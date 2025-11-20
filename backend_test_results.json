@@ -1,0 +1,105 @@
+{
+  "timestamp": "2025-11-20T14:47:42.652012",
+  "summary": {
+    "tests_run": 19,
+    "tests_passed": 19,
+    "success_rate": 100.0
+  },
+  "test_results": [
+    {
+      "test": "User Login",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Admin Login",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get User Profile",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get All Services",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get Instagram Services",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get Tiktok Services",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get Youtube Services",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get Facebook Services",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get Twitter Services",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get User Balance",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Deposit Request",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get Services for Order",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Place Order",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get User Orders",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Admin Stats",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Admin Get Users",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Admin Get Orders",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Admin Get Deposits",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Create Service",
+      "success": true,
+      "details": "Status: 200"
+    }
+  ]
+}
