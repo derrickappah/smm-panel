@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { axiosInstance } from '@/App';
-import { TrendingUp } from 'lucide-react';
+import { TrendingUp, User, Shield } from 'lucide-react';
 
 const AuthPage = ({ onLogin }) => {
   const navigate = useNavigate();
