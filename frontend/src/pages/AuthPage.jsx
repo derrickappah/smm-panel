@@ -4,17 +4,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { axiosInstance } from '@/App';
-import { TrendingUp, User, Shield } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { TrendingUp } from 'lucide-react';
 
-const AuthPage = ({ onLogin }) => {
+const AuthPage = () => {
   const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    name: ''
+    name: '',
   });
 
   const handleSubmit = async (e) => {
@@ -22,15 +22,136 @@ const AuthPage = ({ onLogin }) => {
     setLoading(true);
 
     try {
-      const endpoint = isLogin ? '/auth/login' : '/auth/register';
-      const response = await axiosInstance.post(endpoint, formData);
-      
-      localStorage.setItem('token', response.data.token);
-      toast.success(isLogin ? 'Welcome back!' : 'Account created successfully!');
-      await onLogin();
-      navigate('/dashboard');
+      // Validate inputs
+      if (!formData.email.trim()) {
+        toast.error('Please enter your email');
+        setLoading(false);
+        return;
+      }
+
+      if (!formData.password || formData.password.length < 6) {
+        toast.error('Password must be at least 6 characters');
+        setLoading(false);
+        return;
+      }
+
+      if (!isLogin && !formData.name.trim()) {
+        toast.error('Please enter your name');
+        setLoading(false);
+        return;
+      }
+
+      if (isLogin) {
+        // LOGIN
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: formData.email.trim(),
+          password: formData.password,
+        });
+
+        if (error) {
+          let errorMsg = 'Login failed';
+          
+          if (error.message?.includes('Invalid login credentials') || error.message?.includes('invalid_credentials')) {
+            errorMsg = 'Invalid email or password';
+          } else if (error.message?.includes('Email not confirmed')) {
+            errorMsg = 'Please check your email and confirm your account';
+          } else {
+            errorMsg = error.message || 'Login failed. Please try again.';
+          }
+          
+          toast.error(errorMsg);
+          setLoading(false);
+          return;
+        }
+
+        if (data.user) {
+          toast.success('Welcome back!');
+          
+          // Create profile if it doesn't exist (non-blocking)
+          try {
+            const { error: profileError } = await supabase.from('profiles').insert({
+              id: data.user.id,
+              email: data.user.email,
+              name: data.user.email.split('@')[0],
+              balance: 0.0,
+              role: 'user',
+            });
+
+            // Ignore errors - profile might already exist or table might not exist
+            if (profileError && !profileError.message?.includes('duplicate')) {
+              console.warn('Profile creation warning:', profileError);
+            }
+          } catch (err) {
+            // Ignore profile errors
+          }
+
+          // Navigate - auth state change will handle user loading
+          navigate('/dashboard');
+        }
+      } else {
+        // SIGNUP
+        const { data, error } = await supabase.auth.signUp({
+          email: formData.email.trim(),
+          password: formData.password,
+          options: {
+            data: {
+              name: formData.name.trim(),
+            },
+          },
+        });
+
+        if (error) {
+          let errorMsg = 'Signup failed';
+          
+          if (error.message?.includes('already registered') || error.message?.includes('User already registered')) {
+            errorMsg = 'Email already registered. Please try logging in instead.';
+          } else if (error.message?.includes('Password')) {
+            errorMsg = 'Password does not meet requirements. Please use at least 6 characters.';
+          } else if (error.status === 422) {
+            errorMsg = 'Signup failed. Email may already be registered or password does not meet requirements.';
+          } else {
+            errorMsg = error.message || 'Signup failed. Please try again.';
+          }
+          
+          toast.error(errorMsg);
+          setLoading(false);
+          return;
+        }
+
+        if (data.user) {
+          // Create profile
+          try {
+            const { error: profileError } = await supabase.from('profiles').insert({
+              id: data.user.id,
+              email: formData.email.trim(),
+              name: formData.name.trim(),
+              balance: 0.0,
+              role: 'user',
+            });
+
+            if (profileError && !profileError.message?.includes('duplicate')) {
+              console.warn('Profile creation warning:', profileError);
+            }
+          } catch (err) {
+            console.warn('Profile creation error:', err);
+          }
+
+          if (data.session) {
+            // User is automatically logged in
+            toast.success('Account created successfully!');
+            navigate('/dashboard');
+          } else {
+            // Email confirmation required
+            toast.success('Account created! Please check your email to confirm your account.');
+            navigate('/auth');
+          }
+        } else {
+          toast.error('Signup failed. Please try again.');
+        }
+      }
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Authentication failed');
+      console.error('Auth error:', error);
+      toast.error(error.message || 'An error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -54,7 +175,6 @@ const AuthPage = ({ onLogin }) => {
         <div className="glass rounded-3xl p-8 animate-slideUp">
           <div className="flex gap-2 mb-6">
             <Button
-              data-testid="login-tab-btn"
               type="button"
               onClick={() => setIsLogin(true)}
               className={`flex-1 rounded-full ${
@@ -66,7 +186,6 @@ const AuthPage = ({ onLogin }) => {
               Login
             </Button>
             <Button
-              data-testid="register-tab-btn"
               type="button"
               onClick={() => setIsLogin(false)}
               className={`flex-1 rounded-full ${
@@ -82,10 +201,11 @@ const AuthPage = ({ onLogin }) => {
           <form onSubmit={handleSubmit} className="space-y-5">
             {!isLogin && (
               <div>
-                <Label htmlFor="name" className="text-gray-700 font-medium mb-2 block">Full Name</Label>
+                <Label htmlFor="name" className="text-gray-700 font-medium mb-2 block">
+                  Full Name
+                </Label>
                 <Input
                   id="name"
-                  data-testid="register-name-input"
                   type="text"
                   placeholder="John Doe"
                   value={formData.name}
@@ -97,10 +217,11 @@ const AuthPage = ({ onLogin }) => {
             )}
 
             <div>
-              <Label htmlFor="email" className="text-gray-700 font-medium mb-2 block">Email</Label>
+              <Label htmlFor="email" className="text-gray-700 font-medium mb-2 block">
+                Email
+              </Label>
               <Input
                 id="email"
-                data-testid="auth-email-input"
                 type="email"
                 placeholder="you@example.com"
                 value={formData.email}
@@ -111,10 +232,11 @@ const AuthPage = ({ onLogin }) => {
             </div>
 
             <div>
-              <Label htmlFor="password" className="text-gray-700 font-medium mb-2 block">Password</Label>
+              <Label htmlFor="password" className="text-gray-700 font-medium mb-2 block">
+                Password
+              </Label>
               <Input
                 id="password"
-                data-testid="auth-password-input"
                 type="password"
                 placeholder="••••••••"
                 value={formData.password}
@@ -125,7 +247,6 @@ const AuthPage = ({ onLogin }) => {
             </div>
 
             <Button
-              data-testid="auth-submit-btn"
               type="submit"
               disabled={loading}
               className="w-full btn-hover bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white py-6 rounded-full text-base font-medium"

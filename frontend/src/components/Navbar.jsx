@@ -56,7 +56,7 @@ const Navbar = ({ user, onLogout }) => {
           <div className="flex items-center space-x-4">
             <div className="text-right hidden sm:block">
               <p className="text-sm font-medium text-gray-900">{user?.name}</p>
-              <p className="text-xs text-gray-600">${user?.balance?.toFixed(2) || '0.00'}</p>
+              <p className="text-xs text-gray-600">₵{user?.balance?.toFixed(2) || '0.00'}</p>
             </div>
             <Button
               data-testid="logout-btn"

@@ -1,48 +1,382 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { axiosInstance } from '@/App';
+import { supabase } from '@/lib/supabase';
+import { placeSMMGenOrder, getSMMGenOrderStatus } from '@/lib/smmgen';
 import Navbar from '@/components/Navbar';
 import { Wallet, ShoppingCart, Clock, TrendingUp } from 'lucide-react';
+// Paystack will be loaded via react-paystack package
 
 const Dashboard = ({ user, onLogout, onUpdateUser }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [services, setServices] = useState([]);
   const [recentOrders, setRecentOrders] = useState([]);
   const [depositAmount, setDepositAmount] = useState('');
   const [loading, setLoading] = useState(false);
+  const [pendingTransaction, setPendingTransaction] = useState(null);
   const [orderForm, setOrderForm] = useState({
     service_id: '',
     link: '',
     quantity: ''
   });
 
+  // Paystack public key - should be in environment variable
+  const paystackPublicKey = process.env.REACT_APP_PAYSTACK_PUBLIC_KEY || 'pk_test_xxxxxxxxxxxxx';
+
   useEffect(() => {
     fetchServices();
     fetchRecentOrders();
+    
+    // Ensure PaystackPop is loaded (react-paystack should load it, but we ensure it's available)
+    if (!window.PaystackPop && !document.querySelector('script[src*="paystack"]')) {
+      const script = document.createElement('script');
+      script.src = 'https://js.paystack.co/v1/inline.js';
+      script.async = true;
+      script.onerror = (error) => {
+        console.warn('Failed to load Paystack script:', error);
+        // Don't show error to user yet - will show when they try to pay
+      };
+      script.onload = () => {
+        console.log('Paystack script loaded successfully');
+      };
+      document.head.appendChild(script);
+    }
   }, []);
+
+  // Pre-select service if navigated from Services page
+  useEffect(() => {
+    const selectedServiceId = location.state?.selectedServiceId;
+    if (selectedServiceId && services.length > 0) {
+      // Verify the service exists in the services array
+      const serviceExists = services.find(s => s.id === selectedServiceId);
+      if (serviceExists) {
+        setOrderForm(prev => {
+          // Only update if not already set to avoid unnecessary re-renders
+          if (prev.service_id !== selectedServiceId) {
+            return {
+              ...prev,
+              service_id: selectedServiceId
+            };
+          }
+          return prev;
+        });
+        // Scroll to the order form section after a short delay
+        setTimeout(() => {
+          const orderSection = document.getElementById('order-form-section');
+          if (orderSection) {
+            orderSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }, 300);
+        // Clear the state to avoid re-selecting on re-render
+        window.history.replaceState({}, document.title);
+      }
+    }
+  }, [location.state?.selectedServiceId, services]);
 
   const fetchServices = async () => {
     try {
-      const response = await axiosInstance.get('/services');
-      setServices(response.data);
+      // Fetch services from Supabase only
+      const { data, error } = await supabase
+        .from('services')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) {
+        // Handle 500 errors and other database issues gracefully
+        if (error.code === 'PGRST301' || error.message?.includes('500') || error.message?.includes('Internal Server Error')) {
+          console.warn('Services table may not exist or RLS policy issue:', error.message);
+          setServices([]);
+          return;
+        }
+        throw error;
+      }
+      setServices(data || []);
     } catch (error) {
       console.error('Error fetching services:', error);
+      // Set empty array on error to prevent UI issues
+      setServices([]);
+      // Only show toast for non-500 errors
+      if (!error.message?.includes('500') && !error.message?.includes('Internal Server Error')) {
+      toast.error('Failed to load services');
+      }
     }
+  };
+
+  // Map SMMGen status to our status format
+  const mapSMMGenStatus = (smmgenStatus) => {
+    if (!smmgenStatus) return null;
+    
+    const statusLower = String(smmgenStatus).toLowerCase();
+    
+    if (statusLower.includes('completed') || statusLower === 'completed') {
+      return 'completed';
+    }
+    if (statusLower.includes('cancelled') || statusLower.includes('canceled')) {
+      return 'cancelled';
+    }
+    if (statusLower.includes('processing') || statusLower.includes('in progress') || statusLower.includes('partial')) {
+      return 'processing';
+    }
+    if (statusLower.includes('pending') || statusLower === 'pending') {
+      return 'pending';
+    }
+    
+    return null;
   };
 
   const fetchRecentOrders = async () => {
     try {
-      const response = await axiosInstance.get('/orders');
-      setRecentOrders(response.data.slice(0, 5));
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) return;
+
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('user_id', authUser.id)
+        .order('created_at', { ascending: false })
+        .limit(5);
+      
+      if (error) {
+        // Handle 500 errors and other database issues gracefully
+        if (error.code === 'PGRST301' || error.message?.includes('500') || error.message?.includes('Internal Server Error')) {
+          console.warn('Orders table may not exist or RLS policy issue:', error.message);
+          setRecentOrders([]);
+          return;
+        }
+        throw error;
+      }
+      
+      // Check SMMGen status for orders with SMMGen IDs (only for pending/processing orders)
+      const updatedOrders = await Promise.all(
+        (data || []).map(async (order) => {
+          if (order.smmgen_order_id && (order.status === 'pending' || order.status === 'processing')) {
+            try {
+              const statusData = await getSMMGenOrderStatus(order.smmgen_order_id);
+              const smmgenStatus = statusData.status || statusData.Status;
+              const mappedStatus = mapSMMGenStatus(smmgenStatus);
+
+              // Update in database if status changed
+              if (mappedStatus && mappedStatus !== order.status) {
+                await supabase
+                  .from('orders')
+                  .update({ 
+                    status: mappedStatus,
+                    completed_at: mappedStatus === 'completed' ? new Date().toISOString() : order.completed_at
+                  })
+                  .eq('id', order.id);
+                
+                return { ...order, status: mappedStatus };
+              }
+            } catch (error) {
+              console.warn('Failed to check SMMGen status for order:', order.id, error);
+              // Continue with original order if check fails
+            }
+          }
+          return order;
+        })
+      );
+
+      setRecentOrders(updatedOrders);
     } catch (error) {
       console.error('Error fetching orders:', error);
+      // Set empty array on error to prevent UI issues
+      setRecentOrders([]);
     }
   };
+
+  const handlePaymentSuccess = async (reference) => {
+    if (!pendingTransaction) return;
+
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) throw new Error('Not authenticated');
+
+      // Update transaction status to approved
+      const { error: transactionError } = await supabase
+        .from('transactions')
+        .update({ 
+          status: 'approved'
+        })
+        .eq('id', pendingTransaction.id);
+
+      if (transactionError) throw transactionError;
+
+      // Get current balance and update it
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('balance')
+        .eq('id', authUser.id)
+        .single();
+
+      if (profileError) throw profileError;
+
+      const { error: balanceError } = await supabase
+        .from('profiles')
+        .update({ balance: (profile.balance || 0) + pendingTransaction.amount })
+        .eq('id', authUser.id);
+
+      if (balanceError) throw balanceError;
+
+      toast.success(`Payment successful! ₵${pendingTransaction.amount.toFixed(2)} added to your balance.`);
+      setDepositAmount('');
+      setPendingTransaction(null);
+      
+      // Refresh user data
+      await onUpdateUser();
+    } catch (error) {
+      console.error('Error processing payment:', error);
+      toast.error('Payment successful but failed to update balance. Please contact support.');
+      
+      // Update transaction to pending for manual review
+      await supabase
+        .from('transactions')
+        .update({ status: 'pending' })
+        .eq('id', pendingTransaction.id);
+    }
+  };
+
+  // Trigger Paystack payment when pendingTransaction is set
+  useEffect(() => {
+    if (pendingTransaction && user?.email) {
+      const initializePayment = () => {
+        try {
+          if (!window.PaystackPop) {
+            throw new Error('PaystackPop not loaded. Please refresh the page.');
+          }
+
+          if (!paystackPublicKey || paystackPublicKey.includes('xxxxxxxx')) {
+            throw new Error('Paystack public key not configured. Please set REACT_APP_PAYSTACK_PUBLIC_KEY in your .env file.');
+          }
+
+          // Validate inputs before calling Paystack
+          const amountInPesewas = Math.round(pendingTransaction.amount * 100);
+          
+          if (!amountInPesewas || amountInPesewas < 100) {
+            throw new Error('Amount must be at least ₵1.00 (100 pesewas)');
+          }
+
+          if (!user.email || !user.email.includes('@')) {
+            throw new Error('Valid email is required for payment');
+          }
+
+          console.log('Initializing Paystack payment:', {
+            key: paystackPublicKey.substring(0, 10) + '...',
+            email: user.email,
+            amount: amountInPesewas,
+            currency: 'GHS',
+            transactionId: pendingTransaction.id
+          });
+
+          // Prepare Paystack config - minimal required fields only
+          // Some Paystack accounts may reject metadata, so we'll keep it minimal
+          const paystackConfig = {
+            key: paystackPublicKey.trim(), // Remove any whitespace
+            email: user.email.trim(),
+            amount: amountInPesewas, // Amount in pesewas (1 GHS = 100 pesewas)
+            currency: 'GHS',
+            // Try without metadata first - some test accounts reject it
+            // metadata: {
+            //   transaction_id: pendingTransaction.id,
+            //   user_id: pendingTransaction.user_id
+            // },
+            callback: (response) => {
+              // Paystack callback must be synchronous, handle async operation inside
+              console.log('Paystack callback response:', response);
+              handlePaymentSuccess(response).catch((error) => {
+                console.error('Payment success handler error:', error);
+                toast.error('Payment processed but failed to update. Please contact support.');
+              });
+            },
+            onClose: () => {
+              toast.info('Payment window closed');
+              setPendingTransaction(null);
+            }
+          };
+
+          // Validate Paystack key format
+          if (paystackPublicKey.startsWith('sk_test_') || paystackPublicKey.startsWith('sk_live_')) {
+            throw new Error('❌ You are using a SECRET key (sk_test_...) instead of a PUBLIC key (pk_test_...). Secret keys should NEVER be used in frontend code! Please get your PUBLIC key from Paystack Dashboard → Settings → API Keys and update REACT_APP_PAYSTACK_PUBLIC_KEY in your .env file.');
+          }
+          
+          if (!paystackPublicKey.startsWith('pk_test_') && !paystackPublicKey.startsWith('pk_live_')) {
+            throw new Error('Invalid Paystack public key format. Key must start with pk_test_ (test mode) or pk_live_ (live mode). Get it from: https://dashboard.paystack.com/#/settings/developer');
+          }
+
+          console.log('Paystack config (sanitized):', {
+            key: paystackConfig.key.substring(0, 15) + '...',
+            email: paystackConfig.email,
+            amount: paystackConfig.amount,
+            currency: paystackConfig.currency,
+            metadata: paystackConfig.metadata
+          });
+
+          // Setup Paystack with error handling
+          let handler;
+          try {
+            handler = window.PaystackPop.setup(paystackConfig);
+          } catch (setupError) {
+            console.error('Paystack setup error:', setupError);
+            throw new Error('Failed to setup Paystack: ' + (setupError.message || 'Unknown error'));
+          }
+          
+          // Open payment modal
+          if (handler && typeof handler.openIframe === 'function') {
+            handler.openIframe();
+          } else {
+            throw new Error('Failed to initialize Paystack payment handler. Please check your Paystack key.');
+          }
+        } catch (error) {
+          console.error('Paystack initialization error:', error);
+          
+          // Check for specific error messages
+          const errorMessage = error.message || '';
+          if (errorMessage.includes('400') || errorMessage.includes('Bad Request')) {
+            toast.error('Invalid payment request. Please check: 1) Paystack key is valid, 2) Amount is at least ₵1, 3) Email is valid.');
+          } else if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
+            toast.error('Invalid Paystack public key. Please check your REACT_APP_PAYSTACK_PUBLIC_KEY in .env file.');
+          } else {
+            toast.error('Failed to initialize payment: ' + (errorMessage || 'Unknown error'));
+          }
+          
+          setPendingTransaction(null);
+        }
+      };
+
+      // Wait for PaystackPop to be available
+      if (window.PaystackPop) {
+        // Already loaded, initialize immediately
+        const timer = setTimeout(initializePayment, 100);
+        return () => clearTimeout(timer);
+      } else {
+        // Wait for script to load
+        const checkInterval = setInterval(() => {
+          if (window.PaystackPop) {
+            clearInterval(checkInterval);
+            initializePayment();
+          }
+        }, 100);
+
+        // Timeout after 5 seconds
+        const timeout = setTimeout(() => {
+          clearInterval(checkInterval);
+          if (!window.PaystackPop) {
+            toast.error('Payment gateway failed to load. Please refresh the page and try again.');
+            setPendingTransaction(null);
+          }
+        }, 5000);
+
+        return () => {
+          clearInterval(checkInterval);
+          clearTimeout(timeout);
+        };
+      }
+    }
+  }, [pendingTransaction, user?.email, paystackPublicKey]);
 
   const handleDeposit = async (e) => {
     e.preventDefault();
@@ -51,13 +385,153 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       return;
     }
 
+    const amount = parseFloat(depositAmount);
+    if (amount < 1) {
+      toast.error('Minimum deposit amount is ₵1');
+      return;
+    }
+
     setLoading(true);
     try {
-      await axiosInstance.post('/user/deposit', { amount: parseFloat(depositAmount) });
-      toast.success('Deposit request submitted! Waiting for admin approval.');
-      setDepositAmount('');
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) throw new Error('Not authenticated');
+
+      // First, verify profile exists (required for foreign key)
+      // Handle 500 errors gracefully - profile might exist but RLS is blocking
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', authUser.id)
+        .single();
+
+      if (profileError) {
+        // If it's a 500 error, the profile likely exists but RLS is blocking
+        if (profileError.message?.includes('500') || 
+            profileError.message?.includes('Internal Server Error') ||
+            profileError.message?.includes('Response body')) {
+          console.warn('Profile check returned 500 - likely RLS issue. Proceeding with transaction creation...');
+          // Continue anyway - the transaction insert will fail with a clearer error if profile doesn't exist
+        } else if (profileError.code === 'PGRST116') {
+          // Profile doesn't exist - try to create it
+          console.log('Profile not found, attempting to create...');
+          const { error: createProfileError } = await supabase
+            .from('profiles')
+            .insert({
+              id: authUser.id,
+              email: authUser.email || '',
+              name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
+              balance: 0.0,
+              role: 'user'
+            });
+
+          if (createProfileError) {
+            // 409 means profile already exists (race condition or RLS issue)
+            if (createProfileError.code === '23505' || createProfileError.message?.includes('409')) {
+              console.log('Profile already exists (409 conflict). Proceeding...');
+              // Profile exists, continue
+            } else {
+              console.error('Profile creation failed:', createProfileError);
+              toast.error('Cannot create profile. Please run FIX_RLS_POLICIES.sql in Supabase SQL Editor.');
+              return;
+            }
+          } else {
+            toast.success('Profile created!');
+          }
+        } else {
+          console.error('Profile check error:', profileError);
+          toast.error('Database error: Please run FIX_RLS_POLICIES.sql in Supabase SQL Editor.');
+          return;
+        }
+      }
+
+      // Create transaction record
+      const { data: transaction, error } = await supabase
+        .from('transactions')
+        .insert({
+        user_id: authUser.id,
+          amount: amount,
+        type: 'deposit',
+        status: 'pending'
+        })
+        .select()
+        .single();
+
+      if (error) {
+        // Log the full error for debugging
+        console.error('Transaction insert error:', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          fullError: error
+        });
+
+        // Handle specific error cases
+        const errorMessage = error.message || '';
+        const errorCode = error.code || '';
+        const errorDetails = error.details || '';
+        
+        // Check for 500 errors or database issues
+        if (errorCode === 'PGRST301' || 
+            errorMessage.includes('500') || 
+            errorMessage.includes('Internal Server Error') ||
+            errorDetails.includes('500')) {
+          console.error('Transaction table error - 500:', error);
+          toast.error('Database error: Transactions table may not exist. Please run SUPABASE_DATABASE_SETUP.sql in Supabase SQL Editor.');
+          return;
+        }
+        
+        // Foreign key constraint error
+        if (errorCode === '23503' || errorMessage.includes('foreign key')) {
+          toast.error('User profile not found. Please ensure your profile exists in the database.');
+          return;
+        }
+        
+        // Permission/RLS errors
+        if (errorCode === '42501' || errorMessage.includes('permission') || errorMessage.includes('policy')) {
+          toast.error('Permission denied: RLS policies may not be set up correctly. Please run SUPABASE_DATABASE_SETUP.sql');
+          return;
+        }
+        
+        // Network or connection errors
+        if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
+          toast.error('Network error: Please check your internet connection and try again.');
+          return;
+        }
+        
+        // Generic error
+        toast.error(errorMessage || 'Failed to create transaction. Please try again.');
+        return;
+      }
+
+      // Store transaction - useEffect will trigger payment
+      setPendingTransaction(transaction);
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to submit deposit request');
+      console.error('Deposit error (catch block):', error);
+      const errorMessage = error.message || '';
+      const errorDetails = error.details || '';
+      
+      // Handle "Response body already used" - this is usually masking a 500 error
+      if (errorMessage.includes('Response body is already used') || 
+          errorMessage.includes('clone') ||
+          errorDetails.includes('Response body is already used')) {
+        toast.error('Database setup required: Please run SUPABASE_DATABASE_SETUP.sql in your Supabase SQL Editor.');
+        console.error('Underlying error (likely 500): Check browser Network tab or Supabase logs');
+        return;
+      }
+      
+      // Handle other error types
+      if (errorMessage.includes('500') || errorMessage.includes('Internal Server Error')) {
+        toast.error('Database error: Please ensure all tables are created. Run SUPABASE_DATABASE_SETUP.sql');
+      } else if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
+        toast.error('Network error: Please check your connection and try again.');
+      } else if (errorMessage) {
+        toast.error(errorMessage);
+      } else {
+        toast.error('Failed to initialize payment. Please try again.');
+      }
+      
+      setPendingTransaction(null);
     } finally {
       setLoading(false);
     }
@@ -72,17 +546,80 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
     setLoading(true);
     try {
-      await axiosInstance.post('/orders', {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) throw new Error('Not authenticated');
+
+      // Get service details from local state (from SMMGen or Supabase)
+      const service = services.find(s => s.id === orderForm.service_id);
+      if (!service) throw new Error('Service not found');
+
+      // Validate quantity
+      const quantity = parseInt(orderForm.quantity);
+      if (quantity < service.min_quantity || quantity > service.max_quantity) {
+        throw new Error(`Quantity must be between ${service.min_quantity} and ${service.max_quantity}`);
+      }
+
+      // Calculate cost
+      const totalCost = (quantity / 1000) * service.rate;
+
+      // Check balance
+      if (user.balance < totalCost) {
+        throw new Error('Insufficient balance');
+      }
+
+      // Place order via SMMGen API if service has SMMGen ID
+      let smmgenOrderId = null;
+      if (service.smmgen_service_id) {
+        try {
+          const smmgenResponse = await placeSMMGenOrder(
+            service.smmgen_service_id,
+            orderForm.link,
+            quantity
+          );
+          smmgenOrderId = smmgenResponse.order || smmgenResponse.id || null;
+          console.log('SMMGen order placed:', smmgenOrderId);
+        } catch (smmgenError) {
+          console.error('SMMGen order failed:', smmgenError);
+          // If SMMGen API key is not configured, continue with local order only
+          if (smmgenError.message?.includes('API key not configured')) {
+            console.warn('SMMGen API not configured, creating local order only');
+            toast.warning('SMMGen API not configured. Order created locally. Please configure REACT_APP_SMMGEN_API_KEY in .env and restart server.');
+          } else {
+            // For other SMMGen errors, still create the order locally
+            console.warn('SMMGen order failed, creating local order:', smmgenError.message);
+            toast.warning(`SMMGen order failed: ${smmgenError.message}. Order created locally.`);
+          }
+          // Continue with local order creation even if SMMGen fails
+        }
+      }
+
+      // Create order record in our database
+      const { data: orderData, error: orderError } = await supabase.from('orders').insert({
+        user_id: authUser.id,
         service_id: orderForm.service_id,
         link: orderForm.link,
-        quantity: parseInt(orderForm.quantity)
-      });
+        quantity: quantity,
+        total_cost: totalCost,
+        status: 'pending',
+        smmgen_order_id: smmgenOrderId // Store SMMGen order ID for tracking
+      }).select().single();
+
+      if (orderError) throw orderError;
+
+      // Deduct balance
+      const { error: balanceError } = await supabase
+        .from('profiles')
+        .update({ balance: user.balance - totalCost })
+        .eq('id', authUser.id);
+
+      if (balanceError) throw balanceError;
+
       toast.success('Order placed successfully!');
       setOrderForm({ service_id: '', link: '', quantity: '' });
       await onUpdateUser();
       fetchRecentOrders();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to place order');
+      toast.error(error.message || 'Failed to place order');
     } finally {
       setLoading(false);
     }
@@ -113,7 +650,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               </div>
             </div>
             <p className="text-gray-600 text-sm mb-1">Current Balance</p>
-            <h3 data-testid="user-balance" className="text-3xl font-bold text-gray-900">${user.balance.toFixed(2)}</h3>
+            <h3 data-testid="user-balance" className="text-3xl font-bold text-gray-900">₵{user.balance.toFixed(2)}</h3>
           </div>
 
           <div className="glass p-6 rounded-2xl card-hover">
@@ -143,7 +680,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Add Funds</h2>
             <form onSubmit={handleDeposit} className="space-y-5">
               <div>
-                <Label htmlFor="amount" className="text-gray-700 font-medium mb-2 block">Amount (USD)</Label>
+                <Label htmlFor="amount" className="text-gray-700 font-medium mb-2 block">Amount (GHS)</Label>
                 <Input
                   id="amount"
                   data-testid="deposit-amount-input"
@@ -159,31 +696,38 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               <Button
                 data-testid="deposit-submit-btn"
                 type="submit"
-                disabled={loading}
+                disabled={loading || !depositAmount}
                 className="w-full btn-hover bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white py-6 rounded-full"
               >
-                {loading ? 'Processing...' : 'Request Deposit'}
+                {loading ? 'Processing...' : 'Pay with Paystack'}
               </Button>
               <p className="text-sm text-gray-600 text-center">
-                Deposits are manually approved by admin
+                Secure payment via Paystack. Funds are added instantly after successful payment.
               </p>
             </form>
           </div>
 
           {/* Quick Order */}
-          <div className="glass p-8 rounded-3xl animate-slideUp">
+          <div className="glass p-8 rounded-3xl animate-slideUp" id="order-form-section">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Place New Order</h2>
             <form onSubmit={handleOrder} className="space-y-5">
               <div>
                 <Label htmlFor="service" className="text-gray-700 font-medium mb-2 block">Service</Label>
-                <Select value={orderForm.service_id} onValueChange={(value) => setOrderForm({ ...orderForm, service_id: value })}>
+                <Select 
+                  value={orderForm.service_id || ''} 
+                  onValueChange={(value) => setOrderForm({ ...orderForm, service_id: value })}
+                >
                   <SelectTrigger data-testid="order-service-select" className="rounded-xl bg-white/70">
-                    <SelectValue placeholder="Select a service" />
+                    <SelectValue placeholder="Select a service">
+                      {orderForm.service_id && services.find(s => s.id === orderForm.service_id) 
+                        ? `${services.find(s => s.id === orderForm.service_id).name} - ₵${services.find(s => s.id === orderForm.service_id).rate}/1000`
+                        : 'Select a service'}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {services.map((service) => (
                       <SelectItem key={service.id} value={service.id}>
-                        {service.name} - ${service.rate}/1000
+                        {service.name} - ₵{service.rate}/1000
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -223,7 +767,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
               <div className="bg-indigo-50 p-4 rounded-xl">
                 <p className="text-sm text-gray-600 mb-1">Estimated Cost</p>
-                <p data-testid="order-estimated-cost" className="text-2xl font-bold text-indigo-600">${estimatedCost}</p>
+                <p data-testid="order-estimated-cost" className="text-2xl font-bold text-indigo-600">₵{estimatedCost}</p>
               </div>
 
               <Button
@@ -262,7 +806,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                       <p className="text-sm text-gray-600">Quantity: {order.quantity}</p>
                     </div>
                     <div className="text-right">
-                      <p className="font-medium text-gray-900">${order.total_cost.toFixed(2)}</p>
+                      <p className="font-medium text-gray-900">₵{order.total_cost.toFixed(2)}</p>
                       <span className={`text-xs px-3 py-1 rounded-full ${
                         order.status === 'completed' ? 'bg-green-100 text-green-700' :
                         order.status === 'processing' ? 'bg-blue-100 text-blue-700' :

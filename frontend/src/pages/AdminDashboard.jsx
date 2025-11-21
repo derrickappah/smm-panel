@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { axiosInstance } from '@/App';
+import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
 import { Users, ShoppingCart, DollarSign, Package } from 'lucide-react';
 
@@ -31,18 +31,30 @@ const AdminDashboard = ({ user, onLogout }) => {
 
   const fetchAllData = async () => {
     try {
-      const [statsRes, usersRes, ordersRes, depositsRes] = await Promise.all([
-        axiosInstance.get('/stats'),
-        axiosInstance.get('/admin/users'),
-        axiosInstance.get('/admin/orders'),
-        axiosInstance.get('/admin/deposits')
+      const [usersRes, ordersRes, depositsRes] = await Promise.all([
+        supabase.from('profiles').select('*'),
+        supabase.from('orders').select('*').order('created_at', { ascending: false }),
+        supabase.from('transactions').select('*').eq('type', 'deposit').order('created_at', { ascending: false })
       ]);
-      setStats(statsRes.data);
-      setUsers(usersRes.data);
-      setOrders(ordersRes.data);
-      setDeposits(depositsRes.data);
+
+      if (usersRes.error) throw usersRes.error;
+      if (ordersRes.error) throw ordersRes.error;
+      if (depositsRes.error) throw depositsRes.error;
+
+      setUsers(usersRes.data || []);
+      setOrders(ordersRes.data || []);
+      setDeposits(depositsRes.data || []);
+
+      // Calculate stats
+      const pendingDeposits = (depositsRes.data || []).filter(d => d.status === 'pending').length;
+      setStats({
+        total_users: (usersRes.data || []).length,
+        total_orders: (ordersRes.data || []).length,
+        pending_deposits: pendingDeposits
+      });
     } catch (error) {
       console.error('Error fetching admin data:', error);
+      toast.error('Failed to load admin data');
     }
   };
 
@@ -50,12 +62,17 @@ const AdminDashboard = ({ user, onLogout }) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await axiosInstance.post('/admin/services', {
-        ...serviceForm,
+      const { error } = await supabase.from('services').insert({
+        platform: serviceForm.platform,
+        service_type: serviceForm.service_type,
+        name: serviceForm.name,
         rate: parseFloat(serviceForm.rate),
         min_quantity: parseInt(serviceForm.min_quantity),
-        max_quantity: parseInt(serviceForm.max_quantity)
+        max_quantity: parseInt(serviceForm.max_quantity),
+        description: serviceForm.description
       });
+
+      if (error) throw error;
       toast.success('Service created successfully!');
       setServiceForm({
         platform: '',
@@ -67,7 +84,7 @@ const AdminDashboard = ({ user, onLogout }) => {
         description: ''
       });
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to create service');
+      toast.error(error.message || 'Failed to create service');
     } finally {
       setLoading(false);
     }
@@ -75,21 +92,62 @@ const AdminDashboard = ({ user, onLogout }) => {
 
   const handleOrderStatusUpdate = async (orderId, status) => {
     try {
-      await axiosInstance.put(`/admin/orders/${orderId}/status?status=${status}`);
+      const updateData = { status };
+      if (status === 'completed') {
+        updateData.completed_at = new Date().toISOString();
+      }
+
+      const { error } = await supabase
+        .from('orders')
+        .update(updateData)
+        .eq('id', orderId);
+
+      if (error) throw error;
       toast.success('Order status updated!');
       fetchAllData();
     } catch (error) {
-      toast.error('Failed to update order status');
+      toast.error(error.message || 'Failed to update order status');
     }
   };
 
   const handleDepositAction = async (transactionId, action) => {
     try {
-      await axiosInstance.put(`/admin/deposits/${transactionId}?action=${action}`);
+      const newStatus = action === 'approve' ? 'approved' : 'rejected';
+      
+      // Update transaction status
+      const { error: transactionError } = await supabase
+        .from('transactions')
+        .update({ status: newStatus })
+        .eq('id', transactionId);
+
+      if (transactionError) throw transactionError;
+
+      // If approved, add balance to user
+      if (action === 'approve') {
+        const transaction = deposits.find(d => d.id === transactionId);
+        if (transaction) {
+          // Get current balance
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('balance')
+            .eq('id', transaction.user_id)
+            .single();
+
+          if (profile) {
+            const { error: balanceError } = await supabase
+              .from('profiles')
+              .update({ balance: profile.balance + transaction.amount })
+              .eq('id', transaction.user_id);
+
+            if (balanceError) throw balanceError;
+          }
+        }
+      }
+
       toast.success(`Deposit ${action}d successfully!`);
       fetchAllData();
     } catch (error) {
-      toast.error(`Failed to ${action} deposit`);
+      toast.error(error.message || `Failed to ${action} deposit`);
     }
   };
 
@@ -155,7 +213,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                   {deposits.filter(d => d.status === 'pending').map((deposit) => (
                     <div key={deposit.id} data-testid={`deposit-item-${deposit.id}`} className="bg-white/50 p-4 rounded-xl flex justify-between items-center">
                       <div>
-                        <p className="font-medium text-gray-900">Amount: ${deposit.amount.toFixed(2)}</p>
+                        <p className="font-medium text-gray-900">Amount: ₵{deposit.amount.toFixed(2)}</p>
                         <p className="text-sm text-gray-600">User ID: {deposit.user_id.slice(0, 8)}</p>
                         <p className="text-xs text-gray-500">{new Date(deposit.created_at).toLocaleString()}</p>
                       </div>
@@ -193,7 +251,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                       <div>
                         <p className="font-medium text-gray-900">Order ID: {order.id.slice(0, 8)}</p>
                         <p className="text-sm text-gray-600">User: {order.user_id.slice(0, 8)}</p>
-                        <p className="text-sm text-gray-600">Quantity: {order.quantity} | Cost: ${order.total_cost.toFixed(2)}</p>
+                        <p className="text-sm text-gray-600">Quantity: {order.quantity} | Cost: ₵{order.total_cost.toFixed(2)}</p>
                       </div>
                       <Select defaultValue={order.status} onValueChange={(value) => handleOrderStatusUpdate(order.id, value)}>
                         <SelectTrigger className="w-40">
@@ -325,7 +383,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                       <p className="text-sm text-gray-600">{u.email}</p>
                     </div>
                     <div className="text-right">
-                      <p className="font-medium text-gray-900">${u.balance.toFixed(2)}</p>
+                      <p className="font-medium text-gray-900">₵{u.balance.toFixed(2)}</p>
                       <span className={`text-xs px-2 py-1 rounded-full ${
                         u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'
                       }`}>

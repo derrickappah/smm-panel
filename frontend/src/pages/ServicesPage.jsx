@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { axiosInstance } from '@/App';
+import { supabase } from '@/lib/supabase';
+// SMMGen import removed - only using Supabase services
 import Navbar from '@/components/Navbar';
-import { Instagram, Youtube, Facebook, Twitter } from 'lucide-react';
+import { Instagram, Youtube, Facebook, Twitter, ArrowRight } from 'lucide-react';
 
 const ServicesPage = ({ user, onLogout }) => {
+  const navigate = useNavigate();
   const [services, setServices] = useState([]);
   const [selectedPlatform, setSelectedPlatform] = useState('all');
   const [loading, setLoading] = useState(true);
@@ -25,11 +28,20 @@ const ServicesPage = ({ user, onLogout }) => {
   const fetchServices = async () => {
     setLoading(true);
     try {
-      const endpoint = selectedPlatform === 'all' ? '/services' : `/services?platform=${selectedPlatform}`;
-      const response = await axiosInstance.get(endpoint);
-      setServices(response.data);
+      // Fetch services from Supabase only
+      let query = supabase.from('services').select('*');
+      
+      if (selectedPlatform !== 'all') {
+        query = query.eq('platform', selectedPlatform);
+      }
+      
+      const { data, error } = await query.order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setServices(data || []);
     } catch (error) {
       console.error('Error fetching services:', error);
+      setServices([]);
     } finally {
       setLoading(false);
     }
@@ -38,6 +50,11 @@ const ServicesPage = ({ user, onLogout }) => {
   const filteredServices = selectedPlatform === 'all' 
     ? services 
     : services.filter(s => s.platform === selectedPlatform);
+
+  const handleServiceClick = (service) => {
+    // Navigate to dashboard with the selected service ID
+    navigate('/dashboard', { state: { selectedServiceId: service.id } });
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
@@ -83,7 +100,8 @@ const ServicesPage = ({ user, onLogout }) => {
               <div
                 key={service.id}
                 data-testid={`service-card-${service.id}`}
-                className="glass p-6 rounded-2xl card-hover"
+                onClick={() => handleServiceClick(service)}
+                className="glass p-6 rounded-2xl card-hover cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-xl hover:bg-white/80 group"
                 style={{ animationDelay: `${index * 0.05}s` }}
               >
                 <div className="flex items-start justify-between mb-4">
@@ -93,15 +111,20 @@ const ServicesPage = ({ user, onLogout }) => {
                     </span>
                   </div>
                   <div className="text-right">
-                    <p className="text-2xl font-bold text-indigo-600">${service.rate}</p>
+                    <p className="text-2xl font-bold text-indigo-600">₵{service.rate}</p>
                     <p className="text-xs text-gray-600">per 1000</p>
                   </div>
                 </div>
-                <h3 className="text-lg font-bold text-gray-900 mb-2">{service.name}</h3>
-                <p className="text-sm text-gray-600 mb-4">{service.description}</p>
-                <div className="flex justify-between text-xs text-gray-600 pt-4 border-t border-gray-200">
-                  <span>Min: {service.min_quantity}</span>
-                  <span>Max: {service.max_quantity}</span>
+                <h3 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-indigo-600 transition-colors">
+                  {service.name}
+                </h3>
+                <p className="text-sm text-gray-600 mb-4 line-clamp-2">{service.description}</p>
+                <div className="flex justify-between items-center text-xs text-gray-600 pt-4 border-t border-gray-200">
+                  <div className="flex gap-4">
+                    <span>Min: {service.min_quantity}</span>
+                    <span>Max: {service.max_quantity}</span>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               </div>
             ))}
