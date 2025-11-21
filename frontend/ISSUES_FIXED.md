@@ -71,3 +71,4 @@ After these fixes:
 - ✅ Profile is created automatically when possible
 - ✅ Better error messages for debugging
 
+
