@@ -190,21 +190,92 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
   };
 
   const handlePaymentSuccess = async (reference) => {
-    if (!pendingTransaction) return;
+    if (!pendingTransaction) {
+      console.error('No pending transaction found');
+      return;
+    }
+
+    console.log('Payment success callback received:', { reference, transactionId: pendingTransaction.id });
 
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (!authUser) throw new Error('Not authenticated');
+      if (!authUser) {
+        throw new Error('Not authenticated');
+      }
+
+      // First, verify the transaction exists and get its current status
+      const { data: existingTransaction, error: fetchError } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('id', pendingTransaction.id)
+        .single();
+
+      if (fetchError) {
+        console.error('Error fetching transaction:', fetchError);
+        throw new Error(`Transaction not found: ${fetchError.message}`);
+      }
+
+      if (!existingTransaction) {
+        throw new Error('Transaction not found in database');
+      }
+
+      // Check if already approved (avoid duplicate processing)
+      if (existingTransaction.status === 'approved') {
+        console.log('Transaction already approved, skipping update');
+        toast.success(`Payment already processed! ₵${pendingTransaction.amount.toFixed(2)} is in your balance.`);
+        setDepositAmount('');
+        setPendingTransaction(null);
+        await onUpdateUser();
+        return;
+      }
 
       // Update transaction status to approved
-      const { error: transactionError } = await supabase
+      const { data: updatedTransaction, error: transactionError } = await supabase
         .from('transactions')
         .update({ 
           status: 'approved'
         })
-        .eq('id', pendingTransaction.id);
+        .eq('id', pendingTransaction.id)
+        .select()
+        .single();
 
-      if (transactionError) throw transactionError;
+      if (transactionError) {
+        console.error('Error updating transaction status:', transactionError);
+        
+        // If update failed, check if transaction was already updated
+        const { data: currentTransaction } = await supabase
+          .from('transactions')
+          .select('status')
+          .eq('id', pendingTransaction.id)
+          .single();
+        
+        if (currentTransaction?.status === 'approved') {
+          console.log('Transaction was already approved, continuing with balance update');
+          // Continue with balance update
+        } else {
+          // Retry the update once
+          console.log('Retrying transaction update...');
+          const { data: retryTransaction, error: retryError } = await supabase
+            .from('transactions')
+            .update({ status: 'approved' })
+            .eq('id', pendingTransaction.id)
+            .select()
+            .single();
+          
+          if (retryError) {
+            throw new Error(`Failed to update transaction after retry: ${retryError.message}`);
+          }
+          
+          console.log('Transaction updated on retry:', retryTransaction);
+        }
+      } else {
+        console.log('Transaction status updated to approved:', updatedTransaction);
+        
+        // Verify the update was successful
+        if (updatedTransaction.status !== 'approved') {
+          throw new Error('Transaction update verification failed: status is not approved');
+        }
+      }
 
       // Get current balance and update it
       const { data: profile, error: profileError } = await supabase
@@ -213,14 +284,23 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         .eq('id', authUser.id)
         .single();
 
-      if (profileError) throw profileError;
+      if (profileError) {
+        console.error('Error fetching profile:', profileError);
+        throw new Error(`Failed to fetch profile: ${profileError.message}`);
+      }
 
+      const newBalance = (profile.balance || 0) + pendingTransaction.amount;
       const { error: balanceError } = await supabase
         .from('profiles')
-        .update({ balance: (profile.balance || 0) + pendingTransaction.amount })
+        .update({ balance: newBalance })
         .eq('id', authUser.id);
 
-      if (balanceError) throw balanceError;
+      if (balanceError) {
+        console.error('Error updating balance:', balanceError);
+        throw new Error(`Failed to update balance: ${balanceError.message}`);
+      }
+
+      console.log('Balance updated successfully:', { oldBalance: profile.balance, newBalance });
 
       toast.success(`Payment successful! ₵${pendingTransaction.amount.toFixed(2)} added to your balance.`);
       setDepositAmount('');
@@ -230,13 +310,25 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       await onUpdateUser();
     } catch (error) {
       console.error('Error processing payment:', error);
-      toast.error('Payment successful but failed to update balance. Please contact support.');
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+        transactionId: pendingTransaction?.id
+      });
       
-      // Update transaction to pending for manual review
-      await supabase
-        .from('transactions')
-        .update({ status: 'pending' })
-        .eq('id', pendingTransaction.id);
+      toast.error(`Payment successful but failed to update: ${error.message || 'Unknown error'}. Transaction ID: ${pendingTransaction.id.slice(0, 8)}. Please contact support with this ID.`);
+      
+      // Try to update transaction to pending for manual review (but don't fail if this also fails)
+      try {
+        await supabase
+          .from('transactions')
+          .update({ status: 'pending' })
+          .eq('id', pendingTransaction.id);
+      } catch (updateError) {
+        console.error('Failed to update transaction to pending:', updateError);
+      }
     }
   };
 
@@ -286,10 +378,21 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             // },
             callback: (response) => {
               // Paystack callback must be synchronous, handle async operation inside
-              console.log('Paystack callback response:', response);
-              handlePaymentSuccess(response).catch((error) => {
+              console.log('Paystack callback triggered:', response);
+              console.log('Paystack reference:', response.reference);
+              console.log('Pending transaction:', pendingTransaction);
+              
+              // Verify response has reference
+              if (!response || !response.reference) {
+                console.error('Invalid Paystack response:', response);
+                toast.error('Payment response invalid. Please contact support.');
+                return;
+              }
+
+              // Call the async handler
+              handlePaymentSuccess(response.reference).catch((error) => {
                 console.error('Payment success handler error:', error);
-                toast.error('Payment processed but failed to update. Please contact support.');
+                toast.error(`Payment processed but failed to update: ${error.message || 'Unknown error'}. Please contact support.`);
               });
             },
             onClose: () => {

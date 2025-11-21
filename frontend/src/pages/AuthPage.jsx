@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase';
+import { supabase, isConfigured } from '@/lib/supabase';
 import { TrendingUp } from 'lucide-react';
 
 const AuthPage = () => {
@@ -22,6 +22,14 @@ const AuthPage = () => {
     setLoading(true);
 
     try {
+      // Check if Supabase is configured
+      if (!isConfigured) {
+        toast.error('Supabase is not configured. Please check your environment variables.');
+        console.error('Supabase configuration check failed. REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY must be set.');
+        setLoading(false);
+        return;
+      }
+
       // Validate inputs
       if (!formData.email.trim()) {
         toast.error('Please enter your email');
@@ -90,63 +98,90 @@ const AuthPage = () => {
         }
       } else {
         // SIGNUP
-        const { data, error } = await supabase.auth.signUp({
-          email: formData.email.trim(),
-          password: formData.password,
-          options: {
-            data: {
-              name: formData.name.trim(),
+        try {
+          const { data, error } = await supabase.auth.signUp({
+            email: formData.email.trim(),
+            password: formData.password,
+            options: {
+              data: {
+                name: formData.name.trim(),
+              },
             },
-          },
-        });
+          });
 
-        if (error) {
-          let errorMsg = 'Signup failed';
-          
-          if (error.message?.includes('already registered') || error.message?.includes('User already registered')) {
-            errorMsg = 'Email already registered. Please try logging in instead.';
-          } else if (error.message?.includes('Password')) {
-            errorMsg = 'Password does not meet requirements. Please use at least 6 characters.';
-          } else if (error.status === 422) {
-            errorMsg = 'Signup failed. Email may already be registered or password does not meet requirements.';
-          } else {
-            errorMsg = error.message || 'Signup failed. Please try again.';
+          if (error) {
+            console.error('Supabase signup error:', error);
+            let errorMsg = 'Signup failed';
+            
+            // Handle specific error cases
+            if (error.status === 422) {
+              // 422 Unprocessable Content - usually means validation failed
+              if (error.message?.includes('already registered') || error.message?.includes('User already registered') || error.message?.includes('already exists')) {
+                errorMsg = 'Email already registered. Please try logging in instead.';
+              } else if (error.message?.includes('Password') || error.message?.includes('password')) {
+                errorMsg = 'Password does not meet requirements. Please use at least 6 characters.';
+              } else if (error.message?.includes('email')) {
+                errorMsg = 'Invalid email address. Please check and try again.';
+              } else {
+                // Log the full error for debugging
+                console.error('422 Error details:', {
+                  message: error.message,
+                  status: error.status,
+                  name: error.name
+                });
+                errorMsg = 'Signup failed. Please check your email and password, or try logging in if you already have an account.';
+              }
+            } else if (error.message?.includes('already registered') || error.message?.includes('User already registered')) {
+              errorMsg = 'Email already registered. Please try logging in instead.';
+            } else if (error.message?.includes('Password') || error.message?.includes('password')) {
+              errorMsg = 'Password does not meet requirements. Please use at least 6 characters.';
+            } else if (error.message?.includes('Email not confirmed')) {
+              errorMsg = 'Please check your email and confirm your account before signing in.';
+            } else {
+              errorMsg = error.message || 'Signup failed. Please try again.';
+            }
+            
+            toast.error(errorMsg);
+            setLoading(false);
+            return;
           }
-          
-          toast.error(errorMsg);
+
+          if (data.user) {
+            // Create profile
+            try {
+              const { error: profileError } = await supabase.from('profiles').insert({
+                id: data.user.id,
+                email: formData.email.trim(),
+                name: formData.name.trim(),
+                balance: 0.0,
+                role: 'user',
+              });
+
+              if (profileError && !profileError.message?.includes('duplicate')) {
+                console.warn('Profile creation warning:', profileError);
+              }
+            } catch (err) {
+              console.warn('Profile creation error:', err);
+            }
+
+            if (data.session) {
+              // User is automatically logged in
+              toast.success('Account created successfully!');
+              navigate('/dashboard');
+            } else {
+              // Email confirmation required
+              toast.success('Account created! Please check your email to confirm your account.');
+              navigate('/auth');
+            }
+          } else {
+            toast.error('Signup failed. Please try again.');
+          }
+        } catch (signupError) {
+          // Catch any errors that might occur during signup
+          console.error('Signup exception:', signupError);
+          toast.error('An unexpected error occurred during signup. Please try again.');
           setLoading(false);
           return;
-        }
-
-        if (data.user) {
-          // Create profile
-          try {
-            const { error: profileError } = await supabase.from('profiles').insert({
-              id: data.user.id,
-              email: formData.email.trim(),
-              name: formData.name.trim(),
-              balance: 0.0,
-              role: 'user',
-            });
-
-            if (profileError && !profileError.message?.includes('duplicate')) {
-              console.warn('Profile creation warning:', profileError);
-            }
-          } catch (err) {
-            console.warn('Profile creation error:', err);
-          }
-
-          if (data.session) {
-            // User is automatically logged in
-            toast.success('Account created successfully!');
-            navigate('/dashboard');
-          } else {
-            // Email confirmation required
-            toast.success('Account created! Please check your email to confirm your account.');
-            navigate('/auth');
-          }
-        } else {
-          toast.error('Signup failed. Please try again.');
         }
       }
     } catch (error) {
