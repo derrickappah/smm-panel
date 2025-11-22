@@ -107,12 +107,13 @@ const AdminDashboard = ({ user, onLogout }) => {
         return;
       }
 
-      const [usersRes, ordersRes, depositsRes, transactionsRes, servicesRes] = await Promise.all([
+      const [usersRes, ordersRes, depositsRes, transactionsRes, servicesRes, ticketsRes] = await Promise.all([
         supabase.from('profiles').select('*').order('created_at', { ascending: false }),
         supabase.from('orders').select('*, services(name, platform)').order('created_at', { ascending: false }),
         supabase.from('transactions').select('*, profiles(email, name)').eq('type', 'deposit').order('created_at', { ascending: false }),
         supabase.from('transactions').select('*, profiles(email, name)').order('created_at', { ascending: false }),
-        supabase.from('services').select('*').order('created_at', { ascending: false })
+        supabase.from('services').select('*').order('created_at', { ascending: false }),
+        supabase.from('support_tickets').select('*, profiles(name, email)').order('created_at', { ascending: false })
       ]);
 
       // Check for errors and provide specific messages

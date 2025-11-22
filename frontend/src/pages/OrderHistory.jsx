@@ -209,9 +209,6 @@ const OrderHistory = ({ user, onLogout }) => {
                         <span>Quantity: <strong>{order.quantity}</strong></span>
                         <span>Cost: <strong>₵{order.total_cost.toFixed(2)}</strong></span>
                         <span>Order ID: <strong>{order.id.slice(0, 8)}</strong></span>
-                        {order.smmgen_order_id && (
-                          <span className="text-xs text-indigo-600">SMMGen: <strong>{order.smmgen_order_id}</strong></span>
-                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-3">

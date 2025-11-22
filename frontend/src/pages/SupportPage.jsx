@@ -23,11 +23,22 @@ import {
 const SupportPage = ({ user, onLogout }) => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
-    name: user?.name || '',
-    email: user?.email || '',
+    name: '',
+    email: '',
     orderId: '',
     message: ''
   });
+
+  // Update form data when user loads
+  React.useEffect(() => {
+    if (user) {
+      setFormData(prev => ({
+        ...prev,
+        name: user.name || '',
+        email: user.email || ''
+      }));
+    }
+  }, [user]);
   const [loading, setLoading] = useState(false);
   const [openFaq, setOpenFaq] = useState(null);
 
