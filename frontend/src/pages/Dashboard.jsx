@@ -152,13 +152,28 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                   toast.success(`Payment verified! ₵${transaction.amount.toFixed(2)} added to your balance.`);
                 }
               } else if (verifyData.status === 'failed' || verifyData.status === 'abandoned') {
-                // Payment failed or was abandoned, mark as rejected
-                console.log('Payment failed or abandoned, marking transaction as rejected:', transaction.id);
-                await supabase
+                // Payment failed or was abandoned, mark as rejected (cancelled)
+                console.log('Payment failed or abandoned, marking transaction as rejected:', {
+                  transactionId: transaction.id,
+                  status: verifyData.status
+                });
+                
+                // Force update to rejected (remove status condition to ensure it updates)
+                const { error: updateError } = await supabase
                   .from('transactions')
                   .update({ status: 'rejected' })
-                  .eq('id', transaction.id)
-                  .eq('status', 'pending');
+                  .eq('id', transaction.id);
+                
+                if (updateError) {
+                  console.error('Error updating abandoned transaction:', updateError);
+                  // Try again without status condition
+                  await supabase
+                    .from('transactions')
+                    .update({ status: 'rejected' })
+                    .eq('id', transaction.id);
+                } else {
+                  console.log('Transaction marked as rejected (abandoned/failed):', transaction.id);
+                }
               }
             }
           } catch (verifyError) {
@@ -875,6 +890,30 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               // Process the successful payment
               await handlePaymentSuccess(existingTransaction.paystack_reference);
               return; // Don't mark as cancelled
+            }
+            
+            // If payment was abandoned or failed, mark as rejected
+            if (verifyData.status === 'abandoned' || verifyData.status === 'failed') {
+              console.log('Payment was abandoned or failed, marking transaction as rejected:', {
+                transactionId,
+                status: verifyData.status
+              });
+              
+              // Update transaction status to rejected (cancelled)
+              const { error: abandonError } = await supabase
+                .from('transactions')
+                .update({ status: 'rejected' })
+                .eq('id', transactionId);
+              
+              if (abandonError) {
+                console.error('Error updating abandoned transaction:', abandonError);
+              } else {
+                console.log('Transaction marked as rejected (abandoned):', transactionId);
+                toast.info('Payment was abandoned. Transaction has been cancelled.');
+              }
+              
+              setPendingTransaction(null);
+              return; // Exit early since we've handled the abandoned transaction
             }
           }
         } catch (verifyError) {
