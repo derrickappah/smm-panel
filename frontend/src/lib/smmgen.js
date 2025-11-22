@@ -6,7 +6,12 @@
 const BACKEND_PROXY_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
 
 // Check if we're in production (Vercel)
-const isProduction = process.env.NODE_ENV === 'production' || window.location.hostname !== 'localhost';
+// In production, hostname will be something like 'smm-panel-ten.vercel.app'
+const isProduction = process.env.NODE_ENV === 'production' || 
+  (typeof window !== 'undefined' && 
+   window.location.hostname !== 'localhost' && 
+   window.location.hostname !== '127.0.0.1' &&
+   !window.location.hostname.includes('localhost'));
 
 // Get SMMGen config from environment variables
 const getSMMGenConfig = () => {
@@ -42,12 +47,28 @@ const getSMMGenConfig = () => {
 const buildApiUrl = (endpoint) => {
   const { backendUrl, useServerlessFunctions } = getSMMGenConfig();
   
+  // Remove any trailing slashes from backendUrl and leading slashes from endpoint
+  const cleanBackendUrl = (backendUrl || '').replace(/\/+$/, '');
+  const cleanEndpoint = (endpoint || '').replace(/^\/+/, '');
+  
   if (useServerlessFunctions) {
     // Serverless functions: /api/smmgen/order, /api/smmgen/services, etc.
-    return `${backendUrl}/${endpoint}`;
+    // backendUrl should be '/api/smmgen', endpoint should be 'order'
+    // Result: '/api/smmgen/order'
+    
+    // Safety check: if endpoint already contains /api/smmgen, don't duplicate it
+    if (cleanEndpoint.includes('/api/smmgen')) {
+      // Endpoint already has full path, use it as-is
+      return cleanEndpoint.startsWith('/') ? cleanEndpoint : `/${cleanEndpoint}`;
+    }
+    
+    const url = `${cleanBackendUrl}/${cleanEndpoint}`.replace(/\/+/g, '/');
+    // Ensure it starts with / for relative URLs
+    return url.startsWith('/') ? url : `/${url}`;
   } else {
     // Backend proxy: http://localhost:5000/api/smmgen/order
-    return `${backendUrl}/api/smmgen/${endpoint}`;
+    const url = `${cleanBackendUrl}/api/smmgen/${cleanEndpoint}`.replace(/\/+/g, '/');
+    return url;
   }
 };
 
