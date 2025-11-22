@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { placeSMMGenOrder, getSMMGenOrderStatus } from '@/lib/smmgen';
 import Navbar from '@/components/Navbar';
-import { Wallet, ShoppingCart, Clock, TrendingUp } from 'lucide-react';
+import { Wallet, ShoppingCart, Clock, TrendingUp, Search } from 'lucide-react';
 // Paystack will be loaded via react-paystack package
 
 const Dashboard = ({ user, onLogout, onUpdateUser }) => {
@@ -19,6 +19,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
   const [depositAmount, setDepositAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [pendingTransaction, setPendingTransaction] = useState(null);
+  const [serviceSearch, setServiceSearch] = useState('');
   const [orderForm, setOrderForm] = useState({
     service_id: '',
     link: '',
@@ -846,6 +847,18 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     ? ((parseInt(orderForm.quantity) / 1000) * selectedService.rate).toFixed(2)
     : '0.00';
 
+  // Filter services based on search query
+  const filteredServices = services.filter(service => {
+    if (!serviceSearch.trim()) return true;
+    const searchLower = serviceSearch.toLowerCase();
+    return (
+      service.name?.toLowerCase().includes(searchLower) ||
+      service.platform?.toLowerCase().includes(searchLower) ||
+      service.service_type?.toLowerCase().includes(searchLower) ||
+      service.description?.toLowerCase().includes(searchLower)
+    );
+  });
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
       <Navbar user={user} onLogout={onLogout} />
@@ -929,9 +942,23 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             <form onSubmit={handleOrder} className="space-y-5">
               <div>
                 <Label htmlFor="service" className="text-gray-700 font-medium mb-2 block">Service</Label>
+                {/* Search Input */}
+                <div className="relative mb-3">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <Input
+                    type="text"
+                    placeholder="Search services by name, platform, or type..."
+                    value={serviceSearch}
+                    onChange={(e) => setServiceSearch(e.target.value)}
+                    className="rounded-xl bg-white/70 pl-10"
+                  />
+                </div>
                 <Select 
                   value={orderForm.service_id || ''} 
-                  onValueChange={(value) => setOrderForm({ ...orderForm, service_id: value })}
+                  onValueChange={(value) => {
+                    setOrderForm({ ...orderForm, service_id: value });
+                    setServiceSearch(''); // Clear search when service is selected
+                  }}
                 >
                   <SelectTrigger data-testid="order-service-select" className="rounded-xl bg-white/70">
                     <SelectValue placeholder="Select a service">
@@ -940,14 +967,30 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                         : 'Select a service'}
                     </SelectValue>
                   </SelectTrigger>
-                  <SelectContent>
-                    {services.map((service) => (
-                      <SelectItem key={service.id} value={service.id}>
-                        {service.name} - ₵{service.rate}/1000
-                      </SelectItem>
-                    ))}
+                  <SelectContent className="max-h-[300px]">
+                    {filteredServices.length === 0 ? (
+                      <div className="px-2 py-6 text-center text-sm text-gray-500">
+                        No services found matching "{serviceSearch}"
+                      </div>
+                    ) : (
+                      filteredServices.map((service) => (
+                        <SelectItem key={service.id} value={service.id}>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{service.name}</span>
+                            <span className="text-xs text-gray-500">
+                              {service.platform && `${service.platform} • `}₵{service.rate}/1000
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
+                {serviceSearch && (
+                  <p className="text-xs text-gray-500 mt-2">
+                    {filteredServices.length} service{filteredServices.length !== 1 ? 's' : ''} found
+                  </p>
+                )}
               </div>
 
               <div>
