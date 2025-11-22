@@ -418,8 +418,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           // Validate inputs before calling Paystack
           const amountInPesewas = Math.round(pendingTransaction.amount * 100);
           
-          if (!amountInPesewas || amountInPesewas < 100) {
-            throw new Error('Amount must be at least ₵1.00 (100 pesewas)');
+          if (!amountInPesewas || amountInPesewas < 1000) {
+            throw new Error('Amount must be at least ₵10.00 (1000 pesewas)');
           }
 
           if (!user.email || !user.email.includes('@')) {
@@ -593,8 +593,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     }
 
     const amount = parseFloat(depositAmount);
-    if (amount < 1) {
-      toast.error('Minimum deposit amount is ₵1');
+    if (amount < 10) {
+      toast.error('Minimum deposit amount is ₵10');
       return;
     }
 
