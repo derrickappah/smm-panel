@@ -33,6 +33,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
   useEffect(() => {
     fetchServices();
     fetchRecentOrders();
+    verifyPendingPayments(); // Check for pending payments that might have succeeded
     
     // Ensure PaystackPop is loaded (react-paystack should load it, but we ensure it's available)
     if (!window.PaystackPop && !document.querySelector('script[src*="paystack"]')) {
@@ -49,6 +50,121 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       document.head.appendChild(script);
     }
   }, []);
+
+  // Verify pending payments that might have succeeded
+  const verifyPendingPayments = async () => {
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) return;
+
+      // Find recent pending deposit transactions (within last 30 minutes)
+      const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+      
+      const { data: pendingTransactions, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('user_id', authUser.id)
+        .eq('type', 'deposit')
+        .eq('status', 'pending')
+        .gte('created_at', thirtyMinutesAgo)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (error) {
+        console.error('Error fetching pending transactions for verification:', error);
+        return;
+      }
+
+      if (!pendingTransactions || pendingTransactions.length === 0) {
+        return;
+      }
+
+      // Verify each pending transaction with Paystack
+      for (const transaction of pendingTransactions) {
+        // If transaction has a reference stored, verify it
+        if (transaction.paystack_reference) {
+          try {
+            const verifyResponse = await fetch('/api/verify-paystack-payment', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                reference: transaction.paystack_reference
+              })
+            });
+
+            if (verifyResponse.ok) {
+              const verifyData = await verifyResponse.json();
+              
+              if (verifyData.success && verifyData.status === 'success') {
+                // Payment was successful, update transaction
+                console.log('Found successful payment for pending transaction:', transaction.id);
+                
+                // Update transaction status
+                const { error: updateError } = await supabase
+                  .from('transactions')
+                  .update({ status: 'approved' })
+                  .eq('id', transaction.id)
+                  .eq('status', 'pending');
+
+                if (!updateError) {
+                  // Update balance
+                  const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('balance')
+                    .eq('id', authUser.id)
+                    .single();
+
+                  if (profile) {
+                    const newBalance = (profile.balance || 0) + transaction.amount;
+                    await supabase
+                      .from('profiles')
+                      .update({ balance: newBalance })
+                      .eq('id', authUser.id);
+                    
+                    // Refresh user data
+                    await onUpdateUser();
+                    toast.success(`Payment verified! ₵${transaction.amount.toFixed(2)} added to your balance.`);
+                  }
+                }
+              } else if (verifyData.status === 'failed' || verifyData.status === 'abandoned') {
+                // Payment failed or was abandoned, mark as rejected
+                console.log('Payment failed or abandoned, marking transaction as rejected:', transaction.id);
+                await supabase
+                  .from('transactions')
+                  .update({ status: 'rejected' })
+                  .eq('id', transaction.id)
+                  .eq('status', 'pending');
+              }
+            }
+          } catch (verifyError) {
+            console.error('Error verifying payment:', verifyError);
+            // Continue with other transactions
+          }
+        } else {
+          // No reference stored - this means callback never fired
+          // We can't verify without reference, but we can check if it's been more than 10 minutes
+          // If so, it's likely the payment was never completed
+          const transactionAge = Date.now() - new Date(transaction.created_at).getTime();
+          const tenMinutes = 10 * 60 * 1000;
+          
+          if (transactionAge > tenMinutes) {
+            // Transaction is old and has no reference - likely never completed
+            // Mark as rejected after 10 minutes
+            console.log('Old pending transaction without reference, marking as rejected:', transaction.id);
+            await supabase
+              .from('transactions')
+              .update({ status: 'rejected' })
+              .eq('id', transaction.id)
+              .eq('status', 'pending');
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error in verifyPendingPayments:', error);
+    }
+  };
 
   // Pre-select service if navigated from Services page
   useEffect(() => {
@@ -217,12 +333,25 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         throw new Error('Not authenticated');
       }
 
-      // Find the transaction by reference or pending transaction ID
-      // Handle case where user retried payment - find the correct transaction
+      // Find the transaction by reference first, then by pending transaction ID
       let transactionToUpdate = null;
       
-      if (pendingTransaction) {
-        // First try to find by pending transaction ID
+      // First, try to find by Paystack reference (most reliable)
+      if (reference) {
+        const { data: foundByReference, error: findRefError } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('paystack_reference', reference)
+          .maybeSingle();
+        
+        if (!findRefError && foundByReference) {
+          transactionToUpdate = foundByReference;
+          console.log('Found transaction by Paystack reference:', transactionToUpdate.id);
+        }
+      }
+      
+      // If not found by reference, try by pending transaction ID
+      if (!transactionToUpdate && pendingTransaction) {
         const { data: foundById, error: findByIdError } = await supabase
           .from('transactions')
           .select('*')
@@ -231,12 +360,18 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         
         if (!findByIdError && foundById) {
           transactionToUpdate = foundById;
+          // Update the transaction with the reference for future verification
+          if (reference && !foundById.paystack_reference) {
+            await supabase
+              .from('transactions')
+              .update({ paystack_reference: reference })
+              .eq('id', foundById.id);
+          }
         }
       }
       
-      // If not found by ID, or if we need to verify by reference, search for pending transactions
+      // If still not found, search for most recent pending transaction
       if (!transactionToUpdate) {
-        // Find all pending transactions for this user
         const { data: pendingTransactions, error: findPendingError } = await supabase
           .from('transactions')
           .select('*')
@@ -244,17 +379,31 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           .eq('status', 'pending')
           .eq('type', 'deposit')
           .order('created_at', { ascending: false })
-          .limit(5);
+          .limit(1);
         
         if (!findPendingError && pendingTransactions && pendingTransactions.length > 0) {
-          // Use the most recent pending transaction
           transactionToUpdate = pendingTransactions[0];
+          // Update with reference
+          if (reference) {
+            await supabase
+              .from('transactions')
+              .update({ paystack_reference: reference })
+              .eq('id', transactionToUpdate.id);
+          }
           console.log('Found pending transaction by search:', transactionToUpdate.id);
         }
       }
 
       if (!transactionToUpdate) {
         throw new Error('No pending transaction found for this payment');
+      }
+      
+      // Store reference if not already stored
+      if (reference && !transactionToUpdate.paystack_reference) {
+        await supabase
+          .from('transactions')
+          .update({ paystack_reference: reference })
+          .eq('id', transactionToUpdate.id);
       }
 
       // Check if already approved (avoid duplicate processing)
@@ -396,43 +545,77 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         return;
       }
 
-      // Check if transaction was already approved (shouldn't happen, but safety check)
+      // Fetch transaction to check current status and get reference
       const { data: existingTransaction, error: fetchError } = await supabase
         .from('transactions')
-        .select('status')
+        .select('status, paystack_reference')
         .eq('id', transactionId)
-        .single();
+        .maybeSingle();
 
-      if (fetchError) {
+      if (fetchError && fetchError.code !== 'PGRST116') {
         console.error('Error fetching transaction for cancellation:', fetchError);
         setPendingTransaction(null);
         return;
       }
 
-      // Don't update if already approved (payment might have succeeded before user closed window)
+      // Don't update if already approved
       if (existingTransaction?.status === 'approved') {
         console.log('Transaction already approved, not updating to cancelled');
         setPendingTransaction(null);
         return;
       }
 
-      // Update transaction status to rejected (cancelled)
-      // Only update if still pending to avoid overwriting other statuses
-      // Use update without .single() to avoid "Cannot coerce" error if multiple rows match
-      const { error: updateError } = await supabase
-        .from('transactions')
-        .update({ 
-          status: 'rejected'
-        })
-        .eq('id', transactionId)
-        .eq('status', 'pending'); // Only update if still pending
+      // If we have a Paystack reference, verify payment status before marking as cancelled
+      // This handles the case where payment succeeded but callback didn't fire
+      if (existingTransaction?.paystack_reference) {
+        try {
+          const verifyResponse = await fetch('/api/verify-paystack-payment', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              reference: existingTransaction.paystack_reference
+            })
+          });
 
-      if (updateError) {
-        console.error('Error updating transaction status to rejected:', updateError);
-        // If update failed, that's okay - transaction may have been updated by another process
+          if (verifyResponse.ok) {
+            const verifyData = await verifyResponse.json();
+            
+            // If payment was actually successful, process it instead of cancelling
+            if (verifyData.success && verifyData.status === 'success') {
+              console.log('Payment was successful despite window being closed, processing payment...');
+              
+              // Process the successful payment
+              await handlePaymentSuccess(existingTransaction.paystack_reference);
+              return; // Don't mark as cancelled
+            }
+          }
+        } catch (verifyError) {
+          console.error('Error verifying payment before cancellation:', verifyError);
+          // Continue with cancellation if verification fails
+        }
       } else {
-        console.log('Transaction status updated to rejected (cancelled):', transactionId);
-        // Don't show toast for cancellation - it's expected behavior
+        // No reference stored - try to find payment by email and amount
+        // This is a fallback for when callback never fired
+        // Note: This requires querying Paystack transactions, which needs secret key
+        // For now, we'll mark as cancelled if no reference after a short delay
+        console.log('No Paystack reference stored, cannot verify payment. Marking as cancelled.');
+      }
+
+      // Only update to rejected if still pending and payment was not successful
+      if (existingTransaction?.status === 'pending') {
+        const { error: updateError } = await supabase
+          .from('transactions')
+          .update({ status: 'rejected' })
+          .eq('id', transactionId)
+          .eq('status', 'pending');
+
+        if (updateError) {
+          console.error('Error updating transaction status to rejected:', updateError);
+        } else {
+          console.log('Transaction status updated to rejected (cancelled):', transactionId);
+        }
       }
 
       setPendingTransaction(null);
@@ -475,17 +658,17 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           });
 
           // Prepare Paystack config - minimal required fields only
-          // Some Paystack accounts may reject metadata, so we'll keep it minimal
+          // Include metadata to link transaction ID for verification
           const paystackConfig = {
             key: paystackPublicKey.trim(), // Remove any whitespace
             email: user.email.trim(),
             amount: amountInPesewas, // Amount in pesewas (1 GHS = 100 pesewas)
             currency: 'GHS',
-            // Try without metadata first - some test accounts reject it
-            // metadata: {
-            //   transaction_id: pendingTransaction.id,
-            //   user_id: pendingTransaction.user_id
-            // },
+            // Store transaction ID in metadata so we can verify later
+            metadata: {
+              transaction_id: pendingTransaction.id,
+              user_id: authUser.id
+            },
             callback: (response) => {
               // Paystack callback must be synchronous, handle async operation inside
               console.log('Paystack callback triggered:', response);
@@ -512,6 +695,20 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
               console.log('Paystack reference:', response.reference);
               console.log('Pending transaction:', pendingTransaction);
+
+              // Store the reference immediately (even before processing) so we can verify later if needed
+              if (pendingTransaction?.id && response.reference) {
+                supabase
+                  .from('transactions')
+                  .update({ paystack_reference: response.reference })
+                  .eq('id', pendingTransaction.id)
+                  .then(() => {
+                    console.log('Paystack reference stored:', response.reference);
+                  })
+                  .catch((refError) => {
+                    console.error('Error storing Paystack reference:', refError);
+                  });
+              }
 
               // Call the async handler
               handlePaymentSuccess(response.reference).catch((error) => {
