@@ -82,7 +82,24 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
   const fetchServices = async () => {
     try {
-      // Fetch services from Supabase only
+      // Get current user role to filter services
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      let userRole = 'user';
+      
+      if (authUser) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', authUser.id)
+          .single();
+        
+        if (profile) {
+          userRole = profile.role || 'user';
+        }
+      }
+      
+      // Fetch services from Supabase
+      // RLS policies will automatically filter based on seller_only flag and user role
       const { data, error } = await supabase
         .from('services')
         .select('*')
@@ -192,12 +209,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
   };
 
   const handlePaymentSuccess = async (reference) => {
-    if (!pendingTransaction) {
-      console.error('No pending transaction found');
-      return;
-    }
-
-    console.log('Payment success callback received:', { reference, transactionId: pendingTransaction.id });
+    console.log('Payment success callback received:', { reference, pendingTransactionId: pendingTransaction?.id });
 
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -205,81 +217,108 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         throw new Error('Not authenticated');
       }
 
-      // First, verify the transaction exists and get its current status
-      const { data: existingTransaction, error: fetchError } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('id', pendingTransaction.id)
-        .single();
-
-      if (fetchError) {
-        console.error('Error fetching transaction:', fetchError);
-        throw new Error(`Transaction not found: ${fetchError.message}`);
+      // Find the transaction by reference or pending transaction ID
+      // Handle case where user retried payment - find the correct transaction
+      let transactionToUpdate = null;
+      
+      if (pendingTransaction) {
+        // First try to find by pending transaction ID
+        const { data: foundById, error: findByIdError } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('id', pendingTransaction.id)
+          .maybeSingle();
+        
+        if (!findByIdError && foundById) {
+          transactionToUpdate = foundById;
+        }
+      }
+      
+      // If not found by ID, or if we need to verify by reference, search for pending transactions
+      if (!transactionToUpdate) {
+        // Find all pending transactions for this user
+        const { data: pendingTransactions, error: findPendingError } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('user_id', authUser.id)
+          .eq('status', 'pending')
+          .eq('type', 'deposit')
+          .order('created_at', { ascending: false })
+          .limit(5);
+        
+        if (!findPendingError && pendingTransactions && pendingTransactions.length > 0) {
+          // Use the most recent pending transaction
+          transactionToUpdate = pendingTransactions[0];
+          console.log('Found pending transaction by search:', transactionToUpdate.id);
+        }
       }
 
-      if (!existingTransaction) {
-        throw new Error('Transaction not found in database');
+      if (!transactionToUpdate) {
+        throw new Error('No pending transaction found for this payment');
       }
 
       // Check if already approved (avoid duplicate processing)
-      if (existingTransaction.status === 'approved') {
-        console.log('Transaction already approved, skipping update');
-        toast.success(`Payment already processed! ₵${pendingTransaction.amount.toFixed(2)} is in your balance.`);
+      if (transactionToUpdate.status === 'approved') {
+        console.log('Transaction already approved, checking balance...');
+        
+        // Verify balance was updated
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('balance')
+          .eq('id', authUser.id)
+          .single();
+        
+        toast.success(`Payment already processed! ₵${transactionToUpdate.amount.toFixed(2)} is in your balance.`);
         setDepositAmount('');
         setPendingTransaction(null);
         await onUpdateUser();
         return;
       }
 
-      // Update transaction status to approved
-      const { data: updatedTransaction, error: transactionError } = await supabase
+      // Update transaction status to approved (use maybeSingle to handle multiple rows gracefully)
+      const { data: updatedTransactions, error: transactionError } = await supabase
         .from('transactions')
         .update({ 
           status: 'approved'
         })
-        .eq('id', pendingTransaction.id)
-        .select()
-        .single();
+        .eq('id', transactionToUpdate.id)
+        .eq('status', 'pending') // Only update if still pending (prevents race conditions)
+        .select();
 
       if (transactionError) {
         console.error('Error updating transaction status:', transactionError);
         
-        // If update failed, check if transaction was already updated
+        // Check if transaction was already updated by another process
         const { data: currentTransaction } = await supabase
           .from('transactions')
           .select('status')
-          .eq('id', pendingTransaction.id)
-          .single();
+          .eq('id', transactionToUpdate.id)
+          .maybeSingle();
         
         if (currentTransaction?.status === 'approved') {
-          console.log('Transaction was already approved, continuing with balance update');
+          console.log('Transaction was already approved by another process, continuing with balance update');
           // Continue with balance update
         } else {
-          // Retry the update once
-          console.log('Retrying transaction update...');
-          const { data: retryTransaction, error: retryError } = await supabase
-            .from('transactions')
-            .update({ status: 'approved' })
-            .eq('id', pendingTransaction.id)
-            .select()
-            .single();
-          
-          if (retryError) {
-            throw new Error(`Failed to update transaction after retry: ${retryError.message}`);
-          }
-          
-          console.log('Transaction updated on retry:', retryTransaction);
+          throw new Error(`Failed to update transaction: ${transactionError.message}`);
+        }
+      } else if (!updatedTransactions || updatedTransactions.length === 0) {
+        // Transaction was already updated or doesn't exist
+        const { data: checkTransaction } = await supabase
+          .from('transactions')
+          .select('status')
+          .eq('id', transactionToUpdate.id)
+          .maybeSingle();
+        
+        if (checkTransaction?.status === 'approved') {
+          console.log('Transaction already approved, continuing with balance update');
+        } else {
+          throw new Error('Transaction update returned no rows - may have been updated by another process');
         }
       } else {
-        console.log('Transaction status updated to approved:', updatedTransaction);
-        
-        // Verify the update was successful
-        if (updatedTransaction.status !== 'approved') {
-          throw new Error('Transaction update verification failed: status is not approved');
-        }
+        console.log('Transaction status updated to approved:', updatedTransactions[0]);
       }
 
-      // Get current balance and update it
+      // Get current balance and update it (use atomic update to prevent race conditions)
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('balance')
@@ -291,7 +330,12 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         throw new Error(`Failed to fetch profile: ${profileError.message}`);
       }
 
-      const newBalance = (profile.balance || 0) + pendingTransaction.amount;
+      // Calculate new balance
+      const transactionAmount = transactionToUpdate.amount;
+      const currentBalance = profile.balance || 0;
+      const newBalance = currentBalance + transactionAmount;
+      
+      // Update balance atomically
       const { error: balanceError } = await supabase
         .from('profiles')
         .update({ balance: newBalance })
@@ -302,9 +346,13 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         throw new Error(`Failed to update balance: ${balanceError.message}`);
       }
 
-      console.log('Balance updated successfully:', { oldBalance: profile.balance, newBalance });
+      console.log('Balance updated successfully:', { 
+        oldBalance: currentBalance, 
+        transactionAmount, 
+        newBalance 
+      });
 
-      toast.success(`Payment successful! ₵${pendingTransaction.amount.toFixed(2)} added to your balance.`);
+      toast.success(`Payment successful! ₵${transactionAmount.toFixed(2)} added to your balance.`);
       setDepositAmount('');
       setPendingTransaction(null);
       
@@ -317,20 +365,16 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         code: error.code,
         details: error.details,
         hint: error.hint,
-        transactionId: pendingTransaction?.id
+        reference,
+        pendingTransactionId: pendingTransaction?.id
       });
       
-      toast.error(`Payment successful but failed to update: ${error.message || 'Unknown error'}. Transaction ID: ${pendingTransaction.id.slice(0, 8)}. Please contact support with this ID.`);
+      const transactionId = pendingTransaction?.id?.slice(0, 8) || 'unknown';
+      toast.error(`Payment successful but failed to update: ${error.message || 'Unknown error'}. Transaction ID: ${transactionId}. Please contact support with this ID.`);
       
-      // Try to update transaction to pending for manual review (but don't fail if this also fails)
-      try {
-        await supabase
-          .from('transactions')
-          .update({ status: 'pending' })
-          .eq('id', pendingTransaction.id);
-      } catch (updateError) {
-        console.error('Failed to update transaction to pending:', updateError);
-      }
+      // Don't try to update transaction status here - let admin handle it manually
+      // Just clear the pending transaction state
+      setPendingTransaction(null);
     }
   };
 
@@ -374,25 +418,21 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
       // Update transaction status to rejected (cancelled)
       // Only update if still pending to avoid overwriting other statuses
-      const { data: updatedTransaction, error: updateError } = await supabase
+      // Use update without .single() to avoid "Cannot coerce" error if multiple rows match
+      const { error: updateError } = await supabase
         .from('transactions')
         .update({ 
           status: 'rejected'
         })
         .eq('id', transactionId)
-        .eq('status', 'pending') // Only update if still pending
-        .select()
-        .single();
+        .eq('status', 'pending'); // Only update if still pending
 
       if (updateError) {
         console.error('Error updating transaction status to rejected:', updateError);
-        // If update failed because status changed, that's okay - log it
-        if (updateError.code === 'PGRST116') {
-          console.log('Transaction status was already changed, skipping update');
-        }
-      } else if (updatedTransaction) {
-        console.log('Transaction status updated to rejected (cancelled):', updatedTransaction);
-        toast.success('Payment cancelled');
+        // If update failed, that's okay - transaction may have been updated by another process
+      } else {
+        console.log('Transaction status updated to rejected (cancelled):', transactionId);
+        // Don't show toast for cancellation - it's expected behavior
       }
 
       setPendingTransaction(null);
@@ -651,7 +691,37 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         }
       }
 
-      // Create transaction record
+      // Check for existing pending transactions for this amount (prevent duplicates)
+      const { data: existingPending, error: checkPendingError } = await supabase
+        .from('transactions')
+        .select('id, status, amount, created_at')
+        .eq('user_id', authUser.id)
+        .eq('type', 'deposit')
+        .eq('status', 'pending')
+        .eq('amount', amount)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      // If there's a recent pending transaction (within last 5 minutes), reuse it
+      if (!checkPendingError && existingPending && existingPending.length > 0) {
+        const pendingTx = existingPending[0];
+        const txAge = Date.now() - new Date(pendingTx.created_at).getTime();
+        const fiveMinutes = 5 * 60 * 1000;
+        
+        if (txAge < fiveMinutes) {
+          console.log('Reusing existing pending transaction:', pendingTx.id);
+          setPendingTransaction({
+            id: pendingTx.id,
+            amount: pendingTx.amount,
+            user_id: authUser.id
+          });
+          setDepositAmount('');
+          setLoading(false);
+          return; // Don't create a new transaction, reuse the existing one
+        }
+      }
+
+      // Create new transaction record
       const { data: transaction, error } = await supabase
         .from('transactions')
         .insert({

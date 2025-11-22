@@ -58,7 +58,8 @@ const AdminDashboard = ({ user, onLogout }) => {
     smmgen_service_id: '',
     is_combo: false,
     combo_service_ids: [],
-    combo_smmgen_service_ids: []
+    combo_smmgen_service_ids: [],
+    seller_only: false
   });
 
   useEffect(() => {
@@ -279,7 +280,8 @@ const AdminDashboard = ({ user, onLogout }) => {
           : null,
         combo_smmgen_service_ids: serviceForm.is_combo && serviceForm.combo_smmgen_service_ids.length > 0
           ? serviceForm.combo_smmgen_service_ids
-          : null
+          : null,
+        seller_only: serviceForm.seller_only || false
       });
 
       if (error) throw error;
@@ -292,7 +294,11 @@ const AdminDashboard = ({ user, onLogout }) => {
         min_quantity: '',
         max_quantity: '',
         description: '',
-        smmgen_service_id: ''
+        smmgen_service_id: '',
+        is_combo: false,
+        combo_service_ids: [],
+        combo_smmgen_service_ids: [],
+        seller_only: false
       });
       fetchAllData();
     } catch (error) {
@@ -982,6 +988,20 @@ const AdminDashboard = ({ user, onLogout }) => {
                     )}
                   </div>
                   
+                  {/* Seller-Only Service Option */}
+                  <div className="flex items-center space-x-2 p-4 border border-gray-200 rounded-lg bg-yellow-50">
+                    <input
+                      type="checkbox"
+                      id="seller_only"
+                      checked={serviceForm.seller_only}
+                      onChange={(e) => setServiceForm({ ...serviceForm, seller_only: e.target.checked })}
+                      className="w-4 h-4 text-yellow-600 border-gray-300 rounded focus:ring-yellow-500"
+                    />
+                    <Label htmlFor="seller_only" className="text-sm font-medium text-gray-900">
+                      Seller-only service (only visible to users with seller or admin role)
+                    </Label>
+                  </div>
+                  
                   <Button
                     type="submit"
                     disabled={loading}
@@ -1027,6 +1047,11 @@ const AdminDashboard = ({ user, onLogout }) => {
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full">
                                     <Layers className="w-3 h-3" />
                                     Combo
+                                  </span>
+                                )}
+                                {service.seller_only && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs font-medium rounded-full">
+                                    Seller Only
                                   </span>
                                 )}
                               </div>
@@ -1420,6 +1445,7 @@ const UserEditForm = ({ user, onSave, onCancel }) => {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="user">User</SelectItem>
+            <SelectItem value="seller">Seller</SelectItem>
             <SelectItem value="admin">Admin</SelectItem>
           </SelectContent>
         </Select>
@@ -1455,7 +1481,8 @@ const ServiceEditForm = ({ service, onSave, onCancel }) => {
     smmgen_service_id: service.smmgen_service_id || '',
     is_combo: service.is_combo || false,
     combo_service_ids: service.combo_service_ids || [],
-    combo_smmgen_service_ids: service.combo_smmgen_service_ids || []
+    combo_smmgen_service_ids: service.combo_smmgen_service_ids || [],
+    seller_only: service.seller_only || false
   });
 
   const handleSubmit = (e) => {
@@ -1472,7 +1499,8 @@ const ServiceEditForm = ({ service, onSave, onCancel }) => {
         : null,
       combo_smmgen_service_ids: formData.is_combo && formData.combo_smmgen_service_ids.length > 0
         ? formData.combo_smmgen_service_ids
-        : null
+        : null,
+      seller_only: formData.seller_only || false
     });
   };
 
@@ -1556,6 +1584,18 @@ const ServiceEditForm = ({ service, onSave, onCancel }) => {
           onChange={(e) => setFormData({ ...formData, smmgen_service_id: e.target.value })}
         />
         <p className="text-xs text-gray-500 mt-1">Enter the SMMGen API service ID for integration</p>
+      </div>
+      <div className="flex items-center space-x-2 p-3 border border-gray-200 rounded-lg bg-yellow-50">
+        <input
+          type="checkbox"
+          id="edit_seller_only"
+          checked={formData.seller_only}
+          onChange={(e) => setFormData({ ...formData, seller_only: e.target.checked })}
+          className="w-4 h-4 text-yellow-600 border-gray-300 rounded focus:ring-yellow-500"
+        />
+        <Label htmlFor="edit_seller_only" className="text-sm font-medium text-gray-900">
+          Seller-only service
+        </Label>
       </div>
       <div className="flex gap-2">
         <Button type="submit" size="sm">Save</Button>
