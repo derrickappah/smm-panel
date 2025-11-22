@@ -140,16 +140,20 @@ export const placeSMMGenOrder = async (serviceId, link, quantity) => {
     const data = await response.json();
     return data;
   } catch (error) {
-    console.error('SMMGen Order Error:', error);
     // If it's a network error (CORS, connection failed), return null instead of throwing
     // This allows the app to continue with local order creation
     if (error.message.includes('Failed to fetch') || 
         error.message.includes('CORS') || 
         error.message.includes('ERR_CONNECTION_REFUSED') ||
         error.message.includes('NetworkError')) {
-      console.warn('SMMGen backend unavailable. Continuing with local order only.');
+      // Only log in development, suppress in production
+      if (!isProduction) {
+        console.debug('SMMGen backend unavailable (expected in dev). Continuing with local order only.');
+      }
       return null; // Return null to allow graceful degradation
     }
+    // For other errors, log and throw
+    console.error('SMMGen Order Error:', error);
     throw error;
   }
 };

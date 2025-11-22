@@ -682,25 +682,26 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           
           // If SMMGen returns null, it means backend is not available (graceful skip)
           if (smmgenResponse === null) {
-            console.warn('SMMGen backend not available. Creating local order only.');
-            // Don't show warning - this is expected in production without backend
+            // Silently continue - this is expected when backend/serverless functions aren't available
+            // Order will be created locally in Supabase
           } else if (smmgenResponse) {
             smmgenOrderId = smmgenResponse.order || smmgenResponse.id || null;
             console.log('SMMGen order placed:', smmgenOrderId);
           }
         } catch (smmgenError) {
-          console.error('SMMGen order failed:', smmgenError);
-          // If SMMGen API key is not configured, continue with local order only
-          if (smmgenError.message?.includes('API key not configured')) {
-            console.warn('SMMGen API not configured, creating local order only');
-            toast.warning('SMMGen API not configured. Order created locally.');
-          } else if (smmgenError.message?.includes('Backend proxy server not running')) {
-            // Backend not available - this is okay, continue silently
-            console.warn('SMMGen backend not available. Creating local order only.');
-          } else {
-            // For other SMMGen errors, still create the order locally
-            console.warn('SMMGen order failed, creating local order:', smmgenError.message);
-            toast.warning(`SMMGen order failed: ${smmgenError.message}. Order created locally.`);
+          // Only log actual API errors, not connection failures (which are handled gracefully)
+          if (!smmgenError.message?.includes('Failed to fetch') && 
+              !smmgenError.message?.includes('ERR_CONNECTION_REFUSED') &&
+              !smmgenError.message?.includes('Backend proxy server not running')) {
+            console.error('SMMGen order failed:', smmgenError);
+            
+            // If SMMGen API key is not configured, continue with local order only
+            if (smmgenError.message?.includes('API key not configured')) {
+              toast.warning('SMMGen API not configured. Order created locally.');
+            } else {
+              // For other SMMGen errors, still create the order locally
+              toast.warning(`SMMGen order failed: ${smmgenError.message}. Order created locally.`);
+            }
           }
           // Continue with local order creation even if SMMGen fails
         }
