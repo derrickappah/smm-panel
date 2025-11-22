@@ -57,6 +57,30 @@ const AdminDashboard = ({ user, onLogout }) => {
 
   useEffect(() => {
     fetchAllData();
+
+    // Subscribe to real-time updates for transactions (deposits)
+    const transactionsChannel = supabase
+      .channel('admin-transactions-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to all changes (INSERT, UPDATE, DELETE)
+          schema: 'public',
+          table: 'transactions',
+          filter: 'type=eq.deposit'
+        },
+        (payload) => {
+          console.log('Transaction change detected:', payload);
+          // Refresh deposits when transaction status changes
+          fetchAllData();
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription on unmount
+    return () => {
+      supabase.removeChannel(transactionsChannel);
+    };
   }, []);
 
   const fetchAllData = async () => {

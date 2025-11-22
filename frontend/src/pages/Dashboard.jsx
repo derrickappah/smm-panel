@@ -332,6 +332,63 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     }
   };
 
+  const handlePaymentCancellation = async () => {
+    if (!pendingTransaction) {
+      console.log('No pending transaction to cancel');
+      return;
+    }
+
+    console.log('Payment cancelled or failed:', { transactionId: pendingTransaction.id });
+
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) {
+        console.error('Not authenticated when cancelling payment');
+        return;
+      }
+
+      // Check if transaction was already approved (shouldn't happen, but safety check)
+      const { data: existingTransaction, error: fetchError } = await supabase
+        .from('transactions')
+        .select('status')
+        .eq('id', pendingTransaction.id)
+        .single();
+
+      if (fetchError) {
+        console.error('Error fetching transaction for cancellation:', fetchError);
+        return;
+      }
+
+      // Don't update if already approved (payment might have succeeded before user closed window)
+      if (existingTransaction?.status === 'approved') {
+        console.log('Transaction already approved, not updating to cancelled');
+        setPendingTransaction(null);
+        return;
+      }
+
+      // Update transaction status to rejected (cancelled)
+      const { error: updateError } = await supabase
+        .from('transactions')
+        .update({ 
+          status: 'rejected'
+        })
+        .eq('id', pendingTransaction.id)
+        .eq('status', 'pending'); // Only update if still pending
+
+      if (updateError) {
+        console.error('Error updating transaction status to rejected:', updateError);
+        // Don't show error to user, just log it
+      } else {
+        console.log('Transaction status updated to rejected (cancelled)');
+      }
+
+      setPendingTransaction(null);
+    } catch (error) {
+      console.error('Error handling payment cancellation:', error);
+      setPendingTransaction(null);
+    }
+  };
+
   // Trigger Paystack payment when pendingTransaction is set
   useEffect(() => {
     if (pendingTransaction && user?.email) {
@@ -379,15 +436,29 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             callback: (response) => {
               // Paystack callback must be synchronous, handle async operation inside
               console.log('Paystack callback triggered:', response);
-              console.log('Paystack reference:', response.reference);
-              console.log('Pending transaction:', pendingTransaction);
               
-              // Verify response has reference
-              if (!response || !response.reference) {
-                console.error('Invalid Paystack response:', response);
-                toast.error('Payment response invalid. Please contact support.');
+              // Check if response indicates failure
+              if (!response || response.status === 'error' || response.status === 'failed') {
+                console.error('Payment failed:', response);
+                toast.error('Payment failed. Please try again.');
+                handlePaymentCancellation().catch((error) => {
+                  console.error('Error handling payment failure:', error);
+                });
                 return;
               }
+              
+              // Verify response has reference
+              if (!response.reference) {
+                console.error('Invalid Paystack response (no reference):', response);
+                toast.error('Payment response invalid. Please contact support.');
+                handlePaymentCancellation().catch((error) => {
+                  console.error('Error handling invalid payment response:', error);
+                });
+                return;
+              }
+
+              console.log('Paystack reference:', response.reference);
+              console.log('Pending transaction:', pendingTransaction);
 
               // Call the async handler
               handlePaymentSuccess(response.reference).catch((error) => {
@@ -396,8 +467,12 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               });
             },
             onClose: () => {
-              toast.info('Payment window closed');
-              setPendingTransaction(null);
+              console.log('Payment window closed by user');
+              toast.info('Payment cancelled');
+              // Update transaction status to rejected when payment window is closed
+              handlePaymentCancellation().catch((error) => {
+                console.error('Error handling payment cancellation:', error);
+              });
             }
           };
 
@@ -446,7 +521,14 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             toast.error('Failed to initialize payment: ' + (errorMessage || 'Unknown error'));
           }
           
-          setPendingTransaction(null);
+          // Update transaction status to rejected when payment initialization fails
+          if (pendingTransaction) {
+            handlePaymentCancellation().catch((cancelError) => {
+              console.error('Error handling payment cancellation after init failure:', cancelError);
+            });
+          } else {
+            setPendingTransaction(null);
+          }
         }
       };
 
@@ -469,7 +551,15 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           clearInterval(checkInterval);
           if (!window.PaystackPop) {
             toast.error('Payment gateway failed to load. Please refresh the page and try again.');
-            setPendingTransaction(null);
+            // Update transaction status to rejected when payment gateway fails to load
+            if (pendingTransaction) {
+              handlePaymentCancellation().catch((cancelError) => {
+                console.error('Error handling payment cancellation after timeout:', cancelError);
+                setPendingTransaction(null);
+              });
+            } else {
+              setPendingTransaction(null);
+            }
           }
         }, 5000);
 
