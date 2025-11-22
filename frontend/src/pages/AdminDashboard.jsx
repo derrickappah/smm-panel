@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
@@ -10,7 +11,7 @@ import Navbar from '@/components/Navbar';
 import { 
   Users, ShoppingCart, DollarSign, Package, Search, Edit, Trash2, 
   Plus, Minus, TrendingUp, CheckCircle, XCircle, Clock, Filter,
-  Download, RefreshCw
+  Download, RefreshCw, MessageSquare, Send
 } from 'lucide-react';
 
 const AdminDashboard = ({ user, onLogout }) => {
@@ -22,13 +23,15 @@ const AdminDashboard = ({ user, onLogout }) => {
     completed_orders: 0,
     total_services: 0,
     confirmed_deposits: 0,
-    total_deposits: 0
+    total_deposits: 0,
+    open_tickets: 0
   });
   const [users, setUsers] = useState([]);
   const [orders, setOrders] = useState([]);
   const [deposits, setDeposits] = useState([]);
   const [allTransactions, setAllTransactions] = useState([]);
   const [services, setServices] = useState([]);
+  const [supportTickets, setSupportTickets] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   
@@ -149,17 +152,24 @@ const AdminDashboard = ({ user, onLogout }) => {
         console.error('Error fetching services:', servicesRes.error);
         throw servicesRes.error;
       }
+      if (ticketsRes.error) {
+        console.error('Error fetching support tickets:', ticketsRes.error);
+        // Don't throw - support tickets might not exist yet
+        console.warn('Support tickets table may not exist. Run CREATE_SUPPORT_TICKETS.sql migration.');
+      }
 
       setUsers(usersRes.data || []);
       setOrders(ordersRes.data || []);
       setDeposits(depositsRes.data || []);
       setAllTransactions(transactionsRes.data || []);
       setServices(servicesRes.data || []);
+      setSupportTickets(ticketsRes.data || []);
 
       // Calculate enhanced stats
       const pendingDeposits = (depositsRes.data || []).filter(d => d.status === 'pending').length;
       const confirmedDeposits = (depositsRes.data || []).filter(d => d.status === 'approved').length;
       const completedOrders = (ordersRes.data || []).filter(o => o.status === 'completed').length;
+      const openTickets = (ticketsRes.data || []).filter(t => t.status === 'open').length;
       const totalRevenue = (ordersRes.data || [])
         .filter(o => o.status === 'completed')
         .reduce((sum, o) => sum + parseFloat(o.total_cost || 0), 0);
@@ -175,7 +185,8 @@ const AdminDashboard = ({ user, onLogout }) => {
         completed_orders: completedOrders,
         total_services: (servicesRes.data || []).length,
         confirmed_deposits: confirmedDeposits,
-        total_deposits: totalDeposits
+        total_deposits: totalDeposits,
+        open_tickets: openTickets
       });
 
       // Show warning if only seeing own data
@@ -440,8 +451,59 @@ const AdminDashboard = ({ user, onLogout }) => {
     }
   };
 
+  // Support Ticket Management Functions
+  const handleUpdateTicketStatus = async (ticketId, newStatus) => {
+    try {
+      setLoading(true);
+      const { error } = await supabase
+        .from('support_tickets')
+        .update({ status: newStatus })
+        .eq('id', ticketId);
+
+      if (error) throw error;
+      toast.success('Ticket status updated!');
+      fetchAllData();
+      setEditingTicket(null);
+    } catch (error) {
+      toast.error(error.message || 'Failed to update ticket status');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddTicketResponse = async (ticketId) => {
+    if (!ticketResponse.trim()) {
+      toast.error('Please enter a response');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const { error } = await supabase
+        .from('support_tickets')
+        .update({ 
+          admin_response: ticketResponse,
+          status: 'in_progress' // Auto-update status when admin responds
+        })
+        .eq('id', ticketId);
+
+      if (error) throw error;
+      toast.success('Response added successfully!');
+      setTicketResponse('');
+      setEditingTicket(null);
+      fetchAllData();
+    } catch (error) {
+      toast.error(error.message || 'Failed to add response');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Deposit status filter
   const [depositStatusFilter, setDepositStatusFilter] = useState('all');
+  const [ticketStatusFilter, setTicketStatusFilter] = useState('all');
+  const [editingTicket, setEditingTicket] = useState(null);
+  const [ticketResponse, setTicketResponse] = useState('');
 
   // Filter functions
   const filteredUsers = users.filter(u => 
@@ -455,6 +517,11 @@ const AdminDashboard = ({ user, onLogout }) => {
       o.user_id.toLowerCase().includes(orderSearch.toLowerCase());
     const matchesStatus = orderStatusFilter === 'all' || o.status === orderStatusFilter;
     return matchesSearch && matchesStatus;
+  });
+
+  const filteredTickets = supportTickets.filter(t => {
+    const matchesStatus = ticketStatusFilter === 'all' || t.status === ticketStatusFilter;
+    return matchesStatus;
   });
 
   const filteredServices = services.filter(s =>
@@ -548,6 +615,9 @@ const AdminDashboard = ({ user, onLogout }) => {
             <TabsTrigger value="services">Services</TabsTrigger>
             <TabsTrigger value="users">Users</TabsTrigger>
             <TabsTrigger value="transactions">Transactions</TabsTrigger>
+            <TabsTrigger value="support">
+              Support {stats.open_tickets > 0 && <span className="ml-1 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">{stats.open_tickets}</span>}
+            </TabsTrigger>
             <TabsTrigger value="balance">Balance</TabsTrigger>
           </TabsList>
 
@@ -976,6 +1046,140 @@ const AdminDashboard = ({ user, onLogout }) => {
                   ))
                 )}
               </div>
+            </div>
+          </TabsContent>
+
+          {/* Support Tickets Tab */}
+          <TabsContent value="support">
+            <div className="glass p-4 sm:p-6 rounded-3xl">
+              <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Support Tickets</h2>
+                <Select value={ticketStatusFilter} onValueChange={setTicketStatusFilter}>
+                  <SelectTrigger className="w-full sm:w-48">
+                    <Filter className="w-4 h-4 mr-2" />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="open">Open</SelectItem>
+                    <SelectItem value="in_progress">In Progress</SelectItem>
+                    <SelectItem value="resolved">Resolved</SelectItem>
+                    <SelectItem value="closed">Closed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {filteredTickets.length === 0 ? (
+                <p className="text-gray-600 text-center py-8">No support tickets found</p>
+              ) : (
+                <div className="space-y-4">
+                  {filteredTickets.map((ticket) => {
+                    const statusConfig = {
+                      open: { label: 'Open', color: 'bg-yellow-100 text-yellow-700', icon: Clock },
+                      in_progress: { label: 'In Progress', color: 'bg-blue-100 text-blue-700', icon: Clock },
+                      resolved: { label: 'Resolved', color: 'bg-green-100 text-green-700', icon: CheckCircle },
+                      closed: { label: 'Closed', color: 'bg-gray-100 text-gray-700', icon: XCircle }
+                    };
+                    const status = statusConfig[ticket.status] || statusConfig.open;
+                    const StatusIcon = status.icon;
+
+                    return (
+                      <div key={ticket.id} className="bg-white/50 p-4 sm:p-6 rounded-xl">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className={`px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${status.color}`}>
+                                <StatusIcon className="w-3 h-3" />
+                                {status.label}
+                              </span>
+                              <span className="text-xs text-gray-500">ID: {ticket.id.slice(0, 8)}</span>
+                            </div>
+                            <p className="font-medium text-gray-900 mb-1">
+                              {ticket.profiles?.name || ticket.name} ({ticket.profiles?.email || ticket.email})
+                            </p>
+                            {ticket.order_id && (
+                              <p className="text-sm text-gray-600 mb-1">
+                                Order ID: <span className="font-mono">{ticket.order_id}</span>
+                              </p>
+                            )}
+                            <p className="text-sm text-gray-700 mt-2 whitespace-pre-wrap">{ticket.message}</p>
+                            {ticket.admin_response && (
+                              <div className="mt-3 p-3 bg-indigo-50 rounded-lg">
+                                <p className="text-xs font-medium text-indigo-900 mb-1">Admin Response:</p>
+                                <p className="text-sm text-gray-700 whitespace-pre-wrap">{ticket.admin_response}</p>
+                              </div>
+                            )}
+                            <p className="text-xs text-gray-500 mt-2">
+                              Created: {new Date(ticket.created_at).toLocaleString()}
+                              {ticket.updated_at !== ticket.created_at && (
+                                <> • Updated: {new Date(ticket.updated_at).toLocaleString()}</>
+                              )}
+                            </p>
+                          </div>
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            {editingTicket === ticket.id ? (
+                              <div className="flex flex-col gap-2 w-full sm:w-64">
+                                <Select
+                                  value={ticket.status}
+                                  onValueChange={(value) => handleUpdateTicketStatus(ticket.id, value)}
+                                >
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="open">Open</SelectItem>
+                                    <SelectItem value="in_progress">In Progress</SelectItem>
+                                    <SelectItem value="resolved">Resolved</SelectItem>
+                                    <SelectItem value="closed">Closed</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <Textarea
+                                  placeholder="Add your response..."
+                                  value={ticketResponse}
+                                  onChange={(e) => setTicketResponse(e.target.value)}
+                                  className="min-h-[100px]"
+                                />
+                                <div className="flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleAddTicketResponse(ticket.id)}
+                                    className="flex-1"
+                                  >
+                                    <Send className="w-4 h-4 mr-1" />
+                                    Send Response
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setEditingTicket(null);
+                                      setTicketResponse('');
+                                    }}
+                                  >
+                                    Cancel
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  setEditingTicket(ticket.id);
+                                  setTicketResponse(ticket.admin_response || '');
+                                }}
+                                className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
+                              >
+                                <Edit className="w-4 h-4 mr-1" />
+                                Respond
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </TabsContent>
 

@@ -7,6 +7,7 @@ import Dashboard from "@/pages/Dashboard";
 import ServicesPage from "@/pages/ServicesPage";
 import OrderHistory from "@/pages/OrderHistory";
 import AdminDashboard from "@/pages/AdminDashboard";
+import SupportPage from "@/pages/SupportPage";
 import SupabaseSetup from "@/components/SupabaseSetup";
 import { Toaster } from "@/components/ui/sonner";
 import { supabase, isConfigured } from "@/lib/supabase";
@@ -199,6 +200,16 @@ function App() {
                 <AdminDashboard user={user} onLogout={logout} />
               ) : (
                 <Navigate to="/dashboard" />
+              )
+            }
+          />
+          <Route
+            path="/support"
+            element={
+              user ? (
+                <SupportPage user={user} onLogout={logout} />
+              ) : (
+                <Navigate to="/auth" />
               )
             }
           />

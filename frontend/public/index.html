@@ -122,10 +122,37 @@
                     }),
                     (e.__SV = 1));
             })(document, window.posthog || []);
-            posthog.init("phc_yJW1VjHGGwmCbbrtczfqqNxgBDbhlhOWcdzcIJEOTFE", {
-                api_host: "https://us.i.posthog.com",
-                person_profiles: "identified_only", // or 'always' to create profiles for anonymous users as well
-            });
+            // Only initialize PostHog if not in development or if explicitly enabled
+            const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            
+            if (!isDevelopment || window.REACT_APP_ENABLE_POSTHOG === 'true') {
+                try {
+                    posthog.init("phc_yJW1VjHGGwmCbbrtczfqqNxgBDbhlhOWcdzcIJEOTFE", {
+                        api_host: "https://us.i.posthog.com",
+                        person_profiles: "identified_only",
+                        // Disable session recording in development to avoid cross-origin errors
+                        disable_session_recording: isDevelopment,
+                        // Disable autocapture in development
+                        autocapture: !isDevelopment,
+                        // Disable capture_pageview in development
+                        capture_pageview: !isDevelopment,
+                        // Disable capture_pageleave in development
+                        capture_pageleave: !isDevelopment
+                    });
+                    
+                    // Override session recording methods in development to prevent errors
+                    if (isDevelopment && window.posthog) {
+                        window.posthog.startSessionRecording = function() { return; };
+                        window.posthog.stopSessionRecording = function() { return; };
+                        window.posthog.sessionRecordingStarted = function() { return false; };
+                    }
+                } catch (error) {
+                    // Silently fail in development to avoid console noise
+                    if (!isDevelopment) {
+                        console.error('PostHog initialization error:', error);
+                    }
+                }
+            }
         </script>
     </body>
 </html>

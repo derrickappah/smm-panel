@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { TrendingUp, LayoutDashboard, Package, History, Shield, LogOut, Menu, X, User } from 'lucide-react';
+import { TrendingUp, LayoutDashboard, Package, History, Shield, LogOut, Menu, X, User, HelpCircle } from 'lucide-react';
 
 const Navbar = ({ user, onLogout }) => {
   const navigate = useNavigate();
@@ -12,6 +12,7 @@ const Navbar = ({ user, onLogout }) => {
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/services', label: 'Services', icon: Package },
     { path: '/orders', label: 'Orders', icon: History },
+    { path: '/support', label: 'Support', icon: HelpCircle },
   ];
 
   if (user?.role === 'admin') {
