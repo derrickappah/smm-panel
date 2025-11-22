@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { placeSMMGenOrder, getSMMGenOrderStatus } from '@/lib/smmgen';
 import Navbar from '@/components/Navbar';
-import { Wallet, ShoppingCart, Clock, TrendingUp, Search } from 'lucide-react';
+import { Wallet, ShoppingCart, Clock, Search } from 'lucide-react';
 // Paystack will be loaded via react-paystack package
 
 const Dashboard = ({ user, onLogout, onUpdateUser }) => {
@@ -872,35 +872,25 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid md:grid-cols-3 gap-6 mb-8 animate-slideUp">
-          <div className="glass p-6 rounded-2xl card-hover">
+        <div className="grid grid-cols-2 gap-4 sm:gap-6 mb-8 animate-slideUp">
+          <div className="glass p-4 sm:p-6 rounded-2xl card-hover">
             <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center">
-                <Wallet className="w-6 h-6 text-white" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center">
+                <Wallet className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </div>
             </div>
-            <p className="text-gray-600 text-sm mb-1">Current Balance</p>
-            <h3 data-testid="user-balance" className="text-3xl font-bold text-gray-900">₵{user.balance.toFixed(2)}</h3>
+            <p className="text-gray-600 text-xs sm:text-sm mb-1">Current Balance</p>
+            <h3 data-testid="user-balance" className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">₵{user.balance.toFixed(2)}</h3>
           </div>
 
-          <div className="glass p-6 rounded-2xl card-hover">
+          <div className="glass p-4 sm:p-6 rounded-2xl card-hover">
             <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-                <ShoppingCart className="w-6 h-6 text-white" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
+                <ShoppingCart className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </div>
             </div>
-            <p className="text-gray-600 text-sm mb-1">Total Orders</p>
-            <h3 className="text-3xl font-bold text-gray-900">{recentOrders.length}</h3>
-          </div>
-
-          <div className="glass p-6 rounded-2xl card-hover">
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center">
-                <TrendingUp className="w-6 h-6 text-white" />
-              </div>
-            </div>
-            <p className="text-gray-600 text-sm mb-1">Account Status</p>
-            <h3 className="text-xl font-bold text-green-600">Active</h3>
+            <p className="text-gray-600 text-xs sm:text-sm mb-1">Total Orders</p>
+            <h3 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">{recentOrders.length}</h3>
           </div>
         </div>
 
