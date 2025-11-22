@@ -936,9 +936,37 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
   };
 
   const selectedService = services.find(s => s.id === orderForm.service_id);
-  const estimatedCost = selectedService && orderForm.quantity
-    ? ((parseInt(orderForm.quantity) / 1000) * selectedService.rate).toFixed(2)
-    : '0.00';
+  
+  // Calculate estimated cost - handle combo services differently
+  const estimatedCost = (() => {
+    if (!selectedService || !orderForm.quantity) return '0.00';
+    
+    const quantity = parseInt(orderForm.quantity);
+    if (isNaN(quantity) || quantity <= 0) return '0.00';
+    
+    // For combo services, calculate sum of component service costs
+    if (selectedService.is_combo && selectedService.combo_service_ids && selectedService.combo_service_ids.length > 0) {
+      const componentServices = selectedService.combo_service_ids
+        .map(serviceId => services.find(s => s.id === serviceId))
+        .filter(s => s !== undefined);
+      
+      if (componentServices.length === 0) {
+        // Fallback to combo service rate if components not found
+        return ((quantity / 1000) * selectedService.rate).toFixed(2);
+      }
+      
+      // Sum up all component service costs
+      const totalCost = componentServices.reduce((sum, componentService) => {
+        const componentCost = (quantity / 1000) * componentService.rate;
+        return sum + componentCost;
+      }, 0);
+      
+      return totalCost.toFixed(2);
+    }
+    
+    // For regular services, use the service rate
+    return ((quantity / 1000) * selectedService.rate).toFixed(2);
+  })();
 
   // Filter services based on search query
   const filteredServices = services.filter(service => {
