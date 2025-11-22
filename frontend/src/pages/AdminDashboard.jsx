@@ -480,6 +480,14 @@ const AdminDashboard = ({ user, onLogout }) => {
 
     try {
       setLoading(true);
+      
+      // Get ticket details to send email
+      const ticket = supportTickets.find(t => t.id === ticketId);
+      if (!ticket) {
+        throw new Error('Ticket not found');
+      }
+
+      // Update ticket in database
       const { error } = await supabase
         .from('support_tickets')
         .update({ 
@@ -489,7 +497,36 @@ const AdminDashboard = ({ user, onLogout }) => {
         .eq('id', ticketId);
 
       if (error) throw error;
-      toast.success('Response added successfully!');
+
+      // Send email to user (if email service is configured)
+      try {
+        const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+        if (isProduction) {
+          // Send email via serverless function
+          const emailResponse = await fetch('/api/send-support-email', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              to: ticket.profiles?.email || ticket.email,
+              subject: `Re: Support Ticket #${ticketId.slice(0, 8)} - ${ticket.profiles?.name || ticket.name}`,
+              message: ticketResponse,
+              ticketId: ticketId.slice(0, 8),
+              userName: ticket.profiles?.name || ticket.name
+            })
+          });
+
+          if (!emailResponse.ok) {
+            console.warn('Failed to send email, but response was saved');
+          }
+        }
+      } catch (emailError) {
+        // Don't fail the response if email fails
+        console.warn('Email sending failed (non-critical):', emailError);
+      }
+
+      toast.success('Response added and sent to user!');
       setTicketResponse('');
       setEditingTicket(null);
       fetchAllData();

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,7 +17,8 @@ import {
   MapPin,
   CheckCircle,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  XCircle
 } from 'lucide-react';
 
 const SupportPage = ({ user, onLogout }) => {
@@ -30,7 +31,7 @@ const SupportPage = ({ user, onLogout }) => {
   });
 
   // Update form data when user loads
-  React.useEffect(() => {
+  useEffect(() => {
     if (user) {
       setFormData(prev => ({
         ...prev,
@@ -41,6 +42,8 @@ const SupportPage = ({ user, onLogout }) => {
   }, [user]);
   const [loading, setLoading] = useState(false);
   const [openFaq, setOpenFaq] = useState(null);
+  const [myTickets, setMyTickets] = useState([]);
+  const [loadingTickets, setLoadingTickets] = useState(false);
 
   const faqs = [
     {
@@ -125,6 +128,10 @@ const SupportPage = ({ user, onLogout }) => {
         orderId: '',
         message: ''
       });
+      // Refresh tickets list
+      if (user) {
+        fetchMyTickets();
+      }
     } catch (error) {
       console.error('Support form error:', error);
       toast.error('Failed to submit support request: ' + (error.message || 'Please try again.'));
@@ -136,6 +143,68 @@ const SupportPage = ({ user, onLogout }) => {
   const toggleFaq = (id) => {
     setOpenFaq(openFaq === id ? null : id);
   };
+
+  // Fetch user's support tickets
+  const fetchMyTickets = async () => {
+    if (!user) return;
+    
+    setLoadingTickets(true);
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) return;
+
+      const { data, error } = await supabase
+        .from('support_tickets')
+        .select('*')
+        .eq('user_id', authUser.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        // Table might not exist yet
+        if (error.code === '42P01') {
+          console.warn('Support tickets table does not exist. Run CREATE_SUPPORT_TICKETS.sql migration.');
+          setMyTickets([]);
+          return;
+        }
+        throw error;
+      }
+
+      setMyTickets(data || []);
+    } catch (error) {
+      console.error('Error fetching tickets:', error);
+      setMyTickets([]);
+    } finally {
+      setLoadingTickets(false);
+    }
+  };
+
+  // Fetch tickets when component loads
+  useEffect(() => {
+    if (user) {
+      fetchMyTickets();
+      
+      // Subscribe to real-time updates for user's tickets
+      const ticketsChannel = supabase
+        .channel('user-support-tickets')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'support_tickets',
+            filter: `user_id=eq.${user.id}`
+          },
+          () => {
+            fetchMyTickets();
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(ticketsChannel);
+      };
+    }
+  }, [user]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
@@ -296,6 +365,88 @@ const SupportPage = ({ user, onLogout }) => {
             </div>
           </div>
         </div>
+
+        {/* My Support Tickets */}
+        {user && (
+          <div className="mt-12">
+            <div className="text-center mb-8">
+              <h2 className="text-3xl font-bold text-gray-900 mb-2">My Support Tickets</h2>
+              <p className="text-gray-600">View your support requests and responses</p>
+            </div>
+
+            {loadingTickets ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-t-4 border-indigo-600 mx-auto"></div>
+              </div>
+            ) : myTickets.length === 0 ? (
+              <div className="glass p-8 rounded-3xl text-center animate-slideUp">
+                <MessageSquare className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600">You haven't submitted any support tickets yet</p>
+              </div>
+            ) : (
+              <div className="space-y-4 animate-slideUp">
+                {myTickets.map((ticket) => {
+                  const statusConfig = {
+                    open: { label: 'Open', color: 'bg-yellow-100 text-yellow-700', icon: Clock },
+                    in_progress: { label: 'In Progress', color: 'bg-blue-100 text-blue-700', icon: Clock },
+                    resolved: { label: 'Resolved', color: 'bg-green-100 text-green-700', icon: CheckCircle },
+                    closed: { label: 'Closed', color: 'bg-gray-100 text-gray-700', icon: XCircle }
+                  };
+                  const status = statusConfig[ticket.status] || statusConfig.open;
+                  const StatusIcon = status.icon;
+
+                  return (
+                    <div key={ticket.id} className="glass p-6 rounded-3xl">
+                      <div className="flex items-center gap-2 mb-4">
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${status.color}`}>
+                          <StatusIcon className="w-3 h-3" />
+                          {status.label}
+                        </span>
+                        <span className="text-xs text-gray-500">Ticket ID: {ticket.id.slice(0, 8)}</span>
+                        <span className="text-xs text-gray-500">
+                          {new Date(ticket.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                      
+                      <div className="mb-4">
+                        <p className="text-sm font-medium text-gray-900 mb-2">Your Message:</p>
+                        <p className="text-sm text-gray-700 bg-white/50 p-3 rounded-lg whitespace-pre-wrap">
+                          {ticket.message}
+                        </p>
+                      </div>
+
+                      {ticket.order_id && (
+                        <p className="text-xs text-gray-600 mb-4">
+                          Related Order ID: <span className="font-mono">{ticket.order_id}</span>
+                        </p>
+                      )}
+
+                      {ticket.admin_response ? (
+                        <div className="mt-4 p-4 bg-indigo-50 rounded-lg border-l-4 border-indigo-600">
+                          <div className="flex items-center gap-2 mb-2">
+                            <CheckCircle className="w-4 h-4 text-indigo-600" />
+                            <p className="text-sm font-medium text-indigo-900">Admin Response:</p>
+                          </div>
+                          <p className="text-sm text-gray-700 whitespace-pre-wrap">{ticket.admin_response}</p>
+                          <p className="text-xs text-gray-500 mt-2">
+                            Responded on {new Date(ticket.updated_at).toLocaleString()}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="mt-4 p-3 bg-yellow-50 rounded-lg border-l-4 border-yellow-400">
+                          <p className="text-sm text-yellow-800">
+                            <Clock className="w-4 h-4 inline mr-1" />
+                            Awaiting response from support team
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* FAQ Section */}
         <div className="mt-12">
