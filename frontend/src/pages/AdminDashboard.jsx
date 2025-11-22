@@ -66,6 +66,7 @@ const AdminDashboard = ({ user, onLogout }) => {
     fetchAllData();
 
     // Subscribe to real-time updates for transactions (deposits)
+    // Listen to ALL transaction changes, then filter in callback for better reliability
     const transactionsChannel = supabase
       .channel('admin-transactions-changes')
       .on(
@@ -73,20 +74,49 @@ const AdminDashboard = ({ user, onLogout }) => {
         {
           event: '*', // Listen to all changes (INSERT, UPDATE, DELETE)
           schema: 'public',
-          table: 'transactions',
-          filter: 'type=eq.deposit'
+          table: 'transactions'
         },
         (payload) => {
-          console.log('Transaction change detected:', payload);
-          // Refresh deposits when transaction status changes
-          fetchAllData();
+          // Only process deposit transactions
+          const isDeposit = payload.new?.type === 'deposit' || payload.old?.type === 'deposit';
+          if (isDeposit) {
+            console.log('Deposit transaction change detected:', {
+              eventType: payload.eventType,
+              id: payload.new?.id || payload.old?.id,
+              oldStatus: payload.old?.status,
+              newStatus: payload.new?.status
+            });
+            // Refresh deposits when transaction status changes
+            // Use setTimeout to debounce rapid updates
+            setTimeout(() => {
+              console.log('Refreshing deposits after transaction change...');
+              fetchAllData();
+            }, 200);
+          }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Transaction subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Successfully subscribed to transaction changes');
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('⚠️ Real-time subscription issue, status:', status);
+          console.log('Will rely on manual refresh and periodic polling');
+        }
+      });
 
-    // Cleanup subscription on unmount
+    // Set up periodic polling as backup (every 20 seconds)
+    // This ensures updates even if real-time fails
+    const pollInterval = setInterval(() => {
+      console.log('Periodic refresh: checking for deposit updates...');
+      fetchAllData();
+    }, 20000); // Poll every 20 seconds as backup
+
+    // Cleanup subscription and polling on unmount
     return () => {
+      console.log('Cleaning up transaction subscription and polling');
       supabase.removeChannel(transactionsChannel);
+      clearInterval(pollInterval);
     };
   }, []);
 
