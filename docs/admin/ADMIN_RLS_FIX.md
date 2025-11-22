@@ -8,7 +8,7 @@ The admin dashboard is only showing data for the logged-in user instead of all u
 ### Step 1: Run the Fix Script
 1. Go to your Supabase Dashboard
 2. Navigate to **SQL Editor**
-3. Open the file `FIX_ADMIN_RLS.sql` from your project
+3. Open the file `database/fixes/FIX_ADMIN_RLS.sql` from your project
 4. Copy the entire SQL script
 5. Paste it into the SQL Editor
 6. Click **Run** to execute
@@ -31,7 +31,7 @@ UPDATE profiles SET role = 'admin' WHERE id = 'YOUR_USER_ID';
 
 ## What the Fix Does
 
-The `FIX_ADMIN_RLS.sql` script:
+The `database/fixes/FIX_ADMIN_RLS.sql` script:
 
 1. **Creates a Security Definer Function**: `is_admin()` function that bypasses RLS to check if a user is an admin. This prevents circular dependency issues.
 
@@ -76,11 +76,11 @@ The `FIX_ADMIN_RLS.sql` script:
 
 ### Error: "permission denied" or "policy violation"
 
-This means the RLS policies aren't set up correctly. Re-run the `FIX_ADMIN_RLS.sql` script.
+This means the RLS policies aren't set up correctly. Re-run the `database/fixes/FIX_ADMIN_RLS.sql` script.
 
 ### Error: "function does not exist"
 
-The `is_admin()` function wasn't created. Make sure you ran the entire `FIX_ADMIN_RLS.sql` script, not just parts of it.
+The `is_admin()` function wasn't created. Make sure you ran the entire `database/fixes/FIX_ADMIN_RLS.sql` script, not just parts of it.
 
 ## Alternative: Temporary Disable RLS (NOT RECOMMENDED FOR PRODUCTION)
 
@@ -108,5 +108,5 @@ If you're still having issues:
 1. Check the browser console for specific error messages
 2. Check Supabase logs in the Dashboard → Logs
 3. Verify your user role is set to 'admin' in the profiles table
-4. Make sure you ran the complete `FIX_ADMIN_RLS.sql` script
+4. Make sure you ran the complete `database/fixes/FIX_ADMIN_RLS.sql` script
 

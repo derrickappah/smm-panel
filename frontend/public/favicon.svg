@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8b5cf6;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Background circle -->
+  <circle cx="50" cy="50" r="48" fill="url(#grad)"/>
+  <!-- Upward trending arrow/graph representing growth -->
+  <path d="M 25 65 L 35 55 L 45 60 L 55 40 L 65 45 L 75 30" 
+        stroke="white" 
+        stroke-width="4" 
+        fill="none" 
+        stroke-linecap="round" 
+        stroke-linejoin="round"/>
+  <!-- Arrow head pointing up -->
+  <path d="M 70 35 L 75 30 L 75 40 Z" 
+        fill="white"/>
+  <!-- Small dots representing social media platforms -->
+  <circle cx="35" cy="55" r="3" fill="white" opacity="0.9"/>
+  <circle cx="45" cy="60" r="3" fill="white" opacity="0.9"/>
+  <circle cx="55" cy="40" r="3" fill="white" opacity="0.9"/>
+  <circle cx="65" cy="45" r="3" fill="white" opacity="0.9"/>
+</svg>
+

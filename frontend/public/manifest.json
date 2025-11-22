@@ -1,0 +1,17 @@
+{
+  "short_name": "BoostUp GH",
+  "name": "BoostUp GH - Social Media Growth Platform",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#6366f1",
+  "background_color": "#ffffff"
+}
+

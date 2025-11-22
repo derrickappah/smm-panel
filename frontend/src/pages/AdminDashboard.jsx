@@ -92,7 +92,7 @@ const AdminDashboard = ({ user, onLogout }) => {
       if (usersRes.error) {
         console.error('Error fetching users:', usersRes.error);
         if (usersRes.error.code === '42501' || usersRes.error.message?.includes('permission') || usersRes.error.message?.includes('policy')) {
-          toast.error('RLS Policy Error: Cannot view all users. Please run FIX_ADMIN_RLS.sql in Supabase SQL Editor.');
+          toast.error('RLS Policy Error: Cannot view all users. Please run database/fixes/FIX_ADMIN_RLS.sql in Supabase SQL Editor.');
         } else {
           throw usersRes.error;
         }
@@ -100,7 +100,7 @@ const AdminDashboard = ({ user, onLogout }) => {
       if (ordersRes.error) {
         console.error('Error fetching orders:', ordersRes.error);
         if (ordersRes.error.code === '42501' || ordersRes.error.message?.includes('permission') || ordersRes.error.message?.includes('policy')) {
-          toast.error('RLS Policy Error: Cannot view all orders. Please run FIX_ADMIN_RLS.sql in Supabase SQL Editor.');
+          toast.error('RLS Policy Error: Cannot view all orders. Please run database/fixes/FIX_ADMIN_RLS.sql in Supabase SQL Editor.');
         } else {
           throw ordersRes.error;
         }
@@ -108,7 +108,7 @@ const AdminDashboard = ({ user, onLogout }) => {
       if (depositsRes.error) {
         console.error('Error fetching deposits:', depositsRes.error);
         if (depositsRes.error.code === '42501' || depositsRes.error.message?.includes('permission') || depositsRes.error.message?.includes('policy')) {
-          toast.error('RLS Policy Error: Cannot view all transactions. Please run FIX_ADMIN_RLS.sql in Supabase SQL Editor.');
+          toast.error('RLS Policy Error: Cannot view all transactions. Please run database/fixes/FIX_ADMIN_RLS.sql in Supabase SQL Editor.');
         } else {
           throw depositsRes.error;
         }
@@ -116,7 +116,7 @@ const AdminDashboard = ({ user, onLogout }) => {
       if (transactionsRes.error) {
         console.error('Error fetching transactions:', transactionsRes.error);
         if (transactionsRes.error.code === '42501' || transactionsRes.error.message?.includes('permission') || transactionsRes.error.message?.includes('policy')) {
-          toast.error('RLS Policy Error: Cannot view all transactions. Please run FIX_ADMIN_RLS.sql in Supabase SQL Editor.');
+          toast.error('RLS Policy Error: Cannot view all transactions. Please run database/fixes/FIX_ADMIN_RLS.sql in Supabase SQL Editor.');
         } else {
           throw transactionsRes.error;
         }
@@ -156,7 +156,7 @@ const AdminDashboard = ({ user, onLogout }) => {
 
       // Show warning if only seeing own data
       if (usersRes.data && usersRes.data.length === 1 && usersRes.data[0].id === currentUser.user.id) {
-        toast.warning('Only seeing your own data. RLS policies may need to be updated. Run FIX_ADMIN_RLS.sql in Supabase.');
+        toast.warning('Only seeing your own data. RLS policies may need to be updated. Run database/fixes/FIX_ADMIN_RLS.sql in Supabase.');
       }
     } catch (error) {
       console.error('Error fetching admin data:', error);
