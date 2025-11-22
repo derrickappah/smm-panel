@@ -101,32 +101,55 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                 // Payment was successful, update transaction
                 console.log('Found successful payment for pending transaction:', transaction.id);
                 
-                // Update transaction status
+                // Update transaction status - FORCE UPDATE (remove status condition)
+                // Payment was confirmed, so status must be approved
                 const { error: updateError } = await supabase
                   .from('transactions')
                   .update({ status: 'approved' })
+                  .eq('id', transaction.id);
+
+                // If update failed, try again without status check
+                if (updateError) {
+                  console.warn('First update attempt failed, retrying without status condition:', updateError);
+                  await supabase
+                    .from('transactions')
+                    .update({ status: 'approved' })
+                    .eq('id', transaction.id);
+                }
+
+                // Verify status was updated
+                const { data: statusCheck } = await supabase
+                  .from('transactions')
+                  .select('status')
                   .eq('id', transaction.id)
-                  .eq('status', 'pending');
+                  .maybeSingle();
 
-                if (!updateError) {
-                  // Update balance
-                  const { data: profile } = await supabase
+                if (statusCheck?.status !== 'approved') {
+                  // Force update one more time
+                  console.log('Status not approved yet, forcing update...');
+                  await supabase
+                    .from('transactions')
+                    .update({ status: 'approved' })
+                    .eq('id', transaction.id);
+                }
+
+                // Update balance
+                const { data: profile } = await supabase
+                  .from('profiles')
+                  .select('balance')
+                  .eq('id', authUser.id)
+                  .single();
+
+                if (profile) {
+                  const newBalance = (profile.balance || 0) + transaction.amount;
+                  await supabase
                     .from('profiles')
-                    .select('balance')
-                    .eq('id', authUser.id)
-                    .single();
-
-                  if (profile) {
-                    const newBalance = (profile.balance || 0) + transaction.amount;
-                    await supabase
-                      .from('profiles')
-                      .update({ balance: newBalance })
-                      .eq('id', authUser.id);
-                    
-                    // Refresh user data
-                    await onUpdateUser();
-                    toast.success(`Payment verified! ₵${transaction.amount.toFixed(2)} added to your balance.`);
-                  }
+                    .update({ balance: newBalance })
+                    .eq('id', authUser.id);
+                  
+                  // Refresh user data
+                  await onUpdateUser();
+                  toast.success(`Payment verified! ₵${transaction.amount.toFixed(2)} added to your balance.`);
                 }
               } else if (verifyData.status === 'failed' || verifyData.status === 'abandoned') {
                 // Payment failed or was abandoned, mark as rejected
@@ -424,81 +447,60 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         return;
       }
 
-      // Update transaction status to approved (use maybeSingle to handle multiple rows gracefully)
-      // First check current status to avoid unnecessary updates
-      const { data: currentStatusCheck } = await supabase
+      // Update transaction status to approved - FORCE UPDATE regardless of current status
+      // Since payment was successful, we must mark transaction as approved
+      console.log('Updating transaction status to approved (payment confirmed)');
+      
+      // First attempt: Update without status condition (force update)
+      let transactionUpdated = false;
+      const { data: updatedTransactions, error: transactionError } = await supabase
+        .from('transactions')
+        .update({ 
+          status: 'approved'
+        })
+        .eq('id', transactionToUpdate.id)
+        .select();
+
+      if (transactionError) {
+        console.error('Error updating transaction status (attempt 1):', transactionError);
+      } else if (updatedTransactions && updatedTransactions.length > 0) {
+        transactionUpdated = true;
+        console.log('Transaction status updated to approved:', updatedTransactions[0]);
+      }
+
+      // If first attempt didn't work, try again (might be a race condition)
+      if (!transactionUpdated) {
+        console.log('Retrying transaction status update (attempt 2)...');
+        const { data: retryUpdated, error: retryError } = await supabase
+          .from('transactions')
+          .update({ status: 'approved' })
+          .eq('id', transactionToUpdate.id)
+          .select();
+        
+        if (retryError) {
+          console.error('Error updating transaction status (attempt 2):', retryError);
+        } else if (retryUpdated && retryUpdated.length > 0) {
+          transactionUpdated = true;
+          console.log('Transaction status updated to approved (retry):', retryUpdated[0]);
+        }
+      }
+
+      // Final verification - check current status
+      const { data: finalStatusCheck } = await supabase
         .from('transactions')
         .select('status')
         .eq('id', transactionToUpdate.id)
         .maybeSingle();
 
-      // If already approved, skip update and continue with balance
-      if (currentStatusCheck?.status === 'approved') {
-        console.log('Transaction already approved, skipping update and continuing with balance check');
+      if (finalStatusCheck?.status === 'approved') {
+        console.log('Transaction status confirmed as approved');
       } else {
-        // Update transaction status to approved
-        const { data: updatedTransactions, error: transactionError } = await supabase
+        console.warn('Transaction status may not be approved yet:', finalStatusCheck?.status);
+        // Try one more time with a direct update
+        await supabase
           .from('transactions')
-          .update({ 
-            status: 'approved'
-          })
-          .eq('id', transactionToUpdate.id)
-          .eq('status', 'pending') // Only update if still pending (prevents race conditions)
-          .select();
-
-        if (transactionError) {
-          console.error('Error updating transaction status:', transactionError);
-          
-          // Check if transaction was already updated by another process
-          const { data: currentTransaction } = await supabase
-            .from('transactions')
-            .select('status')
-            .eq('id', transactionToUpdate.id)
-            .maybeSingle();
-          
-          if (currentTransaction?.status === 'approved') {
-            console.log('Transaction was already approved by another process, continuing with balance update');
-            // Continue with balance update
-          } else {
-            // If update failed and status is not approved, this might be a real error
-            // But we'll still try to update balance if the payment was successful
-            console.warn('Transaction update failed, but payment was successful. Continuing with balance update.');
-          }
-        } else if (!updatedTransactions || updatedTransactions.length === 0) {
-          // Transaction was already updated or status changed
-          const { data: checkTransaction } = await supabase
-            .from('transactions')
-            .select('status')
-            .eq('id', transactionToUpdate.id)
-            .maybeSingle();
-          
-          if (checkTransaction?.status === 'approved') {
-            console.log('Transaction already approved (no rows updated), continuing with balance update');
-          } else if (checkTransaction?.status === 'rejected') {
-            // Transaction was rejected, but payment succeeded - this is a conflict
-            // Update it to approved since payment was successful
-            console.log('Transaction was rejected but payment succeeded, updating to approved');
-            await supabase
-              .from('transactions')
-              .update({ status: 'approved' })
-              .eq('id', transactionToUpdate.id);
-          } else {
-            // Status is still pending but update returned no rows - might be a race condition
-            // Try one more time without the status check
-            console.log('Retrying transaction update without status check');
-            const { error: retryError } = await supabase
-              .from('transactions')
-              .update({ status: 'approved' })
-              .eq('id', transactionToUpdate.id);
-            
-            if (retryError) {
-              console.error('Retry update also failed:', retryError);
-              // Continue anyway - payment was successful, we'll update balance
-            }
-          }
-        } else {
-          console.log('Transaction status updated to approved:', updatedTransactions[0]);
-        }
+          .update({ status: 'approved' })
+          .eq('id', transactionToUpdate.id);
       }
 
       // Get current balance and update it (use atomic update to prevent race conditions)
@@ -612,25 +614,50 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         });
       }
 
-      // Final verification: ensure transaction is marked as approved
-      // This is non-blocking - if it fails, balance is already updated
-      try {
-        const { data: finalTransaction } = await supabase
-          .from('transactions')
-          .select('status')
-          .eq('id', transactionToUpdate.id)
-          .maybeSingle();
-        
-        if (finalTransaction?.status !== 'approved') {
-          console.log('Final transaction status check - updating to approved if needed');
-          await supabase
+      // Final verification: ensure transaction is marked as approved (CRITICAL - must succeed)
+      // Try multiple times to ensure status is updated
+      let finalStatusUpdated = false;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          const { data: finalTransaction } = await supabase
             .from('transactions')
-            .update({ status: 'approved' })
-            .eq('id', transactionToUpdate.id);
+            .select('status')
+            .eq('id', transactionToUpdate.id)
+            .maybeSingle();
+          
+          if (finalTransaction?.status === 'approved') {
+            finalStatusUpdated = true;
+            console.log(`Transaction status confirmed as approved (final check attempt ${attempt})`);
+            break;
+          } else {
+            console.log(`Final transaction status check (attempt ${attempt}) - status: ${finalTransaction?.status}, updating to approved...`);
+            const { data: updateResult, error: updateError } = await supabase
+              .from('transactions')
+              .update({ status: 'approved' })
+              .eq('id', transactionToUpdate.id)
+              .select();
+            
+            if (!updateError && updateResult && updateResult.length > 0) {
+              finalStatusUpdated = true;
+              console.log(`Transaction status updated to approved (final check attempt ${attempt})`);
+              break;
+            } else if (updateError) {
+              console.warn(`Failed to update transaction status (final check attempt ${attempt}):`, updateError);
+            }
+          }
+        } catch (finalUpdateError) {
+          console.warn(`Error in final transaction status check (attempt ${attempt}):`, finalUpdateError);
         }
-      } catch (finalUpdateError) {
-        console.warn('Failed to finalize transaction status, but balance was updated:', finalUpdateError);
-        // Non-critical - balance is already updated
+        
+        // Wait a bit before retrying (only if not last attempt)
+        if (attempt < 3 && !finalStatusUpdated) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+      
+      if (!finalStatusUpdated) {
+        console.error('WARNING: Could not confirm transaction status as approved after multiple attempts. Transaction ID:', transactionToUpdate.id);
+        // Log this for admin review, but don't fail the payment process
       }
 
       toast.success(`Payment successful! ₵${transactionAmount.toFixed(2)} added to your balance.`);
