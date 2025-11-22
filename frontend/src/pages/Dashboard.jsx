@@ -20,6 +20,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
   const [loading, setLoading] = useState(false);
   const [pendingTransaction, setPendingTransaction] = useState(null);
   const [serviceSearch, setServiceSearch] = useState('');
+  const [selectOpen, setSelectOpen] = useState(false);
   const [orderForm, setOrderForm] = useState({
     service_id: '',
     link: '',
@@ -949,15 +950,30 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                     type="text"
                     placeholder="Search services by name, platform, or type..."
                     value={serviceSearch}
-                    onChange={(e) => setServiceSearch(e.target.value)}
+                    onChange={(e) => {
+                      setServiceSearch(e.target.value);
+                      // Open dropdown when user starts typing
+                      if (e.target.value.trim()) {
+                        setSelectOpen(true);
+                      }
+                    }}
+                    onFocus={() => {
+                      // Open dropdown when search field is focused (if there are services)
+                      if (services.length > 0) {
+                        setSelectOpen(true);
+                      }
+                    }}
                     className="rounded-xl bg-white/70 pl-10"
                   />
                 </div>
                 <Select 
-                  value={orderForm.service_id || ''} 
+                  value={orderForm.service_id || ''}
+                  open={selectOpen}
+                  onOpenChange={setSelectOpen}
                   onValueChange={(value) => {
                     setOrderForm({ ...orderForm, service_id: value });
                     setServiceSearch(''); // Clear search when service is selected
+                    setSelectOpen(false); // Close dropdown when service is selected
                   }}
                 >
                   <SelectTrigger data-testid="order-service-select" className="rounded-xl bg-white/70">
