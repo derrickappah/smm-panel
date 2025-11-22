@@ -13,16 +13,21 @@ const getSMMGenConfig = () => {
   // In production (Vercel), use serverless functions on the same domain
   // This avoids CORS issues and doesn't require a separate backend
   let backendUrl;
+  let useServerlessFunctions = false;
+  
   if (isProduction) {
     // Use Vercel serverless functions (same domain, no CORS)
     // These are in the /api/smmgen folder
     backendUrl = '/api/smmgen';
+    useServerlessFunctions = true;
   } else if (BACKEND_PROXY_URL && !BACKEND_PROXY_URL.includes('localhost')) {
     // Use custom backend URL if provided
     backendUrl = BACKEND_PROXY_URL;
+    useServerlessFunctions = false;
   } else {
     // Development: use localhost backend
     backendUrl = 'http://localhost:5000';
+    useServerlessFunctions = false;
   }
   
   // In production, serverless functions are always available
@@ -30,7 +35,20 @@ const getSMMGenConfig = () => {
     ? true // Serverless functions are always available in Vercel
     : (BACKEND_PROXY_URL && BACKEND_PROXY_URL.includes('localhost')); // Check if local backend is running
   
-  return { backendUrl, isConfigured };
+  return { backendUrl, isConfigured, useServerlessFunctions };
+};
+
+// Helper function to build the correct API endpoint URL
+const buildApiUrl = (endpoint) => {
+  const { backendUrl, useServerlessFunctions } = getSMMGenConfig();
+  
+  if (useServerlessFunctions) {
+    // Serverless functions: /api/smmgen/order, /api/smmgen/services, etc.
+    return `${backendUrl}/${endpoint}`;
+  } else {
+    // Backend proxy: http://localhost:5000/api/smmgen/order
+    return `${backendUrl}/api/smmgen/${endpoint}`;
+  }
 };
 
 /**
@@ -39,9 +57,9 @@ const getSMMGenConfig = () => {
  */
 export const fetchSMMGenServices = async () => {
   try {
-    const { backendUrl } = getSMMGenConfig();
+    const apiUrl = buildApiUrl('services');
 
-    const response = await fetch(`${backendUrl}/api/smmgen/services`, {
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -120,7 +138,8 @@ export const placeSMMGenOrder = async (serviceId, link, quantity) => {
       return null; // Return null to indicate SMMGen was skipped
     }
 
-    const response = await fetch(`${backendUrl}/api/smmgen/order`, {
+    const apiUrl = buildApiUrl('order');
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -167,7 +186,8 @@ export const getSMMGenOrderStatus = async (orderId) => {
   try {
     const { backendUrl } = getSMMGenConfig();
 
-    const response = await fetch(`${backendUrl}/api/smmgen/status`, {
+    const apiUrl = buildApiUrl('status');
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -197,7 +217,8 @@ export const getSMMGenBalance = async () => {
   try {
     const { backendUrl } = getSMMGenConfig();
 
-    const response = await fetch(`${backendUrl}/api/smmgen/balance`, {
+    const apiUrl = buildApiUrl('balance');
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
