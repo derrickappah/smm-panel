@@ -447,59 +447,88 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         return;
       }
 
-      // Update transaction status to approved - FORCE UPDATE regardless of current status
-      // Since payment was successful, we must mark transaction as approved
-      console.log('Updating transaction status to approved (payment confirmed)');
+      // Update transaction status to approved AND store paystack_reference
+      // Since payment was successful, we must mark transaction as approved and store reference
+      console.log('Updating transaction status to approved and storing reference:', { 
+        transactionId: transactionToUpdate.id, 
+        reference 
+      });
+      
+      // Prepare update object with both status and reference
+      const updateData = {
+        status: 'approved'
+      };
+      
+      // Always include reference if we have it
+      if (reference) {
+        updateData.paystack_reference = reference;
+      }
       
       // First attempt: Update without status condition (force update)
       let transactionUpdated = false;
       const { data: updatedTransactions, error: transactionError } = await supabase
         .from('transactions')
-        .update({ 
-          status: 'approved'
-        })
+        .update(updateData)
         .eq('id', transactionToUpdate.id)
         .select();
 
       if (transactionError) {
-        console.error('Error updating transaction status (attempt 1):', transactionError);
+        console.error('Error updating transaction status and reference (attempt 1):', transactionError);
       } else if (updatedTransactions && updatedTransactions.length > 0) {
         transactionUpdated = true;
-        console.log('Transaction status updated to approved:', updatedTransactions[0]);
+        console.log('Transaction updated successfully:', {
+          id: updatedTransactions[0].id,
+          status: updatedTransactions[0].status,
+          reference: updatedTransactions[0].paystack_reference
+        });
       }
 
       // If first attempt didn't work, try again (might be a race condition)
       if (!transactionUpdated) {
-        console.log('Retrying transaction status update (attempt 2)...');
+        console.log('Retrying transaction update (attempt 2)...');
         const { data: retryUpdated, error: retryError } = await supabase
           .from('transactions')
-          .update({ status: 'approved' })
+          .update(updateData)
           .eq('id', transactionToUpdate.id)
           .select();
         
         if (retryError) {
-          console.error('Error updating transaction status (attempt 2):', retryError);
+          console.error('Error updating transaction (attempt 2):', retryError);
         } else if (retryUpdated && retryUpdated.length > 0) {
           transactionUpdated = true;
-          console.log('Transaction status updated to approved (retry):', retryUpdated[0]);
+          console.log('Transaction updated successfully (retry):', {
+            id: retryUpdated[0].id,
+            status: retryUpdated[0].status,
+            reference: retryUpdated[0].paystack_reference
+          });
         }
       }
 
-      // Final verification - check current status
+      // Final verification - check current status and reference
       const { data: finalStatusCheck } = await supabase
         .from('transactions')
-        .select('status')
+        .select('status, paystack_reference')
         .eq('id', transactionToUpdate.id)
         .maybeSingle();
 
       if (finalStatusCheck?.status === 'approved') {
         console.log('Transaction status confirmed as approved');
+        // Ensure reference is stored
+        if (reference && !finalStatusCheck.paystack_reference) {
+          console.log('Reference missing, storing it now...');
+          await supabase
+            .from('transactions')
+            .update({ paystack_reference: reference })
+            .eq('id', transactionToUpdate.id);
+        } else if (finalStatusCheck.paystack_reference) {
+          console.log('Reference confirmed:', finalStatusCheck.paystack_reference);
+        }
       } else {
         console.warn('Transaction status may not be approved yet:', finalStatusCheck?.status);
-        // Try one more time with a direct update
+        // Try one more time with a direct update (include reference)
         await supabase
           .from('transactions')
-          .update({ status: 'approved' })
+          .update(updateData)
           .eq('id', transactionToUpdate.id);
       }
 
@@ -614,39 +643,67 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         });
       }
 
-      // Final verification: ensure transaction is marked as approved (CRITICAL - must succeed)
-      // Try multiple times to ensure status is updated
+      // Final verification: ensure transaction is marked as approved AND reference is stored (CRITICAL - must succeed)
+      // Try multiple times to ensure status and reference are updated
       let finalStatusUpdated = false;
+      let finalReferenceStored = false;
+      
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
           const { data: finalTransaction } = await supabase
             .from('transactions')
-            .select('status')
+            .select('status, paystack_reference')
             .eq('id', transactionToUpdate.id)
             .maybeSingle();
           
-          if (finalTransaction?.status === 'approved') {
+          const isApproved = finalTransaction?.status === 'approved';
+          const hasReference = !!finalTransaction?.paystack_reference;
+          
+          if (isApproved && (hasReference || !reference)) {
+            // Status is approved and either reference is stored or we don't have a reference to store
             finalStatusUpdated = true;
-            console.log(`Transaction status confirmed as approved (final check attempt ${attempt})`);
+            if (hasReference) {
+              finalReferenceStored = true;
+            }
+            console.log(`Transaction verified (final check attempt ${attempt}):`, {
+              status: finalTransaction.status,
+              hasReference: hasReference,
+              reference: finalTransaction.paystack_reference
+            });
             break;
           } else {
-            console.log(`Final transaction status check (attempt ${attempt}) - status: ${finalTransaction?.status}, updating to approved...`);
+            // Need to update status and/or reference
+            const updateData = { status: 'approved' };
+            if (reference && !hasReference) {
+              updateData.paystack_reference = reference;
+            }
+            
+            console.log(`Final transaction check (attempt ${attempt}) - updating:`, {
+              currentStatus: finalTransaction?.status,
+              hasReference: hasReference,
+              willUpdateReference: !!(reference && !hasReference)
+            });
+            
             const { data: updateResult, error: updateError } = await supabase
               .from('transactions')
-              .update({ status: 'approved' })
+              .update(updateData)
               .eq('id', transactionToUpdate.id)
               .select();
             
             if (!updateError && updateResult && updateResult.length > 0) {
-              finalStatusUpdated = true;
-              console.log(`Transaction status updated to approved (final check attempt ${attempt})`);
-              break;
+              finalStatusUpdated = updateResult[0].status === 'approved';
+              finalReferenceStored = !!updateResult[0].paystack_reference;
+              console.log(`Transaction updated (final check attempt ${attempt}):`, {
+                status: updateResult[0].status,
+                reference: updateResult[0].paystack_reference
+              });
+              if (finalStatusUpdated) break;
             } else if (updateError) {
-              console.warn(`Failed to update transaction status (final check attempt ${attempt}):`, updateError);
+              console.warn(`Failed to update transaction (final check attempt ${attempt}):`, updateError);
             }
           }
         } catch (finalUpdateError) {
-          console.warn(`Error in final transaction status check (attempt ${attempt}):`, finalUpdateError);
+          console.warn(`Error in final transaction check (attempt ${attempt}):`, finalUpdateError);
         }
         
         // Wait a bit before retrying (only if not last attempt)
@@ -658,6 +715,15 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       if (!finalStatusUpdated) {
         console.error('WARNING: Could not confirm transaction status as approved after multiple attempts. Transaction ID:', transactionToUpdate.id);
         // Log this for admin review, but don't fail the payment process
+      }
+      
+      if (reference && !finalReferenceStored) {
+        console.warn('WARNING: Could not confirm paystack_reference was stored. Transaction ID:', transactionToUpdate.id, 'Reference:', reference);
+        // Try one final time to store the reference
+        await supabase
+          .from('transactions')
+          .update({ paystack_reference: reference })
+          .eq('id', transactionToUpdate.id);
       }
 
       toast.success(`Payment successful! ₵${transactionAmount.toFixed(2)} added to your balance.`);
@@ -862,20 +928,33 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               console.log('Pending transaction:', pendingTransaction);
 
               // Store the reference immediately (even before processing) so we can verify later if needed
+              // This is critical - we must store the reference as soon as we get it
               if (pendingTransaction?.id && response.reference) {
                 supabase
                   .from('transactions')
                   .update({ paystack_reference: response.reference })
                   .eq('id', pendingTransaction.id)
-                  .then(() => {
-                    console.log('Paystack reference stored:', response.reference);
+                  .then(({ error: refError }) => {
+                    if (refError) {
+                      console.error('Error storing Paystack reference:', refError);
+                      // Don't fail the payment process if reference storage fails
+                      // We'll try again in handlePaymentSuccess
+                    } else {
+                      console.log('✅ Paystack reference stored successfully:', response.reference);
+                    }
                   })
                   .catch((refError) => {
-                    console.error('Error storing Paystack reference:', refError);
+                    console.error('Error storing Paystack reference (catch):', refError);
+                    // Don't fail the payment process - we'll try again in handlePaymentSuccess
                   });
+              } else {
+                console.warn('⚠️ Cannot store reference - missing transaction ID or reference:', {
+                  hasTransactionId: !!pendingTransaction?.id,
+                  hasReference: !!response.reference
+                });
               }
 
-              // Call the async handler
+              // Call the async handler (this will also ensure reference is stored)
               handlePaymentSuccess(response.reference).catch((error) => {
                 console.error('Payment success handler error:', error);
                 toast.error(`Payment processed but failed to update: ${error.message || 'Unknown error'}. Please contact support.`);
