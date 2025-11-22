@@ -2,13 +2,33 @@
 // This service handles all interactions with SMMGen API via backend proxy
 
 // Backend proxy URL (to avoid CORS issues)
+// Priority: 1. Vercel serverless functions (same domain), 2. Custom backend URL, 3. Localhost
 const BACKEND_PROXY_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
+
+// Check if we're in production (Vercel)
+const isProduction = process.env.NODE_ENV === 'production' || window.location.hostname !== 'localhost';
 
 // Get SMMGen config from environment variables
 const getSMMGenConfig = () => {
-  // Check if backend proxy is configured
-  const backendUrl = BACKEND_PROXY_URL;
-  const isConfigured = backendUrl && !backendUrl.includes('localhost:5000') || true; // Always allow localhost for dev
+  // In production (Vercel), use serverless functions on the same domain
+  // This avoids CORS issues and doesn't require a separate backend
+  let backendUrl;
+  if (isProduction) {
+    // Use Vercel serverless functions (same domain, no CORS)
+    // These are in the /api/smmgen folder
+    backendUrl = '/api/smmgen';
+  } else if (BACKEND_PROXY_URL && !BACKEND_PROXY_URL.includes('localhost')) {
+    // Use custom backend URL if provided
+    backendUrl = BACKEND_PROXY_URL;
+  } else {
+    // Development: use localhost backend
+    backendUrl = 'http://localhost:5000';
+  }
+  
+  // In production, serverless functions are always available
+  const isConfigured = isProduction 
+    ? true // Serverless functions are always available in Vercel
+    : (BACKEND_PROXY_URL && BACKEND_PROXY_URL.includes('localhost')); // Check if local backend is running
   
   return { backendUrl, isConfigured };
 };
@@ -92,7 +112,13 @@ export const fetchSMMGenServices = async () => {
  */
 export const placeSMMGenOrder = async (serviceId, link, quantity) => {
   try {
-    const { backendUrl } = getSMMGenConfig();
+    const { backendUrl, isConfigured } = getSMMGenConfig();
+
+    // If backend is not configured in production, skip SMMGen integration
+    if (!isConfigured && isProduction) {
+      console.warn('SMMGen backend not configured. Skipping SMMGen order placement.');
+      return null; // Return null to indicate SMMGen was skipped
+    }
 
     const response = await fetch(`${backendUrl}/api/smmgen/order`, {
       method: 'POST',
@@ -115,9 +141,14 @@ export const placeSMMGenOrder = async (serviceId, link, quantity) => {
     return data;
   } catch (error) {
     console.error('SMMGen Order Error:', error);
-    // If it's a network error (CORS, connection failed), provide helpful message
-    if (error.message.includes('Failed to fetch') || error.message.includes('CORS')) {
-      throw new Error('Backend proxy server not running. Please start the backend server (cd backend && npm start)');
+    // If it's a network error (CORS, connection failed), return null instead of throwing
+    // This allows the app to continue with local order creation
+    if (error.message.includes('Failed to fetch') || 
+        error.message.includes('CORS') || 
+        error.message.includes('ERR_CONNECTION_REFUSED') ||
+        error.message.includes('NetworkError')) {
+      console.warn('SMMGen backend unavailable. Continuing with local order only.');
+      return null; // Return null to allow graceful degradation
     }
     throw error;
   }

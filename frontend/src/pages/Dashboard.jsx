@@ -679,14 +679,24 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             orderForm.link,
             quantity
           );
-          smmgenOrderId = smmgenResponse.order || smmgenResponse.id || null;
-          console.log('SMMGen order placed:', smmgenOrderId);
+          
+          // If SMMGen returns null, it means backend is not available (graceful skip)
+          if (smmgenResponse === null) {
+            console.warn('SMMGen backend not available. Creating local order only.');
+            // Don't show warning - this is expected in production without backend
+          } else if (smmgenResponse) {
+            smmgenOrderId = smmgenResponse.order || smmgenResponse.id || null;
+            console.log('SMMGen order placed:', smmgenOrderId);
+          }
         } catch (smmgenError) {
           console.error('SMMGen order failed:', smmgenError);
           // If SMMGen API key is not configured, continue with local order only
           if (smmgenError.message?.includes('API key not configured')) {
             console.warn('SMMGen API not configured, creating local order only');
-            toast.warning('SMMGen API not configured. Order created locally. Please configure REACT_APP_SMMGEN_API_KEY in .env and restart server.');
+            toast.warning('SMMGen API not configured. Order created locally.');
+          } else if (smmgenError.message?.includes('Backend proxy server not running')) {
+            // Backend not available - this is okay, continue silently
+            console.warn('SMMGen backend not available. Creating local order only.');
           } else {
             // For other SMMGen errors, still create the order locally
             console.warn('SMMGen order failed, creating local order:', smmgenError.message);

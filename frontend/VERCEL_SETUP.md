@@ -27,10 +27,20 @@ REACT_APP_SUPABASE_ANON_KEY=your-anon-key-here
 REACT_APP_PAYSTACK_PUBLIC_KEY=pk_test_your-paystack-key
 ```
 
-#### Optional (if using backend proxy):
+#### Required for SMMGen Integration (if using SMMGen):
+```
+SMMGEN_API_URL=https://smmgen.com/api/v2
+SMMGEN_API_KEY=your-smmgen-api-key-here
+```
+
+**Note:** These are used by Vercel serverless functions (in `/api/smmgen` folder). The API key stays secure on the server side.
+
+#### Optional (if using separate backend proxy instead of serverless functions):
 ```
 REACT_APP_BACKEND_URL=https://your-backend-url.com
 ```
+
+**Note:** By default, the app uses Vercel serverless functions (no separate backend needed). Only set `REACT_APP_BACKEND_URL` if you want to use a separate backend server.
 
 ### Step 3: Get Your Supabase Credentials
 
@@ -89,6 +99,57 @@ To check if environment variables are set correctly:
    - Supabase project is active
    - Database tables are created
    - RLS policies are configured
+
+## SMMGen Integration Setup
+
+### Option 1: Use Vercel Serverless Functions (Recommended - No Separate Backend Needed!)
+
+The app includes Vercel serverless functions in the `/api/smmgen` folder. These run on Vercel's edge network and don't require a separate backend server.
+
+1. **Set SMMGen environment variables in Vercel:**
+   - Go to Vercel Dashboard → Your Project → Settings → Environment Variables
+   - Add:
+     ```
+     SMMGEN_API_URL=https://smmgen.com/api/v2
+     SMMGEN_API_KEY=your-actual-smmgen-api-key
+     ```
+   - Enable for **Production**, **Preview**, and **Development**
+
+2. **That's it!** The serverless functions will automatically:
+   - Handle SMMGen API calls
+   - Keep your API key secure (server-side only)
+   - Avoid CORS issues (same domain)
+   - Work seamlessly with your frontend
+
+### Option 2: Use Separate Backend Server
+
+If you prefer a separate backend server:
+
+1. Deploy the `backend` folder to:
+   - [Railway](https://railway.app)
+   - [Render](https://render.com)
+   - [Heroku](https://heroku.com)
+   - [Fly.io](https://fly.io)
+
+2. Set environment variables in your backend:
+   ```
+   SMMGEN_API_URL=https://smmgen.com/api/v2
+   SMMGEN_API_KEY=your-smmgen-api-key
+   PORT=5000
+   ```
+
+3. Add to Vercel environment variables:
+   ```
+   REACT_APP_BACKEND_URL=https://your-backend-app.railway.app
+   ```
+
+### Option 3: Use Without SMMGen
+
+If you don't configure SMMGen:
+- The app will work normally
+- Orders will be created locally in your Supabase database
+- SMMGen integration will be automatically skipped
+- No errors will be shown (graceful degradation)
 
 ## Additional Resources
 
