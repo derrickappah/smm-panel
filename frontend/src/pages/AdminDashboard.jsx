@@ -193,32 +193,38 @@ const AdminDashboard = ({ user, onLogout }) => {
         console.warn('Support tickets table may not exist. Run CREATE_SUPPORT_TICKETS.sql migration.');
       }
 
-      setUsers(usersRes.data || []);
-      setOrders(ordersRes.data || []);
-      setDeposits(depositsRes.data || []);
-      setAllTransactions(transactionsRes.data || []);
-      setServices(servicesRes.data || []);
-      setSupportTickets(ticketsRes.data || []);
+      // Update state with fetched data (always update even if some queries failed)
+      // This ensures UI reflects the latest data immediately
+      if (usersRes.data) setUsers(usersRes.data);
+      if (ordersRes.data) setOrders(ordersRes.data);
+      if (depositsRes.data) setDeposits(depositsRes.data);
+      if (transactionsRes.data) setAllTransactions(transactionsRes.data);
+      if (servicesRes.data) setServices(servicesRes.data);
+      if (ticketsRes.data) setSupportTickets(ticketsRes.data);
 
-      // Calculate enhanced stats
-      const pendingDeposits = (depositsRes.data || []).filter(d => d.status === 'pending').length;
-      const confirmedDeposits = (depositsRes.data || []).filter(d => d.status === 'approved').length;
-      const completedOrders = (ordersRes.data || []).filter(o => o.status === 'completed').length;
-      const openTickets = (ticketsRes.data || []).filter(t => t.status === 'open').length;
-      const totalRevenue = (ordersRes.data || [])
+      // Calculate enhanced stats using current data
+      const currentDeposits = depositsRes.data || deposits;
+      const currentOrders = ordersRes.data || orders;
+      const currentTickets = ticketsRes.data || supportTickets;
+      
+      const pendingDeposits = currentDeposits.filter(d => d.status === 'pending').length;
+      const confirmedDeposits = currentDeposits.filter(d => d.status === 'approved').length;
+      const completedOrders = currentOrders.filter(o => o.status === 'completed').length;
+      const openTickets = currentTickets.filter(t => t.status === 'open').length;
+      const totalRevenue = currentOrders
         .filter(o => o.status === 'completed')
         .reduce((sum, o) => sum + parseFloat(o.total_cost || 0), 0);
-      const totalDeposits = (depositsRes.data || [])
+      const totalDeposits = currentDeposits
         .filter(d => d.status === 'approved')
         .reduce((sum, d) => sum + parseFloat(d.amount || 0), 0);
 
       setStats({
-        total_users: (usersRes.data || []).length,
-        total_orders: (ordersRes.data || []).length,
+        total_users: (usersRes.data || users).length,
+        total_orders: currentOrders.length,
         pending_deposits: pendingDeposits,
         total_revenue: totalRevenue,
         completed_orders: completedOrders,
-        total_services: (servicesRes.data || []).length,
+        total_services: (servicesRes.data || services).length,
         confirmed_deposits: confirmedDeposits,
         total_deposits: totalDeposits,
         open_tickets: openTickets
@@ -228,9 +234,12 @@ const AdminDashboard = ({ user, onLogout }) => {
       if (usersRes.data && usersRes.data.length === 1 && usersRes.data[0].id === currentUser.user.id) {
         toast.warning('Only seeing your own data. RLS policies may need to be updated. Run database/fixes/FIX_ADMIN_RLS.sql in Supabase.');
       }
+      
+      console.log('Admin data refreshed successfully');
     } catch (error) {
       console.error('Error fetching admin data:', error);
       toast.error(error.message || 'Failed to load admin data. Check RLS policies.');
+      // Don't clear existing data on error - keep showing what we have
     } finally {
       setRefreshing(false);
     }
@@ -238,18 +247,36 @@ const AdminDashboard = ({ user, onLogout }) => {
 
   // User Management Functions
   const handleUpdateUser = async (userId, updates) => {
+    setLoading(true);
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .update(updates)
-        .eq('id', userId);
+        .eq('id', userId)
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error updating user:', error);
+        throw error;
+      }
+
+      if (!data) {
+        throw new Error('Update succeeded but no data returned');
+      }
+
+      console.log('User updated successfully:', data);
       toast.success('User updated successfully!');
       setEditingUser(null);
-      fetchAllData();
+      
+      // Wait a moment for database to sync, then refresh
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await fetchAllData();
     } catch (error) {
+      console.error('Failed to update user:', error);
       toast.error(error.message || 'Failed to update user');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -295,7 +322,7 @@ const AdminDashboard = ({ user, onLogout }) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const { error } = await supabase.from('services').insert({
+      const { data, error } = await supabase.from('services').insert({
         platform: serviceForm.platform,
         service_type: serviceForm.service_type,
         name: serviceForm.name,
@@ -312,9 +339,18 @@ const AdminDashboard = ({ user, onLogout }) => {
           ? serviceForm.combo_smmgen_service_ids
           : null,
         seller_only: serviceForm.seller_only || false
-      });
+      }).select().single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error creating service:', error);
+        throw error;
+      }
+
+      if (!data) {
+        throw new Error('Service created but no data returned');
+      }
+
+      console.log('Service created successfully:', data);
       toast.success('Service created successfully!');
       setServiceForm({
         platform: '',
@@ -330,8 +366,12 @@ const AdminDashboard = ({ user, onLogout }) => {
         combo_smmgen_service_ids: [],
         seller_only: false
       });
-      fetchAllData();
+      
+      // Wait a moment for database to sync, then refresh
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await fetchAllData();
     } catch (error) {
+      console.error('Failed to create service:', error);
       toast.error(error.message || 'Failed to create service');
     } finally {
       setLoading(false);
@@ -339,18 +379,36 @@ const AdminDashboard = ({ user, onLogout }) => {
   };
 
   const handleUpdateService = async (serviceId, updates) => {
+    setLoading(true);
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('services')
         .update(updates)
-        .eq('id', serviceId);
+        .eq('id', serviceId)
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error updating service:', error);
+        throw error;
+      }
+
+      if (!data) {
+        throw new Error('Update succeeded but no data returned');
+      }
+
+      console.log('Service updated successfully:', data);
       toast.success('Service updated successfully!');
       setEditingService(null);
-      fetchAllData();
+      
+      // Wait a moment for database to sync, then refresh
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await fetchAllData();
     } catch (error) {
+      console.error('Failed to update service:', error);
       toast.error(error.message || 'Failed to update service');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -359,38 +417,68 @@ const AdminDashboard = ({ user, onLogout }) => {
       return;
     }
 
+    setLoading(true);
     try {
       const { error } = await supabase
         .from('services')
         .delete()
         .eq('id', serviceId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error deleting service:', error);
+        throw error;
+      }
+
+      console.log('Service deleted successfully:', serviceId);
       toast.success('Service deleted successfully!');
-      fetchAllData();
+      
+      // Wait a moment for database to sync, then refresh
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await fetchAllData();
     } catch (error) {
+      console.error('Failed to delete service:', error);
       toast.error(error.message || 'Failed to delete service');
+    } finally {
+      setLoading(false);
     }
   };
 
   // Order Management Functions
   const handleOrderStatusUpdate = async (orderId, status) => {
+    setLoading(true);
     try {
       const updateData = { status };
       if (status === 'completed') {
         updateData.completed_at = new Date().toISOString();
       }
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('orders')
         .update(updateData)
-        .eq('id', orderId);
+        .eq('id', orderId)
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error updating order status:', error);
+        throw error;
+      }
+
+      if (!data) {
+        throw new Error('Update succeeded but no data returned');
+      }
+
+      console.log('Order status updated successfully:', data);
       toast.success('Order status updated!');
-      fetchAllData();
+      
+      // Wait a moment for database to sync, then refresh
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await fetchAllData();
     } catch (error) {
+      console.error('Failed to update order status:', error);
       toast.error(error.message || 'Failed to update order status');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -489,7 +577,8 @@ const AdminDashboard = ({ user, onLogout }) => {
       }
 
       // Refresh data to show updated balance
-      fetchAllData();
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await fetchAllData();
     } catch (error) {
       console.error('Error processing refund:', error);
       toast.error(error.message || 'Failed to refund order. Check console for details.');
@@ -500,18 +589,33 @@ const AdminDashboard = ({ user, onLogout }) => {
 
   // Support Ticket Management Functions
   const handleUpdateTicketStatus = async (ticketId, newStatus) => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('support_tickets')
         .update({ status: newStatus })
-        .eq('id', ticketId);
+        .eq('id', ticketId)
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error updating ticket status:', error);
+        throw error;
+      }
+
+      if (!data) {
+        throw new Error('Update succeeded but no data returned');
+      }
+
+      console.log('Ticket status updated successfully:', data);
       toast.success('Ticket status updated!');
-      fetchAllData();
       setEditingTicket(null);
+      
+      // Wait a moment for database to sync, then refresh
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await fetchAllData();
     } catch (error) {
+      console.error('Failed to update ticket status:', error);
       toast.error(error.message || 'Failed to update ticket status');
     } finally {
       setLoading(false);
@@ -534,15 +638,34 @@ const AdminDashboard = ({ user, onLogout }) => {
       }
 
       // Update ticket in database
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('support_tickets')
         .update({ 
           admin_response: ticketResponse,
           status: 'in_progress' // Auto-update status when admin responds
         })
-        .eq('id', ticketId);
+        .eq('id', ticketId)
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error updating ticket response:', error);
+        throw error;
+      }
+
+      if (!data) {
+        throw new Error('Update succeeded but no data returned');
+      }
+
+      console.log('Ticket response updated successfully:', data);
+
+      // Clear the response input
+      setTicketResponse('');
+      setEditingTicket(null);
+      
+      // Wait a moment for database to sync, then refresh
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await fetchAllData();
 
       // Send email to user (if email service is configured)
       try {
@@ -573,9 +696,6 @@ const AdminDashboard = ({ user, onLogout }) => {
       }
 
       toast.success('Response added and sent to user!');
-      setTicketResponse('');
-      setEditingTicket(null);
-      fetchAllData();
     } catch (error) {
       toast.error(error.message || 'Failed to add response');
     } finally {
