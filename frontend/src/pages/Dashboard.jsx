@@ -941,67 +941,109 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           <div className="glass p-8 rounded-3xl animate-slideUp" id="order-form-section">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Place New Order</h2>
             <form onSubmit={handleOrder} className="space-y-5">
-              <div>
+              <div className="relative">
                 <Label htmlFor="service" className="text-gray-700 font-medium mb-2 block">Service</Label>
-                {/* Search Input */}
-                <div className="relative mb-3">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                {/* Search Input with Dropdown */}
+                <div className="relative service-dropdown-container">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none z-20" />
                   <Input
                     type="text"
                     placeholder="Search services by name, platform, or type..."
                     value={serviceSearch}
                     onChange={(e) => {
-                      setServiceSearch(e.target.value);
-                      // Open dropdown when user starts typing
-                      if (e.target.value.trim()) {
+                      const value = e.target.value;
+                      setServiceSearch(value);
+                      // Open dropdown immediately when typing starts
+                      if (value.length > 0 && services.length > 0) {
+                        setSelectOpen(true);
+                      } else if (value.length === 0 && services.length > 0) {
+                        // Show all services when search is cleared
                         setSelectOpen(true);
                       }
                     }}
                     onFocus={() => {
-                      // Open dropdown when search field is focused (if there are services)
+                      // Open dropdown when search field is focused
                       if (services.length > 0) {
                         setSelectOpen(true);
                       }
                     }}
-                    className="rounded-xl bg-white/70 pl-10"
+                    onBlur={(e) => {
+                      // Small delay to allow click events on dropdown items
+                      setTimeout(() => {
+                        // Check if focus moved to dropdown or if clicking outside
+                        const activeElement = document.activeElement;
+                        if (!activeElement || !activeElement.closest('.service-dropdown-container')) {
+                          setSelectOpen(false);
+                        }
+                      }, 150);
+                    }}
+                    className="rounded-xl bg-white/70 pl-10 z-10"
+                    autoComplete="off"
+                    id="service-search-input"
                   />
+                  
+                  {/* Dropdown positioned below search input */}
+                  {selectOpen && (
+                    <div 
+                      className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 max-h-[300px] overflow-y-auto"
+                      onMouseDown={(e) => {
+                        // Prevent blur when clicking on dropdown
+                        e.preventDefault();
+                      }}
+                    >
+                      {filteredServices.length === 0 ? (
+                        <div className="px-4 py-6 text-center text-sm text-gray-500">
+                          No services found matching "{serviceSearch}"
+                        </div>
+                      ) : (
+                        <div className="p-1">
+                          {filteredServices.map((service) => (
+                            <div
+                              key={service.id}
+                              onClick={() => {
+                                setOrderForm({ ...orderForm, service_id: service.id });
+                                setServiceSearch('');
+                                setSelectOpen(false);
+                              }}
+                              className="px-3 py-2 rounded-md hover:bg-gray-100 cursor-pointer transition-colors"
+                            >
+                              <div className="flex flex-col">
+                                <span className="font-medium text-gray-900">{service.name}</span>
+                                <span className="text-xs text-gray-500">
+                                  {service.platform && `${service.platform} • `}₵{service.rate}/1000
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
+                
+                {/* Hidden Select for form submission */}
                 <Select 
                   value={orderForm.service_id || ''}
-                  open={selectOpen}
-                  onOpenChange={setSelectOpen}
-                  onValueChange={(value) => {
-                    setOrderForm({ ...orderForm, service_id: value });
-                    setServiceSearch(''); // Clear search when service is selected
-                    setSelectOpen(false); // Close dropdown when service is selected
-                  }}
+                  onValueChange={() => {}}
+                  style={{ display: 'none' }}
                 >
-                  <SelectTrigger data-testid="order-service-select" className="rounded-xl bg-white/70">
-                    <SelectValue placeholder="Select a service">
-                      {orderForm.service_id && services.find(s => s.id === orderForm.service_id) 
-                        ? `${services.find(s => s.id === orderForm.service_id).name} - ₵${services.find(s => s.id === orderForm.service_id).rate}/1000`
-                        : 'Select a service'}
-                    </SelectValue>
+                  <SelectTrigger style={{ display: 'none' }}>
+                    <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="max-h-[300px]">
-                    {filteredServices.length === 0 ? (
-                      <div className="px-2 py-6 text-center text-sm text-gray-500">
-                        No services found matching "{serviceSearch}"
-                      </div>
-                    ) : (
-                      filteredServices.map((service) => (
-                        <SelectItem key={service.id} value={service.id}>
-                          <div className="flex flex-col">
-                            <span className="font-medium">{service.name}</span>
-                            <span className="text-xs text-gray-500">
-                              {service.platform && `${service.platform} • `}₵{service.rate}/1000
-                            </span>
-                          </div>
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
                 </Select>
+                
+                {/* Selected service display */}
+                {orderForm.service_id && services.find(s => s.id === orderForm.service_id) && (
+                  <div className="mt-3 p-3 bg-indigo-50 rounded-xl">
+                    <p className="text-sm font-medium text-gray-900">
+                      Selected: {services.find(s => s.id === orderForm.service_id).name}
+                    </p>
+                    <p className="text-xs text-gray-600">
+                      ₵{services.find(s => s.id === orderForm.service_id).rate}/1000
+                    </p>
+                  </div>
+                )}
+                
                 {serviceSearch && (
                   <p className="text-xs text-gray-500 mt-2">
                     {filteredServices.length} service{filteredServices.length !== 1 ? 's' : ''} found
