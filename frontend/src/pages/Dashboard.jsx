@@ -338,12 +338,15 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       return;
     }
 
-    console.log('Payment cancelled or failed:', { transactionId: pendingTransaction.id });
+    // Capture transaction ID immediately to avoid race conditions
+    const transactionId = pendingTransaction.id;
+    console.log('Payment cancelled or failed:', { transactionId });
 
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) {
         console.error('Not authenticated when cancelling payment');
+        setPendingTransaction(null);
         return;
       }
 
@@ -351,11 +354,12 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       const { data: existingTransaction, error: fetchError } = await supabase
         .from('transactions')
         .select('status')
-        .eq('id', pendingTransaction.id)
+        .eq('id', transactionId)
         .single();
 
       if (fetchError) {
         console.error('Error fetching transaction for cancellation:', fetchError);
+        setPendingTransaction(null);
         return;
       }
 
@@ -367,19 +371,26 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       }
 
       // Update transaction status to rejected (cancelled)
-      const { error: updateError } = await supabase
+      // Only update if still pending to avoid overwriting other statuses
+      const { data: updatedTransaction, error: updateError } = await supabase
         .from('transactions')
         .update({ 
           status: 'rejected'
         })
-        .eq('id', pendingTransaction.id)
-        .eq('status', 'pending'); // Only update if still pending
+        .eq('id', transactionId)
+        .eq('status', 'pending') // Only update if still pending
+        .select()
+        .single();
 
       if (updateError) {
         console.error('Error updating transaction status to rejected:', updateError);
-        // Don't show error to user, just log it
-      } else {
-        console.log('Transaction status updated to rejected (cancelled)');
+        // If update failed because status changed, that's okay - log it
+        if (updateError.code === 'PGRST116') {
+          console.log('Transaction status was already changed, skipping update');
+        }
+      } else if (updatedTransaction) {
+        console.log('Transaction status updated to rejected (cancelled):', updatedTransaction);
+        toast.success('Payment cancelled');
       }
 
       setPendingTransaction(null);
@@ -467,11 +478,12 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               });
             },
             onClose: () => {
-              console.log('Payment window closed by user');
-              toast.info('Payment cancelled');
+              console.log('Payment window closed by user before confirmation');
               // Update transaction status to rejected when payment window is closed
+              // The toast will be shown in handlePaymentCancellation after successful update
               handlePaymentCancellation().catch((error) => {
                 console.error('Error handling payment cancellation:', error);
+                toast.error('Failed to update payment status. Please contact support.');
               });
             }
           };
