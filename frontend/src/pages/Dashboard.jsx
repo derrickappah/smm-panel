@@ -628,7 +628,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
   // Trigger Paystack payment when pendingTransaction is set
   useEffect(() => {
     if (pendingTransaction && user?.email) {
-      const initializePayment = () => {
+      const initializePayment = async () => {
         try {
           if (!window.PaystackPop) {
             throw new Error('PaystackPop not loaded. Please refresh the page.');
@@ -636,6 +636,12 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
           if (!paystackPublicKey || paystackPublicKey.includes('xxxxxxxx')) {
             throw new Error('Paystack public key not configured. Please set REACT_APP_PAYSTACK_PUBLIC_KEY in your .env file.');
+          }
+
+          // Get auth user for metadata
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+          if (!authUser) {
+            throw new Error('Not authenticated');
           }
 
           // Validate inputs before calling Paystack
@@ -786,14 +792,32 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       // Wait for PaystackPop to be available
       if (window.PaystackPop) {
         // Already loaded, initialize immediately
-        const timer = setTimeout(initializePayment, 100);
+        const timer = setTimeout(() => {
+          initializePayment().catch((error) => {
+            console.error('Payment initialization error:', error);
+            toast.error(error.message || 'Failed to initialize payment');
+            if (pendingTransaction) {
+              handlePaymentCancellation().catch((cancelError) => {
+                console.error('Error handling payment cancellation after init failure:', cancelError);
+              });
+            }
+          });
+        }, 100);
         return () => clearTimeout(timer);
       } else {
         // Wait for script to load
         const checkInterval = setInterval(() => {
           if (window.PaystackPop) {
             clearInterval(checkInterval);
-            initializePayment();
+            initializePayment().catch((error) => {
+              console.error('Payment initialization error:', error);
+              toast.error(error.message || 'Failed to initialize payment');
+              if (pendingTransaction) {
+                handlePaymentCancellation().catch((cancelError) => {
+                  console.error('Error handling payment cancellation after init failure:', cancelError);
+                });
+              }
+            });
           }
         }, 100);
 
