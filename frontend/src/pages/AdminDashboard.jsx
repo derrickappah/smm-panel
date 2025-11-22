@@ -11,7 +11,7 @@ import Navbar from '@/components/Navbar';
 import { 
   Users, ShoppingCart, DollarSign, Package, Search, Edit, Trash2, 
   Plus, Minus, TrendingUp, CheckCircle, XCircle, Clock, Filter,
-  Download, RefreshCw, MessageSquare, Send
+  Download, RefreshCw, MessageSquare, Send, Layers
 } from 'lucide-react';
 
 const AdminDashboard = ({ user, onLogout }) => {
@@ -55,7 +55,10 @@ const AdminDashboard = ({ user, onLogout }) => {
     min_quantity: '',
     max_quantity: '',
     description: '',
-    smmgen_service_id: ''
+    smmgen_service_id: '',
+    is_combo: false,
+    combo_service_ids: [],
+    combo_smmgen_service_ids: []
   });
 
   useEffect(() => {
@@ -269,7 +272,14 @@ const AdminDashboard = ({ user, onLogout }) => {
         min_quantity: parseInt(serviceForm.min_quantity),
         max_quantity: parseInt(serviceForm.max_quantity),
         description: serviceForm.description,
-        smmgen_service_id: serviceForm.smmgen_service_id || null
+        smmgen_service_id: serviceForm.smmgen_service_id || null,
+        is_combo: serviceForm.is_combo || false,
+        combo_service_ids: serviceForm.is_combo && serviceForm.combo_service_ids.length > 0 
+          ? serviceForm.combo_service_ids 
+          : null,
+        combo_smmgen_service_ids: serviceForm.is_combo && serviceForm.combo_smmgen_service_ids.length > 0
+          ? serviceForm.combo_smmgen_service_ids
+          : null
       });
 
       if (error) throw error;
@@ -902,6 +912,76 @@ const AdminDashboard = ({ user, onLogout }) => {
                     />
                     <p className="text-xs text-gray-500 mt-1">Enter the SMMGen API service ID for integration</p>
                   </div>
+                  
+                  {/* Combo Service Options */}
+                  <div className="space-y-4 p-4 border border-gray-200 rounded-lg bg-gray-50">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="is_combo"
+                        checked={serviceForm.is_combo}
+                        onChange={(e) => setServiceForm({ ...serviceForm, is_combo: e.target.checked })}
+                        className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                      />
+                      <Label htmlFor="is_combo" className="text-sm font-medium text-gray-900">
+                        This is a combo service (combines multiple services)
+                      </Label>
+                    </div>
+                    
+                    {serviceForm.is_combo && (
+                      <div className="space-y-3 mt-3">
+                        <div>
+                          <Label className="text-sm font-medium">Component Services</Label>
+                          <p className="text-xs text-gray-500 mb-2">Select the services to include in this combo</p>
+                          <div className="max-h-40 overflow-y-auto border border-gray-200 rounded p-2 bg-white">
+                            {services.filter(s => !s.is_combo).map((service) => (
+                              <div key={service.id} className="flex items-center space-x-2 py-1">
+                                <input
+                                  type="checkbox"
+                                  checked={serviceForm.combo_service_ids?.includes(service.id)}
+                                  onChange={(e) => {
+                                    const currentIds = serviceForm.combo_service_ids || [];
+                                    if (e.target.checked) {
+                                      setServiceForm({
+                                        ...serviceForm,
+                                        combo_service_ids: [...currentIds, service.id]
+                                      });
+                                    } else {
+                                      setServiceForm({
+                                        ...serviceForm,
+                                        combo_service_ids: currentIds.filter(id => id !== service.id)
+                                      });
+                                    }
+                                  }}
+                                  className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                                />
+                                <Label className="text-sm text-gray-700">
+                                  {service.name} ({service.platform})
+                                </Label>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <Label className="text-sm font-medium">SMMGen Service IDs (comma-separated)</Label>
+                          <Input
+                            placeholder="123, 456 (one for each component service)"
+                            value={serviceForm.combo_smmgen_service_ids?.join(', ') || ''}
+                            onChange={(e) => {
+                              const ids = e.target.value.split(',').map(id => id.trim()).filter(id => id);
+                              setServiceForm({ ...serviceForm, combo_smmgen_service_ids: ids });
+                            }}
+                            className="mt-1"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Enter SMMGen service IDs in the same order as component services
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
                   <Button
                     type="submit"
                     disabled={loading}
@@ -941,13 +1021,26 @@ const AdminDashboard = ({ user, onLogout }) => {
                         ) : (
                           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                             <div className="flex-1">
-                              <p className="font-medium text-gray-900">{service.name}</p>
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium text-gray-900">{service.name}</p>
+                                {service.is_combo && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full">
+                                    <Layers className="w-3 h-3" />
+                                    Combo
+                                  </span>
+                                )}
+                              </div>
                               <p className="text-sm text-gray-600">
                                 {service.platform} • {service.service_type}
                               </p>
                               <p className="text-sm text-gray-600">
                                 Rate: ₵{service.rate}/1K • Qty: {service.min_quantity}-{service.max_quantity}
                               </p>
+                              {service.is_combo && service.combo_service_ids && (
+                                <p className="text-xs text-purple-600 mt-1">
+                                  Includes {service.combo_service_ids.length} service{service.combo_service_ids.length !== 1 ? 's' : ''}
+                                </p>
+                              )}
                               {service.smmgen_service_id && (
                                 <p className="text-xs text-gray-500 mt-1">
                                   SMMGen ID: {service.smmgen_service_id}
@@ -1359,7 +1452,10 @@ const ServiceEditForm = ({ service, onSave, onCancel }) => {
     min_quantity: service.min_quantity,
     max_quantity: service.max_quantity,
     description: service.description || '',
-    smmgen_service_id: service.smmgen_service_id || ''
+    smmgen_service_id: service.smmgen_service_id || '',
+    is_combo: service.is_combo || false,
+    combo_service_ids: service.combo_service_ids || [],
+    combo_smmgen_service_ids: service.combo_smmgen_service_ids || []
   });
 
   const handleSubmit = (e) => {
@@ -1369,7 +1465,14 @@ const ServiceEditForm = ({ service, onSave, onCancel }) => {
       rate: parseFloat(formData.rate),
       min_quantity: parseInt(formData.min_quantity),
       max_quantity: parseInt(formData.max_quantity),
-      smmgen_service_id: formData.smmgen_service_id || null
+      smmgen_service_id: formData.smmgen_service_id || null,
+      is_combo: formData.is_combo || false,
+      combo_service_ids: formData.is_combo && formData.combo_service_ids.length > 0 
+        ? formData.combo_service_ids 
+        : null,
+      combo_smmgen_service_ids: formData.is_combo && formData.combo_smmgen_service_ids.length > 0
+        ? formData.combo_smmgen_service_ids
+        : null
     });
   };
 

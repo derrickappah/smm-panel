@@ -15,30 +15,20 @@ const isProduction = process.env.NODE_ENV === 'production' ||
 
 // Get SMMGen config from environment variables
 const getSMMGenConfig = () => {
-  // In production (Vercel), use serverless functions on the same domain
-  // This avoids CORS issues and doesn't require a separate backend
+  // Always use serverless functions (same domain, no CORS, no separate backend needed)
+  // Serverless functions work in both development (via Vercel CLI) and production
   let backendUrl;
-  let useServerlessFunctions = false;
+  let useServerlessFunctions = true;
   
-  if (isProduction) {
-    // Use Vercel serverless functions (same domain, no CORS)
-    // These are in the /api/smmgen folder
-    backendUrl = '/api/smmgen';
-    useServerlessFunctions = true;
-  } else if (BACKEND_PROXY_URL && !BACKEND_PROXY_URL.includes('localhost')) {
-    // Use custom backend URL if provided
-    backendUrl = BACKEND_PROXY_URL;
-    useServerlessFunctions = false;
-  } else {
-    // Development: use localhost backend
-    backendUrl = 'http://localhost:5000';
-    useServerlessFunctions = false;
-  }
+  // Always use serverless functions at /api/smmgen
+  // These work in:
+  // - Production (Vercel): automatically available
+  // - Development: if using Vercel CLI (vercel dev), or can work with production functions
+  backendUrl = '/api/smmgen';
+  useServerlessFunctions = true;
   
-  // In production, serverless functions are always available
-  const isConfigured = isProduction 
-    ? true // Serverless functions are always available in Vercel
-    : (BACKEND_PROXY_URL && BACKEND_PROXY_URL.includes('localhost')); // Check if local backend is running
+  // Serverless functions are always available (they're part of the app)
+  const isConfigured = true;
   
   return { backendUrl, isConfigured, useServerlessFunctions };
 };
@@ -48,7 +38,7 @@ const buildApiUrl = (endpoint) => {
   const { backendUrl, useServerlessFunctions } = getSMMGenConfig();
   
   // Remove any trailing slashes from backendUrl and leading slashes from endpoint
-  const cleanBackendUrl = (backendUrl || '').replace(/\/+$/, '');
+  let cleanBackendUrl = (backendUrl || '').replace(/\/+$/, '');
   const cleanEndpoint = (endpoint || '').replace(/^\/+/, '');
   
   if (useServerlessFunctions) {
@@ -67,7 +57,29 @@ const buildApiUrl = (endpoint) => {
     return url.startsWith('/') ? url : `/${url}`;
   } else {
     // Backend proxy: http://localhost:5000/api/smmgen/order
+    // Ensure backendUrl is a full URL (starts with http:// or https://)
+    // If it doesn't have a protocol, add http:// (for development)
+    if (!cleanBackendUrl.startsWith('http://') && !cleanBackendUrl.startsWith('https://')) {
+      // If it's just a hostname like 'localhost:5000', add http://
+      if (cleanBackendUrl.includes(':') || cleanBackendUrl.includes('.')) {
+        cleanBackendUrl = `http://${cleanBackendUrl}`;
+      } else {
+        // Fallback: assume it's a relative path
+        console.warn('Backend URL format unclear, using relative path:', cleanBackendUrl);
+        const url = `/api/smmgen/${cleanEndpoint}`.replace(/\/+/g, '/');
+        return url;
+      }
+    }
+    
+    // Construct the full URL
     const url = `${cleanBackendUrl}/api/smmgen/${cleanEndpoint}`.replace(/\/+/g, '/');
+    
+    // Final validation: ensure it's a valid absolute URL
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      console.error('Invalid URL constructed:', url, 'from backendUrl:', backendUrl);
+      throw new Error(`Invalid backend URL configuration: ${backendUrl}`);
+    }
+    
     return url;
   }
 };
@@ -160,6 +172,33 @@ export const placeSMMGenOrder = async (serviceId, link, quantity) => {
     }
 
     const apiUrl = buildApiUrl('order');
+    
+    // Debug logging in development
+    if (!isProduction) {
+      console.log('SMMGen Order Request:', {
+        serviceId,
+        link,
+        quantity,
+        backendUrl,
+        apiUrl,
+        isConfigured,
+        apiUrlType: typeof apiUrl,
+        apiUrlStartsWith: apiUrl.startsWith('http') ? 'absolute' : 'relative'
+      });
+      
+      // Validate URL is absolute
+      if (!apiUrl.startsWith('http://') && !apiUrl.startsWith('https://')) {
+        console.error('ERROR: URL is not absolute!', {
+          apiUrl,
+          backendUrl,
+          isProduction,
+          useServerlessFunctions: getSMMGenConfig().useServerlessFunctions
+        });
+        // Return null to skip SMMGen and create local order only
+        return null;
+      }
+    }
+    
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {

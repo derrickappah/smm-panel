@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { placeSMMGenOrder, getSMMGenOrderStatus } from '@/lib/smmgen';
 import Navbar from '@/components/Navbar';
-import { Wallet, ShoppingCart, Clock, Search } from 'lucide-react';
+import { Wallet, ShoppingCart, Clock, Search, Layers } from 'lucide-react';
 // Paystack will be loaded via react-paystack package
 
 const Dashboard = ({ user, onLogout, onUpdateUser }) => {
@@ -766,6 +766,98 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         throw new Error(`Quantity must be between ${service.min_quantity} and ${service.max_quantity}`);
       }
 
+      // Handle combo services
+      if (service.is_combo && service.combo_service_ids && service.combo_service_ids.length > 0) {
+        // Get component services
+        const componentServices = service.combo_service_ids
+          .map(serviceId => services.find(s => s.id === serviceId))
+          .filter(s => s !== undefined);
+
+        if (componentServices.length === 0) {
+          throw new Error('Combo service components not found');
+        }
+
+        // Calculate total cost for all component services
+        let totalCost = 0;
+        const orderPromises = [];
+        const smmgenServiceIds = service.combo_smmgen_service_ids || [];
+
+        for (let i = 0; i < componentServices.length; i++) {
+          const componentService = componentServices[i];
+          const componentCost = (quantity / 1000) * componentService.rate;
+          totalCost += componentCost;
+
+          // Place SMMGen order if service has SMMGen ID
+          let smmgenOrderId = null;
+          const smmgenServiceId = smmgenServiceIds[i] || componentService.smmgen_service_id;
+          
+          if (smmgenServiceId) {
+            try {
+              const smmgenResponse = await placeSMMGenOrder(
+                smmgenServiceId,
+                orderForm.link,
+                quantity
+              );
+              
+              if (smmgenResponse === null) {
+                // Backend not available, continue with local order
+              } else if (smmgenResponse) {
+                smmgenOrderId = smmgenResponse.order || smmgenResponse.id || null;
+                console.log(`SMMGen order placed for ${componentService.name}:`, smmgenOrderId);
+              }
+            } catch (smmgenError) {
+              if (!smmgenError.message?.includes('Failed to fetch') && 
+                  !smmgenError.message?.includes('ERR_CONNECTION_REFUSED') &&
+                  !smmgenError.message?.includes('Backend proxy server not running')) {
+                console.error(`SMMGen order failed for ${componentService.name}:`, smmgenError);
+              }
+              // Continue with local order creation
+            }
+          }
+
+          // Create order record for this component
+          orderPromises.push(
+            supabase.from('orders').insert({
+              user_id: authUser.id,
+              service_id: componentService.id,
+              link: orderForm.link,
+              quantity: quantity,
+              total_cost: componentCost,
+              status: 'pending',
+              smmgen_order_id: smmgenOrderId
+            }).select().single()
+          );
+        }
+
+        // Check balance
+        if (user.balance < totalCost) {
+          throw new Error('Insufficient balance');
+        }
+
+        // Create all orders
+        const orderResults = await Promise.all(orderPromises);
+        const orderErrors = orderResults.filter(r => r.error);
+        
+        if (orderErrors.length > 0) {
+          throw new Error(`Failed to create some orders: ${orderErrors[0].error.message}`);
+        }
+
+        // Deduct balance
+        const { error: balanceError } = await supabase
+          .from('profiles')
+          .update({ balance: user.balance - totalCost })
+          .eq('id', authUser.id);
+
+        if (balanceError) throw balanceError;
+
+        toast.success(`Combo order placed successfully! ${componentServices.length} orders created.`);
+        setOrderForm({ service_id: '', link: '', quantity: '' });
+        await onUpdateUser();
+        fetchRecentOrders();
+        return;
+      }
+
+      // Regular (non-combo) service handling
       // Calculate cost
       const totalCost = (quantity / 1000) * service.rate;
 
@@ -998,9 +1090,22 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                               className="px-3 py-2 rounded-md hover:bg-gray-100 cursor-pointer transition-colors"
                             >
                               <div className="flex flex-col">
-                                <span className="font-medium text-gray-900">{service.name}</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-gray-900">{service.name}</span>
+                                  {service.is_combo && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full">
+                                      <Layers className="w-3 h-3" />
+                                      Combo
+                                    </span>
+                                  )}
+                                </div>
                                 <span className="text-xs text-gray-500">
                                   {service.platform && `${service.platform} • `}₵{service.rate}/1000
+                                  {service.is_combo && service.combo_service_ids && (
+                                    <span className="ml-2 text-purple-600">
+                                      ({service.combo_service_ids.length} services)
+                                    </span>
+                                  )}
                                 </span>
                               </div>
                             </div>
@@ -1066,9 +1171,30 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                   className="rounded-xl bg-white/70"
                 />
                 {selectedService && (
-                  <p className="text-sm text-gray-600 mt-2">
-                    Min: {selectedService.min_quantity} | Max: {selectedService.max_quantity}
-                  </p>
+                  <div className="mt-2 space-y-1">
+                    <p className="text-sm text-gray-600">
+                      Min: {selectedService.min_quantity} | Max: {selectedService.max_quantity}
+                    </p>
+                    {selectedService.is_combo && selectedService.combo_service_ids && (
+                      <div className="mt-2 p-2 bg-purple-50 rounded-lg border border-purple-200">
+                        <p className="text-xs font-medium text-purple-900 mb-1 flex items-center gap-1">
+                          <Layers className="w-3 h-3" />
+                          Combo includes:
+                        </p>
+                        <ul className="text-xs text-purple-700 space-y-0.5">
+                          {selectedService.combo_service_ids.map((serviceId, idx) => {
+                            const componentService = services.find(s => s.id === serviceId);
+                            return componentService ? (
+                              <li key={serviceId} className="flex items-center gap-1">
+                                <span className="w-1 h-1 bg-purple-500 rounded-full"></span>
+                                {componentService.name} (₵{componentService.rate}/1000)
+                              </li>
+                            ) : null;
+                          })}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
 
