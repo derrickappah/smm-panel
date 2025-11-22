@@ -390,7 +390,15 @@ const AdminDashboard = ({ user, onLogout }) => {
 
       if (error) {
         console.error('Error updating service:', error);
-        throw error;
+        
+        // Check for specific error types
+        if (error.code === '42501') {
+          // Permission denied (RLS policy issue)
+          toast.error('Permission denied. Please ensure RLS policies allow admins to update services.');
+        } else {
+          throw error;
+        }
+        return;
       }
 
       if (!data) {
@@ -401,12 +409,17 @@ const AdminDashboard = ({ user, onLogout }) => {
       toast.success('Service updated successfully!');
       setEditingService(null);
       
-      // Wait a moment for database to sync, then refresh
+      // Update local state immediately for better UX
+      setServices(prevServices => 
+        prevServices.map(s => s.id === serviceId ? { ...s, ...data } : s)
+      );
+      
+      // Wait a moment for database to sync, then refresh all data
       await new Promise(resolve => setTimeout(resolve, 300));
       await fetchAllData();
     } catch (error) {
       console.error('Failed to update service:', error);
-      toast.error(error.message || 'Failed to update service');
+      toast.error(error.message || 'Failed to update service. Check console for details.');
     } finally {
       setLoading(false);
     }
@@ -419,25 +432,77 @@ const AdminDashboard = ({ user, onLogout }) => {
 
     setLoading(true);
     try {
-      const { error } = await supabase
+      // First, check if there are any orders using this service
+      const { data: ordersUsingService, error: checkError } = await supabase
+        .from('orders')
+        .select('id, status')
+        .eq('service_id', serviceId)
+        .limit(1);
+
+      if (checkError) {
+        console.warn('Could not check for orders using service:', checkError);
+        // Continue anyway - might be a permission issue
+      } else if (ordersUsingService && ordersUsingService.length > 0) {
+        const orderCount = ordersUsingService.length;
+        const message = `Cannot delete service: There ${orderCount === 1 ? 'is' : 'are'} ${orderCount} order${orderCount === 1 ? '' : 's'} using this service. Please cancel or complete those orders first.`;
+        toast.error(message);
+        setLoading(false);
+        return;
+      }
+
+      // Attempt to delete the service
+      const { data: deletedData, error } = await supabase
         .from('services')
         .delete()
-        .eq('id', serviceId);
+        .eq('id', serviceId)
+        .select();
 
       if (error) {
         console.error('Error deleting service:', error);
-        throw error;
+        
+        // Check for specific error types
+        if (error.code === '23503') {
+          // Foreign key constraint violation
+          toast.error('Cannot delete service: It is being used by existing orders. Please contact support.');
+        } else if (error.code === '42501') {
+          // Permission denied (RLS policy issue)
+          toast.error('Permission denied. Please ensure RLS policies allow admins to delete services.');
+        } else {
+          throw error;
+        }
+        return;
       }
 
-      console.log('Service deleted successfully:', serviceId);
+      // Verify deletion succeeded
+      if (!deletedData || deletedData.length === 0) {
+        // Check if service still exists
+        const { data: stillExists } = await supabase
+          .from('services')
+          .select('id')
+          .eq('id', serviceId)
+          .maybeSingle();
+
+        if (stillExists) {
+          throw new Error('Service deletion failed - service still exists. This may be a permission issue.');
+        } else {
+          // Service was deleted (no data returned is normal for DELETE)
+          console.log('Service deleted successfully (no data returned, which is normal)');
+        }
+      } else {
+        console.log('Service deleted successfully:', deletedData[0]);
+      }
+
       toast.success('Service deleted successfully!');
       
-      // Wait a moment for database to sync, then refresh
+      // Remove from local state immediately for better UX
+      setServices(prevServices => prevServices.filter(s => s.id !== serviceId));
+      
+      // Wait a moment for database to sync, then refresh all data
       await new Promise(resolve => setTimeout(resolve, 300));
       await fetchAllData();
     } catch (error) {
       console.error('Failed to delete service:', error);
-      toast.error(error.message || 'Failed to delete service');
+      toast.error(error.message || 'Failed to delete service. Check console for details.');
     } finally {
       setLoading(false);
     }
