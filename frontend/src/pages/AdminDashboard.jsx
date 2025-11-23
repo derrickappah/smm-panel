@@ -586,11 +586,11 @@ const AdminDashboard = ({ user, onLogout }) => {
 
       // Refund the amount
       const { data: updatedProfile, error: balanceError } = await supabase
-        .from('profiles')
+            .from('profiles')
         .update({ balance: newBalance })
         .eq('id', order.user_id)
-        .select('balance')
-        .single();
+            .select('balance')
+            .single();
 
       if (balanceError) {
         console.error('Error updating balance:', balanceError);
@@ -777,7 +777,8 @@ const AdminDashboard = ({ user, onLogout }) => {
   // Filter functions
   const filteredUsers = users.filter(u => 
     u.name?.toLowerCase().includes(userSearch.toLowerCase()) ||
-    u.email?.toLowerCase().includes(userSearch.toLowerCase())
+    u.email?.toLowerCase().includes(userSearch.toLowerCase()) ||
+    u.phone_number?.toLowerCase().includes(userSearch.toLowerCase())
   );
 
   const filteredOrders = orders.filter(o => {
@@ -816,7 +817,7 @@ const AdminDashboard = ({ user, onLogout }) => {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
               <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">Admin Dashboard</h1>
-              <p className="text-gray-600">Manage users, orders, and services</p>
+          <p className="text-gray-600">Manage users, orders, and services</p>
             </div>
             <Button
               onClick={fetchAllData}
@@ -934,7 +935,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                                 {status.label}
                               </span>
                             </div>
-                            <p className="font-medium text-gray-900">Amount: ₵{deposit.amount.toFixed(2)}</p>
+                        <p className="font-medium text-gray-900">Amount: ₵{deposit.amount.toFixed(2)}</p>
                             <p className="text-sm text-gray-600">
                               User: {deposit.profiles?.name || deposit.profiles?.email || deposit.user_id.slice(0, 8)}
                             </p>
@@ -950,9 +951,9 @@ const AdminDashboard = ({ user, onLogout }) => {
                             {deposit.status === 'pending' && (
                               <p className="text-xs text-yellow-600 mt-1">⏳ Awaiting payment confirmation</p>
                             )}
-                          </div>
-                        </div>
                       </div>
+                      </div>
+                    </div>
                     );
                   })}
                 </div>
@@ -1004,22 +1005,22 @@ const AdminDashboard = ({ user, onLogout }) => {
                               Quantity: {order.quantity} | Cost: ₵{order.total_cost.toFixed(2)}
                             </p>
                             <p className="text-xs text-gray-500">{new Date(order.created_at).toLocaleString()}</p>
-                          </div>
+                      </div>
                           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                             <Select 
                               value={order.status} 
                               onValueChange={(value) => handleOrderStatusUpdate(order.id, value)}
                             >
                               <SelectTrigger className="w-full sm:w-40">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="pending">Pending</SelectItem>
-                                <SelectItem value="processing">Processing</SelectItem>
-                                <SelectItem value="completed">Completed</SelectItem>
-                                <SelectItem value="cancelled">Cancelled</SelectItem>
-                              </SelectContent>
-                            </Select>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pending">Pending</SelectItem>
+                          <SelectItem value="processing">Processing</SelectItem>
+                          <SelectItem value="completed">Completed</SelectItem>
+                          <SelectItem value="cancelled">Cancelled</SelectItem>
+                        </SelectContent>
+                      </Select>
                             {order.status !== 'cancelled' && (
                               <Button
                                 onClick={() => handleRefundOrder(order)}
@@ -1030,8 +1031,8 @@ const AdminDashboard = ({ user, onLogout }) => {
                                 Refund
                               </Button>
                             )}
-                          </div>
-                        </div>
+                    </div>
+                  </div>
                       </div>
                     </div>
                   ))
@@ -1046,84 +1047,84 @@ const AdminDashboard = ({ user, onLogout }) => {
               {/* Add Service Form */}
               <div className="glass p-4 sm:p-8 rounded-3xl">
                 <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">Add New Service</h2>
-                <form onSubmit={handleCreateService} className="space-y-5">
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div>
-                      <Label>Platform</Label>
-                      <Select value={serviceForm.platform} onValueChange={(value) => setServiceForm({ ...serviceForm, platform: value })}>
+              <form onSubmit={handleCreateService} className="space-y-5">
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <Label>Platform</Label>
+                    <Select value={serviceForm.platform} onValueChange={(value) => setServiceForm({ ...serviceForm, platform: value })}>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select platform" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="instagram">Instagram</SelectItem>
-                          <SelectItem value="tiktok">TikTok</SelectItem>
-                          <SelectItem value="youtube">YouTube</SelectItem>
-                          <SelectItem value="facebook">Facebook</SelectItem>
-                          <SelectItem value="twitter">Twitter</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label>Service Type</Label>
-                      <Input
-                        placeholder="e.g., followers, likes"
-                        value={serviceForm.service_type}
-                        onChange={(e) => setServiceForm({ ...serviceForm, service_type: e.target.value })}
-                        required
-                      />
-                    </div>
+                        <SelectValue placeholder="Select platform" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="instagram">Instagram</SelectItem>
+                        <SelectItem value="tiktok">TikTok</SelectItem>
+                        <SelectItem value="youtube">YouTube</SelectItem>
+                        <SelectItem value="facebook">Facebook</SelectItem>
+                        <SelectItem value="twitter">Twitter</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
-                    <Label>Service Name</Label>
+                    <Label>Service Type</Label>
                     <Input
-                      placeholder="e.g., Instagram Followers - High Quality"
-                      value={serviceForm.name}
-                      onChange={(e) => setServiceForm({ ...serviceForm, name: e.target.value })}
+                      placeholder="e.g., followers, likes"
+                      value={serviceForm.service_type}
+                      onChange={(e) => setServiceForm({ ...serviceForm, service_type: e.target.value })}
                       required
                     />
                   </div>
-                  <div className="grid md:grid-cols-3 gap-4">
-                    <div>
-                      <Label>Rate (per 1000)</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        placeholder="5.00"
-                        value={serviceForm.rate}
-                        onChange={(e) => setServiceForm({ ...serviceForm, rate: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <div>
-                      <Label>Min Quantity</Label>
-                      <Input
-                        type="number"
-                        placeholder="100"
-                        value={serviceForm.min_quantity}
-                        onChange={(e) => setServiceForm({ ...serviceForm, min_quantity: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <div>
-                      <Label>Max Quantity</Label>
-                      <Input
-                        type="number"
-                        placeholder="10000"
-                        value={serviceForm.max_quantity}
-                        onChange={(e) => setServiceForm({ ...serviceForm, max_quantity: e.target.value })}
-                        required
-                      />
-                    </div>
-                  </div>
+                </div>
+                <div>
+                  <Label>Service Name</Label>
+                  <Input
+                    placeholder="e.g., Instagram Followers - High Quality"
+                    value={serviceForm.name}
+                    onChange={(e) => setServiceForm({ ...serviceForm, name: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="grid md:grid-cols-3 gap-4">
                   <div>
-                    <Label>Description</Label>
+                    <Label>Rate (per 1000)</Label>
                     <Input
-                      placeholder="Service description"
-                      value={serviceForm.description}
-                      onChange={(e) => setServiceForm({ ...serviceForm, description: e.target.value })}
+                      type="number"
+                      step="0.01"
+                      placeholder="5.00"
+                      value={serviceForm.rate}
+                      onChange={(e) => setServiceForm({ ...serviceForm, rate: e.target.value })}
                       required
                     />
                   </div>
+                  <div>
+                    <Label>Min Quantity</Label>
+                    <Input
+                      type="number"
+                      placeholder="100"
+                      value={serviceForm.min_quantity}
+                      onChange={(e) => setServiceForm({ ...serviceForm, min_quantity: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label>Max Quantity</Label>
+                    <Input
+                      type="number"
+                      placeholder="10000"
+                      value={serviceForm.max_quantity}
+                      onChange={(e) => setServiceForm({ ...serviceForm, max_quantity: e.target.value })}
+                      required
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label>Description</Label>
+                  <Input
+                    placeholder="Service description"
+                    value={serviceForm.description}
+                    onChange={(e) => setServiceForm({ ...serviceForm, description: e.target.value })}
+                    required
+                  />
+                </div>
                   <div>
                     <Label>SMMGen Service ID</Label>
                     <Input
@@ -1217,14 +1218,14 @@ const AdminDashboard = ({ user, onLogout }) => {
                     </Label>
                   </div>
                   
-                  <Button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white py-6 rounded-full"
-                  >
-                    {loading ? 'Creating...' : 'Create Service'}
-                  </Button>
-                </form>
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white py-6 rounded-full"
+                >
+                  {loading ? 'Creating...' : 'Create Service'}
+                </Button>
+              </form>
               </div>
 
               {/* Services List */}
@@ -1345,19 +1346,22 @@ const AdminDashboard = ({ user, onLogout }) => {
                           <div className="flex-1">
                             <p className="font-medium text-gray-900">{u.name}</p>
                             <p className="text-sm text-gray-600">{u.email}</p>
+                            {u.phone_number && (
+                              <p className="text-sm text-gray-600">📱 {u.phone_number}</p>
+                            )}
                             <p className="text-xs text-gray-500">
                               Joined: {new Date(u.created_at).toLocaleDateString()}
                             </p>
                           </div>
                           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
-                            <div className="text-right">
-                              <p className="font-medium text-gray-900">₵{u.balance.toFixed(2)}</p>
-                              <span className={`text-xs px-2 py-1 rounded-full ${
-                                u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'
-                              }`}>
-                                {u.role}
-                              </span>
-                            </div>
+                    <div className="text-right">
+                      <p className="font-medium text-gray-900">₵{u.balance.toFixed(2)}</p>
+                      <span className={`text-xs px-2 py-1 rounded-full ${
+                        u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'
+                      }`}>
+                        {u.role}
+                      </span>
+                    </div>
                             <Button
                               onClick={() => setEditingUser(u)}
                               variant="outline"
@@ -1366,7 +1370,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                               <Edit className="w-4 h-4 mr-2" />
                               Edit
                             </Button>
-                          </div>
+                  </div>
                         </div>
                       )}
                     </div>
@@ -1624,6 +1628,7 @@ const UserEditForm = ({ user, onSave, onCancel }) => {
   const [formData, setFormData] = useState({
     name: user.name,
     email: user.email,
+    phone_number: user.phone_number || '',
     role: user.role,
     balance: user.balance
   });
@@ -1650,6 +1655,15 @@ const UserEditForm = ({ user, onSave, onCancel }) => {
           value={formData.email}
           onChange={(e) => setFormData({ ...formData, email: e.target.value })}
           required
+        />
+      </div>
+      <div>
+        <Label>Phone Number</Label>
+        <Input
+          type="tel"
+          placeholder="+233 XX XXX XXXX"
+          value={formData.phone_number}
+          onChange={(e) => setFormData({ ...formData, phone_number: e.target.value })}
         />
       </div>
       <div>
