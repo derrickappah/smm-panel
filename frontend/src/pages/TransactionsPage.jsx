@@ -90,16 +90,51 @@ const TransactionsPage = ({ user, onLogout }) => {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    setBalanceCheckResults({}); // Clear previous results
+    // Don't clear verified results - only clear non-verified ones
+    // This preserves the verified status of transactions
     await fetchTransactions();
     setRefreshing(false);
     // Balance checks will run automatically via useEffect when transactions/userProfiles update
+    // But will skip already verified transactions
   };
 
   // Memoized balance check results to avoid re-checking on every render
   const [balanceCheckResults, setBalanceCheckResults] = useState({});
   const [checkingBalances, setCheckingBalances] = useState(false);
   const [balanceCheckTrigger, setBalanceCheckTrigger] = useState(0); // Trigger for re-checking
+  
+  // Load verified transactions from localStorage on mount
+  useEffect(() => {
+    if (isAdmin) {
+      try {
+        const stored = localStorage.getItem('verifiedTransactions');
+        if (stored) {
+          const verified = JSON.parse(stored);
+          setBalanceCheckResults(verified);
+        }
+      } catch (error) {
+        console.warn('Failed to load verified transactions from localStorage:', error);
+      }
+    }
+  }, [isAdmin]);
+  
+  // Save verified transactions to localStorage whenever results change
+  useEffect(() => {
+    if (isAdmin && Object.keys(balanceCheckResults).length > 0) {
+      try {
+        // Only save transactions that are marked as "updated" (confirmed)
+        const verified = {};
+        Object.keys(balanceCheckResults).forEach(transactionId => {
+          if (balanceCheckResults[transactionId] === 'updated') {
+            verified[transactionId] = 'updated';
+          }
+        });
+        localStorage.setItem('verifiedTransactions', JSON.stringify(verified));
+      } catch (error) {
+        console.warn('Failed to save verified transactions to localStorage:', error);
+      }
+    }
+  }, [balanceCheckResults, isAdmin]);
 
   // For admin: Check if balance was updated after successful deposit (IMPROVED TRIPLE CHECK)
   const performTripleCheck = async (transaction) => {
@@ -245,7 +280,20 @@ const TransactionsPage = ({ user, onLogout }) => {
 
     const performBalanceChecks = async () => {
       setCheckingBalances(true);
-      const results = {};
+      
+      // Load previously verified transactions from localStorage
+      let previouslyVerified = {};
+      try {
+        const stored = localStorage.getItem('verifiedTransactions');
+        if (stored) {
+          previouslyVerified = JSON.parse(stored);
+        }
+      } catch (error) {
+        console.warn('Failed to load verified transactions:', error);
+      }
+      
+      // Start with previously verified results
+      const results = { ...previouslyVerified };
       
       // Check all approved deposit transactions
       const depositTransactions = transactions.filter(
@@ -255,6 +303,13 @@ const TransactionsPage = ({ user, onLogout }) => {
       for (const transaction of depositTransactions) {
         if (!isMounted) break; // Stop if component unmounted
         
+        // Skip if this transaction was already verified as "updated"
+        if (previouslyVerified[transaction.id] === 'updated') {
+          // Keep the previous result, don't re-check
+          continue;
+        }
+        
+        // Only check transactions that haven't been verified or were marked as "not_updated" or "unknown"
         const result = await performTripleCheck(transaction);
         if (isMounted) {
           results[transaction.id] = result;
@@ -312,10 +367,15 @@ const TransactionsPage = ({ user, onLogout }) => {
 
       toast.success(`Balance credited successfully! ₵${depositAmount.toFixed(2)} added to user's account.`);
       
-      // Refresh data and clear balance check results to re-verify
-      setBalanceCheckResults({});
+      // Mark this transaction as verified since we just manually credited it
+      setBalanceCheckResults(prev => ({
+        ...prev,
+        [transaction.id]: 'updated'
+      }));
+      
+      // Refresh data - verified results will be preserved
       await fetchTransactions();
-      // Balance checks will run automatically via useEffect
+      // Balance checks will run automatically via useEffect, but will skip already verified transactions
     } catch (error) {
       console.error('Error manually crediting balance:', error);
       toast.error('Failed to credit balance: ' + error.message);
@@ -444,6 +504,13 @@ const TransactionsPage = ({ user, onLogout }) => {
               {isAdmin && (
                 <Button
                   onClick={() => {
+                    // Force re-check by clearing only non-verified results
+                    // Verified transactions will be re-checked
+                    try {
+                      localStorage.removeItem('verifiedTransactions');
+                    } catch (error) {
+                      console.warn('Failed to clear verified transactions:', error);
+                    }
                     setBalanceCheckResults({});
                     setBalanceCheckTrigger(prev => prev + 1); // Trigger useEffect
                   }}
