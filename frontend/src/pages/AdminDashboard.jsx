@@ -145,7 +145,7 @@ const AdminDashboard = ({ user, onLogout }) => {
 
       const [usersRes, ordersRes, depositsRes, transactionsRes, servicesRes, ticketsRes] = await Promise.all([
         supabase.from('profiles').select('*').order('created_at', { ascending: false }),
-        supabase.from('orders').select('*, services(name, platform)').order('created_at', { ascending: false }),
+        supabase.from('orders').select('*, services(name, platform), profiles(name, email, phone_number)').order('created_at', { ascending: false }),
         supabase.from('transactions').select('*, profiles(email, name)').eq('type', 'deposit').order('created_at', { ascending: false }),
         supabase.from('transactions').select('*, profiles(email, name)').order('created_at', { ascending: false }),
         supabase.from('services').select('*').order('created_at', { ascending: false }),
@@ -790,9 +790,15 @@ const AdminDashboard = ({ user, onLogout }) => {
   );
 
   const filteredOrders = orders.filter(o => {
+    const searchLower = orderSearch.toLowerCase();
     const matchesSearch = orderSearch === '' || 
-      o.id.toLowerCase().includes(orderSearch.toLowerCase()) ||
-      o.user_id.toLowerCase().includes(orderSearch.toLowerCase());
+      o.id.toLowerCase().includes(searchLower) ||
+      o.user_id.toLowerCase().includes(searchLower) ||
+      o.profiles?.name?.toLowerCase().includes(searchLower) ||
+      o.profiles?.email?.toLowerCase().includes(searchLower) ||
+      o.profiles?.phone_number?.toLowerCase().includes(searchLower) ||
+      o.services?.name?.toLowerCase().includes(searchLower) ||
+      o.link?.toLowerCase().includes(searchLower);
     const matchesStatus = orderStatusFilter === 'all' || o.status === orderStatusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -976,7 +982,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                   <Input
-                    placeholder="Search orders..."
+                    placeholder="Search by order ID, username, email, phone, or service..."
                     value={orderSearch}
                     onChange={(e) => setOrderSearch(e.target.value)}
                     className="pl-10"
@@ -1005,9 +1011,33 @@ const AdminDashboard = ({ user, onLogout }) => {
                       <div className="flex flex-col gap-4">
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                           <div className="flex-1">
-                            <p className="font-medium text-gray-900">Order: {order.id.slice(0, 8)}...</p>
+                            <div className="flex items-center gap-2 mb-2">
+                              <p className="font-medium text-gray-900">Order: {order.id.slice(0, 8)}...</p>
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                order.status === 'completed' ? 'bg-green-100 text-green-700' :
+                                order.status === 'processing' ? 'bg-blue-100 text-blue-700' :
+                                order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                                'bg-yellow-100 text-yellow-700'
+                              }`}>
+                                {order.status}
+                              </span>
+                            </div>
+                            {order.profiles && (
+                              <div className="mb-2 p-2 bg-gray-50 rounded-lg">
+                                <p className="text-sm font-medium text-gray-900">
+                                  👤 {order.profiles.name || 'Unknown User'}
+                                </p>
+                                <p className="text-xs text-gray-600">{order.profiles.email}</p>
+                                {order.profiles.phone_number && (
+                                  <p className="text-xs text-gray-600">📱 {order.profiles.phone_number}</p>
+                                )}
+                              </div>
+                            )}
                             <p className="text-sm text-gray-600">
                               Service: {order.services?.name || 'N/A'}
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              Link: <a href={order.link} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline break-all">{order.link}</a>
                             </p>
                             <p className="text-sm text-gray-600">
                               Quantity: {order.quantity} | Cost: ₵{order.total_cost.toFixed(2)}
