@@ -426,31 +426,35 @@ const AdminDashboard = ({ user, onLogout }) => {
   };
 
   const handleDeleteService = async (serviceId) => {
-    if (!confirm('Are you sure you want to delete this service? This action cannot be undone.')) {
-      return;
-    }
-
     setLoading(true);
     try {
-      // First, check if there are any orders using this service
+      // Check if there are any orders using this service (for warning only)
       const { data: ordersUsingService, error: checkError } = await supabase
         .from('orders')
-        .select('id, status')
-        .eq('service_id', serviceId)
-        .limit(1);
+        .select('id')
+        .eq('service_id', serviceId);
 
-      if (checkError) {
-        console.warn('Could not check for orders using service:', checkError);
-        // Continue anyway - might be a permission issue
-      } else if (ordersUsingService && ordersUsingService.length > 0) {
-        const orderCount = ordersUsingService.length;
-        const message = `Cannot delete service: There ${orderCount === 1 ? 'is' : 'are'} ${orderCount} order${orderCount === 1 ? '' : 's'} using this service. Please cancel or complete those orders first.`;
-        toast.error(message);
-        setLoading(false);
-        return;
+      let orderCount = 0;
+      if (!checkError && ordersUsingService) {
+        orderCount = ordersUsingService.length;
       }
 
-      // Attempt to delete the service
+      // Show warning if orders exist, but allow deletion (CASCADE will handle it)
+      if (orderCount > 0) {
+        const confirmMessage = `Warning: This service has ${orderCount} order${orderCount === 1 ? '' : 's'} associated with it. Deleting this service will also delete all associated orders. Are you sure you want to continue?`;
+        if (!confirm(confirmMessage)) {
+          setLoading(false);
+          return;
+        }
+      } else {
+        // Standard confirmation if no orders
+        if (!confirm('Are you sure you want to delete this service? This action cannot be undone.')) {
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Attempt to delete the service (CASCADE will automatically delete related orders)
       const { data: deletedData, error } = await supabase
         .from('services')
         .delete()
