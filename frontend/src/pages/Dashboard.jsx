@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { placeSMMGenOrder, getSMMGenOrderStatus } from '@/lib/smmgen';
@@ -1854,23 +1855,31 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                 </p>
               </div>
               
-              {/* Deposit Tutorial Video */}
+              {/* Deposit Tutorial Video - Collapsible */}
               <div className="mt-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">How to Deposit - Video Tutorial</h3>
-                <div className="rounded-xl overflow-hidden bg-gray-100">
-                  <video
-                    controls
-                    className="w-full h-auto"
-                    preload="metadata"
-                    style={{ maxHeight: '500px' }}
-                  >
-                    <source
-                      src="https://spihsvdchouynfbsotwq.supabase.co/storage/v1/object/public/storage/tutorial.mp4"
-                      type="video/mp4"
-                    />
-                    Your browser does not support the video tag.
-                  </video>
-                </div>
+                <Accordion type="single" collapsible className="w-full">
+                  <AccordionItem value="tutorial" className="border border-gray-200 rounded-xl overflow-hidden">
+                    <AccordionTrigger className="px-4 py-3 hover:no-underline">
+                      <span className="text-sm font-semibold text-gray-900">📹 How to Deposit - Video Tutorial</span>
+                    </AccordionTrigger>
+                    <AccordionContent className="px-4 pb-4">
+                      <div className="rounded-xl overflow-hidden bg-gray-100">
+                        <video
+                          controls
+                          className="w-full h-auto"
+                          preload="metadata"
+                          style={{ maxHeight: '500px' }}
+                        >
+                          <source
+                            src="https://spihsvdchouynfbsotwq.supabase.co/storage/v1/object/public/storage/tutorial.mp4"
+                            type="video/mp4"
+                          />
+                          Your browser does not support the video tag.
+                        </video>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
               </div>
             </form>
           </div>
