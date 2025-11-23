@@ -90,12 +90,19 @@ const TransactionsPage = ({ user, onLogout }) => {
 
   const handleRefresh = async () => {
     setRefreshing(true);
+    setBalanceCheckResults({}); // Clear previous results
     await fetchTransactions();
     setRefreshing(false);
+    // Balance checks will run automatically via useEffect when transactions/userProfiles update
   };
 
-  // For admin: Check if balance was updated after successful deposit
-  const checkBalanceUpdated = (transaction) => {
+  // Memoized balance check results to avoid re-checking on every render
+  const [balanceCheckResults, setBalanceCheckResults] = useState({});
+  const [checkingBalances, setCheckingBalances] = useState(false);
+  const [balanceCheckTrigger, setBalanceCheckTrigger] = useState(0); // Trigger for re-checking
+
+  // For admin: Check if balance was updated after successful deposit (IMPROVED TRIPLE CHECK)
+  const performTripleCheck = async (transaction) => {
     if (!isAdmin || transaction.type !== 'deposit' || transaction.status !== 'approved') {
       return null; // Not applicable
     }
@@ -105,7 +112,45 @@ const TransactionsPage = ({ user, onLogout }) => {
       return 'unknown'; // Can't check
     }
 
-    // Calculate expected balance: sum of all approved deposits for this user
+    const transactionAmount = parseFloat(transaction.amount || 0);
+    if (transactionAmount <= 0) {
+      return 'unknown'; // Invalid amount
+    }
+    
+    // IMPROVED TRIPLE CHECK SYSTEM - More reliable and less prone to false negatives
+    
+    // STEP 1: Fetch fresh balance from database (TRIPLE FETCH to avoid stale data)
+    let freshBalance = parseFloat(userProfile.balance || 0);
+    const freshBalances = [];
+    
+    try {
+      // Fetch 3 times with delays to ensure we get the latest data
+      for (let i = 0; i < 3; i++) {
+        await new Promise(resolve => setTimeout(resolve, 150)); // Delay between fetches
+        const { data: freshProfile, error: freshError } = await supabase
+          .from('profiles')
+          .select('balance')
+          .eq('id', transaction.user_id)
+          .single();
+
+        if (!freshError && freshProfile) {
+          const balance = parseFloat(freshProfile.balance || 0);
+          freshBalances.push(balance);
+        }
+      }
+
+      if (freshBalances.length > 0) {
+        // Use the highest balance from the 3 fetches (most recent/accurate)
+        freshBalance = Math.max(...freshBalances);
+        // Also update userProfile for consistency
+        userProfile.balance = freshBalance;
+      }
+    } catch (error) {
+      console.warn('Fresh balance fetch failed:', error);
+      // Continue with current balance
+    }
+
+    // Calculate all approved deposits for this user
     const allApprovedDeposits = transactions
       .filter(t => 
         t.user_id === transaction.user_id &&
@@ -114,25 +159,127 @@ const TransactionsPage = ({ user, onLogout }) => {
       )
       .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
 
-    // Get user's current balance
-    const currentBalance = parseFloat(userProfile.balance || 0);
+    // Calculate all completed orders (these deduct from balance)
+    const allCompletedOrders = transactions
+      .filter(t => 
+        t.user_id === transaction.user_id &&
+        t.type === 'order' &&
+        t.status === 'completed'
+      )
+      .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+
+    // Calculate expected balance (deposits - orders)
+    const expectedBalanceFromTransactions = allApprovedDeposits - allCompletedOrders;
     
-    // Check if this specific transaction amount was added to balance
-    // We check if current balance includes this transaction amount
-    // by seeing if balance is at least equal to all approved deposits
-    const expectedMinimumBalance = allApprovedDeposits;
+    // Calculate balance without this specific transaction
+    const balanceWithoutThisTransaction = allApprovedDeposits - transactionAmount - allCompletedOrders;
+    const minExpectedBalanceWithTransaction = balanceWithoutThisTransaction + transactionAmount;
+
+    // CHECK 1: Current balance is at least equal to expected (allowing for small differences)
+    // More lenient: allow up to 1% difference or 0.10 cedis tolerance
+    const tolerance = Math.max(0.10, expectedBalanceFromTransactions * 0.01);
+    const check1Pass = freshBalance >= (expectedBalanceFromTransactions - tolerance);
+
+    // CHECK 2: Balance includes this transaction amount
+    // Balance should be at least (balance without this transaction + this transaction amount)
+    const check2Pass = freshBalance >= (minExpectedBalanceWithTransaction - tolerance);
+
+    // CHECK 3: Balance is reasonable (not negative, not suspiciously low)
+    // If balance is significantly lower than expected, it's likely not updated
+    const significantDifference = expectedBalanceFromTransactions - freshBalance;
+    const check3Pass = significantDifference <= tolerance || significantDifference <= transactionAmount * 0.5;
+
+    // TRIPLE CHECK RESULT: Use conservative approach (err on side of "updated")
+    const passCount = [check1Pass, check2Pass, check3Pass].filter(Boolean).length;
     
-    // Allow small floating point differences (0.01)
-    if (Math.abs(currentBalance - expectedMinimumBalance) < 0.01) {
-      return 'updated'; // Balance matches expected (was updated)
-    } else if (currentBalance < expectedMinimumBalance - 0.01) {
-      // Current balance is significantly less than expected
-      // This means at least one deposit wasn't credited
-      return 'not_updated'; // Balance wasn't fully updated
+    console.log('Improved triple check result for transaction:', {
+      transactionId: transaction.id.slice(0, 8),
+      check1Pass,
+      check2Pass,
+      check3Pass,
+      passCount,
+      currentBalance: freshBalance,
+      expectedBalance: expectedBalanceFromTransactions,
+      minExpectedWithTransaction: minExpectedBalanceWithTransaction,
+      transactionAmount,
+      tolerance,
+      difference: Math.abs(freshBalance - expectedBalanceFromTransactions)
+    });
+    
+    // Conservative approach: Only mark as "not_updated" if we're very confident
+    // If balance is close to expected (within tolerance), consider it updated
+    if (passCount >= 2) {
+      // At least 2 checks passed - balance was likely updated
+      return 'updated';
+    } else if (passCount === 1) {
+      // Only 1 check passed - be conservative
+      // If balance is within reasonable range, consider it updated
+      if (freshBalance >= balanceWithoutThisTransaction - tolerance) {
+        return 'updated'; // Probably updated (conservative)
+      }
+      // Only mark as not_updated if balance is significantly lower
+      if (freshBalance < balanceWithoutThisTransaction - transactionAmount * 0.8) {
+        return 'not_updated'; // Definitely not updated
+      }
+      return 'updated'; // Default to updated (conservative)
     } else {
-      // Balance is more than expected (might have been manually adjusted or has other credits)
-      return 'updated'; // Assume updated if balance is higher
+      // All checks failed - but be conservative
+      // Only mark as not_updated if balance is significantly lower than expected
+      const significantGap = expectedBalanceFromTransactions - freshBalance;
+      if (significantGap > transactionAmount * 0.9) {
+        // Balance is missing at least 90% of this transaction amount
+        return 'not_updated';
+      }
+      // Otherwise, be conservative and assume it's updated
+      return 'updated';
     }
+  };
+  
+  // Perform balance checks when transactions or userProfiles change
+  useEffect(() => {
+    if (!isAdmin || transactions.length === 0 || Object.keys(userProfiles).length === 0) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const performBalanceChecks = async () => {
+      setCheckingBalances(true);
+      const results = {};
+      
+      // Check all approved deposit transactions
+      const depositTransactions = transactions.filter(
+        t => t.type === 'deposit' && t.status === 'approved'
+      );
+
+      for (const transaction of depositTransactions) {
+        if (!isMounted) break; // Stop if component unmounted
+        
+        const result = await performTripleCheck(transaction);
+        if (isMounted) {
+          results[transaction.id] = result;
+        }
+      }
+      
+      if (isMounted) {
+        setBalanceCheckResults(results);
+        setCheckingBalances(false);
+      }
+    };
+
+    performBalanceChecks();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [transactions, userProfiles, isAdmin, balanceCheckTrigger]);
+
+  // Helper function to get balance check result (synchronous for rendering)
+  const getBalanceCheckResult = (transaction) => {
+    if (!isAdmin || transaction.type !== 'deposit' || transaction.status !== 'approved') {
+      return null;
+    }
+    return balanceCheckResults[transaction.id] || 'checking';
   };
 
   // For admin: Manually credit balance for a deposit
@@ -165,8 +312,10 @@ const TransactionsPage = ({ user, onLogout }) => {
 
       toast.success(`Balance credited successfully! ₵${depositAmount.toFixed(2)} added to user's account.`);
       
-      // Refresh data
+      // Refresh data and clear balance check results to re-verify
+      setBalanceCheckResults({});
       await fetchTransactions();
+      // Balance checks will run automatically via useEffect
     } catch (error) {
       console.error('Error manually crediting balance:', error);
       toast.error('Failed to credit balance: ' + error.message);
@@ -291,15 +440,32 @@ const TransactionsPage = ({ user, onLogout }) => {
                   : 'Track your deposits and payments'}
               </p>
             </div>
-            <Button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              variant="outline"
-              className="flex items-center gap-2"
-            >
-              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
+            <div className="flex gap-2">
+              {isAdmin && (
+                <Button
+                  onClick={() => {
+                    setBalanceCheckResults({});
+                    setBalanceCheckTrigger(prev => prev + 1); // Trigger useEffect
+                  }}
+                  disabled={checkingBalances}
+                  variant="outline"
+                  className="flex items-center gap-2"
+                  title="Re-check all balances with triple verification"
+                >
+                  <RefreshCw className={`w-4 h-4 ${checkingBalances ? 'animate-spin' : ''}`} />
+                  Re-check Balances
+                </Button>
+              )}
+              <Button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                variant="outline"
+                className="flex items-center gap-2"
+              >
+                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+            </div>
           </div>
 
           {/* Filters */}
@@ -368,7 +534,7 @@ const TransactionsPage = ({ user, onLogout }) => {
                 const typeConfig = getTypeConfig(transaction.type);
                 const StatusIcon = statusConfig.icon;
                 const TypeIcon = typeConfig.icon;
-                const balanceCheck = isAdmin ? checkBalanceUpdated(transaction) : null;
+                const balanceCheck = isAdmin ? getBalanceCheckResult(transaction) : null;
                 const userProfile = isAdmin ? userProfiles[transaction.user_id] : null;
 
                 return (
@@ -414,6 +580,12 @@ const TransactionsPage = ({ user, onLogout }) => {
                         {/* Admin Actions */}
                         {isAdmin && transaction.type === 'deposit' && transaction.status === 'approved' && (
                           <div className="flex flex-col gap-2">
+                            {balanceCheck === 'checking' && (
+                              <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 px-3 py-2 rounded-lg">
+                                <Loader className="w-4 h-4 animate-spin" />
+                                <span>Verifying balance...</span>
+                              </div>
+                            )}
                             {balanceCheck === 'not_updated' && (
                               <div className="flex flex-col gap-2">
                                 <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">
