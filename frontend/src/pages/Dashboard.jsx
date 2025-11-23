@@ -1853,6 +1853,25 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                   </a>
                 </p>
               </div>
+              
+              {/* Deposit Tutorial Video */}
+              <div className="mt-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">How to Deposit - Video Tutorial</h3>
+                <div className="rounded-xl overflow-hidden bg-gray-100">
+                  <video
+                    controls
+                    className="w-full h-auto"
+                    preload="metadata"
+                    style={{ maxHeight: '500px' }}
+                  >
+                    <source
+                      src="https://spihsvdchouynfbsotwq.supabase.co/storage/v1/object/public/storage/tutorial.mp4"
+                      type="video/mp4"
+                    />
+                    Your browser does not support the video tag.
+                  </video>
+                </div>
+              </div>
             </form>
           </div>
 
