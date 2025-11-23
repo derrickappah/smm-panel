@@ -15,6 +15,7 @@ const AuthPage = () => {
     email: '',
     password: '',
     name: '',
+    phone_number: '',
   });
 
   const handleSubmit = async (e) => {
@@ -45,6 +46,12 @@ const AuthPage = () => {
 
       if (!isLogin && !formData.name.trim()) {
         toast.error('Please enter your name');
+        setLoading(false);
+        return;
+      }
+
+      if (!isLogin && !formData.phone_number.trim()) {
+        toast.error('Please enter your phone number');
         setLoading(false);
         return;
       }
@@ -105,6 +112,7 @@ const AuthPage = () => {
             options: {
               data: {
                 name: formData.name.trim(),
+                phone_number: formData.phone_number.trim(),
               },
             },
           });
@@ -153,6 +161,7 @@ const AuthPage = () => {
                 id: data.user.id,
                 email: formData.email.trim(),
                 name: formData.name.trim(),
+                phone_number: formData.phone_number.trim(),
                 balance: 0.0,
                 role: 'user',
               });
@@ -235,20 +244,36 @@ const AuthPage = () => {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {!isLogin && (
-              <div>
-                <Label htmlFor="name" className="text-gray-700 font-medium mb-2 block">
-                  Full Name
-                </Label>
-                <Input
-                  id="name"
-                  type="text"
-                  placeholder="John Doe"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  required={!isLogin}
-                  className="rounded-xl bg-white/70 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500"
-                />
-              </div>
+              <>
+                <div>
+                  <Label htmlFor="name" className="text-gray-700 font-medium mb-2 block">
+                    Full Name
+                  </Label>
+                  <Input
+                    id="name"
+                    type="text"
+                    placeholder="John Doe"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    required={!isLogin}
+                    className="rounded-xl bg-white/70 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="phone_number" className="text-gray-700 font-medium mb-2 block">
+                    Phone Number
+                  </Label>
+                  <Input
+                    id="phone_number"
+                    type="tel"
+                    placeholder="+233 XX XXX XXXX"
+                    value={formData.phone_number}
+                    onChange={(e) => setFormData({ ...formData, phone_number: e.target.value })}
+                    required={!isLogin}
+                    className="rounded-xl bg-white/70 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500"
+                  />
+                </div>
+              </>
             )}
 
             <div>
