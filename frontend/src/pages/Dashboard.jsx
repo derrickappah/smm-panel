@@ -1989,7 +1989,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                   id="link"
                   data-testid="order-link-input"
                   type="url"
-                  placeholder="https://instagram.com/yourprofile"
+                  placeholder="put your link here"
                   value={orderForm.link}
                   onChange={(e) => setOrderForm({ ...orderForm, link: e.target.value })}
                   className="rounded-xl bg-white/70"
