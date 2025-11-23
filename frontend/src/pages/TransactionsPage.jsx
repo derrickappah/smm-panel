@@ -103,36 +103,92 @@ const TransactionsPage = ({ user, onLogout }) => {
   const [checkingBalances, setCheckingBalances] = useState(false);
   const [balanceCheckTrigger, setBalanceCheckTrigger] = useState(0); // Trigger for re-checking
   
-  // Load verified transactions from localStorage on mount
+  // Load verified transactions from database on mount
   useEffect(() => {
     if (isAdmin) {
-      try {
-        const stored = localStorage.getItem('verifiedTransactions');
-        if (stored) {
-          const verified = JSON.parse(stored);
-          setBalanceCheckResults(verified);
-        }
-      } catch (error) {
-        console.warn('Failed to load verified transactions from localStorage:', error);
-      }
+      loadVerifiedTransactions();
     }
   }, [isAdmin]);
-  
-  // Save verified transactions to localStorage whenever results change
+
+  // Function to load verified transactions from database
+  const loadVerifiedTransactions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('verified_transactions')
+        .select('transaction_id, verified_status');
+
+      if (error) {
+        console.warn('Failed to load verified transactions from database:', error);
+        return;
+      }
+
+      if (data) {
+        const verified = {};
+        data.forEach(item => {
+          verified[item.transaction_id] = item.verified_status;
+        });
+        setBalanceCheckResults(verified);
+      }
+    } catch (error) {
+      console.warn('Error loading verified transactions:', error);
+    }
+  };
+
+  // Function to save verified transaction to database
+  const saveVerifiedTransaction = async (transactionId, status) => {
+    if (!isAdmin) return;
+
+    try {
+      // Check if already exists
+      const { data: existing } = await supabase
+        .from('verified_transactions')
+        .select('id')
+        .eq('transaction_id', transactionId)
+        .maybeSingle();
+
+      if (existing) {
+        // Update existing record
+        const { error } = await supabase
+          .from('verified_transactions')
+          .update({
+            verified_status: status,
+            updated_at: new Date().toISOString()
+          })
+          .eq('transaction_id', transactionId);
+
+        if (error) {
+          console.warn('Failed to update verified transaction:', error);
+        }
+      } else {
+        // Insert new record
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        const { error } = await supabase
+          .from('verified_transactions')
+          .insert({
+            transaction_id: transactionId,
+            verified_status: status,
+            verified_by: authUser?.id || null
+          });
+
+        if (error) {
+          console.warn('Failed to save verified transaction:', error);
+        }
+      }
+    } catch (error) {
+      console.warn('Error saving verified transaction:', error);
+    }
+  };
+
+  // Save verified transactions to database whenever results change
   useEffect(() => {
     if (isAdmin && Object.keys(balanceCheckResults).length > 0) {
-      try {
-        // Only save transactions that are marked as "updated" (confirmed)
-        const verified = {};
-        Object.keys(balanceCheckResults).forEach(transactionId => {
-          if (balanceCheckResults[transactionId] === 'updated') {
-            verified[transactionId] = 'updated';
-          }
-        });
-        localStorage.setItem('verifiedTransactions', JSON.stringify(verified));
-      } catch (error) {
-        console.warn('Failed to save verified transactions to localStorage:', error);
-      }
+      // Save each verified transaction to database
+      Object.keys(balanceCheckResults).forEach(transactionId => {
+        const status = balanceCheckResults[transactionId];
+        if (status && status !== 'checking') {
+          saveVerifiedTransaction(transactionId, status);
+        }
+      });
     }
   }, [balanceCheckResults, isAdmin]);
 
@@ -281,15 +337,20 @@ const TransactionsPage = ({ user, onLogout }) => {
     const performBalanceChecks = async () => {
       setCheckingBalances(true);
       
-      // Load previously verified transactions from localStorage
+      // Load previously verified transactions from database
       let previouslyVerified = {};
       try {
-        const stored = localStorage.getItem('verifiedTransactions');
-        if (stored) {
-          previouslyVerified = JSON.parse(stored);
+        const { data: verifiedData, error } = await supabase
+          .from('verified_transactions')
+          .select('transaction_id, verified_status');
+
+        if (!error && verifiedData) {
+          verifiedData.forEach(item => {
+            previouslyVerified[item.transaction_id] = item.verified_status;
+          });
         }
       } catch (error) {
-        console.warn('Failed to load verified transactions:', error);
+        console.warn('Failed to load verified transactions from database:', error);
       }
       
       // Start with previously verified results
@@ -313,6 +374,10 @@ const TransactionsPage = ({ user, onLogout }) => {
         const result = await performTripleCheck(transaction);
         if (isMounted) {
           results[transaction.id] = result;
+          // Save to database immediately after checking
+          if (result && result !== 'checking') {
+            await saveVerifiedTransaction(transaction.id, result);
+          }
         }
       }
       
@@ -372,6 +437,9 @@ const TransactionsPage = ({ user, onLogout }) => {
         ...prev,
         [transaction.id]: 'updated'
       }));
+      
+      // Save to database immediately
+      await saveVerifiedTransaction(transaction.id, 'updated');
       
       // Refresh data - verified results will be preserved
       await fetchTransactions();
@@ -503,13 +571,24 @@ const TransactionsPage = ({ user, onLogout }) => {
             <div className="flex gap-2">
               {isAdmin && (
                 <Button
-                  onClick={() => {
-                    // Force re-check by clearing only non-verified results
-                    // Verified transactions will be re-checked
+                  onClick={async () => {
+                    // Force re-check by deleting verified transactions from database
+                    // This will cause all transactions to be re-checked
                     try {
-                      localStorage.removeItem('verifiedTransactions');
+                      const { error } = await supabase
+                        .from('verified_transactions')
+                        .delete()
+                        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all (using a condition that's always true)
+                      
+                      if (error) {
+                        console.warn('Failed to clear verified transactions:', error);
+                        toast.error('Failed to clear verified transactions. Please try again.');
+                      } else {
+                        toast.success('Verified transactions cleared. Re-checking all balances...');
+                      }
                     } catch (error) {
-                      console.warn('Failed to clear verified transactions:', error);
+                      console.warn('Error clearing verified transactions:', error);
+                      toast.error('Error clearing verified transactions');
                     }
                     setBalanceCheckResults({});
                     setBalanceCheckTrigger(prev => prev + 1); // Trigger useEffect
