@@ -1645,6 +1645,23 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
         if (balanceError) throw balanceError;
 
+        // Record transaction for combo order (balance subtraction)
+        // Create one transaction record for the total cost
+        const { error: transactionError } = await supabase
+          .from('transactions')
+          .insert({
+            user_id: authUser.id,
+            amount: totalCost,
+            type: 'order',
+            status: 'approved', // Order transactions are immediately approved when balance is deducted
+            order_id: orderResults[0]?.data?.id || null // Link to first order in combo
+          });
+
+        if (transactionError) {
+          console.warn('Failed to create transaction record for combo order:', transactionError);
+          // Don't fail the order if transaction record fails, but log it
+        }
+
         toast.success(`Combo order placed successfully! ${componentServices.length} orders created.`);
         setOrderForm({ service_id: '', link: '', quantity: '' });
         await onUpdateUser();
@@ -1718,6 +1735,22 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         .eq('id', authUser.id);
 
       if (balanceError) throw balanceError;
+
+      // Record transaction for order (balance subtraction)
+      const { error: transactionError } = await supabase
+        .from('transactions')
+        .insert({
+          user_id: authUser.id,
+          amount: totalCost,
+          type: 'order',
+          status: 'approved', // Order transactions are immediately approved when balance is deducted
+          order_id: orderData.id
+        });
+
+      if (transactionError) {
+        console.warn('Failed to create transaction record for order:', transactionError);
+        // Don't fail the order if transaction record fails, but log it
+      }
 
       toast.success('Order placed successfully!');
       setOrderForm({ service_id: '', link: '', quantity: '' });

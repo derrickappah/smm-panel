@@ -304,11 +304,12 @@ const AdminDashboard = ({ user, onLogout }) => {
 
       await handleUpdateUser(balanceAdjustment.userId, { balance: newBalance });
       
-      // Create transaction record
+      // Create transaction record for balance adjustment
+      // Use 'deposit' type for additions, 'order' type for subtractions
       await supabase.from('transactions').insert({
         user_id: balanceAdjustment.userId,
         amount: amount,
-        type: 'deposit',
+        type: balanceAdjustment.type === 'add' ? 'deposit' : 'order',
         status: 'approved'
       });
 
@@ -1021,7 +1022,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                               }`}>
                                 {order.status}
                               </span>
-                            </div>
+                      </div>
                             {order.profiles && (
                               <div className="mb-2 p-2 bg-gray-50 rounded-lg">
                                 <p className="text-sm font-medium text-gray-900">
@@ -1382,15 +1383,15 @@ const AdminDashboard = ({ user, onLogout }) => {
                       ) : (
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                           <div className="flex-1">
-                            <p className="font-medium text-gray-900">{u.name}</p>
-                            <p className="text-sm text-gray-600">{u.email}</p>
+                      <p className="font-medium text-gray-900">{u.name}</p>
+                      <p className="text-sm text-gray-600">{u.email}</p>
                             {u.phone_number && (
                               <p className="text-sm text-gray-600">📱 {u.phone_number}</p>
                             )}
                             <p className="text-xs text-gray-500">
                               Joined: {new Date(u.created_at).toLocaleDateString()}
                             </p>
-                          </div>
+                    </div>
                           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
                     <div className="text-right">
                       <p className="font-medium text-gray-900">₵{u.balance.toFixed(2)}</p>
