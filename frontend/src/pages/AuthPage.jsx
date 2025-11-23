@@ -51,7 +51,7 @@ const AuthPage = () => {
       }
 
       if (!isLogin && !formData.phone_number.trim()) {
-        toast.error('Please enter your phone number');
+        toast.error('Please enter your WhatsApp number');
         setLoading(false);
         return;
       }
@@ -261,7 +261,7 @@ const AuthPage = () => {
                 </div>
                 <div>
                   <Label htmlFor="phone_number" className="text-gray-700 font-medium mb-2 block">
-                    Phone Number
+                    WhatsApp Number
                   </Label>
                   <Input
                     id="phone_number"
