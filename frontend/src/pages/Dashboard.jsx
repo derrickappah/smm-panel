@@ -626,6 +626,68 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           newBalance 
         });
 
+        // DOUBLE-CHECK: Verify balance was actually updated (CRITICAL)
+        console.log('Verifying balance was updated (fallback path)...');
+        let balanceVerified = false;
+        for (let verifyAttempt = 1; verifyAttempt <= 3; verifyAttempt++) {
+          // Wait a moment for database to sync
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
+          const { data: verifyProfile, error: verifyError } = await supabase
+            .from('profiles')
+            .select('balance')
+            .eq('id', authUser.id)
+            .maybeSingle();
+
+          if (verifyError || !verifyProfile) {
+            console.warn(`Balance verification attempt ${verifyAttempt} failed:`, verifyError);
+            continue;
+          }
+
+          const verifiedBalance = parseFloat(verifyProfile.balance || 0);
+          const expectedBalance = newBalance;
+          
+          // Allow small floating point differences (0.01)
+          if (Math.abs(verifiedBalance - expectedBalance) < 0.01) {
+            balanceVerified = true;
+            console.log(`✅ Balance verified successfully (fallback, attempt ${verifyAttempt}):`, {
+              expected: expectedBalance,
+              actual: verifiedBalance
+            });
+            break;
+          } else {
+            console.warn(`Balance verification attempt ${verifyAttempt} - mismatch:`, {
+              expected: expectedBalance,
+              actual: verifiedBalance
+            });
+            
+            // If balance doesn't match, try updating again
+            if (verifyAttempt < 3) {
+              console.log(`Retrying balance update (fallback, verification attempt ${verifyAttempt})...`);
+              const retryNewBalance = verifiedBalance + transactionAmount;
+              const { error: retryError } = await supabase
+                .from('profiles')
+                .update({ balance: retryNewBalance })
+                .eq('id', authUser.id);
+              
+              if (!retryError) {
+                console.log('Balance update retry successful (fallback), will verify again...');
+              } else {
+                console.error('Balance update retry failed (fallback):', retryError);
+              }
+            }
+          }
+        }
+
+        if (!balanceVerified) {
+          console.error('⚠️ WARNING: Balance verification failed after multiple attempts (fallback)!', {
+            transactionId: transactionToUpdate.id,
+            transactionAmount,
+            expectedBalance: newBalance
+          });
+          toast.warning('Payment approved but balance verification failed. Please check your balance or contact support.');
+        }
+
         toast.success(`Payment successful! ₵${transactionAmount.toFixed(2)} added to your balance.`);
         setDepositAmount('');
         setPendingTransaction(null);
@@ -684,6 +746,35 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             transactionAmount, 
             newBalance: retryBalance 
           });
+
+          // DOUBLE-CHECK: Verify balance was actually updated after retry
+          console.log('Verifying balance was updated (retry path)...');
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
+          const { data: verifyProfile, error: verifyError } = await supabase
+            .from('profiles')
+            .select('balance')
+            .eq('id', authUser.id)
+            .single();
+
+          if (!verifyError && verifyProfile) {
+            const verifiedBalance = parseFloat(verifyProfile.balance || 0);
+            const expectedBalance = retryBalance;
+            
+            if (Math.abs(verifiedBalance - expectedBalance) < 0.01) {
+              console.log('✅ Balance verified successfully (retry path):', {
+                expected: expectedBalance,
+                actual: verifiedBalance
+              });
+            } else {
+              console.error('⚠️ WARNING: Balance verification failed after retry!', {
+                expected: expectedBalance,
+                actual: verifiedBalance,
+                difference: Math.abs(verifiedBalance - expectedBalance)
+              });
+              toast.warning('Payment approved but balance verification failed. Please check your balance or contact support.');
+            }
+          }
         } else {
           throw new Error(`Failed to update balance: ${balanceError.message}`);
         }
@@ -693,6 +784,73 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           transactionAmount, 
           newBalance 
         });
+      }
+
+      // DOUBLE-CHECK: Verify balance was actually updated (CRITICAL)
+      console.log('Verifying balance was updated...');
+      let balanceVerified = false;
+      for (let verifyAttempt = 1; verifyAttempt <= 3; verifyAttempt++) {
+        // Wait a moment for database to sync
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        const { data: verifyProfile, error: verifyError } = await supabase
+          .from('profiles')
+          .select('balance')
+          .eq('id', authUser.id)
+          .single();
+
+        if (verifyError) {
+          console.warn(`Balance verification attempt ${verifyAttempt} failed:`, verifyError);
+          continue;
+        }
+
+        const verifiedBalance = parseFloat(verifyProfile.balance || 0);
+        const expectedBalance = newBalance;
+        
+        // Allow small floating point differences (0.01)
+        if (Math.abs(verifiedBalance - expectedBalance) < 0.01) {
+          balanceVerified = true;
+          console.log(`✅ Balance verified successfully (attempt ${verifyAttempt}):`, {
+            expected: expectedBalance,
+            actual: verifiedBalance,
+            difference: Math.abs(verifiedBalance - expectedBalance)
+          });
+          break;
+        } else {
+          console.warn(`Balance verification attempt ${verifyAttempt} - mismatch:`, {
+            expected: expectedBalance,
+            actual: verifiedBalance,
+            difference: Math.abs(verifiedBalance - expectedBalance)
+          });
+          
+          // If balance doesn't match, try updating again
+          if (verifyAttempt < 3) {
+            console.log(`Retrying balance update (verification attempt ${verifyAttempt})...`);
+            const retryNewBalance = verifiedBalance + transactionAmount;
+            const { error: retryError } = await supabase
+              .from('profiles')
+              .update({ balance: retryNewBalance })
+              .eq('id', authUser.id);
+            
+            if (!retryError) {
+              console.log('Balance update retry successful, will verify again...');
+              // Will verify again in next iteration
+            } else {
+              console.error('Balance update retry failed:', retryError);
+            }
+          }
+        }
+      }
+
+      if (!balanceVerified) {
+        console.error('⚠️ WARNING: Balance verification failed after multiple attempts!', {
+          transactionId: transactionToUpdate.id,
+          transactionAmount,
+          expectedBalance: newBalance
+        });
+        // Don't fail the payment process, but log the issue
+        // Admin can manually credit if needed
+        toast.warning('Payment approved but balance verification failed. Please check your balance or contact support.');
       }
 
       // Final verification: ensure transaction is marked as approved AND reference is stored (CRITICAL - must succeed)
