@@ -45,6 +45,8 @@ const AdminDashboard = ({ user, onLogout }) => {
   const [editingUser, setEditingUser] = useState(null);
   const [editingService, setEditingService] = useState(null);
   const [balanceAdjustment, setBalanceAdjustment] = useState({ userId: '', amount: '', type: 'add' });
+  const [balanceUserSearch, setBalanceUserSearch] = useState('');
+  const [balanceUserDropdownOpen, setBalanceUserDropdownOpen] = useState(false);
   
   // Form states
   const [serviceForm, setServiceForm] = useState({
@@ -282,7 +284,7 @@ const AdminDashboard = ({ user, onLogout }) => {
 
   const handleAdjustBalance = async () => {
     if (!balanceAdjustment.userId || !balanceAdjustment.amount) {
-      toast.error('Please select a user and enter an amount');
+      toast.error('Please search and select a user and enter an amount');
       return;
     }
 
@@ -311,6 +313,8 @@ const AdminDashboard = ({ user, onLogout }) => {
       });
 
       setBalanceAdjustment({ userId: '', amount: '', type: 'add' });
+      setBalanceUserSearch('');
+      setBalanceUserDropdownOpen(false);
       toast.success(`Balance ${balanceAdjustment.type === 'add' ? 'added' : 'deducted'} successfully!`);
     } catch (error) {
       toast.error(error.message || 'Failed to adjust balance');
@@ -1568,22 +1572,111 @@ const AdminDashboard = ({ user, onLogout }) => {
               <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">Manual Balance Adjustment</h2>
               <div className="space-y-5">
                 <div>
-                  <Label>Select User</Label>
-                  <Select 
-                    value={balanceAdjustment.userId} 
-                    onValueChange={(value) => setBalanceAdjustment({ ...balanceAdjustment, userId: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Choose a user" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {users.map((u) => (
-                        <SelectItem key={u.id} value={u.id}>
-                          {u.name} ({u.email}) - Current: ₵{u.balance.toFixed(2)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label>Search User</Label>
+                  <div className="relative user-search-dropdown-container">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none z-20" />
+                    <Input
+                      type="text"
+                      placeholder="Search by name, email, or phone number..."
+                      value={balanceUserSearch}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setBalanceUserSearch(value);
+                        if (value.length > 0 && users.length > 0) {
+                          setBalanceUserDropdownOpen(true);
+                        } else if (value.length === 0) {
+                          setBalanceUserDropdownOpen(false);
+                        }
+                      }}
+                      onFocus={() => {
+                        if (users.length > 0) {
+                          setBalanceUserDropdownOpen(true);
+                        }
+                      }}
+                      onBlur={(e) => {
+                        setTimeout(() => {
+                          const activeElement = document.activeElement;
+                          if (!activeElement || !activeElement.closest('.user-search-dropdown-container')) {
+                            setBalanceUserDropdownOpen(false);
+                          }
+                        }, 150);
+                      }}
+                      className="rounded-xl bg-white/70 pl-10 z-10"
+                      autoComplete="off"
+                    />
+                    
+                    {/* Dropdown with filtered users */}
+                    {balanceUserDropdownOpen && users.length > 0 && (
+                      <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                        {(() => {
+                          const filteredUsers = users.filter(u => 
+                            !balanceUserSearch || 
+                            u.name?.toLowerCase().includes(balanceUserSearch.toLowerCase()) ||
+                            u.email?.toLowerCase().includes(balanceUserSearch.toLowerCase()) ||
+                            u.phone_number?.toLowerCase().includes(balanceUserSearch.toLowerCase())
+                          );
+                          
+                          if (filteredUsers.length === 0) {
+                            return (
+                              <div className="p-3 text-sm text-gray-500 text-center">
+                                No users found
+                              </div>
+                            );
+                          }
+                          
+                          return filteredUsers.map((u) => {
+                            const isSelected = balanceAdjustment.userId === u.id;
+                            return (
+                              <div
+                                key={u.id}
+                                onClick={() => {
+                                  setBalanceAdjustment({ ...balanceAdjustment, userId: u.id });
+                                  setBalanceUserSearch(u.name || u.email);
+                                  setBalanceUserDropdownOpen(false);
+                                }}
+                                className={`p-3 cursor-pointer hover:bg-indigo-50 transition-colors ${
+                                  isSelected ? 'bg-indigo-100' : ''
+                                }`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <p className="font-medium text-gray-900">{u.name}</p>
+                                    <p className="text-xs text-gray-600">{u.email}</p>
+                                    {u.phone_number && (
+                                      <p className="text-xs text-gray-500">📱 {u.phone_number}</p>
+                                    )}
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-sm font-semibold text-indigo-600">
+                                      ₵{u.balance.toFixed(2)}
+                                    </p>
+                                    {isSelected && (
+                                      <CheckCircle className="w-4 h-4 text-indigo-600 mt-1" />
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          });
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Show selected user */}
+                  {balanceAdjustment.userId && (() => {
+                    const selectedUser = users.find(u => u.id === balanceAdjustment.userId);
+                    return selectedUser ? (
+                      <div className="mt-2 p-3 bg-indigo-50 rounded-xl border border-indigo-200">
+                        <p className="text-sm font-medium text-gray-900">
+                          Selected: {selectedUser.name} ({selectedUser.email})
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          Current Balance: ₵{selectedUser.balance.toFixed(2)}
+                        </p>
+                      </div>
+                    ) : null;
+                  })()}
                 </div>
                 <div>
                   <Label>Adjustment Type</Label>
