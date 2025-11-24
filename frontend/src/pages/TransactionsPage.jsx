@@ -16,7 +16,9 @@ import {
   AlertCircle,
   Plus,
   Search,
-  Filter
+  Filter,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -29,6 +31,8 @@ const TransactionsPage = ({ user, onLogout }) => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [manuallyCrediting, setManuallyCrediting] = useState(null); // Transaction ID being manually credited
+  const [transactionsPage, setTransactionsPage] = useState(1);
+  const transactionsPerPage = 20;
   const isAdmin = user?.role === 'admin';
 
   useEffect(() => {
@@ -52,6 +56,14 @@ const TransactionsPage = ({ user, onLogout }) => {
       } else {
         // For admins, fetch all transactions with user profiles
         transactionsQuery = transactionsQuery.select('*, profiles(email, name, balance)');
+        
+        // Also fetch orders to check refund status
+        const { data: ordersData } = await supabase
+          .from('orders')
+          .select('id, refund_status, user_id');
+        if (ordersData) {
+          setOrders(ordersData);
+        }
       }
 
       const { data: transactionsData, error } = await transactionsQuery;
@@ -241,21 +253,32 @@ const TransactionsPage = ({ user, onLogout }) => {
       // Continue with current balance
     }
 
-    // Calculate all approved deposits for this user
+    // Get all orders for this user to check refund status
+    const userOrders = orders.filter(o => o.user_id === transaction.user_id);
+    const refundedOrderIds = new Set(
+      userOrders
+        .filter(o => o.refund_status === 'succeeded')
+        .map(o => o.id)
+    );
+
+    // Calculate all approved deposits, EXCLUDING refund deposit transactions
+    // (Refund deposits shouldn't exist after the fix, but exclude them just in case)
     const allApprovedDeposits = transactions
       .filter(t => 
         t.user_id === transaction.user_id &&
         t.type === 'deposit' &&
-        t.status === 'approved'
+        t.status === 'approved' &&
+        !(t.order_id && refundedOrderIds.has(t.order_id)) // Exclude refund deposits
       )
       .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
 
-    // Calculate all completed orders (these deduct from balance)
+    // Calculate orders, EXCLUDING refunded orders (since refund already added balance back directly)
     const allCompletedOrders = transactions
       .filter(t => 
         t.user_id === transaction.user_id &&
         t.type === 'order' &&
-        t.status === 'completed'
+        t.status === 'completed' &&
+        !refundedOrderIds.has(t.order_id) // Exclude transactions for refunded orders
       )
       .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
 
@@ -539,6 +562,17 @@ const TransactionsPage = ({ user, onLogout }) => {
     return true;
   });
 
+  // Pagination
+  const totalTransactionsPages = Math.ceil(filteredTransactions.length / transactionsPerPage);
+  const startTransactionIndex = (transactionsPage - 1) * transactionsPerPage;
+  const endTransactionIndex = startTransactionIndex + transactionsPerPage;
+  const paginatedTransactions = filteredTransactions.slice(startTransactionIndex, endTransactionIndex);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setTransactionsPage(1);
+  }, [statusFilter, typeFilter, searchTerm]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
@@ -655,10 +689,12 @@ const TransactionsPage = ({ user, onLogout }) => {
             </Select>
           </div>
 
-          {/* Transactions List */}
+          {/* Transactions Table */}
           {filteredTransactions.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-gray-600 text-lg">No transactions found</p>
+              <p className="text-gray-600 text-lg">
+                {transactions.length === 0 ? 'No transactions yet' : 'No transactions match your filters'}
+              </p>
               {searchTerm || statusFilter !== 'all' || typeFilter !== 'all' ? (
                 <Button
                   onClick={() => {
@@ -674,133 +710,191 @@ const TransactionsPage = ({ user, onLogout }) => {
               ) : null}
             </div>
           ) : (
-            <div className="space-y-4">
-              {filteredTransactions.map((transaction) => {
-                const statusConfig = getStatusConfig(transaction.status);
-                const typeConfig = getTypeConfig(transaction.type);
-                const StatusIcon = statusConfig.icon;
-                const TypeIcon = typeConfig.icon;
-                const balanceCheck = isAdmin ? getBalanceCheckResult(transaction) : null;
-                const userProfile = isAdmin ? userProfiles[transaction.user_id] : null;
+            <>
+              <div className="overflow-x-auto">
+                <div className="min-w-[1200px]">
+                  {/* Fixed Header */}
+                  <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white sticky top-0 z-10">
+                    <div className={`grid gap-4 p-4 font-semibold text-sm text-center ${isAdmin ? 'grid-cols-[1.5fr_1.5fr_1.5fr_1.5fr_2fr_2fr_1fr_1fr]' : 'grid-cols-[1.5fr_1.5fr_1.5fr_1.5fr_2fr_1fr_1fr]'}`}>
+                      <div>Type</div>
+                      <div>Status</div>
+                      <div>Amount</div>
+                      <div>Time</div>
+                      {isAdmin && <div>User</div>}
+                      <div>Transaction ID</div>
+                      {isAdmin && <div>Balance Status</div>}
+                      <div>Actions</div>
+                    </div>
+                  </div>
 
-                return (
-                  <div key={transaction.id} className="bg-white/50 p-4 sm:p-6 rounded-xl border border-white/20">
-                    <div className="flex flex-col gap-4">
-                      {/* Header Row */}
-                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                        <div className="flex-1">
-                          <div className="flex flex-wrap items-center gap-2 mb-2">
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${statusConfig.color}`}>
-                              <StatusIcon className="w-3 h-3" />
-                              {statusConfig.label}
-                            </span>
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${typeConfig.color}`}>
-                              <TypeIcon className="w-3 h-3" />
-                              {typeConfig.label}
-                            </span>
-                            {transaction.paystack_reference && (
-                              <span className="px-3 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">
-                                Ref: {transaction.paystack_reference.slice(0, 8)}...
+                  {/* Transactions List */}
+                  <div className="divide-y divide-gray-200">
+                    {paginatedTransactions.map((transaction) => {
+                      const statusConfig = getStatusConfig(transaction.status);
+                      const typeConfig = getTypeConfig(transaction.type);
+                      const StatusIcon = statusConfig.icon;
+                      const TypeIcon = typeConfig.icon;
+                      const balanceCheck = isAdmin ? getBalanceCheckResult(transaction) : null;
+                      const userProfile = isAdmin ? userProfiles[transaction.user_id] : null;
+
+                      return (
+                        <div key={transaction.id} className="bg-white/50 hover:bg-white/70 transition-colors">
+                          <div className={`grid gap-4 p-4 items-center ${isAdmin ? 'grid-cols-[1.5fr_1.5fr_1.5fr_1.5fr_2fr_2fr_1fr_1fr]' : 'grid-cols-[1.5fr_1.5fr_1.5fr_1.5fr_2fr_1fr_1fr]'}`}>
+                            {/* Type */}
+                            <div className="flex justify-center">
+                              <span className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 ${typeConfig.color}`}>
+                                <TypeIcon className="w-3 h-3" />
+                                {typeConfig.label}
                               </span>
-                            )}
-                          </div>
-                          
-                          <div className="space-y-1">
-                            <p className="text-lg font-bold text-gray-900">
-                              {transaction.type === 'deposit' ? '+' : '-'}₵{parseFloat(transaction.amount || 0).toFixed(2)}
-                            </p>
-                            {isAdmin && userProfile && (
-                              <p className="text-sm text-gray-600">
-                                User: {userProfile.name || userProfile.email || transaction.user_id.slice(0, 8)}
+                            </div>
+                            {/* Status */}
+                            <div className="flex justify-center">
+                              <span className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 ${statusConfig.color}`}>
+                                <StatusIcon className="w-3 h-3" />
+                                {statusConfig.label}
+                              </span>
+                            </div>
+                            {/* Amount */}
+                            <div className="text-center">
+                              <p className={`font-semibold text-gray-900 ${transaction.type === 'deposit' ? 'text-green-600' : 'text-red-600'}`}>
+                                {transaction.type === 'deposit' ? '+' : '-'}₵{parseFloat(transaction.amount || 0).toFixed(2)}
                               </p>
-                            )}
-                            <p className="text-xs text-gray-500">
-                              {new Date(transaction.created_at).toLocaleString()}
-                            </p>
-                            <p className="text-xs text-gray-400 font-mono">
-                              ID: {transaction.id.slice(0, 8)}...
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Admin Actions */}
-                        {isAdmin && transaction.type === 'deposit' && transaction.status === 'approved' && (
-                          <div className="flex flex-col gap-2">
-                            {balanceCheck === 'checking' && (
-                              <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 px-3 py-2 rounded-lg">
-                                <Loader className="w-4 h-4 animate-spin" />
-                                <span>Verifying balance...</span>
+                            </div>
+                            {/* Time */}
+                            <div className="text-center">
+                              <p className="text-sm text-gray-700">{new Date(transaction.created_at).toLocaleDateString()}</p>
+                              <p className="text-xs text-gray-500">{new Date(transaction.created_at).toLocaleTimeString()}</p>
+                            </div>
+                            {/* User (Admin only) */}
+                            {isAdmin && (
+                              <div className="text-center">
+                                <p className="font-medium text-gray-900 text-sm">{userProfile?.name || 'Unknown'}</p>
+                                <p className="text-xs text-gray-600 break-all">{userProfile?.email || transaction.user_id.slice(0, 8)}</p>
                               </div>
                             )}
-                            {balanceCheck === 'not_updated' && (
-                              <div className="flex flex-col gap-2">
-                                <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">
-                                  <AlertCircle className="w-4 h-4" />
-                                  <span>Balance not updated</span>
-                                </div>
+                            {/* Transaction ID */}
+                            <div className="text-center">
+                              <p className="text-xs text-gray-700 break-all">{transaction.id}</p>
+                              {transaction.paystack_reference && (
+                                <p className="text-xs text-gray-500">Ref: {transaction.paystack_reference.slice(0, 8)}...</p>
+                              )}
+                            </div>
+                            {/* Balance Status (Admin only) */}
+                            {isAdmin && (
+                              <div className="flex justify-center">
+                                {(() => {
+                                  if (transaction.type === 'deposit' && transaction.status === 'approved') {
+                                    if (balanceCheck === 'not_updated') {
+                                      return (
+                                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 whitespace-nowrap">
+                                          not-updated
+                                        </span>
+                                      );
+                                    } else if (balanceCheck === 'updated') {
+                                      return (
+                                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 whitespace-nowrap">
+                                          Updated
+                                        </span>
+                                      );
+                                    } else if (balanceCheck === 'checking') {
+                                      return (
+                                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700 whitespace-nowrap">
+                                          Checking...
+                                        </span>
+                                      );
+                                    } else if (balanceCheck === 'unknown') {
+                                      return (
+                                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 whitespace-nowrap">
+                                          Unknown
+                                        </span>
+                                      );
+                                    }
+                                  }
+                                  return <span className="text-xs text-gray-400">-</span>;
+                                })()}
+                              </div>
+                            )}
+                            {/* Actions */}
+                            <div className="flex justify-center">
+                              {isAdmin && transaction.type === 'deposit' && transaction.status === 'approved' && balanceCheck === 'not_updated' && (
                                 <Button
                                   onClick={() => handleManualCredit(transaction)}
                                   disabled={manuallyCrediting === transaction.id}
+                                  variant="outline"
                                   size="sm"
-                                  className="bg-green-600 hover:bg-green-700 text-white"
+                                  className="text-xs whitespace-nowrap text-green-600 hover:text-green-700 border-green-300"
+                                  title="Credit balance to user"
                                 >
-                                  {manuallyCrediting === transaction.id ? (
-                                    <>
-                                      <Loader className="w-4 h-4 mr-2 animate-spin" />
-                                      Crediting...
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Plus className="w-4 h-4 mr-2" />
-                                      Credit Balance
-                                    </>
-                                  )}
+                                  {manuallyCrediting === transaction.id ? 'Crediting...' : 'Credit Balance'}
                                 </Button>
-                              </div>
-                            )}
-                            {balanceCheck === 'updated' && (
-                              <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 px-3 py-2 rounded-lg">
-                                <CheckCircle className="w-4 h-4" />
-                                <span>Balance updated</span>
-                              </div>
-                            )}
-                            {balanceCheck === 'unknown' && (
-                              <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 px-3 py-2 rounded-lg">
-                                <AlertCircle className="w-4 h-4" />
-                                <span>Cannot verify</span>
-                              </div>
-                            )}
+                              )}
+                              {!isAdmin && transaction.type === 'deposit' && transaction.status === 'approved' && (
+                                <span className="text-xs text-green-600 flex items-center gap-1">
+                                  <CheckCircle className="w-3 h-3" />
+                                  Credited
+                                </span>
+                              )}
+                            </div>
                           </div>
-                        )}
-
-                        {/* User View: Balance Update Status */}
-                        {!isAdmin && transaction.type === 'deposit' && transaction.status === 'approved' && (
-                          <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 px-3 py-2 rounded-lg">
-                            <CheckCircle className="w-4 h-4" />
-                            <span>Account credited successfully</span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Additional Info */}
-                      {transaction.status === 'pending' && (
-                        <div className="flex items-center gap-2 text-sm text-yellow-600 bg-yellow-50 px-3 py-2 rounded-lg">
-                          <Clock className="w-4 h-4" />
-                          <span>Awaiting payment confirmation</span>
                         </div>
-                      )}
-
-                      {transaction.status === 'rejected' && (
-                        <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">
-                          <XCircle className="w-4 h-4" />
-                          <span>Payment was cancelled or failed</span>
-                        </div>
-                      )}
-                    </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
-            </div>
+                </div>
+              </div>
+
+              {/* Pagination */}
+              {totalTransactionsPages > 1 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t border-gray-200">
+                  <p className="text-sm text-gray-600">
+                    Showing {startTransactionIndex + 1} to {Math.min(endTransactionIndex, filteredTransactions.length)} of {filteredTransactions.length} transactions
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setTransactionsPage(prev => Math.max(1, prev - 1))}
+                      disabled={transactionsPage === 1}
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </Button>
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: Math.min(5, totalTransactionsPages) }, (_, i) => {
+                        let pageNum;
+                        if (totalTransactionsPages <= 5) {
+                          pageNum = i + 1;
+                        } else if (transactionsPage >= totalTransactionsPages - 2) {
+                          pageNum = totalTransactionsPages - 4 + i;
+                        } else if (transactionsPage <= 3) {
+                          pageNum = i + 1;
+                        } else {
+                          pageNum = transactionsPage - 2 + i;
+                        }
+                        return (
+                          <Button
+                            key={pageNum}
+                            variant={transactionsPage === pageNum ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setTransactionsPage(pageNum)}
+                            className={`w-8 h-8 p-0 ${transactionsPage === pageNum ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white' : ''}`}
+                          >
+                            {pageNum}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setTransactionsPage(prev => Math.min(totalTransactionsPages, prev + 1))}
+                      disabled={transactionsPage === totalTransactionsPages}
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {/* Summary Stats */}

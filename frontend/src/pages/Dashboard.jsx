@@ -301,19 +301,30 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
   const mapSMMGenStatus = (smmgenStatus) => {
     if (!smmgenStatus) return null;
     
-    const statusLower = String(smmgenStatus).toLowerCase();
+    const statusString = String(smmgenStatus).trim();
+    const statusLower = statusString.toLowerCase();
     
-    if (statusLower.includes('completed') || statusLower === 'completed') {
+    // Map to exact SMMGen statuses (normalized to lowercase)
+    if (statusLower === 'pending' || statusLower.includes('pending')) {
+      return 'pending';
+    }
+    if (statusLower === 'in progress' || statusLower.includes('in progress')) {
+      return 'in progress';
+    }
+    if (statusLower === 'completed' || statusLower.includes('completed')) {
       return 'completed';
     }
-    if (statusLower.includes('cancelled') || statusLower.includes('canceled')) {
-      return 'cancelled';
+    if (statusLower === 'partial' || statusLower.includes('partial')) {
+      return 'partial';
     }
-    if (statusLower.includes('processing') || statusLower.includes('in progress') || statusLower.includes('partial')) {
+    if (statusLower === 'processing' || statusLower.includes('processing')) {
       return 'processing';
     }
-    if (statusLower.includes('pending') || statusLower === 'pending') {
-      return 'pending';
+    if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower.includes('cancel')) {
+      return 'canceled';
+    }
+    if (statusLower === 'refunds' || statusLower.includes('refund')) {
+      return 'refunds';
     }
     
     return null;
@@ -396,7 +407,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           }
           
           // Also check if order is cancelled but refund hasn't been processed
-          if (order.status === 'cancelled' && !order.refund_status) {
+          if ((order.status === 'canceled' || order.status === 'cancelled') && !order.refund_status) {
             console.log('Found cancelled order without refund, processing automatic refund:', order.id);
             try {
               const refundResult = await processAutomaticRefund(order);
@@ -2205,9 +2216,11 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                     <div className="text-right">
                       <p className="font-medium text-gray-900">₵{order.total_cost.toFixed(2)}</p>
                       <span className={`text-xs px-3 py-1 rounded-full ${
-                        order.status === 'completed' ? 'bg-green-100 text-green-700' :
-                        order.status === 'processing' ? 'bg-blue-100 text-blue-700' :
-                        order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                                  order.status === 'completed' ? 'bg-green-100 text-green-700' :
+                                  order.status === 'processing' || order.status === 'in progress' ? 'bg-blue-100 text-blue-700' :
+                                  order.status === 'partial' ? 'bg-orange-100 text-orange-700' :
+                                  order.status === 'canceled' || order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                                  order.status === 'refunds' ? 'bg-purple-100 text-purple-700' :
                         'bg-yellow-100 text-yellow-700'
                       }`}>
                         {order.status}

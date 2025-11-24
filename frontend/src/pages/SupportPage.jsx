@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
@@ -18,7 +19,11 @@ import {
   CheckCircle,
   ChevronDown,
   ChevronUp,
-  XCircle
+  XCircle,
+  Search,
+  Filter,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 const SupportPage = ({ user, onLogout }) => {
@@ -44,6 +49,12 @@ const SupportPage = ({ user, onLogout }) => {
   const [openFaq, setOpenFaq] = useState(null);
   const [myTickets, setMyTickets] = useState([]);
   const [loadingTickets, setLoadingTickets] = useState(false);
+  
+  // Search and filter states
+  const [ticketSearch, setTicketSearch] = useState('');
+  const [ticketStatusFilter, setTicketStatusFilter] = useState('all');
+  const [ticketsPage, setTicketsPage] = useState(1);
+  const ticketsPerPage = 20;
 
   const faqs = [
     {
@@ -205,6 +216,11 @@ const SupportPage = ({ user, onLogout }) => {
       };
     }
   }, [user]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setTicketsPage(1);
+  }, [ticketStatusFilter, ticketSearch]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
@@ -369,80 +385,223 @@ const SupportPage = ({ user, onLogout }) => {
         {/* My Support Tickets */}
         {user && (
           <div className="mt-12">
-            <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-gray-900 mb-2">My Support Tickets</h2>
+            <div className="mb-6">
+              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">My Support Tickets</h2>
               <p className="text-gray-600">View your support requests and responses</p>
             </div>
 
             {loadingTickets ? (
-              <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-t-4 border-indigo-600 mx-auto"></div>
-              </div>
-            ) : myTickets.length === 0 ? (
-              <div className="glass p-8 rounded-3xl text-center animate-slideUp">
-                <MessageSquare className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-600">You haven't submitted any support tickets yet</p>
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-indigo-600 mx-auto"></div>
               </div>
             ) : (
-              <div className="space-y-4 animate-slideUp">
-                {myTickets.map((ticket) => {
-                  const statusConfig = {
-                    open: { label: 'Open', color: 'bg-yellow-100 text-yellow-700', icon: Clock },
-                    in_progress: { label: 'In Progress', color: 'bg-blue-100 text-blue-700', icon: Clock },
-                    resolved: { label: 'Resolved', color: 'bg-green-100 text-green-700', icon: CheckCircle },
-                    closed: { label: 'Closed', color: 'bg-gray-100 text-gray-700', icon: XCircle }
-                  };
-                  const status = statusConfig[ticket.status] || statusConfig.open;
-                  const StatusIcon = status.icon;
+              <div className="glass p-4 sm:p-6 rounded-3xl animate-slideUp">
+                {/* Search and Filter */}
+                <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <Input
+                      placeholder="Search by ticket ID, message, or order ID..."
+                      value={ticketSearch}
+                      onChange={(e) => setTicketSearch(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <Select value={ticketStatusFilter} onValueChange={setTicketStatusFilter}>
+                    <SelectTrigger className="w-full sm:w-48">
+                      <Filter className="w-4 h-4 mr-2" />
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="open">Open</SelectItem>
+                      <SelectItem value="in_progress">In Progress</SelectItem>
+                      <SelectItem value="resolved">Resolved</SelectItem>
+                      <SelectItem value="closed">Closed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Filter and display tickets */}
+                {(() => {
+                  const filteredTickets = myTickets.filter(ticket => {
+                    const searchLower = ticketSearch.toLowerCase();
+                    const matchesSearch = 
+                      !ticketSearch ||
+                      ticket.id.toLowerCase().includes(searchLower) ||
+                      ticket.message.toLowerCase().includes(searchLower) ||
+                      (ticket.order_id && ticket.order_id.toLowerCase().includes(searchLower));
+                    
+                    const matchesStatus = ticketStatusFilter === 'all' || ticket.status === ticketStatusFilter;
+                    
+                    return matchesSearch && matchesStatus;
+                  });
+
+                  // Pagination
+                  const totalTicketsPages = Math.ceil(filteredTickets.length / ticketsPerPage);
+                  const startTicketIndex = (ticketsPage - 1) * ticketsPerPage;
+                  const endTicketIndex = startTicketIndex + ticketsPerPage;
+                  const paginatedTickets = filteredTickets.slice(startTicketIndex, endTicketIndex);
+
+                  if (filteredTickets.length === 0) {
+                    return (
+                      <div className="text-center py-12">
+                        <MessageSquare className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-600 text-lg mb-2">
+                          {myTickets.length === 0 ? 'You haven\'t submitted any support tickets yet' : 'No tickets match your filters'}
+                        </p>
+                        {ticketSearch || ticketStatusFilter !== 'all' ? (
+                          <Button
+                            onClick={() => {
+                              setTicketSearch('');
+                              setTicketStatusFilter('all');
+                            }}
+                            variant="outline"
+                            className="mt-4"
+                          >
+                            Clear Filters
+                          </Button>
+                        ) : null}
+                      </div>
+                    );
+                  }
 
                   return (
-                    <div key={ticket.id} className="glass p-6 rounded-3xl">
-                      <div className="flex items-center gap-2 mb-4">
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${status.color}`}>
-                          <StatusIcon className="w-3 h-3" />
-                          {status.label}
-                        </span>
-                        <span className="text-xs text-gray-500">Ticket ID: {ticket.id.slice(0, 8)}</span>
-                        <span className="text-xs text-gray-500">
-                          {new Date(ticket.created_at).toLocaleDateString()}
-                        </span>
-                      </div>
-                      
-                      <div className="mb-4">
-                        <p className="text-sm font-medium text-gray-900 mb-2">Your Message:</p>
-                        <p className="text-sm text-gray-700 bg-white/50 p-3 rounded-lg whitespace-pre-wrap">
-                          {ticket.message}
-                        </p>
-                      </div>
-
-                      {ticket.order_id && (
-                        <p className="text-xs text-gray-600 mb-4">
-                          Related Order ID: <span className="font-mono">{ticket.order_id}</span>
-                        </p>
-                      )}
-
-                      {ticket.admin_response ? (
-                        <div className="mt-4 p-4 bg-indigo-50 rounded-lg border-l-4 border-indigo-600">
-                          <div className="flex items-center gap-2 mb-2">
-                            <CheckCircle className="w-4 h-4 text-indigo-600" />
-                            <p className="text-sm font-medium text-indigo-900">Admin Response:</p>
+                    <>
+                      {/* Tickets Table */}
+                      <div className="overflow-x-auto">
+                        <div className="min-w-[1000px]">
+                          {/* Fixed Header */}
+                          <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white sticky top-0 z-10">
+                            <div className="grid grid-cols-[1fr_1.5fr_2fr_2fr_1.5fr] gap-4 p-4 font-semibold text-sm text-center">
+                              <div>Status</div>
+                              <div>Ticket ID</div>
+                              <div>Message</div>
+                              <div>Response</div>
+                              <div>Date</div>
+                            </div>
                           </div>
-                          <p className="text-sm text-gray-700 whitespace-pre-wrap">{ticket.admin_response}</p>
-                          <p className="text-xs text-gray-500 mt-2">
-                            Responded on {new Date(ticket.updated_at).toLocaleString()}
-                          </p>
+
+                          {/* Tickets List */}
+                          <div className="divide-y divide-gray-200">
+                            {paginatedTickets.map((ticket) => {
+                              const statusConfig = {
+                                open: { label: 'Open', color: 'bg-yellow-100 text-yellow-700', icon: Clock },
+                                in_progress: { label: 'In Progress', color: 'bg-blue-100 text-blue-700', icon: Clock },
+                                resolved: { label: 'Resolved', color: 'bg-green-100 text-green-700', icon: CheckCircle },
+                                closed: { label: 'Closed', color: 'bg-gray-100 text-gray-700', icon: XCircle }
+                              };
+                              const status = statusConfig[ticket.status] || statusConfig.open;
+                              const StatusIcon = status.icon;
+
+                              return (
+                                <div key={ticket.id} className="bg-white/50 hover:bg-white/70 transition-colors">
+                                  <div className="grid grid-cols-[1fr_1.5fr_2fr_2fr_1.5fr] gap-4 p-4 items-center">
+                                    {/* Status */}
+                                    <div className="flex justify-center">
+                                      <span className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 whitespace-nowrap ${status.color}`}>
+                                        <StatusIcon className="w-3 h-3" />
+                                        {status.label}
+                                      </span>
+                                    </div>
+                                    {/* Ticket ID */}
+                                    <div className="text-center">
+                                      <p className="text-xs text-gray-700 break-all">{ticket.id}</p>
+                                      {ticket.order_id && (
+                                        <p className="text-xs text-gray-500 mt-1">Order: {ticket.order_id.slice(0, 8)}...</p>
+                                      )}
+                                    </div>
+                                    {/* Message */}
+                                    <div className="text-center">
+                                      <p className="text-sm text-gray-700 line-clamp-2" title={ticket.message}>
+                                        {ticket.message}
+                                      </p>
+                                    </div>
+                                    {/* Response */}
+                                    <div className="text-center">
+                                      {ticket.admin_response ? (
+                                        <div>
+                                          <p className="text-sm text-gray-700 line-clamp-2" title={ticket.admin_response}>
+                                            {ticket.admin_response}
+                                          </p>
+                                          <p className="text-xs text-gray-500 mt-1">
+                                            {new Date(ticket.updated_at).toLocaleDateString()}
+                                          </p>
+                                        </div>
+                                      ) : (
+                                        <span className="text-xs text-yellow-600 flex items-center justify-center gap-1">
+                                          <Clock className="w-3 h-3" />
+                                          Awaiting response
+                                        </span>
+                                      )}
+                                    </div>
+                                    {/* Date */}
+                                    <div className="text-center">
+                                      <p className="text-sm text-gray-700">{new Date(ticket.created_at).toLocaleDateString()}</p>
+                                      <p className="text-xs text-gray-500">{new Date(ticket.created_at).toLocaleTimeString()}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
-                      ) : (
-                        <div className="mt-4 p-3 bg-yellow-50 rounded-lg border-l-4 border-yellow-400">
-                          <p className="text-sm text-yellow-800">
-                            <Clock className="w-4 h-4 inline mr-1" />
-                            Awaiting response from support team
+                      </div>
+
+                      {/* Pagination */}
+                      {totalTicketsPages > 1 && (
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t border-gray-200">
+                          <p className="text-sm text-gray-600">
+                            Showing {startTicketIndex + 1} to {Math.min(endTicketIndex, filteredTickets.length)} of {filteredTickets.length} tickets
                           </p>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setTicketsPage(prev => Math.max(1, prev - 1))}
+                              disabled={ticketsPage === 1}
+                            >
+                              <ChevronLeft className="w-4 h-4" />
+                            </Button>
+                            <div className="flex items-center gap-1">
+                              {Array.from({ length: Math.min(5, totalTicketsPages) }, (_, i) => {
+                                let pageNum;
+                                if (totalTicketsPages <= 5) {
+                                  pageNum = i + 1;
+                                } else if (ticketsPage >= totalTicketsPages - 2) {
+                                  pageNum = totalTicketsPages - 4 + i;
+                                } else if (ticketsPage <= 3) {
+                                  pageNum = i + 1;
+                                } else {
+                                  pageNum = ticketsPage - 2 + i;
+                                }
+                                return (
+                                  <Button
+                                    key={pageNum}
+                                    variant={ticketsPage === pageNum ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => setTicketsPage(pageNum)}
+                                    className={`w-8 h-8 p-0 ${ticketsPage === pageNum ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white' : ''}`}
+                                  >
+                                    {pageNum}
+                                  </Button>
+                                );
+                              })}
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setTicketsPage(prev => Math.min(totalTicketsPages, prev + 1))}
+                              disabled={ticketsPage === totalTicketsPages}
+                            >
+                              <ChevronRight className="w-4 h-4" />
+                            </Button>
+                          </div>
                         </div>
                       )}
-                    </div>
+                    </>
                   );
-                })}
+                })()}
               </div>
             )}
           </div>

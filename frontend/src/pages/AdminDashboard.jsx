@@ -208,7 +208,7 @@ const AdminDashboard = ({ user, onLogout }) => {
 
       const [usersRes, ordersRes, depositsRes, transactionsRes, servicesRes, ticketsRes] = await Promise.all([
         supabase.from('profiles').select('*').order('created_at', { ascending: false }),
-        supabase.from('orders').select('*, services(name, platform), profiles(name, email, phone_number)').order('created_at', { ascending: false }),
+        supabase.from('orders').select('id, user_id, service_id, link, quantity, total_cost, status, smmgen_order_id, created_at, completed_at, refund_status, refund_attempted_at, refund_error, services(name, platform), profiles(name, email, phone_number)').order('created_at', { ascending: false }),
         supabase.from('transactions').select('*, profiles(email, name)').eq('type', 'deposit').order('created_at', { ascending: false }),
         supabase.from('transactions').select('*, profiles(email, name, balance)').order('created_at', { ascending: false }),
         supabase.from('services').select('*').order('created_at', { ascending: false }),
@@ -321,11 +321,13 @@ const AdminDashboard = ({ user, onLogout }) => {
         })
         .reduce((sum, o) => sum + parseFloat(o.total_cost || 0), 0);
 
-      const processingOrders = currentOrders.filter(o => o.status === 'processing').length;
-      const cancelledOrders = currentOrders.filter(o => o.status === 'cancelled').length;
-      const failedOrders = currentOrders.filter(o => o.status === 'failed').length;
+      const processingOrders = currentOrders.filter(o => o.status === 'processing' || o.status === 'in progress').length;
+      const cancelledOrders = currentOrders.filter(o => o.status === 'canceled' || o.status === 'cancelled').length;
+      const partialOrders = currentOrders.filter(o => o.status === 'partial').length;
+      const refundOrders = currentOrders.filter(o => o.status === 'refunds').length;
       const refundedOrders = currentOrders.filter(o => o.refund_status === 'succeeded').length;
       const failedRefunds = currentOrders.filter(o => o.refund_status === 'failed').length;
+      const failedOrders = 0; // No "failed" status in SMMGen - using cancelled_orders instead
       const rejectedDeposits = currentDeposits.filter(d => d.status === 'rejected').length;
       const inProgressTickets = currentTickets.filter(t => t.status === 'in_progress').length;
       const resolvedTickets = currentTickets.filter(t => t.status === 'resolved' || t.status === 'closed').length;
@@ -565,19 +567,32 @@ const AdminDashboard = ({ user, onLogout }) => {
       console.warn('Fresh balance fetch failed:', error);
     }
 
+    // Get all orders for this user to check refund status
+    const userOrders = orders.filter(o => o.user_id === transaction.user_id);
+    const refundedOrderIds = new Set(
+      userOrders
+        .filter(o => o.refund_status === 'succeeded')
+        .map(o => o.id)
+    );
+
+    // Calculate all approved deposits, EXCLUDING refund deposit transactions
+    // (Refund deposits shouldn't exist after the fix, but exclude them just in case)
     const allApprovedDeposits = allTransactions
       .filter(t => 
         t.user_id === transaction.user_id &&
         t.type === 'deposit' &&
-        t.status === 'approved'
+        t.status === 'approved' &&
+        !(t.order_id && refundedOrderIds.has(t.order_id)) // Exclude refund deposits
       )
       .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
 
+    // Calculate orders, EXCLUDING refunded orders (since refund already added balance back directly)
     const allCompletedOrders = allTransactions
       .filter(t => 
         t.user_id === transaction.user_id &&
         t.type === 'order' &&
-        t.status === 'approved'
+        t.status === 'approved' &&
+        !refundedOrderIds.has(t.order_id) // Exclude transactions for refunded orders
       )
       .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
 
@@ -1809,8 +1824,10 @@ const AdminDashboard = ({ user, onLogout }) => {
                                 <div className="flex items-center gap-2">
                                   <span className={`text-xs px-2 py-0.5 rounded-full ${
                                     order.status === 'completed' ? 'bg-green-100 text-green-700' :
-                                    order.status === 'processing' ? 'bg-blue-100 text-blue-700' :
-                                    order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                                    order.status === 'processing' || order.status === 'in progress' ? 'bg-blue-100 text-blue-700' :
+                                    order.status === 'partial' ? 'bg-orange-100 text-orange-700' :
+                                    order.status === 'canceled' || order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                                    order.status === 'refunds' ? 'bg-purple-100 text-purple-700' :
                                     'bg-yellow-100 text-yellow-700'
                                   }`}>
                                     {order.status}
@@ -2076,9 +2093,12 @@ const AdminDashboard = ({ user, onLogout }) => {
                   <SelectContent>
                     <SelectItem value="all">All Status</SelectItem>
                     <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="in progress">In Progress</SelectItem>
                     <SelectItem value="processing">Processing</SelectItem>
+                    <SelectItem value="partial">Partial</SelectItem>
                     <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                    <SelectItem value="canceled">Canceled</SelectItem>
+                    <SelectItem value="refunds">Refunds</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -2133,11 +2153,13 @@ const AdminDashboard = ({ user, onLogout }) => {
                               <div className="col-span-1.5">
                                 <span className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 w-fit ${
                                 order.status === 'completed' ? 'bg-green-100 text-green-700' :
-                                order.status === 'processing' ? 'bg-blue-100 text-blue-700' :
-                                order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                                order.status === 'processing' || order.status === 'in progress' ? 'bg-blue-100 text-blue-700' :
+                                order.status === 'partial' ? 'bg-orange-100 text-orange-700' :
+                                order.status === 'canceled' || order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                                order.status === 'refunds' ? 'bg-purple-100 text-purple-700' :
                                 'bg-yellow-100 text-yellow-700'
                               }`}>
-                                {order.status}
+                                {order.status || 'pending'}
                               </span>
                                 {order.refund_status && (
                                   <p className="text-xs text-gray-500 mt-1">
@@ -2186,21 +2208,24 @@ const AdminDashboard = ({ user, onLogout }) => {
                               <div className="col-span-1">
                                 <div className="flex flex-col gap-2">
                             <Select 
-                              value={order.status} 
+                              value={order.status || 'pending'} 
                               onValueChange={(value) => handleOrderStatusUpdate(order.id, value)}
                             >
                                     <SelectTrigger className="w-full text-xs">
-                          <SelectValue />
+                          <SelectValue placeholder="Select status" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="pending">Pending</SelectItem>
+                          <SelectItem value="in progress">In Progress</SelectItem>
                           <SelectItem value="processing">Processing</SelectItem>
+                          <SelectItem value="partial">Partial</SelectItem>
                           <SelectItem value="completed">Completed</SelectItem>
-                          <SelectItem value="cancelled">Cancelled</SelectItem>
+                          <SelectItem value="canceled">Canceled</SelectItem>
+                          <SelectItem value="refunds">Refunds</SelectItem>
                         </SelectContent>
                       </Select>
                                   {/* Show refund button for non-cancelled and non-completed orders, or cancelled orders with failed refunds */}
-                                  {order.status !== 'completed' && (order.status !== 'cancelled' || order.refund_status === 'failed') && (
+                                  {order.status !== 'completed' && ((order.status !== 'canceled' && order.status !== 'cancelled') || order.refund_status === 'failed') && (
                               <Button
                                 onClick={() => handleRefundOrder(order)}
                                 variant="outline"
