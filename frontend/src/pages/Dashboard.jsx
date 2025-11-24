@@ -1656,15 +1656,19 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           }
 
           // Create order record for this component
+          // Use SMMGen order ID as the primary key if available, otherwise generate UUID
+          const componentOrderId = smmgenOrderId || crypto.randomUUID();
+          
           orderPromises.push(
             supabase.from('orders').insert({
+              id: componentOrderId, // Use SMMGen order ID as primary key
               user_id: authUser.id,
               service_id: componentService.id,
               link: orderForm.link,
               quantity: quantity,
               total_cost: componentCost,
               status: 'pending',
-              smmgen_order_id: smmgenOrderId
+              smmgen_order_id: smmgenOrderId // Store SMMGen order ID for tracking (synced with id)
             }).select().single()
           );
         }
@@ -1761,14 +1765,18 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       }
 
       // Create order record in our database
+      // Use SMMGen order ID as the primary key if available, otherwise generate UUID
+      const orderId = smmgenOrderId || crypto.randomUUID();
+      
       const { data: orderData, error: orderError } = await supabase.from('orders').insert({
+        id: orderId, // Use SMMGen order ID as primary key
         user_id: authUser.id,
         service_id: orderForm.service_id,
         link: orderForm.link,
         quantity: quantity,
         total_cost: totalCost,
         status: 'pending',
-        smmgen_order_id: smmgenOrderId // Store SMMGen order ID for tracking
+        smmgen_order_id: smmgenOrderId // Store SMMGen order ID for tracking (synced with id)
       }).select().single();
 
       if (orderError) throw orderError;
