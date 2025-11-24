@@ -2256,10 +2256,11 @@ const AdminDashboard = ({ user, onLogout }) => {
                   <div className="overflow-hidden rounded-xl border border-white/20">
                     <div className="max-h-[600px] overflow-y-auto overflow-x-auto">
                       {/* Fixed Header */}
-                      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white sticky top-0 z-10 min-w-[1400px]">
+                      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white sticky top-0 z-10 min-w-[1500px]">
                         <div className="grid grid-cols-12 gap-4 p-4 font-semibold text-sm">
                           <div className="col-span-1.5">Status</div>
-                          <div className="col-span-1.5">Order ID</div>
+                          <div className="col-span-1">Order ID</div>
+                          <div className="col-span-1">SMMGen ID</div>
                           <div className="col-span-1">Quantity</div>
                           <div className="col-span-1.5">Time</div>
                           <div className="col-span-2">User</div>
@@ -2270,7 +2271,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                         </div>
                       </div>
                       {/* Scrollable List */}
-                      <div className="divide-y divide-gray-200/50 min-w-[1400px]">
+                      <div className="divide-y divide-gray-200/50 min-w-[1500px]">
                         {paginatedOrders.map((order) => (
                           <div key={order.id} className="bg-white/50 hover:bg-white/70 transition-colors">
                             <div className="grid grid-cols-12 gap-4 p-4 items-center">
@@ -2293,13 +2294,16 @@ const AdminDashboard = ({ user, onLogout }) => {
                                 )}
                               </div>
                               {/* Order ID */}
-                              <div className="col-span-1.5">
-                                <p className="font-medium text-gray-900 text-sm">ID: {order.id.slice(0, 8)}...</p>
-                                {order.smmgen_order_id && (
-                                  <p className="text-xs text-gray-500">SMMGen: {order.smmgen_order_id}</p>
-                                )}
-                                {!order.smmgen_order_id && (
-                                  <p className="text-xs text-gray-400">No SMMGen ID</p>
+                              <div className="col-span-1">
+                                <p className="font-medium text-gray-900 text-sm">{order.id.slice(0, 8)}...</p>
+                                <p className="text-xs text-gray-500">{order.id.slice(8, 16)}...</p>
+                              </div>
+                              {/* SMMGen Order ID */}
+                              <div className="col-span-1">
+                                {order.smmgen_order_id ? (
+                                  <p className="font-medium text-gray-900 text-sm">{order.smmgen_order_id}</p>
+                                ) : (
+                                  <p className="text-xs text-gray-400 italic">N/A</p>
                                 )}
                               </div>
                               {/* Quantity */}
