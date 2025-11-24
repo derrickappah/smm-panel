@@ -324,11 +324,12 @@ const OrderHistory = ({ user, onLogout }) => {
               <>
                 {/* Orders Table */}
                 <div className="overflow-x-auto">
-                  <div className="min-w-[1000px]">
+                  <div className="min-w-[1100px]">
                     {/* Fixed Header */}
                     <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white sticky top-0 z-10">
-                      <div className="grid grid-cols-[2fr_1.5fr_1fr_1fr_1.5fr_1.5fr_1fr] gap-4 p-4 font-semibold text-sm text-center">
+                      <div className="grid grid-cols-[2fr_1fr_1.5fr_1fr_1fr_1.5fr_1.5fr_1fr] gap-4 p-4 font-semibold text-sm text-center">
                         <div>Service</div>
+                        <div>order_no</div>
                         <div>Link</div>
                         <div>Quantity</div>
                         <div>Cost</div>
@@ -348,13 +349,18 @@ const OrderHistory = ({ user, onLogout }) => {
                             data-testid={`order-item-${order.id}`}
                             className="bg-white/50 hover:bg-white/70 transition-colors"
                           >
-                            <div className="grid grid-cols-[2fr_1.5fr_1fr_1fr_1.5fr_1.5fr_1fr] gap-4 p-4 items-center">
+                            <div className="grid grid-cols-[2fr_1fr_1.5fr_1fr_1fr_1.5fr_1.5fr_1fr] gap-4 p-4 items-center">
                               {/* Service */}
                               <div className="text-center">
                                 <p className="font-medium text-gray-900 text-sm">{service?.name || 'Unknown Service'}</p>
                                 <p className="text-xs text-gray-500 mt-1">ID: {order.id.slice(0, 8)}...</p>
-                                {order.smmgen_order_id && (
-                                  <p className="text-xs text-gray-400 mt-0.5">SMMGen: {order.smmgen_order_id}</p>
+                              </div>
+                              {/* Order No */}
+                              <div className="text-center">
+                                {order.smmgen_order_id ? (
+                                  <p className="font-medium text-gray-900 text-sm">{order.smmgen_order_id}</p>
+                                ) : (
+                                  <p className="text-xs text-gray-400 italic">N/A</p>
                                 )}
                               </div>
                               {/* Link */}
