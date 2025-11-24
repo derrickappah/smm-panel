@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { processManualRefund } from '@/lib/refunds';
 import { saveOrderStatusHistory } from '@/lib/orderStatusHistory';
+import { getSMMGenOrderStatus } from '@/lib/smmgen';
 import Navbar from '@/components/Navbar';
 import { 
   Users, ShoppingCart, DollarSign, Package, Search, Edit, Trash2, 
@@ -259,17 +260,95 @@ const AdminDashboard = ({ user, onLogout }) => {
         console.warn('Support tickets table may not exist. Run CREATE_SUPPORT_TICKETS.sql migration.');
       }
 
+      // Map SMMGen status to our status format
+      const mapSMMGenStatus = (smmgenStatus) => {
+        if (!smmgenStatus) return null;
+        
+        const statusString = String(smmgenStatus).trim();
+        const statusLower = statusString.toLowerCase();
+        
+        // Map to exact SMMGen statuses (normalized to lowercase)
+        if (statusLower === 'pending' || statusLower.includes('pending')) {
+          return 'pending';
+        }
+        if (statusLower === 'in progress' || statusLower.includes('in progress')) {
+          return 'in progress';
+        }
+        if (statusLower === 'completed' || statusLower.includes('completed')) {
+          return 'completed';
+        }
+        if (statusLower === 'partial' || statusLower.includes('partial')) {
+          return 'partial';
+        }
+        if (statusLower === 'processing' || statusLower.includes('processing')) {
+          return 'processing';
+        }
+        if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower.includes('cancel')) {
+          return 'canceled';
+        }
+        if (statusLower === 'refunds' || statusLower.includes('refund')) {
+          return 'refunds';
+        }
+        
+        return null;
+      };
+
+      // Check and update order statuses from SMMGen for orders that aren't completed
+      let finalOrders = ordersRes.data || [];
+      if (ordersRes.data && ordersRes.data.length > 0) {
+        const updatedOrders = await Promise.all(
+          ordersRes.data.map(async (order) => {
+            // Check SMMGen status for orders that have SMMGen IDs and aren't completed
+            if (order.smmgen_order_id && order.status !== 'completed') {
+              try {
+                const statusData = await getSMMGenOrderStatus(order.smmgen_order_id);
+                const smmgenStatus = statusData.status || statusData.Status;
+                const mappedStatus = mapSMMGenStatus(smmgenStatus);
+
+                // Update in database if status changed
+                if (mappedStatus && mappedStatus !== order.status) {
+                  // Save status to history first
+                  await saveOrderStatusHistory(
+                    order.id,
+                    mappedStatus,
+                    'smmgen',
+                    statusData, // Full SMMGen response
+                    order.status // Previous status
+                  );
+
+                  // Update order status in Supabase
+                  await supabase
+                    .from('orders')
+                    .update({ 
+                      status: mappedStatus,
+                      completed_at: mappedStatus === 'completed' ? new Date().toISOString() : order.completed_at
+                    })
+                    .eq('id', order.id);
+                  
+                  // Return updated order
+                  return { ...order, status: mappedStatus };
+                }
+              } catch (error) {
+                console.warn('Failed to check SMMGen status for order:', order.id, error);
+                // Continue with original order if check fails
+              }
+            }
+            
+            return order;
+          })
+        );
+
+        // Use updated orders for stats calculation
+        finalOrders = updatedOrders;
+        // Update state with updated orders
+        setOrders(updatedOrders);
+      } else {
+        setOrders(ordersRes.data || []);
+      }
+
       // Update state with fetched data (always update even if some queries failed)
       // This ensures UI reflects the latest data immediately
       if (usersRes.data) setUsers(usersRes.data);
-      if (ordersRes.data) {
-        // Debug: Log first order to check status field
-        if (ordersRes.data.length > 0) {
-          console.log('Sample order data:', ordersRes.data[0]);
-          console.log('Order status:', ordersRes.data[0].status);
-        }
-        setOrders(ordersRes.data);
-      }
       if (depositsRes.data) setDeposits(depositsRes.data);
       if (transactionsRes.data) {
         setAllTransactions(transactionsRes.data);
@@ -285,9 +364,9 @@ const AdminDashboard = ({ user, onLogout }) => {
       if (servicesRes.data) setServices(servicesRes.data);
       if (ticketsRes.data) setSupportTickets(ticketsRes.data);
 
-      // Calculate enhanced stats using current data (always use fresh data from response)
+      // Calculate enhanced stats using current data (use updated orders with SMMGen statuses)
       const currentDeposits = depositsRes.data || [];
-      const currentOrders = ordersRes.data || [];
+      const currentOrders = finalOrders; // Use orders with updated SMMGen statuses
       const currentTickets = ticketsRes.data || [];
       
       const pendingDeposits = currentDeposits.filter(d => d.status === 'pending').length;
