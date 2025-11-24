@@ -15,7 +15,7 @@ import {
   Users, ShoppingCart, DollarSign, Package, Search, Edit, Trash2, 
   Plus, Minus, TrendingUp, CheckCircle, XCircle, Clock, Filter,
   Download, RefreshCw, MessageSquare, Send, Layers, Wallet, Receipt, HelpCircle,
-  AlertCircle, BarChart3, Activity, FileText, Settings, Bell
+  AlertCircle, BarChart3, Activity, FileText, Settings, Bell, Power, PowerOff
 } from 'lucide-react';
 
 const AdminDashboard = ({ user, onLogout }) => {
@@ -126,7 +126,8 @@ const AdminDashboard = ({ user, onLogout }) => {
     is_combo: false,
     combo_service_ids: [],
     combo_smmgen_service_ids: [],
-    seller_only: false
+    seller_only: false,
+    enabled: true
   });
 
   useEffect(() => {
@@ -875,7 +876,8 @@ const AdminDashboard = ({ user, onLogout }) => {
         combo_smmgen_service_ids: serviceForm.is_combo && serviceForm.combo_smmgen_service_ids.length > 0
           ? serviceForm.combo_smmgen_service_ids
           : null,
-        seller_only: serviceForm.seller_only || false
+        seller_only: serviceForm.seller_only || false,
+        enabled: serviceForm.enabled !== undefined ? serviceForm.enabled : true
       }).select().single();
 
       if (error) {
@@ -901,7 +903,8 @@ const AdminDashboard = ({ user, onLogout }) => {
         is_combo: false,
         combo_service_ids: [],
         combo_smmgen_service_ids: [],
-        seller_only: false
+        seller_only: false,
+        enabled: true
       });
       
       // Wait a moment for database to sync, then refresh
@@ -957,6 +960,32 @@ const AdminDashboard = ({ user, onLogout }) => {
     } catch (error) {
       console.error('Failed to update service:', error);
       toast.error(error.message || 'Failed to update service. Check console for details.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleToggleService = async (serviceId, currentEnabled) => {
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('services')
+        .update({ enabled: !currentEnabled })
+        .eq('id', serviceId);
+
+      if (error) {
+        console.error('Error toggling service:', error);
+        throw error;
+      }
+
+      toast.success(`Service ${!currentEnabled ? 'enabled' : 'disabled'} successfully!`);
+      
+      // Wait a moment for database to sync, then refresh
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await fetchAllData(false); // Skip SMMGen status check on updates
+    } catch (error) {
+      console.error('Failed to toggle service:', error);
+      toast.error(error.message || 'Failed to toggle service');
     } finally {
       setLoading(false);
     }
@@ -2660,6 +2689,20 @@ const AdminDashboard = ({ user, onLogout }) => {
                     </Label>
                   </div>
                   
+                  {/* Enabled Service Option */}
+                  <div className="flex items-center space-x-2 p-4 border border-gray-200 rounded-lg bg-green-50">
+                    <input
+                      type="checkbox"
+                      id="enabled"
+                      checked={serviceForm.enabled !== false}
+                      onChange={(e) => setServiceForm({ ...serviceForm, enabled: e.target.checked })}
+                      className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                    />
+                    <Label htmlFor="enabled" className="text-sm font-medium text-gray-900">
+                      Enabled (service is visible to users)
+                    </Label>
+                  </div>
+                  
                 <Button
                   type="submit"
                   disabled={loading}
@@ -2713,6 +2756,12 @@ const AdminDashboard = ({ user, onLogout }) => {
                             <div className="flex-1">
                               <div className="flex items-center gap-2">
                                 <p className="font-medium text-gray-900">{service.name}</p>
+                                {service.enabled === false && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-700 text-xs font-medium rounded-full">
+                                    <PowerOff className="w-3 h-3" />
+                                    Disabled
+                                  </span>
+                                )}
                                 {service.is_combo && (
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full">
                                     <Layers className="w-3 h-3" />
@@ -2743,6 +2792,19 @@ const AdminDashboard = ({ user, onLogout }) => {
                               )}
                             </div>
                             <div className="flex gap-2">
+                              <Button
+                                onClick={() => handleToggleService(service.id, service.enabled !== false)}
+                                variant={service.enabled === false ? "default" : "outline"}
+                                size="sm"
+                                className={service.enabled === false ? "bg-green-600 hover:bg-green-700" : ""}
+                                title={service.enabled === false ? "Enable service" : "Disable service"}
+                              >
+                                {service.enabled === false ? (
+                                  <Power className="w-4 h-4" />
+                                ) : (
+                                  <PowerOff className="w-4 h-4" />
+                                )}
+                              </Button>
                               <Button
                                 onClick={() => setEditingService(service)}
                                 variant="outline"
@@ -3908,7 +3970,8 @@ const ServiceEditForm = ({ service, onSave, onCancel }) => {
     is_combo: service.is_combo || false,
     combo_service_ids: service.combo_service_ids || [],
     combo_smmgen_service_ids: service.combo_smmgen_service_ids || [],
-    seller_only: service.seller_only || false
+    seller_only: service.seller_only || false,
+    enabled: service.enabled !== undefined ? service.enabled : true
   });
 
   const handleSubmit = (e) => {
@@ -3926,7 +3989,8 @@ const ServiceEditForm = ({ service, onSave, onCancel }) => {
       combo_smmgen_service_ids: formData.is_combo && formData.combo_smmgen_service_ids.length > 0
         ? formData.combo_smmgen_service_ids
         : null,
-      seller_only: formData.seller_only || false
+      seller_only: formData.seller_only || false,
+      enabled: formData.enabled !== undefined ? formData.enabled : true
     });
   };
 
@@ -4021,6 +4085,18 @@ const ServiceEditForm = ({ service, onSave, onCancel }) => {
         />
         <Label htmlFor="edit_seller_only" className="text-sm font-medium text-gray-900">
           Seller-only service
+        </Label>
+      </div>
+      <div className="flex items-center space-x-2 p-3 border border-gray-200 rounded-lg bg-green-50">
+        <input
+          type="checkbox"
+          id="edit_enabled"
+          checked={formData.enabled !== false}
+          onChange={(e) => setFormData({ ...formData, enabled: e.target.checked })}
+          className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+        />
+        <Label htmlFor="edit_enabled" className="text-sm font-medium text-gray-900">
+          Enabled (visible to users)
         </Label>
       </div>
       <div className="flex gap-2">

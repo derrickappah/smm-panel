@@ -271,9 +271,11 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       
       // Fetch services from Supabase
       // RLS policies will automatically filter based on seller_only flag and user role
+      // Only fetch enabled services for users
       const { data, error } = await supabase
         .from('services')
         .select('*')
+        .eq('enabled', true)
         .order('created_at', { ascending: false });
       
       if (error) {

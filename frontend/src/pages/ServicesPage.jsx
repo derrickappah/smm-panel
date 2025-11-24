@@ -29,7 +29,8 @@ const ServicesPage = ({ user, onLogout }) => {
     setLoading(true);
     try {
       // Fetch services from Supabase only
-      let query = supabase.from('services').select('*');
+      // Only fetch enabled services for users
+      let query = supabase.from('services').select('*').eq('enabled', true);
       
       if (selectedPlatform !== 'all') {
         query = query.eq('platform', selectedPlatform);
