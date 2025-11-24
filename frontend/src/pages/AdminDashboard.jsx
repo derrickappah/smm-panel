@@ -2373,8 +2373,8 @@ const AdminDashboard = ({ user, onLogout }) => {
                           <SelectItem value="refunds">Refunds</SelectItem>
                         </SelectContent>
                       </Select>
-                                  {/* Show refund button for non-cancelled and non-completed orders, or cancelled orders with failed refunds */}
-                                  {order.status !== 'completed' && ((order.status !== 'canceled' && order.status !== 'cancelled') || order.refund_status === 'failed') && (
+                                  {/* Show refund button only for canceled orders */}
+                                  {(order.status === 'canceled' || order.status === 'cancelled') && (
                               <Button
                                 onClick={() => handleRefundOrder(order)}
                                 variant="outline"
