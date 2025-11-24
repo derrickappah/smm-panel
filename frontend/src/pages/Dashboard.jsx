@@ -1671,7 +1671,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               total_cost: componentCost,
               status: 'pending',
               smmgen_order_id: smmgenOrderId // Store SMMGen order ID for tracking
-            }).select().single()
+            }).select('*').single()
           );
         }
 
@@ -1774,6 +1774,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       }
 
       // Create order record in our database
+      console.log('Creating order with SMMGen ID:', smmgenOrderId);
       const { data: orderData, error: orderError } = await supabase.from('orders').insert({
         user_id: authUser.id,
         service_id: orderForm.service_id,
@@ -1782,9 +1783,15 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         total_cost: totalCost,
         status: 'pending',
         smmgen_order_id: smmgenOrderId // Store SMMGen order ID for tracking
-      }).select().single();
+      }).select('*').single();
 
-      if (orderError) throw orderError;
+      if (orderError) {
+        console.error('Error creating order:', orderError);
+        throw orderError;
+      }
+      
+      console.log('Order created successfully:', orderData);
+      console.log('Order SMMGen ID in database:', orderData.smmgen_order_id);
 
       // Deduct balance
       const { error: balanceError } = await supabase
@@ -1813,7 +1820,9 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       toast.success('Order placed successfully!');
       setOrderForm({ service_id: '', link: '', quantity: '' });
       await onUpdateUser();
-      fetchRecentOrders();
+      // Wait a moment for database to sync, then refresh orders
+      await new Promise(resolve => setTimeout(resolve, 500));
+      await fetchRecentOrders();
     } catch (error) {
       toast.error(error.message || 'Failed to place order');
     } finally {
