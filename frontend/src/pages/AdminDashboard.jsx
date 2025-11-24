@@ -2910,6 +2910,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                         <SelectItem value="all">All Types</SelectItem>
                         <SelectItem value="deposit">Deposit</SelectItem>
                         <SelectItem value="order">Order</SelectItem>
+                        <SelectItem value="refund">Refund</SelectItem>
                       </SelectContent>
                     </Select>
                     <Select value={transactionStatusFilter} onValueChange={setTransactionStatusFilter}>
@@ -2977,9 +2978,16 @@ const AdminDashboard = ({ user, onLogout }) => {
                                 <span className={`px-3 py-1.5 rounded-full text-xs font-medium ${
                                   transaction.type === 'deposit' 
                                     ? 'bg-green-100 text-green-700' 
-                                    : 'bg-blue-100 text-blue-700'
+                                    : transaction.type === 'refund'
+                                    ? 'bg-green-100 text-green-700'
+                                    : transaction.type === 'order'
+                                    ? 'bg-blue-100 text-blue-700'
+                                    : 'bg-gray-100 text-gray-700'
                                 }`}>
-                                  {transaction.type}
+                                  {transaction.type === 'deposit' ? 'Deposit' : 
+                                   transaction.type === 'refund' ? 'Refund' :
+                                   transaction.type === 'order' ? 'Order' : 
+                                   transaction.type}
                                 </span>
                               </div>
                               {/* Status */}
@@ -2996,7 +3004,9 @@ const AdminDashboard = ({ user, onLogout }) => {
                               </div>
                               {/* Amount */}
                               <div className="text-center">
-                                <p className="font-semibold text-gray-900">₵{transaction.amount.toFixed(2)}</p>
+                                <p className={`font-semibold ${transaction.type === 'deposit' || transaction.type === 'refund' ? 'text-green-600' : 'text-red-600'}`}>
+                                  {transaction.type === 'deposit' || transaction.type === 'refund' ? '+' : '-'}₵{transaction.amount.toFixed(2)}
+                                </p>
                               </div>
                               {/* Time */}
                               <div className="text-center">

@@ -524,6 +524,12 @@ const TransactionsPage = ({ user, onLogout }) => {
           color: 'bg-purple-100 text-purple-700', 
           icon: DollarSign 
         };
+      case 'refund':
+        return { 
+          label: 'Refund', 
+          color: 'bg-green-100 text-green-700', 
+          icon: RefreshCw 
+        };
       default:
         return { 
           label: type || 'Unknown', 
@@ -691,6 +697,7 @@ const TransactionsPage = ({ user, onLogout }) => {
                 <SelectItem value="all">All Types</SelectItem>
                 <SelectItem value="deposit">Deposits</SelectItem>
                 <SelectItem value="order">Orders</SelectItem>
+                <SelectItem value="refund">Refunds</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -762,8 +769,8 @@ const TransactionsPage = ({ user, onLogout }) => {
                             </div>
                             {/* Amount */}
                             <div className="text-center">
-                              <p className={`font-semibold text-gray-900 ${transaction.type === 'deposit' ? 'text-green-600' : 'text-red-600'}`}>
-                                {transaction.type === 'deposit' ? '+' : '-'}₵{parseFloat(transaction.amount || 0).toFixed(2)}
+                              <p className={`font-semibold text-gray-900 ${transaction.type === 'deposit' || transaction.type === 'refund' ? 'text-green-600' : 'text-red-600'}`}>
+                                {transaction.type === 'deposit' || transaction.type === 'refund' ? '+' : '-'}₵{parseFloat(transaction.amount || 0).toFixed(2)}
                               </p>
                             </div>
                             {/* Time */}
