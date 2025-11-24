@@ -130,7 +130,7 @@ const AdminDashboard = ({ user, onLogout }) => {
   });
 
   useEffect(() => {
-    fetchAllData();
+    fetchAllData(true); // Check SMMGen status on initial load
 
     // Subscribe to real-time updates for transactions (deposits)
     // Listen to ALL transaction changes, then filter in callback for better reliability
@@ -157,7 +157,7 @@ const AdminDashboard = ({ user, onLogout }) => {
             // Use setTimeout to debounce rapid updates
             setTimeout(() => {
               console.log('Refreshing deposits after transaction change...');
-              fetchAllData();
+              fetchAllData(false); // Skip SMMGen status check on transaction updates
             }, 200);
           }
         }
@@ -176,7 +176,7 @@ const AdminDashboard = ({ user, onLogout }) => {
     // This ensures updates even if real-time fails
     const pollInterval = setInterval(() => {
       console.log('Periodic refresh: checking for deposit updates...');
-      fetchAllData();
+      fetchAllData(false); // Skip SMMGen status check on periodic refresh
     }, 20000); // Poll every 20 seconds as backup
 
     // Cleanup subscription and polling on unmount
@@ -187,7 +187,7 @@ const AdminDashboard = ({ user, onLogout }) => {
     };
   }, []);
 
-  const fetchAllData = async () => {
+  const fetchAllData = async (checkSMMGenStatus = false) => {
     setRefreshing(true);
     try {
       // Verify user is admin first
@@ -294,8 +294,9 @@ const AdminDashboard = ({ user, onLogout }) => {
       };
 
       // Check and update order statuses from SMMGen for orders that aren't completed
+      // Only check if explicitly requested (on initial load or manual refresh)
       let finalOrders = ordersRes.data || [];
-      if (ordersRes.data && ordersRes.data.length > 0) {
+      if (checkSMMGenStatus && ordersRes.data && ordersRes.data.length > 0) {
         const updatedOrders = await Promise.all(
           ordersRes.data.map(async (order) => {
             // Check SMMGen status for orders that have SMMGen IDs and aren't completed
@@ -509,7 +510,7 @@ const AdminDashboard = ({ user, onLogout }) => {
       
       // Wait a moment for database to sync, then refresh
       await new Promise(resolve => setTimeout(resolve, 300));
-      await fetchAllData();
+      await fetchAllData(false); // Skip SMMGen status check on updates
     } catch (error) {
       console.error('Failed to update user:', error);
       toast.error(error.message || 'Failed to update user');
@@ -904,7 +905,7 @@ const AdminDashboard = ({ user, onLogout }) => {
       
       // Wait a moment for database to sync, then refresh
       await new Promise(resolve => setTimeout(resolve, 300));
-      await fetchAllData();
+      await fetchAllData(false); // Skip SMMGen status check on updates
     } catch (error) {
       console.error('Failed to create service:', error);
       toast.error(error.message || 'Failed to create service');
@@ -951,7 +952,7 @@ const AdminDashboard = ({ user, onLogout }) => {
       
       // Wait a moment for database to sync, then refresh all data
       await new Promise(resolve => setTimeout(resolve, 300));
-      await fetchAllData();
+      await fetchAllData(false); // Skip SMMGen status check on updates
     } catch (error) {
       console.error('Failed to update service:', error);
       toast.error(error.message || 'Failed to update service. Check console for details.');
@@ -1038,7 +1039,7 @@ const AdminDashboard = ({ user, onLogout }) => {
       
       // Wait a moment for database to sync, then refresh all data
       await new Promise(resolve => setTimeout(resolve, 300));
-      await fetchAllData();
+      await fetchAllData(false); // Skip SMMGen status check on updates
     } catch (error) {
       console.error('Failed to delete service:', error);
       toast.error(error.message || 'Failed to delete service. Check console for details.');
@@ -1099,7 +1100,7 @@ const AdminDashboard = ({ user, onLogout }) => {
       
       // Wait a moment for database to sync, then refresh
       await new Promise(resolve => setTimeout(resolve, 300));
-      await fetchAllData();
+      await fetchAllData(false); // Skip SMMGen status check on updates
     } catch (error) {
       console.error('Failed to update order status:', error);
       toast.error(error.message || 'Failed to update order status');
@@ -1139,7 +1140,7 @@ const AdminDashboard = ({ user, onLogout }) => {
       // Refresh data to show updated balance and stats
       // Increased delay to ensure database has synced the refund_status update
       await new Promise(resolve => setTimeout(resolve, 500));
-      await fetchAllData();
+      await fetchAllData(false); // Skip SMMGen status check on updates
     } catch (error) {
       console.error('Error processing refund:', error);
       toast.error(error.message || 'Failed to refund order. Check console for details.');
@@ -1174,7 +1175,7 @@ const AdminDashboard = ({ user, onLogout }) => {
       
       // Wait a moment for database to sync, then refresh
       await new Promise(resolve => setTimeout(resolve, 300));
-      await fetchAllData();
+      await fetchAllData(false); // Skip SMMGen status check on updates
     } catch (error) {
       console.error('Failed to update ticket status:', error);
       toast.error(error.message || 'Failed to update ticket status');
@@ -1226,7 +1227,7 @@ const AdminDashboard = ({ user, onLogout }) => {
       
       // Wait a moment for database to sync, then refresh
       await new Promise(resolve => setTimeout(resolve, 300));
-      await fetchAllData();
+      await fetchAllData(false); // Skip SMMGen status check on updates
 
       // Send email to user (if email service is configured)
       try {
@@ -1647,7 +1648,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                         <p className="text-gray-600">Manage users, orders, and services</p>
                       </div>
                       <Button
-                        onClick={fetchAllData}
+                        onClick={() => fetchAllData(true)} // Check SMMGen status on manual refresh
                         disabled={refreshing}
                         variant="outline"
                         className="flex items-center gap-2"
