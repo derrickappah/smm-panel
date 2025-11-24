@@ -7,11 +7,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
+import { processManualRefund } from '@/lib/refunds';
 import Navbar from '@/components/Navbar';
 import { 
   Users, ShoppingCart, DollarSign, Package, Search, Edit, Trash2, 
   Plus, Minus, TrendingUp, CheckCircle, XCircle, Clock, Filter,
-  Download, RefreshCw, MessageSquare, Send, Layers
+  Download, RefreshCw, MessageSquare, Send, Layers, Wallet, Receipt, HelpCircle,
+  AlertCircle, BarChart3, Activity, FileText, Settings, Bell
 } from 'lucide-react';
 
 const AdminDashboard = ({ user, onLogout }) => {
@@ -24,7 +26,23 @@ const AdminDashboard = ({ user, onLogout }) => {
     total_services: 0,
     confirmed_deposits: 0,
     total_deposits: 0,
-    open_tickets: 0
+    open_tickets: 0,
+    users_today: 0,
+    orders_today: 0,
+    deposits_today: 0,
+    revenue_today: 0,
+    processing_orders: 0,
+    cancelled_orders: 0,
+    failed_orders: 0,
+    refunded_orders: 0,
+    failed_refunds: 0,
+    total_deposits_amount: 0,
+    total_revenue_amount: 0,
+    average_order_value: 0,
+    total_transactions: 0,
+    rejected_deposits: 0,
+    in_progress_tickets: 0,
+    resolved_tickets: 0
   });
   const [users, setUsers] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -34,6 +52,10 @@ const AdminDashboard = ({ user, onLogout }) => {
   const [supportTickets, setSupportTickets] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [manuallyCrediting, setManuallyCrediting] = useState(null);
+  const [balanceCheckResults, setBalanceCheckResults] = useState({});
+  const [checkingBalances, setCheckingBalances] = useState(false);
+  const [userProfiles, setUserProfiles] = useState({});
   
   // Search and filter states
   const [userSearch, setUserSearch] = useState('');
@@ -41,12 +63,53 @@ const AdminDashboard = ({ user, onLogout }) => {
   const [orderStatusFilter, setOrderStatusFilter] = useState('all');
   const [serviceSearch, setServiceSearch] = useState('');
   
+  // Pagination states
+  const [depositsPage, setDepositsPage] = useState(1);
+  const depositsPerPage = 20;
+  const [ordersPage, setOrdersPage] = useState(1);
+  const ordersPerPage = 20;
+  const [usersPage, setUsersPage] = useState(1);
+  const usersPerPage = 20;
+  const [transactionsPage, setTransactionsPage] = useState(1);
+  const transactionsPerPage = 20;
+  const [ticketsPage, setTicketsPage] = useState(1);
+  const ticketsPerPage = 20;
+  const [balancePage, setBalancePage] = useState(1);
+  const balancePerPage = 20;
+  
+  // Deposit search state
+  const [depositSearch, setDepositSearch] = useState('');
+  const [depositDateFilter, setDepositDateFilter] = useState('');
+  
+  // Order search state
+  const [orderDateFilter, setOrderDateFilter] = useState('');
+  
+  // User search state
+  const [userDateFilter, setUserDateFilter] = useState('');
+  
+  // Transaction search state
+  const [transactionSearch, setTransactionSearch] = useState('');
+  const [transactionDateFilter, setTransactionDateFilter] = useState('');
+  const [transactionTypeFilter, setTransactionTypeFilter] = useState('all');
+  const [transactionStatusFilter, setTransactionStatusFilter] = useState('all');
+  
+  // Ticket search state
+  const [ticketSearch, setTicketSearch] = useState('');
+  const [ticketDateFilter, setTicketDateFilter] = useState('');
+  
+  // Balance search state
+  const [balanceListSearch, setBalanceListSearch] = useState('');
+  const [balanceDateFilter, setBalanceDateFilter] = useState('');
+  
   // Edit states
   const [editingUser, setEditingUser] = useState(null);
   const [editingService, setEditingService] = useState(null);
   const [balanceAdjustment, setBalanceAdjustment] = useState({ userId: '', amount: '', type: 'add' });
   const [balanceUserSearch, setBalanceUserSearch] = useState('');
   const [balanceUserDropdownOpen, setBalanceUserDropdownOpen] = useState(false);
+  
+  // Active section state (for sidebar navigation)
+  const [activeSection, setActiveSection] = useState('dashboard');
   
   // Form states
   const [serviceForm, setServiceForm] = useState({
@@ -147,7 +210,7 @@ const AdminDashboard = ({ user, onLogout }) => {
         supabase.from('profiles').select('*').order('created_at', { ascending: false }),
         supabase.from('orders').select('*, services(name, platform), profiles(name, email, phone_number)').order('created_at', { ascending: false }),
         supabase.from('transactions').select('*, profiles(email, name)').eq('type', 'deposit').order('created_at', { ascending: false }),
-        supabase.from('transactions').select('*, profiles(email, name)').order('created_at', { ascending: false }),
+        supabase.from('transactions').select('*, profiles(email, name, balance)').order('created_at', { ascending: false }),
         supabase.from('services').select('*').order('created_at', { ascending: false }),
         supabase.from('support_tickets').select('*, profiles(name, email)').order('created_at', { ascending: false })
       ]);
@@ -200,7 +263,17 @@ const AdminDashboard = ({ user, onLogout }) => {
       if (usersRes.data) setUsers(usersRes.data);
       if (ordersRes.data) setOrders(ordersRes.data);
       if (depositsRes.data) setDeposits(depositsRes.data);
-      if (transactionsRes.data) setAllTransactions(transactionsRes.data);
+      if (transactionsRes.data) {
+        setAllTransactions(transactionsRes.data);
+        // Build user profiles map for balance checking
+        const profilesMap = {};
+        transactionsRes.data.forEach(transaction => {
+          if (transaction.profiles) {
+            profilesMap[transaction.user_id] = transaction.profiles;
+          }
+        });
+        setUserProfiles(profilesMap);
+      }
       if (servicesRes.data) setServices(servicesRes.data);
       if (ticketsRes.data) setSupportTickets(ticketsRes.data);
 
@@ -220,6 +293,45 @@ const AdminDashboard = ({ user, onLogout }) => {
         .filter(d => d.status === 'approved')
         .reduce((sum, d) => sum + parseFloat(d.amount || 0), 0);
 
+      // Calculate today's metrics
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayEnd = new Date(today);
+      todayEnd.setHours(23, 59, 59, 999);
+
+      const usersToday = (usersRes.data || users).filter(u => {
+        const userDate = new Date(u.created_at);
+        return userDate >= today && userDate <= todayEnd;
+      }).length;
+
+      const ordersToday = currentOrders.filter(o => {
+        const orderDate = new Date(o.created_at);
+        return orderDate >= today && orderDate <= todayEnd;
+      }).length;
+
+      const depositsToday = currentDeposits.filter(d => {
+        const depositDate = new Date(d.created_at);
+        return depositDate >= today && depositDate <= todayEnd;
+      }).length;
+
+      const revenueToday = currentOrders
+        .filter(o => {
+          const orderDate = new Date(o.created_at);
+          return orderDate >= today && orderDate <= todayEnd && o.status === 'completed';
+        })
+        .reduce((sum, o) => sum + parseFloat(o.total_cost || 0), 0);
+
+      const processingOrders = currentOrders.filter(o => o.status === 'processing').length;
+      const cancelledOrders = currentOrders.filter(o => o.status === 'cancelled').length;
+      const failedOrders = currentOrders.filter(o => o.status === 'failed').length;
+      const refundedOrders = currentOrders.filter(o => o.refund_status === 'succeeded').length;
+      const failedRefunds = currentOrders.filter(o => o.refund_status === 'failed').length;
+      const rejectedDeposits = currentDeposits.filter(d => d.status === 'rejected').length;
+      const inProgressTickets = currentTickets.filter(t => t.status === 'in_progress').length;
+      const resolvedTickets = currentTickets.filter(t => t.status === 'resolved' || t.status === 'closed').length;
+      const totalTransactions = (transactionsRes.data || allTransactions || []).length;
+      const averageOrderValue = completedOrders > 0 ? totalRevenue / completedOrders : 0;
+
       setStats({
         total_users: (usersRes.data || users).length,
         total_orders: currentOrders.length,
@@ -229,7 +341,23 @@ const AdminDashboard = ({ user, onLogout }) => {
         total_services: (servicesRes.data || services).length,
         confirmed_deposits: confirmedDeposits,
         total_deposits: totalDeposits,
-        open_tickets: openTickets
+        open_tickets: openTickets,
+        users_today: usersToday,
+        orders_today: ordersToday,
+        deposits_today: depositsToday,
+        revenue_today: revenueToday,
+        processing_orders: processingOrders,
+        cancelled_orders: cancelledOrders,
+        failed_orders: failedOrders,
+        refunded_orders: refundedOrders,
+        failed_refunds: failedRefunds,
+        total_deposits_amount: totalDeposits,
+        total_revenue_amount: totalRevenue,
+        average_order_value: averageOrderValue,
+        total_transactions: totalTransactions,
+        rejected_deposits: rejectedDeposits,
+        in_progress_tickets: inProgressTickets,
+        resolved_tickets: resolvedTickets
       });
 
       // Show warning if only seeing own data
@@ -319,6 +447,280 @@ const AdminDashboard = ({ user, onLogout }) => {
       toast.success(`Balance ${balanceAdjustment.type === 'add' ? 'added' : 'deducted'} successfully!`);
     } catch (error) {
       toast.error(error.message || 'Failed to adjust balance');
+    }
+  };
+
+  // Load verified transactions from database on mount
+  useEffect(() => {
+    loadVerifiedTransactions();
+  }, []);
+
+  // Function to load verified transactions from database
+  const loadVerifiedTransactions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('verified_transactions')
+        .select('transaction_id, verified_status');
+
+      if (error) {
+        console.warn('Failed to load verified transactions from database:', error);
+        return;
+      }
+
+      if (data) {
+        const verified = {};
+        data.forEach(item => {
+          verified[item.transaction_id] = item.verified_status;
+        });
+        setBalanceCheckResults(verified);
+      }
+    } catch (error) {
+      console.warn('Error loading verified transactions:', error);
+    }
+  };
+
+  // Function to save verified transaction to database
+  const saveVerifiedTransaction = async (transactionId, status) => {
+    try {
+      // Check if already exists
+      const { data: existing } = await supabase
+        .from('verified_transactions')
+        .select('id')
+        .eq('transaction_id', transactionId)
+        .maybeSingle();
+
+      if (existing) {
+        // Update existing record
+        const { error } = await supabase
+          .from('verified_transactions')
+          .update({
+            verified_status: status,
+            updated_at: new Date().toISOString()
+          })
+          .eq('transaction_id', transactionId);
+
+        if (error) {
+          console.warn('Failed to update verified transaction:', error);
+        }
+      } else {
+        // Insert new record
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        const { error } = await supabase
+          .from('verified_transactions')
+          .insert({
+            transaction_id: transactionId,
+            verified_status: status,
+            verified_by: authUser?.id || null
+          });
+
+        if (error) {
+          console.warn('Failed to save verified transaction:', error);
+        }
+      }
+    } catch (error) {
+      console.warn('Error saving verified transaction:', error);
+    }
+  };
+
+  // For admin: Check if balance was updated after successful deposit (TRIPLE CHECK)
+  const performTripleCheck = async (transaction) => {
+    if (transaction.type !== 'deposit' || transaction.status !== 'approved') {
+      return null;
+    }
+
+    const userProfile = userProfiles[transaction.user_id];
+    if (!userProfile) {
+      return 'unknown';
+    }
+
+    const transactionAmount = parseFloat(transaction.amount || 0);
+    if (transactionAmount <= 0) {
+      return 'unknown';
+    }
+    
+    // TRIPLE CHECK SYSTEM
+    let freshBalance = parseFloat(userProfile.balance || 0);
+    const freshBalances = [];
+    
+    try {
+      for (let i = 0; i < 3; i++) {
+        await new Promise(resolve => setTimeout(resolve, 150));
+        const { data: freshProfile, error: freshError } = await supabase
+          .from('profiles')
+          .select('balance')
+          .eq('id', transaction.user_id)
+          .single();
+
+        if (!freshError && freshProfile) {
+          const balance = parseFloat(freshProfile.balance || 0);
+          freshBalances.push(balance);
+        }
+      }
+
+      if (freshBalances.length > 0) {
+        freshBalance = Math.max(...freshBalances);
+        userProfile.balance = freshBalance;
+      }
+    } catch (error) {
+      console.warn('Fresh balance fetch failed:', error);
+    }
+
+    const allApprovedDeposits = allTransactions
+      .filter(t => 
+        t.user_id === transaction.user_id &&
+        t.type === 'deposit' &&
+        t.status === 'approved'
+      )
+      .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+
+    const allCompletedOrders = allTransactions
+      .filter(t => 
+        t.user_id === transaction.user_id &&
+        t.type === 'order' &&
+        t.status === 'approved'
+      )
+      .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+
+    const expectedBalanceFromTransactions = allApprovedDeposits - allCompletedOrders;
+    const balanceWithoutThisTransaction = allApprovedDeposits - transactionAmount - allCompletedOrders;
+    const minExpectedBalanceWithTransaction = balanceWithoutThisTransaction + transactionAmount;
+
+    const tolerance = Math.max(0.10, expectedBalanceFromTransactions * 0.01);
+    const check1Pass = freshBalance >= (expectedBalanceFromTransactions - tolerance);
+    const check2Pass = freshBalance >= (minExpectedBalanceWithTransaction - tolerance);
+    const significantDifference = expectedBalanceFromTransactions - freshBalance;
+    const check3Pass = significantDifference <= tolerance || significantDifference <= transactionAmount * 0.5;
+
+    const passCount = [check1Pass, check2Pass, check3Pass].filter(Boolean).length;
+    
+    if (passCount >= 2) {
+      return 'updated';
+    } else if (passCount === 1) {
+      if (freshBalance >= balanceWithoutThisTransaction - tolerance) {
+        return 'updated';
+      }
+      if (freshBalance < balanceWithoutThisTransaction - transactionAmount * 0.8) {
+        return 'not_updated';
+      }
+      return 'updated';
+    } else {
+      const significantGap = expectedBalanceFromTransactions - freshBalance;
+      if (significantGap > transactionAmount * 0.9) {
+        return 'not_updated';
+      }
+      return 'updated';
+    }
+  };
+  
+  // Perform balance checks when transactions or userProfiles change
+  useEffect(() => {
+    if (allTransactions.length === 0 || Object.keys(userProfiles).length === 0) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const performBalanceChecks = async () => {
+      setCheckingBalances(true);
+      
+      let previouslyVerified = {};
+      try {
+        const { data: verifiedData, error } = await supabase
+          .from('verified_transactions')
+          .select('transaction_id, verified_status');
+
+        if (!error && verifiedData) {
+          verifiedData.forEach(item => {
+            previouslyVerified[item.transaction_id] = item.verified_status;
+          });
+        }
+      } catch (error) {
+        console.warn('Failed to load verified transactions from database:', error);
+      }
+      
+      const results = { ...previouslyVerified };
+      
+      const depositTransactions = allTransactions.filter(
+        t => t.type === 'deposit' && t.status === 'approved'
+      );
+
+      for (const transaction of depositTransactions) {
+        if (!isMounted) break;
+        
+        if (previouslyVerified[transaction.id] === 'updated') {
+          continue;
+        }
+        
+        const result = await performTripleCheck(transaction);
+        if (isMounted) {
+          results[transaction.id] = result;
+          if (result && result !== 'checking') {
+            await saveVerifiedTransaction(transaction.id, result);
+          }
+        }
+      }
+      
+      if (isMounted) {
+        setBalanceCheckResults(results);
+        setCheckingBalances(false);
+      }
+    };
+
+    performBalanceChecks();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [allTransactions, userProfiles]);
+
+  // Helper function to get balance check result
+  const getBalanceCheckResult = (transaction) => {
+    if (transaction.type !== 'deposit' || transaction.status !== 'approved') {
+      return null;
+    }
+    return balanceCheckResults[transaction.id] || 'checking';
+  };
+
+  // For admin: Manually credit balance for a deposit
+  const handleManualCredit = async (transaction) => {
+    setManuallyCrediting(transaction.id);
+    try {
+      const userProfile = userProfiles[transaction.user_id];
+      if (!userProfile) {
+        toast.error('User profile not found');
+        return;
+      }
+
+      const currentBalance = parseFloat(userProfile.balance || 0);
+      const depositAmount = parseFloat(transaction.amount || 0);
+      const newBalance = currentBalance + depositAmount;
+
+      const { error: balanceError } = await supabase
+        .from('profiles')
+        .update({ balance: newBalance })
+        .eq('id', transaction.user_id);
+
+      if (balanceError) {
+        console.error('Error updating balance:', balanceError);
+        toast.error('Failed to update balance: ' + balanceError.message);
+        return;
+      }
+
+      toast.success(`Balance credited successfully! ₵${depositAmount.toFixed(2)} added to user's account.`);
+      
+      setBalanceCheckResults(prev => ({
+        ...prev,
+        [transaction.id]: 'updated'
+      }));
+      
+      await saveVerifiedTransaction(transaction.id, 'updated');
+      
+      await fetchData();
+    } catch (error) {
+      console.error('Error manually crediting balance:', error);
+      toast.error('Failed to credit balance: ' + error.message);
+    } finally {
+      setManuallyCrediting(null);
     }
   };
 
@@ -557,97 +959,31 @@ const AdminDashboard = ({ user, onLogout }) => {
   };
 
   const handleRefundOrder = async (order) => {
-    if (!confirm('Are you sure you want to refund this order? The user will receive their balance back.')) {
+    // Check if refund was already processed
+    if (order.refund_status === 'succeeded') {
+      if (!confirm('This order has already been refunded. Are you sure you want to refund it again?')) {
       return;
+    }
+    } else if (order.refund_status === 'failed') {
+      if (!confirm('Automatic refund failed for this order. Proceed with manual refund?')) {
+        return;
+      }
+    } else {
+      if (!confirm('Are you sure you want to refund this order? The user will receive their balance back.')) {
+        return;
+      }
     }
 
     try {
       setLoading(true);
       
-      // Get user's current balance
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('balance, name, email')
-        .eq('id', order.user_id)
-        .single();
+      // Use the manual refund utility function
+      const refundResult = await processManualRefund(order);
 
-      if (profileError) {
-        console.error('Error fetching profile for refund:', profileError);
-        throw new Error(`Failed to fetch user profile: ${profileError.message}`);
-      }
-
-      if (!profile) {
-        throw new Error('User profile not found');
-      }
-
-      const currentBalance = parseFloat(profile.balance || 0);
-      const refundAmount = parseFloat(order.total_cost || 0);
-      const newBalance = currentBalance + refundAmount;
-
-      console.log('Processing refund:', {
-        userId: order.user_id,
-        userName: profile.name || profile.email,
-        currentBalance,
-        refundAmount,
-        newBalance,
-        orderId: order.id
-      });
-
-      // Refund the amount
-      const { data: updatedProfile, error: balanceError } = await supabase
-            .from('profiles')
-        .update({ balance: newBalance })
-        .eq('id', order.user_id)
-            .select('balance')
-            .single();
-
-      if (balanceError) {
-        console.error('Error updating balance:', balanceError);
-        throw new Error(`Failed to update balance: ${balanceError.message}`);
-      }
-
-      // Verify the balance was updated correctly
-      if (!updatedProfile || parseFloat(updatedProfile.balance) !== newBalance) {
-        console.error('Balance verification failed:', {
-          expected: newBalance,
-          actual: updatedProfile?.balance
-        });
-        throw new Error('Balance update verification failed. Please check manually.');
-      }
-
-      console.log('Balance updated successfully:', {
-        oldBalance: currentBalance,
-        newBalance: updatedProfile.balance
-      });
-
-      // Create a transaction record for the refund (optional but recommended for tracking)
-      try {
-        await supabase
-          .from('transactions')
-          .insert({
-            user_id: order.user_id,
-            amount: refundAmount,
-            type: 'deposit',
-            status: 'approved'
-          });
-        console.log('Refund transaction record created');
-      } catch (transactionError) {
-        // Don't fail the refund if transaction record creation fails
-        console.warn('Failed to create refund transaction record:', transactionError);
-      }
-
-      // Update order status to cancelled
-      const { error: orderError } = await supabase
-        .from('orders')
-        .update({ status: 'cancelled' })
-        .eq('id', order.id);
-
-      if (orderError) {
-        console.error('Error updating order status:', orderError);
-        // Balance was updated, but order status failed - still show success but warn
-        toast.warning(`Balance refunded, but failed to update order status: ${orderError.message}`);
+      if (refundResult.success) {
+        toast.success(`Order refunded successfully! ₵${refundResult.refundAmount.toFixed(2)} added back to user's balance.`);
       } else {
-        toast.success(`Order refunded successfully! ₵${refundAmount.toFixed(2)} added back to user's balance.`);
+        throw new Error(refundResult.error || 'Failed to process refund');
       }
 
       // Refresh data to show updated balance
@@ -784,13 +1120,38 @@ const AdminDashboard = ({ user, onLogout }) => {
   const [ticketResponse, setTicketResponse] = useState('');
 
   // Filter functions
-  const filteredUsers = users.filter(u => 
-    u.name?.toLowerCase().includes(userSearch.toLowerCase()) ||
-    u.email?.toLowerCase().includes(userSearch.toLowerCase()) ||
-    u.phone_number?.toLowerCase().includes(userSearch.toLowerCase())
-  );
+  const filteredUsers = users.filter(u => {
+    // Search filter
+    const searchLower = userSearch.toLowerCase();
+    const matchesSearch = userSearch === '' || 
+      u.name?.toLowerCase().includes(searchLower) ||
+      u.email?.toLowerCase().includes(searchLower) ||
+      u.phone_number?.toLowerCase().includes(searchLower);
+    
+    // Date filter
+    let matchesDate = true;
+    if (userDateFilter) {
+      const userDate = new Date(u.created_at).toLocaleDateString();
+      const filterDate = new Date(userDateFilter).toLocaleDateString();
+      matchesDate = userDate === filterDate;
+    }
+    
+    return matchesSearch && matchesDate;
+  });
+
+  // Pagination calculations for users
+  const totalUsersPages = Math.ceil(filteredUsers.length / usersPerPage);
+  const startUserIndex = (usersPage - 1) * usersPerPage;
+  const endUserIndex = startUserIndex + usersPerPage;
+  const paginatedUsers = filteredUsers.slice(startUserIndex, endUserIndex);
+
+  // Reset to page 1 when filter or search changes
+  useEffect(() => {
+    setUsersPage(1);
+  }, [userSearch, userDateFilter]);
 
   const filteredOrders = orders.filter(o => {
+    // Search filter
     const searchLower = orderSearch.toLowerCase();
     const matchesSearch = orderSearch === '' || 
       o.id.toLowerCase().includes(searchLower) ||
@@ -800,14 +1161,134 @@ const AdminDashboard = ({ user, onLogout }) => {
       o.profiles?.phone_number?.toLowerCase().includes(searchLower) ||
       o.services?.name?.toLowerCase().includes(searchLower) ||
       o.link?.toLowerCase().includes(searchLower);
+    
+    // Status filter
     const matchesStatus = orderStatusFilter === 'all' || o.status === orderStatusFilter;
-    return matchesSearch && matchesStatus;
+    
+    // Date filter
+    let matchesDate = true;
+    if (orderDateFilter) {
+      const orderDate = new Date(o.created_at).toLocaleDateString();
+      const filterDate = new Date(orderDateFilter).toLocaleDateString();
+      matchesDate = orderDate === filterDate;
+    }
+    
+    return matchesSearch && matchesStatus && matchesDate;
   });
 
+  // Pagination calculations for orders
+  const totalOrdersPages = Math.ceil(filteredOrders.length / ordersPerPage);
+  const startOrderIndex = (ordersPage - 1) * ordersPerPage;
+  const endOrderIndex = startOrderIndex + ordersPerPage;
+  const paginatedOrders = filteredOrders.slice(startOrderIndex, endOrderIndex);
+
+  // Reset to page 1 when filter or search changes
+  useEffect(() => {
+    setOrdersPage(1);
+  }, [orderStatusFilter, orderSearch, orderDateFilter]);
+
   const filteredTickets = supportTickets.filter(t => {
+    // Search filter
+    const searchLower = ticketSearch.toLowerCase();
+    const matchesSearch = ticketSearch === '' || 
+      t.id.toLowerCase().includes(searchLower) ||
+      t.user_id.toLowerCase().includes(searchLower) ||
+      t.subject?.toLowerCase().includes(searchLower) ||
+      t.message?.toLowerCase().includes(searchLower) ||
+      t.profiles?.name?.toLowerCase().includes(searchLower) ||
+      t.profiles?.email?.toLowerCase().includes(searchLower);
+    
+    // Status filter
     const matchesStatus = ticketStatusFilter === 'all' || t.status === ticketStatusFilter;
-    return matchesStatus;
+    
+    // Date filter
+    let matchesDate = true;
+    if (ticketDateFilter) {
+      const ticketDate = new Date(t.created_at).toLocaleDateString();
+      const filterDate = new Date(ticketDateFilter).toLocaleDateString();
+      matchesDate = ticketDate === filterDate;
+    }
+    
+    return matchesSearch && matchesStatus && matchesDate;
   });
+
+  // Pagination calculations for tickets
+  const totalTicketsPages = Math.ceil(filteredTickets.length / ticketsPerPage);
+  const startTicketIndex = (ticketsPage - 1) * ticketsPerPage;
+  const endTicketIndex = startTicketIndex + ticketsPerPage;
+  const paginatedTickets = filteredTickets.slice(startTicketIndex, endTicketIndex);
+
+  // Reset to page 1 when filter or search changes
+  useEffect(() => {
+    setTicketsPage(1);
+  }, [ticketStatusFilter, ticketSearch, ticketDateFilter]);
+
+  const filteredBalanceUsers = users.filter(u => {
+    // Search filter
+    const searchLower = balanceListSearch.toLowerCase();
+    const matchesSearch = balanceListSearch === '' || 
+      u.name?.toLowerCase().includes(searchLower) ||
+      u.email?.toLowerCase().includes(searchLower) ||
+      u.phone_number?.toLowerCase().includes(searchLower);
+    
+    // Date filter
+    let matchesDate = true;
+    if (balanceDateFilter) {
+      const userDate = new Date(u.created_at).toLocaleDateString();
+      const filterDate = new Date(balanceDateFilter).toLocaleDateString();
+      matchesDate = userDate === filterDate;
+    }
+    
+    return matchesSearch && matchesDate;
+  });
+
+  // Pagination calculations for balance users
+  const totalBalancePages = Math.ceil(filteredBalanceUsers.length / balancePerPage);
+  const startBalanceIndex = (balancePage - 1) * balancePerPage;
+  const endBalanceIndex = startBalanceIndex + balancePerPage;
+  const paginatedBalanceUsers = filteredBalanceUsers.slice(startBalanceIndex, endBalanceIndex);
+
+  // Reset to page 1 when filter or search changes
+  useEffect(() => {
+    setBalancePage(1);
+  }, [balanceListSearch, balanceDateFilter]);
+
+  const filteredTransactions = allTransactions.filter(t => {
+    // Search filter
+    const searchLower = transactionSearch.toLowerCase();
+    const matchesSearch = transactionSearch === '' || 
+      t.id.toLowerCase().includes(searchLower) ||
+      t.user_id.toLowerCase().includes(searchLower) ||
+      t.profiles?.name?.toLowerCase().includes(searchLower) ||
+      t.profiles?.email?.toLowerCase().includes(searchLower);
+    
+    // Type filter
+    const matchesType = transactionTypeFilter === 'all' || t.type === transactionTypeFilter;
+    
+    // Status filter
+    const matchesStatus = transactionStatusFilter === 'all' || t.status === transactionStatusFilter;
+    
+    // Date filter
+    let matchesDate = true;
+    if (transactionDateFilter) {
+      const transactionDate = new Date(t.created_at).toLocaleDateString();
+      const filterDate = new Date(transactionDateFilter).toLocaleDateString();
+      matchesDate = transactionDate === filterDate;
+    }
+    
+    return matchesSearch && matchesType && matchesStatus && matchesDate;
+  });
+
+  // Pagination calculations for transactions
+  const totalTransactionsPages = Math.ceil(filteredTransactions.length / transactionsPerPage);
+  const startTransactionIndex = (transactionsPage - 1) * transactionsPerPage;
+  const endTransactionIndex = startTransactionIndex + transactionsPerPage;
+  const paginatedTransactions = filteredTransactions.slice(startTransactionIndex, endTransactionIndex);
+
+  // Reset to page 1 when filter or search changes
+  useEffect(() => {
+    setTransactionsPage(1);
+  }, [transactionSearch, transactionDateFilter, transactionTypeFilter, transactionStatusFilter]);
 
   const filteredServices = services.filter(s =>
     s.name?.toLowerCase().includes(serviceSearch.toLowerCase()) ||
@@ -816,85 +1297,181 @@ const AdminDashboard = ({ user, onLogout }) => {
   );
 
   const filteredDeposits = deposits.filter(d => {
-    if (depositStatusFilter === 'all') return true;
-    if (depositStatusFilter === 'pending') return d.status === 'pending';
-    if (depositStatusFilter === 'confirmed') return d.status === 'approved';
-    if (depositStatusFilter === 'cancelled') return d.status === 'rejected';
-    return true;
+    // Status filter
+    let matchesStatus = true;
+    if (depositStatusFilter === 'pending') matchesStatus = d.status === 'pending';
+    else if (depositStatusFilter === 'confirmed') matchesStatus = d.status === 'approved';
+    else if (depositStatusFilter === 'cancelled') matchesStatus = d.status === 'rejected';
+    
+    // Username search
+    let matchesSearch = true;
+    if (depositSearch.trim()) {
+      const searchLower = depositSearch.toLowerCase();
+      const userName = (d.profiles?.name || '').toLowerCase();
+      const userEmail = (d.profiles?.email || '').toLowerCase();
+      const userId = (d.user_id || '').toLowerCase();
+      matchesSearch = userName.includes(searchLower) || 
+                     userEmail.includes(searchLower) || 
+                     userId.includes(searchLower);
+    }
+    
+    // Date filter
+    let matchesDate = true;
+    if (depositDateFilter) {
+      const depositDate = new Date(d.created_at).toLocaleDateString();
+      const filterDate = new Date(depositDateFilter).toLocaleDateString();
+      matchesDate = depositDate === filterDate;
+    }
+    
+    return matchesStatus && matchesSearch && matchesDate;
   });
+
+  // Pagination calculations for deposits
+  const totalDepositsPages = Math.ceil(filteredDeposits.length / depositsPerPage);
+  const startDepositIndex = (depositsPage - 1) * depositsPerPage;
+  const endDepositIndex = startDepositIndex + depositsPerPage;
+  const paginatedDeposits = filteredDeposits.slice(startDepositIndex, endDepositIndex);
+
+  // Reset to page 1 when filter or search changes
+  useEffect(() => {
+    setDepositsPage(1);
+  }, [depositStatusFilter, depositSearch, depositDateFilter]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-      <Navbar user={user} onLogout={onLogout} />
+      {user?.role !== 'admin' && <Navbar user={user} onLogout={onLogout} />}
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        <div className="mb-6 sm:mb-8 animate-fadeIn">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div>
-              <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">Admin Dashboard</h1>
-          <p className="text-gray-600">Manage users, orders, and services</p>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 lg:pl-[280px]">
+        {/* Navigation - Sidebar for desktop, Tabs for mobile */}
+        <div className="flex flex-col lg:flex-row gap-6 animate-slideUp">
+          {/* Sidebar Navigation - Desktop */}
+          <div className="hidden lg:block fixed top-0 left-0 bottom-0 w-64 z-40 pt-4 pb-6 px-6">
+            <div className="glass p-4 rounded-2xl h-full flex flex-col overflow-y-auto">
+              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4 px-2">Navigation</h3>
+              <nav className="space-y-1">
+                <button
+                  onClick={() => setActiveSection('dashboard')}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                    activeSection === 'dashboard'
+                      ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
+                      : 'text-gray-700 hover:bg-white/50'
+                  }`}
+                >
+                  <Layers className="w-5 h-5" />
+                  <span className="font-medium">Dashboard</span>
+                </button>
+                <button
+                  onClick={() => setActiveSection('deposits')}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                    activeSection === 'deposits'
+                      ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
+                      : 'text-gray-700 hover:bg-white/50'
+                  }`}
+                >
+                  <DollarSign className="w-5 h-5" />
+                  <span className="font-medium">Deposits</span>
+                </button>
+                <button
+                  onClick={() => setActiveSection('orders')}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                    activeSection === 'orders'
+                      ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
+                      : 'text-gray-700 hover:bg-white/50'
+                  }`}
+                >
+                  <ShoppingCart className="w-5 h-5" />
+                  <span className="font-medium">Orders</span>
+                </button>
+                <button
+                  onClick={() => setActiveSection('services')}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                    activeSection === 'services'
+                      ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
+                      : 'text-gray-700 hover:bg-white/50'
+                  }`}
+                >
+                  <Package className="w-5 h-5" />
+                  <span className="font-medium">Services</span>
+                </button>
+                <button
+                  onClick={() => setActiveSection('users')}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                    activeSection === 'users'
+                      ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
+                      : 'text-gray-700 hover:bg-white/50'
+                  }`}
+                >
+                  <Users className="w-5 h-5" />
+                  <span className="font-medium">Users</span>
+                </button>
+                <button
+                  onClick={() => setActiveSection('transactions')}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                    activeSection === 'transactions'
+                      ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
+                      : 'text-gray-700 hover:bg-white/50'
+                  }`}
+                >
+                  <Receipt className="w-5 h-5" />
+                  <span className="font-medium">Transactions</span>
+                </button>
+                <button
+                  onClick={() => setActiveSection('support')}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                    activeSection === 'support'
+                      ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
+                      : 'text-gray-700 hover:bg-white/50'
+                  }`}
+                >
+                  <MessageSquare className="w-5 h-5" />
+                  <span className="font-medium">Support</span>
+                  {stats.open_tickets > 0 && (
+                    <span className="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
+                      {stats.open_tickets}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setActiveSection('balance')}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                    activeSection === 'balance'
+                      ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
+                      : 'text-gray-700 hover:bg-white/50'
+                  }`}
+                >
+                  <Wallet className="w-5 h-5" />
+                  <span className="font-medium">Balance</span>
+                </button>
+              </nav>
+              
+              {/* User Info at Bottom */}
+              <div className="mt-auto pt-4 border-t border-white/20">
+                <div className="px-3 py-3 space-y-2">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900 truncate">{user?.name || 'Admin'}</p>
+                    <p className="text-xs text-gray-600 truncate">{user?.email || ''}</p>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-500">Balance:</span>
+                    <span className="text-sm font-semibold text-indigo-600">₵{user?.balance?.toFixed(2) || '0.00'}</span>
+                  </div>
+                  <Button
+                    onClick={onLogout}
+                    variant="outline"
+                    size="sm"
+                    className="w-full mt-2 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                  >
+                    <span className="text-xs">Logout</span>
+                  </Button>
+                </div>
+              </div>
             </div>
-            <Button
-              onClick={fetchAllData}
-              disabled={refreshing}
-              variant="outline"
-              className="flex items-center gap-2"
-            >
-              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
           </div>
-        </div>
 
-        {/* Enhanced Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-6 mb-6 sm:mb-8 animate-slideUp">
-          <div className="glass p-4 sm:p-6 rounded-2xl">
-            <div className="flex items-center justify-between mb-2">
-              <Users className="w-6 h-6 sm:w-8 sm:h-8 text-indigo-600" />
-              <span className="text-2xl sm:text-3xl font-bold text-gray-900">{stats.total_users}</span>
-            </div>
-            <p className="text-gray-600 text-xs sm:text-sm">Total Users</p>
-          </div>
-          <div className="glass p-4 sm:p-6 rounded-2xl">
-            <div className="flex items-center justify-between mb-2">
-              <ShoppingCart className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
-              <span className="text-2xl sm:text-3xl font-bold text-gray-900">{stats.total_orders}</span>
-            </div>
-            <p className="text-gray-600 text-xs sm:text-sm">Total Orders</p>
-          </div>
-          <div className="glass p-4 sm:p-6 rounded-2xl">
-            <div className="flex items-center justify-between mb-2">
-              <CheckCircle className="w-6 h-6 sm:w-8 sm:h-8 text-green-600" />
-              <span className="text-2xl sm:text-3xl font-bold text-gray-900">{stats.completed_orders}</span>
-            </div>
-            <p className="text-gray-600 text-xs sm:text-sm">Completed</p>
-          </div>
-          <div className="glass p-4 sm:p-6 rounded-2xl">
-            <div className="flex items-center justify-between mb-2">
-              <DollarSign className="w-6 h-6 sm:w-8 sm:h-8 text-emerald-600" />
-              <span className="text-2xl sm:text-3xl font-bold text-gray-900">₵{stats.total_revenue.toFixed(2)}</span>
-            </div>
-            <p className="text-gray-600 text-xs sm:text-sm">Revenue</p>
-          </div>
-          <div className="glass p-4 sm:p-6 rounded-2xl">
-            <div className="flex items-center justify-between mb-2">
-              <Clock className="w-6 h-6 sm:w-8 sm:h-8 text-yellow-600" />
-              <span className="text-2xl sm:text-3xl font-bold text-gray-900">{stats.pending_deposits}</span>
-            </div>
-            <p className="text-gray-600 text-xs sm:text-sm">Pending</p>
-          </div>
-          <div className="glass p-4 sm:p-6 rounded-2xl">
-            <div className="flex items-center justify-between mb-2">
-              <Package className="w-6 h-6 sm:w-8 sm:h-8 text-purple-600" />
-              <span className="text-2xl sm:text-3xl font-bold text-gray-900">{stats.total_services}</span>
-            </div>
-            <p className="text-gray-600 text-xs sm:text-sm">Services</p>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <Tabs defaultValue="deposits" className="animate-slideUp">
-          <TabsList className="glass mb-6 flex-wrap">
+          {/* Tabs Navigation - Mobile */}
+          <Tabs value={activeSection} onValueChange={setActiveSection} className="w-full">
+            <TabsList className="glass mb-6 flex-wrap w-full lg:hidden">
+            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
             <TabsTrigger value="deposits">Deposits</TabsTrigger>
             <TabsTrigger value="orders">Orders</TabsTrigger>
             <TabsTrigger value="services">Services</TabsTrigger>
@@ -906,10 +1483,407 @@ const AdminDashboard = ({ user, onLogout }) => {
             <TabsTrigger value="balance">Balance</TabsTrigger>
           </TabsList>
 
-          {/* Deposits Tab */}
-          <TabsContent value="deposits">
+            {/* Content Area */}
+            <div className="flex-1 min-w-0">
+              {/* Dashboard Section */}
+              <TabsContent value="dashboard" className="lg:mt-0">
+                <div className="space-y-6">
+                  {/* Header Section */}
+                  <div className="glass p-6 sm:p-8 rounded-3xl">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                      <div>
+                        <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">Admin Dashboard</h1>
+                        <p className="text-gray-600">Manage users, orders, and services</p>
+                      </div>
+                      <Button
+                        onClick={fetchAllData}
+                        disabled={refreshing}
+                        variant="outline"
+                        className="flex items-center gap-2"
+                      >
+                        <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                        Refresh
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Enhanced Stats Cards */}
+                  <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3 sm:gap-4">
+                    {/* Users Today */}
+                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('users')}>
+                      <div className="flex items-center justify-between mb-1">
+                        <Users className="w-4 h-4 text-indigo-600" />
+                        <span className="text-lg font-bold text-gray-900">{stats.users_today}</span>
+                      </div>
+                      <p className="text-gray-600 text-[10px] font-medium">Users Today</p>
+                      <p className="text-gray-400 text-[9px] mt-0.5">{stats.total_users} Total</p>
+                    </div>
+                    {/* Orders Today */}
+                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('orders')}>
+                      <div className="flex items-center justify-between mb-1">
+                        <ShoppingCart className="w-4 h-4 text-blue-600" />
+                        <span className="text-lg font-bold text-gray-900">{stats.orders_today}</span>
+                      </div>
+                      <p className="text-gray-600 text-[10px] font-medium">Orders Today</p>
+                      <p className="text-gray-400 text-[9px] mt-0.5">{stats.total_orders} Total</p>
+                    </div>
+                    {/* Deposits Today */}
+                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('deposits')}>
+                      <div className="flex items-center justify-between mb-1">
+                        <DollarSign className="w-4 h-4 text-emerald-600" />
+                        <span className="text-lg font-bold text-gray-900">{stats.deposits_today}</span>
+                      </div>
+                      <p className="text-gray-600 text-[10px] font-medium">Deposits Today</p>
+                      <p className="text-gray-400 text-[9px] mt-0.5">{stats.pending_deposits} Pending</p>
+                    </div>
+                    {/* Cancelled Orders */}
+                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('orders')}>
+                      <div className="flex items-center justify-between mb-1">
+                        <XCircle className="w-4 h-4 text-orange-600" />
+                        <span className="text-lg font-bold text-gray-900">{stats.cancelled_orders}</span>
+                      </div>
+                      <p className="text-gray-600 text-[10px] font-medium">Cancelled</p>
+                      <p className="text-gray-400 text-[9px] mt-0.5">Orders</p>
+                    </div>
+                    {/* Total Revenue */}
+                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('transactions')}>
+                      <div className="flex items-center justify-between mb-1">
+                        <TrendingUp className="w-4 h-4 text-green-600" />
+                        <span className="text-lg font-bold text-gray-900">₵{stats.total_revenue_amount.toFixed(0)}</span>
+                      </div>
+                      <p className="text-gray-600 text-[10px] font-medium">Total Revenue</p>
+                      <p className="text-gray-400 text-[9px] mt-0.5">{stats.completed_orders} Orders</p>
+                    </div>
+                    {/* Average Order Value */}
+                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('orders')}>
+                      <div className="flex items-center justify-between mb-1">
+                        <BarChart3 className="w-4 h-4 text-purple-600" />
+                        <span className="text-lg font-bold text-gray-900">₵{stats.average_order_value.toFixed(0)}</span>
+                      </div>
+                      <p className="text-gray-600 text-[10px] font-medium">Avg Order</p>
+                      <p className="text-gray-400 text-[9px] mt-0.5">Per Order</p>
+                    </div>
+                    {/* Completed Orders */}
+                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('orders')}>
+                      <div className="flex items-center justify-between mb-1">
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                        <span className="text-lg font-bold text-gray-900">{stats.completed_orders}</span>
+                      </div>
+                      <p className="text-gray-600 text-[10px] font-medium">Completed</p>
+                      <p className="text-gray-400 text-[9px] mt-0.5">{stats.processing_orders} Processing</p>
+                    </div>
+                    {/* Processing Orders */}
+                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('orders')}>
+                      <div className="flex items-center justify-between mb-1">
+                        <Clock className="w-4 h-4 text-blue-600" />
+                        <span className="text-lg font-bold text-gray-900">{stats.processing_orders}</span>
+                      </div>
+                      <p className="text-gray-600 text-[10px] font-medium">Processing</p>
+                      <p className="text-gray-400 text-[9px] mt-0.5">{stats.cancelled_orders} Cancelled</p>
+                    </div>
+                    {/* Pending Deposits */}
+                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('deposits')}>
+                      <div className="flex items-center justify-between mb-1">
+                        <AlertCircle className="w-4 h-4 text-yellow-600" />
+                        <span className="text-lg font-bold text-gray-900">{stats.pending_deposits}</span>
+                      </div>
+                      <p className="text-gray-600 text-[10px] font-medium">Pending</p>
+                      <p className="text-gray-400 text-[9px] mt-0.5">{stats.confirmed_deposits} Confirmed</p>
+                    </div>
+                    {/* Rejected Deposits */}
+                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('deposits')}>
+                      <div className="flex items-center justify-between mb-1">
+                        <XCircle className="w-4 h-4 text-red-600" />
+                        <span className="text-lg font-bold text-gray-900">{stats.rejected_deposits}</span>
+                      </div>
+                      <p className="text-gray-600 text-[10px] font-medium">Rejected</p>
+                      <p className="text-gray-400 text-[9px] mt-0.5">Deposits</p>
+                    </div>
+                    {/* Failed Orders */}
+                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('orders')}>
+                      <div className="flex items-center justify-between mb-1">
+                        <XCircle className="w-4 h-4 text-red-600" />
+                        <span className="text-lg font-bold text-gray-900">{stats.failed_orders}</span>
+                      </div>
+                      <p className="text-gray-600 text-[10px] font-medium">Failed</p>
+                      <p className="text-gray-400 text-[9px] mt-0.5">Orders</p>
+                    </div>
+                    {/* Refunded Orders */}
+                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('orders')}>
+                      <div className="flex items-center justify-between mb-1">
+                        <Receipt className="w-4 h-4 text-orange-600" />
+                        <span className="text-lg font-bold text-gray-900">{stats.refunded_orders}</span>
+                      </div>
+                      <p className="text-gray-600 text-[10px] font-medium">Refunded</p>
+                      <p className="text-gray-400 text-[9px] mt-0.5">{stats.failed_refunds} Failed</p>
+                    </div>
+                    {/* Open Support Tickets */}
+                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('support')}>
+                      <div className="flex items-center justify-between mb-1">
+                        <MessageSquare className="w-4 h-4 text-blue-600" />
+                        <span className="text-lg font-bold text-gray-900">{stats.open_tickets}</span>
+                      </div>
+                      <p className="text-gray-600 text-[10px] font-medium">Open Tickets</p>
+                      <p className="text-gray-400 text-[9px] mt-0.5">{stats.in_progress_tickets} In Progress</p>
+                    </div>
+                    {/* Resolved Tickets */}
+                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('support')}>
+                      <div className="flex items-center justify-between mb-1">
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                        <span className="text-lg font-bold text-gray-900">{stats.resolved_tickets}</span>
+                      </div>
+                      <p className="text-gray-600 text-[10px] font-medium">Resolved</p>
+                      <p className="text-gray-400 text-[9px] mt-0.5">Tickets</p>
+                    </div>
+                    {/* Total Transactions */}
+                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('transactions')}>
+                      <div className="flex items-center justify-between mb-1">
+                        <Receipt className="w-4 h-4 text-indigo-600" />
+                        <span className="text-lg font-bold text-gray-900">{stats.total_transactions}</span>
+                      </div>
+                      <p className="text-gray-600 text-[10px] font-medium">Transactions</p>
+                      <p className="text-gray-400 text-[9px] mt-0.5">All Time</p>
+                    </div>
+                    {/* Total Services */}
+                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('services')}>
+                      <div className="flex items-center justify-between mb-1">
+                        <Package className="w-4 h-4 text-purple-600" />
+                        <span className="text-lg font-bold text-gray-900">{stats.total_services}</span>
+                      </div>
+                      <p className="text-gray-600 text-[10px] font-medium">Services</p>
+                      <p className="text-gray-400 text-[9px] mt-0.5">Active</p>
+                    </div>
+                  </div>
+
+                  {/* Quick Actions & Alerts */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Quick Actions */}
+                    <div className="glass p-6 rounded-3xl">
+                      <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <Activity className="w-5 h-5 text-indigo-600" />
+                        Quick Actions
+                      </h3>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Button
+                          onClick={() => setActiveSection('deposits')}
+                          variant="outline"
+                          className="flex flex-col items-center gap-2 h-auto py-4 hover:bg-indigo-50"
+                        >
+                          <DollarSign className="w-5 h-5 text-indigo-600" />
+                          <span className="text-xs">Review Deposits</span>
+                          {stats.pending_deposits > 0 && (
+                            <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
+                              {stats.pending_deposits}
+                            </span>
+                          )}
+                        </Button>
+                        <Button
+                          onClick={() => setActiveSection('support')}
+                          variant="outline"
+                          className="flex flex-col items-center gap-2 h-auto py-4 hover:bg-indigo-50"
+                        >
+                          <MessageSquare className="w-5 h-5 text-indigo-600" />
+                          <span className="text-xs">Support Tickets</span>
+                          {stats.open_tickets > 0 && (
+                            <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
+                              {stats.open_tickets}
+                            </span>
+                          )}
+                        </Button>
+                        <Button
+                          onClick={() => setActiveSection('orders')}
+                          variant="outline"
+                          className="flex flex-col items-center gap-2 h-auto py-4 hover:bg-indigo-50"
+                        >
+                          <ShoppingCart className="w-5 h-5 text-indigo-600" />
+                          <span className="text-xs">View Orders</span>
+                        </Button>
+                        <Button
+                          onClick={() => setActiveSection('users')}
+                          variant="outline"
+                          className="flex flex-col items-center gap-2 h-auto py-4 hover:bg-indigo-50"
+                        >
+                          <Users className="w-5 h-5 text-indigo-600" />
+                          <span className="text-xs">Manage Users</span>
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Alerts & Notifications */}
+                    <div className="glass p-6 rounded-3xl">
+                      <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <Bell className="w-5 h-5 text-yellow-600" />
+                        Alerts & Notifications
+                      </h3>
+                      <div className="space-y-3">
+                        {stats.pending_deposits > 0 && (
+                          <div className="flex items-center gap-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                            <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0" />
+                            <div className="flex-1">
+                              <p className="text-sm font-medium text-gray-900">{stats.pending_deposits} Pending Deposit{stats.pending_deposits > 1 ? 's' : ''}</p>
+                              <p className="text-xs text-gray-600">Requires your attention</p>
+                            </div>
+                            <Button
+                              onClick={() => setActiveSection('deposits')}
+                              size="sm"
+                              variant="outline"
+                              className="text-xs"
+                            >
+                              Review
+                            </Button>
+                          </div>
+                        )}
+                        {stats.open_tickets > 0 && (
+                          <div className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                            <MessageSquare className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                            <div className="flex-1">
+                              <p className="text-sm font-medium text-gray-900">{stats.open_tickets} Open Ticket{stats.open_tickets > 1 ? 's' : ''}</p>
+                              <p className="text-xs text-gray-600">Awaiting response</p>
+                            </div>
+                            <Button
+                              onClick={() => setActiveSection('support')}
+                              size="sm"
+                              variant="outline"
+                              className="text-xs"
+                            >
+                              View
+                            </Button>
+                          </div>
+                        )}
+                        {allTransactions.filter(t => t.type === 'deposit' && t.status === 'approved' && getBalanceCheckResult(t) === 'not_updated').length > 0 && (
+                          <div className="flex items-center gap-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+                            <div className="flex-1">
+                              <p className="text-sm font-medium text-gray-900">
+                                {allTransactions.filter(t => t.type === 'deposit' && t.status === 'approved' && getBalanceCheckResult(t) === 'not_updated').length} Balance{allTransactions.filter(t => t.type === 'deposit' && t.status === 'approved' && getBalanceCheckResult(t) === 'not_updated').length > 1 ? 's' : ''} Not Updated
+                              </p>
+                              <p className="text-xs text-gray-600">Requires manual credit</p>
+                            </div>
+                            <Button
+                              onClick={() => setActiveSection('transactions')}
+                              size="sm"
+                              variant="outline"
+                              className="text-xs"
+                            >
+                              Fix
+                            </Button>
+                          </div>
+                        )}
+                        {stats.pending_deposits === 0 && stats.open_tickets === 0 && allTransactions.filter(t => t.type === 'deposit' && t.status === 'approved' && getBalanceCheckResult(t) === 'not_updated').length === 0 && (
+                          <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                            <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+                            <div className="flex-1">
+                              <p className="text-sm font-medium text-gray-900">All Clear!</p>
+                              <p className="text-xs text-gray-600">No pending actions required</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Recent Activity */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Recent Orders */}
+                    <div className="glass p-6 rounded-3xl">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                          <ShoppingCart className="w-5 h-5 text-blue-600" />
+                          Recent Orders
+                        </h3>
+                        <Button
+                          onClick={() => setActiveSection('orders')}
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs"
+                        >
+                          View All
+                        </Button>
+                      </div>
+                      <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                        {orders.slice(0, 5).map((order) => (
+                          <div key={order.id} className="flex items-center justify-between p-3 bg-white/50 rounded-lg hover:bg-white/70 transition-colors">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900 truncate">{order.services?.name || 'Unknown Service'}</p>
+                              <div className="flex flex-col gap-1 mt-1">
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                    order.status === 'completed' ? 'bg-green-100 text-green-700' :
+                                    order.status === 'processing' ? 'bg-blue-100 text-blue-700' :
+                                    order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                                    'bg-yellow-100 text-yellow-700'
+                                  }`}>
+                                    {order.status}
+                                  </span>
+                                  <span className="text-xs text-gray-500">{new Date(order.created_at).toLocaleDateString()}</span>
+                                </div>
+                                <p className="text-xs text-gray-600 truncate">
+                                  {order.profiles?.name || order.profiles?.email || 'Unknown User'}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-right ml-4">
+                              <p className="text-sm font-semibold text-gray-900">₵{order.total_cost.toFixed(2)}</p>
+                              <p className="text-xs text-gray-500">Qty: {order.quantity}</p>
+                            </div>
+                          </div>
+                        ))}
+                        {orders.length === 0 && (
+                          <p className="text-center text-gray-500 text-sm py-4">No orders yet</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Recent Deposits */}
+                    <div className="glass p-6 rounded-3xl">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                          <DollarSign className="w-5 h-5 text-emerald-600" />
+                          Recent Deposits
+                        </h3>
+                        <Button
+                          onClick={() => setActiveSection('deposits')}
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs"
+                        >
+                          View All
+                        </Button>
+                      </div>
+                      <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                        {deposits.slice(0, 5).map((deposit) => (
+                          <div key={deposit.id} className="flex items-center justify-between p-3 bg-white/50 rounded-lg hover:bg-white/70 transition-colors">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900 truncate">{deposit.profiles?.name || deposit.profiles?.email || 'Unknown User'}</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                  deposit.status === 'approved' ? 'bg-green-100 text-green-700' :
+                                  deposit.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                                  'bg-red-100 text-red-700'
+                                }`}>
+                                  {deposit.status}
+                                </span>
+                                <span className="text-xs text-gray-500">{new Date(deposit.created_at).toLocaleDateString()}</span>
+                              </div>
+                            </div>
+                            <div className="text-right ml-4">
+                              <p className="text-sm font-semibold text-gray-900">₵{deposit.amount.toFixed(2)}</p>
+                            </div>
+                          </div>
+                        ))}
+                        {deposits.length === 0 && (
+                          <p className="text-center text-gray-500 text-sm py-4">No deposits yet</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+              {/* Deposits Section */}
+              <TabsContent value="deposits" className="lg:mt-0">
             <div className="glass p-4 sm:p-6 rounded-3xl">
-              <div className="flex flex-col sm:flex-row gap-4 mb-6">
+              <div className="flex flex-col gap-4 mb-6">
+                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
                 <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Payment Deposits</h2>
                 <Select value={depositStatusFilter} onValueChange={setDepositStatusFilter}>
                   <SelectTrigger className="w-full sm:w-48">
@@ -923,6 +1897,28 @@ const AdminDashboard = ({ user, onLogout }) => {
                     <SelectItem value="cancelled">Cancelled</SelectItem>
                   </SelectContent>
                 </Select>
+                </div>
+                {/* Search and Date Filter */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <Input
+                      placeholder="Search by username, email, or user ID..."
+                      value={depositSearch}
+                      onChange={(e) => setDepositSearch(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <div>
+                    <Input
+                      type="date"
+                      placeholder="Filter by date"
+                      value={depositDateFilter}
+                      onChange={(e) => setDepositDateFilter(e.target.value)}
+                      className="w-full"
+                    />
+                  </div>
+                </div>
               </div>
               <p className="text-sm text-gray-600 mb-4">
                 Payments are processed via Paystack. Status is automatically updated based on payment confirmation.
@@ -930,8 +1926,22 @@ const AdminDashboard = ({ user, onLogout }) => {
               {filteredDeposits.length === 0 ? (
                 <p className="text-gray-600 text-center py-8">No deposits found</p>
               ) : (
-                <div className="space-y-4">
-                  {filteredDeposits.map((deposit) => {
+                <>
+                  <div className="overflow-hidden rounded-xl border border-white/20">
+                    <div className="max-h-[600px] overflow-y-auto overflow-x-auto">
+                      {/* Fixed Header */}
+                      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white sticky top-0 z-10 min-w-[1000px]">
+                        <div className="grid grid-cols-12 gap-4 p-4 font-semibold text-sm">
+                          <div className="col-span-2">Status</div>
+                          <div className="col-span-2">Amount</div>
+                          <div className="col-span-2">Time</div>
+                          <div className="col-span-3">User</div>
+                          <div className="col-span-3">Transaction Details</div>
+                        </div>
+                      </div>
+                      {/* Scrollable List */}
+                      <div className="divide-y divide-gray-200/50 min-w-[1000px]">
+                        {paginatedDeposits.map((deposit) => {
                     const statusConfig = {
                       pending: { label: 'Pending', color: 'bg-yellow-100 text-yellow-700', icon: Clock },
                       approved: { label: 'Confirmed', color: 'bg-green-100 text-green-700', icon: CheckCircle },
@@ -941,30 +1951,54 @@ const AdminDashboard = ({ user, onLogout }) => {
                     const StatusIcon = status.icon;
 
                     return (
-                      <div key={deposit.id} className="bg-white/50 p-4 rounded-xl">
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <span className={`px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${status.color}`}>
-                                <StatusIcon className="w-3 h-3" />
+                          <div key={deposit.id} className="bg-white/50 hover:bg-white/70 transition-colors">
+                            <div className="grid grid-cols-12 gap-4 p-4 items-center">
+                              {/* Status */}
+                              <div className="col-span-2">
+                                <span className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 w-fit ${status.color}`}>
+                                  <StatusIcon className="w-3.5 h-3.5" />
                                 {status.label}
                               </span>
                             </div>
-                        <p className="font-medium text-gray-900">Amount: ₵{deposit.amount.toFixed(2)}</p>
-                            <p className="text-sm text-gray-600">
-                              User: {deposit.profiles?.name || deposit.profiles?.email || deposit.user_id.slice(0, 8)}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              {new Date(deposit.created_at).toLocaleString()}
-                            </p>
+                              {/* Amount */}
+                              <div className="col-span-2">
+                                <p className="font-semibold text-gray-900">₵{deposit.amount.toFixed(2)}</p>
+                              </div>
+                              {/* Time */}
+                              <div className="col-span-2">
+                                <p className="text-sm text-gray-700">{new Date(deposit.created_at).toLocaleDateString()}</p>
+                                <p className="text-xs text-gray-500">{new Date(deposit.created_at).toLocaleTimeString()}</p>
+                              </div>
+                              {/* User */}
+                              <div className="col-span-3">
+                                <p className="font-medium text-gray-900">{deposit.profiles?.name || 'Unknown'}</p>
+                                <p className="text-sm text-gray-600">{deposit.profiles?.email || deposit.user_id.slice(0, 8)}</p>
+                                {deposit.profiles?.phone_number && (
+                                  <p className="text-xs text-gray-500">📱 {deposit.profiles.phone_number}</p>
+                                )}
+                              </div>
+                              {/* Transaction Details */}
+                              <div className="col-span-3">
                             {deposit.status === 'approved' && (
-                              <p className="text-xs text-green-600 mt-1">✓ Payment confirmed via Paystack</p>
+                                  <p className="text-xs text-green-600 flex items-center gap-1.5">
+                                    <CheckCircle className="w-3.5 h-3.5" />
+                                    Payment confirmed via Paystack
+                                  </p>
                             )}
                             {deposit.status === 'rejected' && (
-                              <p className="text-xs text-red-600 mt-1">✗ Payment was cancelled</p>
+                                  <p className="text-xs text-red-600 flex items-center gap-1.5">
+                                    <XCircle className="w-3.5 h-3.5" />
+                                    Payment was cancelled
+                                  </p>
                             )}
                             {deposit.status === 'pending' && (
-                              <p className="text-xs text-yellow-600 mt-1">⏳ Awaiting payment confirmation</p>
+                                  <p className="text-xs text-yellow-600 flex items-center gap-1.5">
+                                    <Clock className="w-3.5 h-3.5" />
+                                    Awaiting payment confirmation
+                                  </p>
+                                )}
+                                {deposit.paystack_reference && (
+                                  <p className="text-xs text-gray-500 mt-1">Ref: {deposit.paystack_reference}</p>
                             )}
                       </div>
                       </div>
@@ -972,23 +2006,68 @@ const AdminDashboard = ({ user, onLogout }) => {
                     );
                   })}
                 </div>
+                    </div>
+                  </div>
+                  {/* Pagination Controls */}
+                  <div className="flex items-center justify-between mt-4">
+                    <div className="text-sm text-gray-600">
+                      Showing {startDepositIndex + 1} to {Math.min(endDepositIndex, filteredDeposits.length)} of {filteredDeposits.length} deposits
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        onClick={() => setDepositsPage(prev => Math.max(1, prev - 1))}
+                        disabled={depositsPage === 1}
+                        variant="outline"
+                        size="sm"
+                      >
+                        Previous
+                      </Button>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: Math.min(5, totalDepositsPages) }, (_, i) => {
+                          let pageNum;
+                          if (totalDepositsPages <= 5) {
+                            pageNum = i + 1;
+                          } else if (depositsPage <= 3) {
+                            pageNum = i + 1;
+                          } else if (depositsPage >= totalDepositsPages - 2) {
+                            pageNum = totalDepositsPages - 4 + i;
+                          } else {
+                            pageNum = depositsPage - 2 + i;
+                          }
+                          return (
+                            <Button
+                              key={pageNum}
+                              onClick={() => setDepositsPage(pageNum)}
+                              variant={depositsPage === pageNum ? "default" : "outline"}
+                              size="sm"
+                              className={depositsPage === pageNum ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white" : ""}
+                            >
+                              {pageNum}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                      <Button
+                        onClick={() => setDepositsPage(prev => Math.min(totalDepositsPages, prev + 1))}
+                        disabled={depositsPage === totalDepositsPages}
+                        variant="outline"
+                        size="sm"
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
           </TabsContent>
 
-          {/* Orders Tab */}
-          <TabsContent value="orders">
+            {/* Orders Section */}
+            <TabsContent value="orders" className="lg:mt-0">
             <div className="glass p-4 sm:p-6 rounded-3xl">
-              <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <Input
-                    placeholder="Search by order ID, username, email, phone, or service..."
-                    value={orderSearch}
-                    onChange={(e) => setOrderSearch(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
+              <div className="flex flex-col gap-4 mb-6">
+                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                  <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Orders</h2>
                 <Select value={orderStatusFilter} onValueChange={setOrderStatusFilter}>
                   <SelectTrigger className="w-full sm:w-40">
                     <Filter className="w-4 h-4 mr-2" />
@@ -1003,18 +2082,56 @@ const AdminDashboard = ({ user, onLogout }) => {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-4">
+                {/* Search and Date Filter */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <Input
+                      placeholder="Search by order ID, username, email, phone, or service..."
+                      value={orderSearch}
+                      onChange={(e) => setOrderSearch(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <div>
+                    <Input
+                      type="date"
+                      placeholder="Filter by date"
+                      value={orderDateFilter}
+                      onChange={(e) => setOrderDateFilter(e.target.value)}
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+              </div>
                 {filteredOrders.length === 0 ? (
                   <p className="text-gray-600 text-center py-8">No orders found</p>
                 ) : (
-                  filteredOrders.map((order) => (
-                    <div key={order.id} className="bg-white/50 p-4 rounded-xl">
-                      <div className="flex flex-col gap-4">
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <p className="font-medium text-gray-900">Order: {order.id.slice(0, 8)}...</p>
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                <>
+                  <div className="overflow-hidden rounded-xl border border-white/20">
+                    <div className="max-h-[600px] overflow-y-auto overflow-x-auto">
+                      {/* Fixed Header */}
+                      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white sticky top-0 z-10 min-w-[1400px]">
+                        <div className="grid grid-cols-12 gap-4 p-4 font-semibold text-sm">
+                          <div className="col-span-1.5">Status</div>
+                          <div className="col-span-1.5">Order ID</div>
+                          <div className="col-span-1">Quantity</div>
+                          <div className="col-span-1.5">Time</div>
+                          <div className="col-span-2">User</div>
+                          <div className="col-span-1.5">Service</div>
+                          <div className="col-span-1">Cost</div>
+                          <div className="col-span-2">Link</div>
+                          <div className="col-span-1">Actions</div>
+                        </div>
+                      </div>
+                      {/* Scrollable List */}
+                      <div className="divide-y divide-gray-200/50 min-w-[1400px]">
+                        {paginatedOrders.map((order) => (
+                          <div key={order.id} className="bg-white/50 hover:bg-white/70 transition-colors">
+                            <div className="grid grid-cols-12 gap-4 p-4 items-center">
+                              {/* Status */}
+                              <div className="col-span-1.5">
+                                <span className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 w-fit ${
                                 order.status === 'completed' ? 'bg-green-100 text-green-700' :
                                 order.status === 'processing' ? 'bg-blue-100 text-blue-700' :
                                 order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
@@ -1022,35 +2139,57 @@ const AdminDashboard = ({ user, onLogout }) => {
                               }`}>
                                 {order.status}
                               </span>
-                      </div>
-                            {order.profiles && (
-                              <div className="mb-2 p-2 bg-gray-50 rounded-lg">
-                                <p className="text-sm font-medium text-gray-900">
-                                  👤 {order.profiles.name || 'Unknown User'}
-                                </p>
-                                <p className="text-xs text-gray-600">{order.profiles.email}</p>
-                                {order.profiles.phone_number && (
-                                  <p className="text-xs text-gray-600">📱 {order.profiles.phone_number}</p>
+                                {order.refund_status && (
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    Refund: {order.refund_status}
+                                  </p>
                                 )}
                               </div>
-                            )}
-                            <p className="text-sm text-gray-600">
-                              Service: {order.services?.name || 'N/A'}
-                            </p>
-                            <p className="text-sm text-gray-600">
-                              Link: <a href={order.link} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline break-all">{order.link}</a>
-                            </p>
-                            <p className="text-sm text-gray-600">
-                              Quantity: {order.quantity} | Cost: ₵{order.total_cost.toFixed(2)}
-                            </p>
-                            <p className="text-xs text-gray-500">{new Date(order.created_at).toLocaleString()}</p>
+                              {/* Order ID */}
+                              <div className="col-span-1.5">
+                                <p className="font-medium text-gray-900 text-sm">{order.id.slice(0, 8)}...</p>
+                                <p className="text-xs text-gray-500">{order.id.slice(8, 16)}...</p>
+                              </div>
+                              {/* Quantity */}
+                              <div className="col-span-1">
+                                <p className="font-semibold text-gray-900 text-base">{order.quantity}</p>
+                                <p className="text-xs text-gray-500">units</p>
+                              </div>
+                              {/* Time */}
+                              <div className="col-span-1.5">
+                                <p className="text-sm text-gray-700">{new Date(order.created_at).toLocaleDateString()}</p>
+                                <p className="text-xs text-gray-500">{new Date(order.created_at).toLocaleTimeString()}</p>
+                              </div>
+                              {/* User */}
+                              <div className="col-span-2">
+                                <p className="font-medium text-gray-900 text-sm">{order.profiles?.name || 'Unknown'}</p>
+                                <p className="text-xs text-gray-600">{order.profiles?.email || order.user_id.slice(0, 8)}</p>
+                                {order.profiles?.phone_number && (
+                                  <p className="text-xs text-gray-500">📱 {order.profiles.phone_number}</p>
+                                )}
                       </div>
-                          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                              {/* Service */}
+                              <div className="col-span-1.5">
+                                <p className="text-sm font-medium text-gray-900">{order.services?.name || 'N/A'}</p>
+                              </div>
+                              {/* Cost */}
+                              <div className="col-span-1">
+                                <p className="text-sm font-semibold text-gray-900">₵{order.total_cost.toFixed(2)}</p>
+                              </div>
+                              {/* Link */}
+                              <div className="col-span-2">
+                                <a href={order.link} target="_blank" rel="noopener noreferrer" className="text-xs text-indigo-600 hover:underline whitespace-nowrap break-all">
+                                  {order.link}
+                                </a>
+                              </div>
+                              {/* Actions */}
+                              <div className="col-span-1">
+                                <div className="flex flex-col gap-2">
                             <Select 
                               value={order.status} 
                               onValueChange={(value) => handleOrderStatusUpdate(order.id, value)}
                             >
-                              <SelectTrigger className="w-full sm:w-40">
+                                    <SelectTrigger className="w-full text-xs">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -1060,28 +2199,90 @@ const AdminDashboard = ({ user, onLogout }) => {
                           <SelectItem value="cancelled">Cancelled</SelectItem>
                         </SelectContent>
                       </Select>
-                            {order.status !== 'cancelled' && (
+                                  {/* Show refund button for non-cancelled and non-completed orders, or cancelled orders with failed refunds */}
+                                  {order.status !== 'completed' && (order.status !== 'cancelled' || order.refund_status === 'failed') && (
                               <Button
                                 onClick={() => handleRefundOrder(order)}
                                 variant="outline"
                                 size="sm"
-                                className="text-red-600 hover:text-red-700"
-                              >
-                                Refund
+                                      className={
+                                        order.refund_status === 'failed' 
+                                          ? "text-orange-600 hover:text-orange-700 border-orange-300 text-xs"
+                                          : "text-red-600 hover:text-red-700 text-xs"
+                                      }
+                                      title={
+                                        order.refund_status === 'failed' 
+                                          ? `Automatic refund failed: ${order.refund_error || 'Unknown error'}. Click to process manual refund.`
+                                          : 'Refund this order'
+                                      }
+                                    >
+                                      {order.refund_status === 'failed' ? 'Manual Refund' : 'Refund'}
                               </Button>
                             )}
                     </div>
                   </div>
                       </div>
                     </div>
-                  ))
-                )}
+                        ))}
               </div>
+                    </div>
+                  </div>
+                  {/* Pagination Controls */}
+                  <div className="flex items-center justify-between mt-4">
+                    <div className="text-sm text-gray-600">
+                      Showing {startOrderIndex + 1} to {Math.min(endOrderIndex, filteredOrders.length)} of {filteredOrders.length} orders
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        onClick={() => setOrdersPage(prev => Math.max(1, prev - 1))}
+                        disabled={ordersPage === 1}
+                        variant="outline"
+                        size="sm"
+                      >
+                        Previous
+                      </Button>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: Math.min(5, totalOrdersPages) }, (_, i) => {
+                          let pageNum;
+                          if (totalOrdersPages <= 5) {
+                            pageNum = i + 1;
+                          } else if (ordersPage <= 3) {
+                            pageNum = i + 1;
+                          } else if (ordersPage >= totalOrdersPages - 2) {
+                            pageNum = totalOrdersPages - 4 + i;
+                          } else {
+                            pageNum = ordersPage - 2 + i;
+                          }
+                          return (
+                            <Button
+                              key={pageNum}
+                              onClick={() => setOrdersPage(pageNum)}
+                              variant={ordersPage === pageNum ? "default" : "outline"}
+                              size="sm"
+                              className={ordersPage === pageNum ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white" : ""}
+                            >
+                              {pageNum}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                      <Button
+                        onClick={() => setOrdersPage(prev => Math.min(totalOrdersPages, prev + 1))}
+                        disabled={ordersPage === totalOrdersPages}
+                        variant="outline"
+                        size="sm"
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </TabsContent>
 
-          {/* Services Tab */}
-          <TabsContent value="services">
+            {/* Services Section */}
+            <TabsContent value="services" className="lg:mt-0">
             <div className="space-y-6">
               {/* Add Service Form */}
               <div className="glass p-4 sm:p-8 rounded-3xl">
@@ -1353,120 +2554,408 @@ const AdminDashboard = ({ user, onLogout }) => {
             </div>
           </TabsContent>
 
-          {/* Users Tab */}
-          <TabsContent value="users">
+            {/* Users Section */}
+            <TabsContent value="users" className="lg:mt-0">
             <div className="glass p-4 sm:p-6 rounded-3xl">
-              <div className="flex flex-col sm:flex-row gap-4 mb-6">
+              <div className="flex flex-col gap-4 mb-6">
+                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
                 <h2 className="text-xl sm:text-2xl font-bold text-gray-900">All Users</h2>
-                <div className="relative flex-1">
+                </div>
+                {/* Search and Date Filter */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                   <Input
-                    placeholder="Search users..."
+                      placeholder="Search by username, email, or phone..."
                     value={userSearch}
                     onChange={(e) => setUserSearch(e.target.value)}
                     className="pl-10"
                   />
                 </div>
+                  <div>
+                    <Input
+                      type="date"
+                      placeholder="Filter by date"
+                      value={userDateFilter}
+                      onChange={(e) => setUserDateFilter(e.target.value)}
+                      className="w-full"
+                    />
               </div>
-              <div className="space-y-4">
+                </div>
+              </div>
                 {filteredUsers.length === 0 ? (
                   <p className="text-gray-600 text-center py-8">No users found</p>
                 ) : (
-                  filteredUsers.map((u) => (
-                    <div key={u.id} className="bg-white/50 p-4 rounded-xl">
+                <>
+                  <div className="overflow-hidden rounded-xl border border-white/20">
+                    <div className="max-h-[600px] overflow-y-auto overflow-x-auto">
+                      {/* Fixed Header */}
+                      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white sticky top-0 z-10 min-w-[1200px]">
+                        <div className="grid grid-cols-12 gap-4 p-4 font-semibold text-sm">
+                          <div className="col-span-2">Name</div>
+                          <div className="col-span-3">Email</div>
+                          <div className="col-span-2">Phone</div>
+                          <div className="col-span-1">Role</div>
+                          <div className="col-span-1">Balance</div>
+                          <div className="col-span-2">Joined Date</div>
+                          <div className="col-span-1">Actions</div>
+                        </div>
+                      </div>
+                      {/* Scrollable List */}
+                      <div className="divide-y divide-gray-200/50 min-w-[1200px]">
+                        {paginatedUsers.map((u) => (
+                          <div key={u.id} className="bg-white/50 hover:bg-white/70 transition-colors">
                       {editingUser?.id === u.id ? (
+                              <div className="p-4">
                         <UserEditForm 
                           user={u} 
                           onSave={(updates) => handleUpdateUser(u.id, updates)}
                           onCancel={() => setEditingUser(null)}
                         />
-                      ) : (
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                          <div className="flex-1">
-                      <p className="font-medium text-gray-900">{u.name}</p>
-                      <p className="text-sm text-gray-600">{u.email}</p>
-                            {u.phone_number && (
-                              <p className="text-sm text-gray-600">📱 {u.phone_number}</p>
-                            )}
-                            <p className="text-xs text-gray-500">
-                              Joined: {new Date(u.created_at).toLocaleDateString()}
-                            </p>
+                              </div>
+                            ) : (
+                              <div className="grid grid-cols-12 gap-4 p-4 items-center">
+                                {/* Name */}
+                                <div className="col-span-2">
+                                  <p className="font-medium text-gray-900 break-words">{u.name}</p>
                     </div>
-                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
-                    <div className="text-right">
-                      <p className="font-medium text-gray-900">₵{u.balance.toFixed(2)}</p>
-                      <span className={`text-xs px-2 py-1 rounded-full ${
+                                {/* Email */}
+                                <div className="col-span-3">
+                                  <p className="text-sm text-gray-700 break-all">{u.email}</p>
+                                </div>
+                                {/* Phone */}
+                                <div className="col-span-2">
+                                  <p className="text-sm text-gray-700 break-words">{u.phone_number || 'N/A'}</p>
+                                </div>
+                                {/* Role */}
+                                <div className="col-span-1">
+                                  <span className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ${
                         u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'
                       }`}>
                         {u.role}
                       </span>
                     </div>
+                                {/* Balance */}
+                                <div className="col-span-1">
+                                  <p className="font-semibold text-gray-900 whitespace-nowrap">₵{u.balance.toFixed(2)}</p>
+                                </div>
+                                {/* Joined Date */}
+                                <div className="col-span-2">
+                                  <p className="text-sm text-gray-700 whitespace-nowrap">{new Date(u.created_at).toLocaleDateString()}</p>
+                                  <p className="text-xs text-gray-500 whitespace-nowrap">{new Date(u.created_at).toLocaleTimeString()}</p>
+                                </div>
+                                {/* Actions */}
+                                <div className="col-span-1">
                             <Button
                               onClick={() => setEditingUser(u)}
                               variant="outline"
                               size="sm"
+                                    className="text-xs whitespace-nowrap"
                             >
-                              <Edit className="w-4 h-4 mr-2" />
+                                    <Edit className="w-3 h-3 mr-1" />
                               Edit
                             </Button>
                   </div>
                         </div>
                       )}
                     </div>
-                  ))
-                )}
+                        ))}
               </div>
+                    </div>
+                  </div>
+                  {/* Pagination Controls */}
+                  <div className="flex items-center justify-between mt-4">
+                    <div className="text-sm text-gray-600">
+                      Showing {startUserIndex + 1} to {Math.min(endUserIndex, filteredUsers.length)} of {filteredUsers.length} users
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        onClick={() => setUsersPage(prev => Math.max(1, prev - 1))}
+                        disabled={usersPage === 1}
+                        variant="outline"
+                        size="sm"
+                      >
+                        Previous
+                      </Button>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: Math.min(5, totalUsersPages) }, (_, i) => {
+                          let pageNum;
+                          if (totalUsersPages <= 5) {
+                            pageNum = i + 1;
+                          } else if (usersPage <= 3) {
+                            pageNum = i + 1;
+                          } else if (usersPage >= totalUsersPages - 2) {
+                            pageNum = totalUsersPages - 4 + i;
+                          } else {
+                            pageNum = usersPage - 2 + i;
+                          }
+                          return (
+                            <Button
+                              key={pageNum}
+                              onClick={() => setUsersPage(pageNum)}
+                              variant={usersPage === pageNum ? "default" : "outline"}
+                              size="sm"
+                              className={usersPage === pageNum ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white" : ""}
+                            >
+                              {pageNum}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                      <Button
+                        onClick={() => setUsersPage(prev => Math.min(totalUsersPages, prev + 1))}
+                        disabled={usersPage === totalUsersPages}
+                        variant="outline"
+                        size="sm"
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </TabsContent>
 
-          {/* Transactions Tab */}
-          <TabsContent value="transactions">
+            {/* Transactions Section */}
+            <TabsContent value="transactions" className="lg:mt-0">
             <div className="glass p-4 sm:p-6 rounded-3xl">
-              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">All Transactions</h2>
-              <div className="space-y-4">
-                {allTransactions.length === 0 ? (
+              <div className="flex flex-col gap-4 mb-6">
+                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                  <h2 className="text-xl sm:text-2xl font-bold text-gray-900">All Transactions</h2>
+                  <div className="flex gap-2">
+                    <Select value={transactionTypeFilter} onValueChange={setTransactionTypeFilter}>
+                      <SelectTrigger className="w-full sm:w-40">
+                        <Filter className="w-4 h-4 mr-2" />
+                        <SelectValue placeholder="Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Types</SelectItem>
+                        <SelectItem value="deposit">Deposit</SelectItem>
+                        <SelectItem value="order">Order</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={transactionStatusFilter} onValueChange={setTransactionStatusFilter}>
+                      <SelectTrigger className="w-full sm:w-40">
+                        <Filter className="w-4 h-4 mr-2" />
+                        <SelectValue placeholder="Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Status</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="approved">Approved</SelectItem>
+                        <SelectItem value="rejected">Rejected</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {/* Search and Date Filter */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <Input
+                      placeholder="Search by transaction ID, username, or email..."
+                      value={transactionSearch}
+                      onChange={(e) => setTransactionSearch(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <div>
+                    <Input
+                      type="date"
+                      placeholder="Filter by date"
+                      value={transactionDateFilter}
+                      onChange={(e) => setTransactionDateFilter(e.target.value)}
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+              </div>
+              {filteredTransactions.length === 0 ? (
                   <p className="text-gray-600 text-center py-8">No transactions found</p>
                 ) : (
-                  allTransactions.map((transaction) => (
-                    <div key={transaction.id} className="bg-white/50 p-4 rounded-xl">
-                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className={`px-2 py-1 rounded text-xs font-medium ${
-                              transaction.type === 'deposit' 
-                                ? 'bg-green-100 text-green-700' 
-                                : 'bg-blue-100 text-blue-700'
-                            }`}>
-                              {transaction.type}
-                            </span>
-                            <span className={`px-2 py-1 rounded text-xs font-medium ${
-                              transaction.status === 'approved' 
-                                ? 'bg-green-100 text-green-700'
-                                : transaction.status === 'pending'
-                                ? 'bg-yellow-100 text-yellow-700'
-                                : 'bg-red-100 text-red-700'
-                            }`}>
-                              {transaction.status}
-                            </span>
-                          </div>
-                          <p className="font-medium text-gray-900">Amount: ₵{transaction.amount.toFixed(2)}</p>
-                          <p className="text-sm text-gray-600">
-                            User: {transaction.profiles?.name || transaction.profiles?.email || transaction.user_id.slice(0, 8)}
-                          </p>
-                          <p className="text-xs text-gray-500">{new Date(transaction.created_at).toLocaleString()}</p>
+                <>
+                  <div className="overflow-hidden rounded-xl border border-white/20">
+                    <div className="max-h-[600px] overflow-y-auto overflow-x-auto">
+                      {/* Fixed Header */}
+                      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white sticky top-0 z-10 min-w-[1200px]">
+                        <div className="grid grid-cols-[1.5fr_1.5fr_1.5fr_1.5fr_2fr_2fr_1fr_1fr] gap-4 p-4 font-semibold text-sm">
+                          <div className="text-center">Type</div>
+                          <div className="text-center">Status</div>
+                          <div className="text-center">Amount</div>
+                          <div className="text-center">Time</div>
+                          <div className="text-center">User</div>
+                          <div className="text-center">Transaction ID</div>
+                          <div className="text-center">Balance Status</div>
+                          <div className="text-center">Actions</div>
                         </div>
                       </div>
+                      {/* Scrollable List */}
+                      <div className="divide-y divide-gray-200/50 min-w-[1200px]">
+                        {paginatedTransactions.map((transaction) => (
+                          <div key={transaction.id} className="bg-white/50 hover:bg-white/70 transition-colors">
+                            <div className="grid grid-cols-[1.5fr_1.5fr_1.5fr_1.5fr_2fr_2fr_1fr_1fr] gap-4 p-4 items-center">
+                              {/* Type */}
+                              <div className="flex justify-center">
+                                <span className={`px-3 py-1.5 rounded-full text-xs font-medium ${
+                                  transaction.type === 'deposit' 
+                                    ? 'bg-green-100 text-green-700' 
+                                    : 'bg-blue-100 text-blue-700'
+                                }`}>
+                                  {transaction.type}
+                                </span>
+                              </div>
+                              {/* Status */}
+                              <div className="flex justify-center">
+                                <span className={`px-3 py-1.5 rounded-full text-xs font-medium ${
+                                  transaction.status === 'approved' 
+                                    ? 'bg-green-100 text-green-700'
+                                    : transaction.status === 'pending'
+                                    ? 'bg-yellow-100 text-yellow-700'
+                                    : 'bg-red-100 text-red-700'
+                                }`}>
+                                  {transaction.status}
+                                </span>
+                              </div>
+                              {/* Amount */}
+                              <div className="text-center">
+                                <p className="font-semibold text-gray-900">₵{transaction.amount.toFixed(2)}</p>
+                              </div>
+                              {/* Time */}
+                              <div className="text-center">
+                                <p className="text-sm text-gray-700">{new Date(transaction.created_at).toLocaleDateString()}</p>
+                                <p className="text-xs text-gray-500">{new Date(transaction.created_at).toLocaleTimeString()}</p>
+                              </div>
+                              {/* User */}
+                              <div className="text-center">
+                                <p className="font-medium text-gray-900 text-sm">{transaction.profiles?.name || 'Unknown'}</p>
+                                <p className="text-xs text-gray-600 break-all">{transaction.profiles?.email || transaction.user_id.slice(0, 8)}</p>
+                              </div>
+                              {/* Transaction ID */}
+                              <div className="text-center">
+                                <p className="text-xs text-gray-700 break-all">{transaction.id}</p>
+                                {transaction.order_id && (
+                                  <p className="text-xs text-gray-500">Order: {transaction.order_id.slice(0, 8)}...</p>
+                                )}
+                              </div>
+                              {/* Balance Status */}
+                              <div className="flex justify-center">
+                                {(() => {
+                                  const balanceCheck = getBalanceCheckResult(transaction);
+                                  if (balanceCheck === 'not_updated') {
+                                    return (
+                                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                                        <span className="whitespace-nowrap">not-updated</span>
+                                      </span>
+                                    );
+                                  } else if (balanceCheck === 'updated') {
+                                    return (
+                                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                                        Updated
+                                      </span>
+                                    );
+                                  } else if (balanceCheck === 'checking') {
+                                    return (
+                                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">
+                                        Checking...
+                                      </span>
+                                    );
+                                  } else if (balanceCheck === 'unknown') {
+                                    return (
+                                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                                        Unknown
+                                      </span>
+                                    );
+                                  }
+                                  return null;
+                                })()}
+                              </div>
+                              {/* Actions */}
+                              <div className="flex justify-center">
+                                {(() => {
+                                  const balanceCheck = getBalanceCheckResult(transaction);
+                                  if (balanceCheck === 'not_updated') {
+                                    return (
+                                      <Button
+                                        onClick={() => handleManualCredit(transaction)}
+                                        disabled={manuallyCrediting === transaction.id}
+                                        variant="outline"
+                                        size="sm"
+                                        className="text-xs whitespace-nowrap text-green-600 hover:text-green-700 border-green-300"
+                                        title="Credit balance to user"
+                                      >
+                                        {manuallyCrediting === transaction.id ? 'Crediting...' : 'Credit Balance'}
+                                      </Button>
+                                    );
+                                  }
+                                  return null;
+                                })()}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  ))
-                )}
-              </div>
+                  </div>
+                  {/* Pagination Controls */}
+                  <div className="flex items-center justify-between mt-4">
+                    <div className="text-sm text-gray-600">
+                      Showing {startTransactionIndex + 1} to {Math.min(endTransactionIndex, filteredTransactions.length)} of {filteredTransactions.length} transactions
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        onClick={() => setTransactionsPage(prev => Math.max(1, prev - 1))}
+                        disabled={transactionsPage === 1}
+                        variant="outline"
+                        size="sm"
+                      >
+                        Previous
+                      </Button>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: Math.min(5, totalTransactionsPages) }, (_, i) => {
+                          let pageNum;
+                          if (totalTransactionsPages <= 5) {
+                            pageNum = i + 1;
+                          } else if (transactionsPage <= 3) {
+                            pageNum = i + 1;
+                          } else if (transactionsPage >= totalTransactionsPages - 2) {
+                            pageNum = totalTransactionsPages - 4 + i;
+                          } else {
+                            pageNum = transactionsPage - 2 + i;
+                          }
+                          return (
+                            <Button
+                              key={pageNum}
+                              onClick={() => setTransactionsPage(pageNum)}
+                              variant={transactionsPage === pageNum ? "default" : "outline"}
+                              size="sm"
+                              className={transactionsPage === pageNum ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white" : ""}
+                            >
+                              {pageNum}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                      <Button
+                        onClick={() => setTransactionsPage(prev => Math.min(totalTransactionsPages, prev + 1))}
+                        disabled={transactionsPage === totalTransactionsPages}
+                        variant="outline"
+                        size="sm"
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </TabsContent>
 
-          {/* Support Tickets Tab */}
-          <TabsContent value="support">
+            {/* Support Section */}
+            <TabsContent value="support" className="lg:mt-0">
             <div className="glass p-4 sm:p-6 rounded-3xl">
-              <div className="flex flex-col sm:flex-row gap-4 mb-6">
+              <div className="flex flex-col gap-4 mb-6">
+                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
                 <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Support Tickets</h2>
                 <Select value={ticketStatusFilter} onValueChange={setTicketStatusFilter}>
                   <SelectTrigger className="w-full sm:w-48">
@@ -1481,13 +2970,52 @@ const AdminDashboard = ({ user, onLogout }) => {
                     <SelectItem value="closed">Closed</SelectItem>
                   </SelectContent>
                 </Select>
+                </div>
+                {/* Search and Date Filter */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <Input
+                      placeholder="Search by ticket ID, username, email, subject, or message..."
+                      value={ticketSearch}
+                      onChange={(e) => setTicketSearch(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <div>
+                    <Input
+                      type="date"
+                      placeholder="Filter by date"
+                      value={ticketDateFilter}
+                      onChange={(e) => setTicketDateFilter(e.target.value)}
+                      className="w-full"
+                    />
+                  </div>
+                </div>
               </div>
 
               {filteredTickets.length === 0 ? (
                 <p className="text-gray-600 text-center py-8">No support tickets found</p>
               ) : (
-                <div className="space-y-4">
-                  {filteredTickets.map((ticket) => {
+                <>
+                  <div className="overflow-hidden rounded-xl border border-white/20">
+                    <div className="max-h-[600px] overflow-y-auto overflow-x-auto">
+                      {/* Fixed Header */}
+                      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white sticky top-0 z-10 min-w-[1400px]">
+                        <div className="grid grid-cols-12 gap-4 p-4 font-semibold text-sm">
+                          <div className="col-span-1.5">Status</div>
+                          <div className="col-span-1.5">Ticket ID</div>
+                          <div className="col-span-2">Time</div>
+                          <div className="col-span-2">User</div>
+                          <div className="col-span-1.5">Subject</div>
+                          <div className="col-span-2">Message</div>
+                          <div className="col-span-2">Response</div>
+                          <div className="col-span-1">Actions</div>
+                        </div>
+                      </div>
+                      {/* Scrollable List */}
+                      <div className="divide-y divide-gray-200/50 min-w-[1400px]">
+                        {paginatedTickets.map((ticket) => {
                     const statusConfig = {
                       open: { label: 'Open', color: 'bg-yellow-100 text-yellow-700', icon: Clock },
                       in_progress: { label: 'In Progress', color: 'bg-blue-100 text-blue-700', icon: Clock },
@@ -1498,46 +3026,60 @@ const AdminDashboard = ({ user, onLogout }) => {
                     const StatusIcon = status.icon;
 
                     return (
-                      <div key={ticket.id} className="bg-white/50 p-4 sm:p-6 rounded-xl">
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <span className={`px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${status.color}`}>
-                                <StatusIcon className="w-3 h-3" />
+                            <div key={ticket.id} className="bg-white/50 hover:bg-white/70 transition-colors">
+                              {editingTicket === ticket.id ? (
+                                <div className="p-4">
+                                  <div className="mb-4">
+                                    <div className="grid grid-cols-12 gap-4 p-4 items-center">
+                                      <div className="col-span-1.5">
+                                        <span className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 w-fit ${status.color}`}>
+                                          <StatusIcon className="w-3.5 h-3.5" />
                                 {status.label}
                               </span>
-                              <span className="text-xs text-gray-500">ID: {ticket.id.slice(0, 8)}</span>
                             </div>
-                            <p className="font-medium text-gray-900 mb-1">
-                              {ticket.profiles?.name || ticket.name} ({ticket.profiles?.email || ticket.email})
-                            </p>
-                            {ticket.order_id && (
-                              <p className="text-sm text-gray-600 mb-1">
-                                Order ID: <span className="font-mono">{ticket.order_id}</span>
-                              </p>
-                            )}
-                            <p className="text-sm text-gray-700 mt-2 whitespace-pre-wrap">{ticket.message}</p>
-                            {ticket.admin_response && (
-                              <div className="mt-3 p-3 bg-indigo-50 rounded-lg">
-                                <p className="text-xs font-medium text-indigo-900 mb-1">Admin Response:</p>
-                                <p className="text-sm text-gray-700 whitespace-pre-wrap">{ticket.admin_response}</p>
+                                      <div className="col-span-1.5">
+                                        <p className="text-xs text-gray-700">{ticket.id.slice(0, 8)}...</p>
                               </div>
-                            )}
-                            <p className="text-xs text-gray-500 mt-2">
-                              Created: {new Date(ticket.created_at).toLocaleString()}
-                              {ticket.updated_at !== ticket.created_at && (
-                                <> • Updated: {new Date(ticket.updated_at).toLocaleString()}</>
-                              )}
-                            </p>
+                                      <div className="col-span-2">
+                                        <p className="text-sm text-gray-700">{new Date(ticket.created_at).toLocaleDateString()}</p>
+                                        <p className="text-xs text-gray-500">{new Date(ticket.created_at).toLocaleTimeString()}</p>
                           </div>
-                          <div className="flex flex-col sm:flex-row gap-2">
-                            {editingTicket === ticket.id ? (
-                              <div className="flex flex-col gap-2 w-full sm:w-64">
+                                      <div className="col-span-2">
+                                        <p className="font-medium text-gray-900 text-sm">{ticket.profiles?.name || ticket.name || 'Unknown'}</p>
+                                        <p className="text-xs text-gray-600 break-all">{ticket.profiles?.email || ticket.email || ''}</p>
+                                      </div>
+                                      <div className="col-span-1.5">
+                                        <p className="text-sm text-gray-900 font-medium line-clamp-2">{ticket.subject || 'No subject'}</p>
+                                      </div>
+                                      <div className="col-span-2">
+                                        <p className="text-xs text-gray-700 line-clamp-2">{ticket.message}</p>
+                                      </div>
+                                      <div className="col-span-2">
+                                        <p className="text-xs text-gray-700 line-clamp-2">{ticket.admin_response || 'No response yet'}</p>
+                                      </div>
+                                      <div className="col-span-1">
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => {
+                                            setEditingTicket(null);
+                                            setTicketResponse('');
+                                          }}
+                                          className="text-xs"
+                                        >
+                                          Cancel
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="border-t border-gray-200 pt-4 space-y-3">
+                                    <div>
+                                      <Label>Status</Label>
                                 <Select
                                   value={ticket.status}
                                   onValueChange={(value) => handleUpdateTicketStatus(ticket.id, value)}
                                 >
-                                  <SelectTrigger className="w-full">
+                                        <SelectTrigger>
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -1547,59 +3089,311 @@ const AdminDashboard = ({ user, onLogout }) => {
                                     <SelectItem value="closed">Closed</SelectItem>
                                   </SelectContent>
                                 </Select>
+                                    </div>
+                                    <div>
+                                      <Label>Response</Label>
                                 <Textarea
                                   placeholder="Add your response..."
                                   value={ticketResponse}
                                   onChange={(e) => setTicketResponse(e.target.value)}
                                   className="min-h-[100px]"
                                 />
-                                <div className="flex gap-2">
+                                    </div>
                                   <Button
                                     size="sm"
                                     onClick={() => handleAddTicketResponse(ticket.id)}
-                                    className="flex-1"
+                                      className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
                                   >
                                     <Send className="w-4 h-4 mr-1" />
                                     Send Response
                                   </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => {
-                                      setEditingTicket(null);
-                                      setTicketResponse('');
-                                    }}
-                                  >
-                                    Cancel
-                                  </Button>
                                 </div>
                               </div>
                             ) : (
+                                <div className="grid grid-cols-12 gap-4 p-4 items-center">
+                                  {/* Status */}
+                                  <div className="col-span-1.5">
+                                    <span className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 w-fit ${status.color}`}>
+                                      <StatusIcon className="w-3.5 h-3.5" />
+                                      {status.label}
+                                    </span>
+                                  </div>
+                                  {/* Ticket ID */}
+                                  <div className="col-span-1.5">
+                                    <p className="text-xs text-gray-700">{ticket.id.slice(0, 8)}...</p>
+                                    {ticket.order_id && (
+                                      <p className="text-xs text-gray-500">Order: {ticket.order_id.slice(0, 8)}</p>
+                                    )}
+                                  </div>
+                                  {/* Time */}
+                                  <div className="col-span-2">
+                                    <p className="text-sm text-gray-700">{new Date(ticket.created_at).toLocaleDateString()}</p>
+                                    <p className="text-xs text-gray-500">{new Date(ticket.created_at).toLocaleTimeString()}</p>
+                                    {ticket.updated_at !== ticket.created_at && (
+                                      <p className="text-xs text-gray-400">Updated</p>
+                                    )}
+                                  </div>
+                                  {/* User */}
+                                  <div className="col-span-2">
+                                    <p className="font-medium text-gray-900 text-sm">{ticket.profiles?.name || ticket.name || 'Unknown'}</p>
+                                    <p className="text-xs text-gray-600 break-all">{ticket.profiles?.email || ticket.email || ''}</p>
+                                  </div>
+                                  {/* Subject */}
+                                  <div className="col-span-1.5">
+                                    <p className="text-sm text-gray-900 font-medium line-clamp-2">{ticket.subject || 'No subject'}</p>
+                                  </div>
+                                  {/* Message */}
+                                  <div className="col-span-2">
+                                    <p className="text-xs text-gray-700 line-clamp-3 break-words">{ticket.message}</p>
+                                  </div>
+                                  {/* Response */}
+                                  <div className="col-span-2">
+                                    {ticket.admin_response ? (
+                                      <p className="text-xs text-gray-700 line-clamp-3 break-words">{ticket.admin_response}</p>
+                                    ) : (
+                                      <p className="text-xs text-gray-400 italic">No response yet</p>
+                                    )}
+                                  </div>
+                                  {/* Actions */}
+                                  <div className="col-span-1">
                               <Button
                                 size="sm"
                                 onClick={() => {
                                   setEditingTicket(ticket.id);
                                   setTicketResponse(ticket.admin_response || '');
                                 }}
-                                className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
+                                      className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-xs whitespace-nowrap"
                               >
-                                <Edit className="w-4 h-4 mr-1" />
+                                      <Edit className="w-3 h-3 mr-1" />
                                 Respond
                               </Button>
+                                  </div>
+                                </div>
                             )}
                           </div>
+                          );
+                        })}
                         </div>
                       </div>
+                  </div>
+                  {/* Pagination Controls */}
+                  <div className="flex items-center justify-between mt-4">
+                    <div className="text-sm text-gray-600">
+                      Showing {startTicketIndex + 1} to {Math.min(endTicketIndex, filteredTickets.length)} of {filteredTickets.length} tickets
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        onClick={() => setTicketsPage(prev => Math.max(1, prev - 1))}
+                        disabled={ticketsPage === 1}
+                        variant="outline"
+                        size="sm"
+                      >
+                        Previous
+                      </Button>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: Math.min(5, totalTicketsPages) }, (_, i) => {
+                          let pageNum;
+                          if (totalTicketsPages <= 5) {
+                            pageNum = i + 1;
+                          } else if (ticketsPage <= 3) {
+                            pageNum = i + 1;
+                          } else if (ticketsPage >= totalTicketsPages - 2) {
+                            pageNum = totalTicketsPages - 4 + i;
+                          } else {
+                            pageNum = ticketsPage - 2 + i;
+                          }
+                          return (
+                            <Button
+                              key={pageNum}
+                              onClick={() => setTicketsPage(pageNum)}
+                              variant={ticketsPage === pageNum ? "default" : "outline"}
+                              size="sm"
+                              className={ticketsPage === pageNum ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white" : ""}
+                            >
+                              {pageNum}
+                            </Button>
                     );
                   })}
                 </div>
+                      <Button
+                        onClick={() => setTicketsPage(prev => Math.min(totalTicketsPages, prev + 1))}
+                        disabled={ticketsPage === totalTicketsPages}
+                        variant="outline"
+                        size="sm"
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
           </TabsContent>
 
-          {/* Balance Adjustment Tab */}
-          <TabsContent value="balance">
-            <div className="glass p-4 sm:p-8 rounded-3xl max-w-2xl">
+            {/* Balance Section */}
+            <TabsContent value="balance" className="lg:mt-0">
+            <div className="space-y-6">
+              {/* User Balances List */}
+              <div className="glass p-4 sm:p-6 rounded-3xl">
+                <div className="flex flex-col gap-4 mb-6">
+                  <h2 className="text-xl sm:text-2xl font-bold text-gray-900">User Balances</h2>
+                  {/* Search and Date Filter */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                      <Input
+                        placeholder="Search by username, email, or phone..."
+                        value={balanceListSearch}
+                        onChange={(e) => setBalanceListSearch(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+                    <div>
+                      <Input
+                        type="date"
+                        placeholder="Filter by date"
+                        value={balanceDateFilter}
+                        onChange={(e) => setBalanceDateFilter(e.target.value)}
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+                </div>
+                {filteredBalanceUsers.length === 0 ? (
+                  <p className="text-gray-600 text-center py-8">No users found</p>
+                ) : (
+                  <>
+                    <div className="overflow-hidden rounded-xl border border-white/20">
+                      <div className="max-h-[600px] overflow-y-auto overflow-x-auto">
+                        {/* Fixed Header */}
+                        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white sticky top-0 z-10 min-w-[1100px]">
+                          <div className="grid grid-cols-12 gap-4 p-4 font-semibold text-sm">
+                            <div className="col-span-2">Name</div>
+                            <div className="col-span-3">Email</div>
+                            <div className="col-span-2">Phone</div>
+                            <div className="col-span-1">Role</div>
+                            <div className="col-span-2">Balance</div>
+                            <div className="col-span-1.5">Joined Date</div>
+                            <div className="col-span-0.5">Actions</div>
+                          </div>
+                        </div>
+                        {/* Scrollable List */}
+                        <div className="divide-y divide-gray-200/50 min-w-[1100px]">
+                          {paginatedBalanceUsers.map((u) => (
+                            <div key={u.id} className="bg-white/50 hover:bg-white/70 transition-colors">
+                              <div className="grid grid-cols-12 gap-4 p-4 items-center">
+                                {/* Name */}
+                                <div className="col-span-2">
+                                  <p className="font-medium text-gray-900 break-words">{u.name}</p>
+                                </div>
+                                {/* Email */}
+                                <div className="col-span-3">
+                                  <p className="text-sm text-gray-700 break-all">{u.email}</p>
+                                </div>
+                                {/* Phone */}
+                                <div className="col-span-2">
+                                  <p className="text-sm text-gray-700 break-words">{u.phone_number || 'N/A'}</p>
+                                </div>
+                                {/* Role */}
+                                <div className="col-span-1">
+                                  <span className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ${
+                                    u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'
+                                  }`}>
+                                    {u.role}
+                                  </span>
+                                </div>
+                                {/* Balance */}
+                                <div className="col-span-2">
+                                  <p className="font-semibold text-gray-900 whitespace-nowrap">₵{u.balance.toFixed(2)}</p>
+                                </div>
+                                {/* Joined Date */}
+                                <div className="col-span-1.5">
+                                  <p className="text-sm text-gray-700 whitespace-nowrap">{new Date(u.created_at).toLocaleDateString()}</p>
+                                  <p className="text-xs text-gray-500 whitespace-nowrap">{new Date(u.created_at).toLocaleTimeString()}</p>
+                                </div>
+                                {/* Actions */}
+                                <div className="col-span-0.5">
+                                  <Button
+                                    onClick={() => {
+                                      setBalanceAdjustment({ ...balanceAdjustment, userId: u.id });
+                                      setBalanceUserSearch(u.name || u.email);
+                                      // Scroll to the adjustment form
+                                      setTimeout(() => {
+                                        const formElement = document.querySelector('[data-balance-form]');
+                                        if (formElement) {
+                                          formElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                        }
+                                      }, 100);
+                                    }}
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-xs whitespace-nowrap"
+                                    title="Adjust balance"
+                                  >
+                                    <Edit className="w-3 h-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    {/* Pagination Controls */}
+                    <div className="flex items-center justify-between mt-4">
+                      <div className="text-sm text-gray-600">
+                        Showing {startBalanceIndex + 1} to {Math.min(endBalanceIndex, filteredBalanceUsers.length)} of {filteredBalanceUsers.length} users
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          onClick={() => setBalancePage(prev => Math.max(1, prev - 1))}
+                          disabled={balancePage === 1}
+                          variant="outline"
+                          size="sm"
+                        >
+                          Previous
+                        </Button>
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: Math.min(5, totalBalancePages) }, (_, i) => {
+                            let pageNum;
+                            if (totalBalancePages <= 5) {
+                              pageNum = i + 1;
+                            } else if (balancePage <= 3) {
+                              pageNum = i + 1;
+                            } else if (balancePage >= totalBalancePages - 2) {
+                              pageNum = totalBalancePages - 4 + i;
+                            } else {
+                              pageNum = balancePage - 2 + i;
+                            }
+                            return (
+                              <Button
+                                key={pageNum}
+                                onClick={() => setBalancePage(pageNum)}
+                                variant={balancePage === pageNum ? "default" : "outline"}
+                                size="sm"
+                                className={balancePage === pageNum ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white" : ""}
+                              >
+                                {pageNum}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                        <Button
+                          onClick={() => setBalancePage(prev => Math.min(totalBalancePages, prev + 1))}
+                          disabled={balancePage === totalBalancePages}
+                          variant="outline"
+                          size="sm"
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+              
+              {/* Manual Balance Adjustment Form */}
+              <div className="glass p-4 sm:p-8 rounded-3xl max-w-2xl" data-balance-form>
               <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">Manual Balance Adjustment</h2>
               <div className="space-y-5">
                 <div>
@@ -1743,9 +3537,12 @@ const AdminDashboard = ({ user, onLogout }) => {
                   {balanceAdjustment.type === 'add' ? 'Add' : 'Subtract'} Balance
                 </Button>
               </div>
+              </div>
             </div>
           </TabsContent>
+            </div>
         </Tabs>
+        </div>
       </div>
     </div>
   );

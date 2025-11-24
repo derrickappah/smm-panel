@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getSMMGenOrderStatus } from '@/lib/smmgen';
+import { processAutomaticRefund } from '@/lib/refunds';
 import Navbar from '@/components/Navbar';
 import { Button } from '@/components/ui/button';
 import { Clock, CheckCircle, XCircle, Loader, RefreshCw } from 'lucide-react';
@@ -36,8 +37,33 @@ const OrderHistory = ({ user, onLogout }) => {
       if (ordersRes.error) throw ordersRes.error;
       if (servicesRes.error) throw servicesRes.error;
 
-      setOrders(ordersRes.data || []);
+      const fetchedOrders = ordersRes.data || [];
+      setOrders(fetchedOrders);
       setServices(servicesRes.data || []);
+
+      // Check for cancelled orders without refunds and process them
+      const cancelledOrdersWithoutRefund = fetchedOrders.filter(
+        o => o.status === 'cancelled' && !o.refund_status
+      );
+      
+      for (const order of cancelledOrdersWithoutRefund) {
+        try {
+          await processAutomaticRefund(order);
+          // Refresh order after refund attempt
+          const { data: refreshedOrder } = await supabase
+            .from('orders')
+            .select('*')
+            .eq('id', order.id)
+            .single();
+          if (refreshedOrder) {
+            setOrders(prevOrders =>
+              prevOrders.map(o => o.id === order.id ? refreshedOrder : o)
+            );
+          }
+        } catch (error) {
+          console.error('Error processing automatic refund on load:', error);
+        }
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -125,16 +151,52 @@ const OrderHistory = ({ user, onLogout }) => {
           throw updateError;
         }
 
+        // Get updated order with refund_status
+        const { data: updatedOrder } = await supabase
+          .from('orders')
+          .select('*')
+          .eq('id', order.id)
+          .single();
+
         // Update local state
         setOrders(prevOrders =>
           prevOrders.map(o =>
             o.id === order.id
-              ? { ...o, status: mappedStatus, completed_at: mappedStatus === 'completed' ? new Date().toISOString() : o.completed_at }
+              ? { ...o, ...updatedOrder, status: mappedStatus, completed_at: mappedStatus === 'completed' ? new Date().toISOString() : o.completed_at }
               : o
           )
         );
 
-        toast.success(`Order status updated to ${mappedStatus}`);
+        // If order was cancelled or failed, trigger automatic refund
+        if (mappedStatus === 'cancelled' && updatedOrder && updatedOrder.refund_status !== 'succeeded') {
+          console.log('Order cancelled, processing automatic refund:', order.id);
+          try {
+            const refundResult = await processAutomaticRefund(updatedOrder);
+            if (refundResult.success) {
+              toast.success(`Order cancelled and refund processed. ₵${refundResult.refundAmount?.toFixed(2) || order.total_cost.toFixed(2)} refunded.`);
+              // Refresh order to get updated refund_status
+              const { data: refreshedOrder } = await supabase
+                .from('orders')
+                .select('*')
+                .eq('id', order.id)
+                .single();
+              if (refreshedOrder) {
+                setOrders(prevOrders =>
+                  prevOrders.map(o =>
+                    o.id === order.id ? refreshedOrder : o
+                  )
+                );
+              }
+            } else {
+              toast.warning(`Order cancelled but automatic refund failed: ${refundResult.error}. Please contact support.`);
+            }
+          } catch (refundError) {
+            console.error('Error processing automatic refund:', refundError);
+            toast.warning('Order cancelled but automatic refund failed. Please contact support.');
+          }
+        } else {
+          toast.success(`Order status updated to ${mappedStatus}`);
+        }
       } else if (mappedStatus === order.status) {
         toast.info('Order status is already up to date');
       } else {
@@ -153,7 +215,8 @@ const OrderHistory = ({ user, onLogout }) => {
     if (!loading && orders.length > 0 && !hasCheckedStatus.current) {
       hasCheckedStatus.current = true;
       const checkAllSMMGenOrders = async () => {
-        const ordersWithSMMGen = orders.filter(o => o.smmgen_order_id && (o.status === 'pending' || o.status === 'processing'));
+        // Check all non-completed orders (to catch cancellations)
+        const ordersWithSMMGen = orders.filter(o => o.smmgen_order_id && o.status !== 'completed');
         
         // Check status for each order (with delay to avoid rate limiting)
         for (let i = 0; i < ordersWithSMMGen.length; i++) {
@@ -165,6 +228,19 @@ const OrderHistory = ({ user, onLogout }) => {
       checkAllSMMGenOrders();
     }
   }, [loading, orders.length, checkOrderStatus]);
+
+  // Periodic status checking for orders (every 2 minutes)
+  useEffect(() => {
+    if (loading) return;
+
+    const interval = setInterval(() => {
+      console.log('Periodic order status check in OrderHistory...');
+      // Fetch fresh orders and check their status
+      fetchData();
+    }, 120000); // Check every 2 minutes
+
+    return () => clearInterval(interval);
+  }, [loading]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">

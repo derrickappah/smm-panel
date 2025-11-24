@@ -8,6 +8,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { placeSMMGenOrder, getSMMGenOrderStatus } from '@/lib/smmgen';
+import { processAutomaticRefund } from '@/lib/refunds';
 import Navbar from '@/components/Navbar';
 import { Wallet, ShoppingCart, Clock, Search, Layers } from 'lucide-react';
 // Paystack will be loaded via react-paystack package
@@ -51,6 +52,21 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       document.head.appendChild(script);
     }
   }, []);
+
+  // Periodic status checking for orders (every 2 minutes)
+  useEffect(() => {
+    if (!user) return;
+
+    const interval = setInterval(() => {
+      // Only check if user is authenticated and has orders
+      if (user) {
+        console.log('Periodic order status check...');
+        fetchRecentOrders();
+      }
+    }, 120000); // Check every 2 minutes
+
+    return () => clearInterval(interval);
+  }, [user]);
 
   // Verify pending payments that might have succeeded
   const verifyPendingPayments = async () => {
@@ -325,10 +341,11 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         throw error;
       }
       
-      // Check SMMGen status for orders with SMMGen IDs (only for pending/processing orders)
+      // Check SMMGen status for orders with SMMGen IDs (check all statuses to catch cancellations)
       const updatedOrders = await Promise.all(
         (data || []).map(async (order) => {
-          if (order.smmgen_order_id && (order.status === 'pending' || order.status === 'processing')) {
+          // Check SMMGen status for orders that are not completed (pending, processing, or cancelled without refund)
+          if (order.smmgen_order_id && order.status !== 'completed') {
             try {
               const statusData = await getSMMGenOrderStatus(order.smmgen_order_id);
               const smmgenStatus = statusData.status || statusData.Status;
@@ -344,13 +361,62 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                   })
                   .eq('id', order.id);
                 
-                return { ...order, status: mappedStatus };
+                const updatedOrder = { ...order, status: mappedStatus };
+                
+                // If order was cancelled or failed, trigger automatic refund
+                if (mappedStatus === 'cancelled' && order.refund_status !== 'succeeded') {
+                  console.log('Order cancelled, processing automatic refund:', order.id);
+                  try {
+                    const refundResult = await processAutomaticRefund(updatedOrder);
+                    if (refundResult.success) {
+                      console.log('Automatic refund processed successfully for order:', order.id);
+                      // Refresh order to get updated refund_status
+                      const { data: refreshedOrder } = await supabase
+                        .from('orders')
+                        .select('*')
+                        .eq('id', order.id)
+                        .single();
+                      if (refreshedOrder) {
+                        return refreshedOrder;
+                      }
+                    } else {
+                      console.warn('Automatic refund failed for order:', order.id, refundResult.error);
+                    }
+                  } catch (refundError) {
+                    console.error('Error processing automatic refund:', refundError);
+                  }
+                }
+                
+                return updatedOrder;
               }
             } catch (error) {
               console.warn('Failed to check SMMGen status for order:', order.id, error);
               // Continue with original order if check fails
             }
           }
+          
+          // Also check if order is cancelled but refund hasn't been processed
+          if (order.status === 'cancelled' && !order.refund_status) {
+            console.log('Found cancelled order without refund, processing automatic refund:', order.id);
+            try {
+              const refundResult = await processAutomaticRefund(order);
+              if (refundResult.success) {
+                console.log('Automatic refund processed successfully for order:', order.id);
+                // Refresh order to get updated refund_status
+                const { data: refreshedOrder } = await supabase
+                  .from('orders')
+                  .select('*')
+                  .eq('id', order.id)
+                  .single();
+                if (refreshedOrder) {
+                  return refreshedOrder;
+                }
+              }
+            } catch (refundError) {
+              console.error('Error processing automatic refund:', refundError);
+            }
+          }
+          
           return order;
         })
       );
