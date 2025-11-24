@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Clock, CheckCircle, XCircle, Loader, RefreshCw, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
-import { toast } from 'sonner';
 
 const OrderHistory = ({ user, onLogout }) => {
   const [orders, setOrders] = useState([]);
@@ -135,7 +134,6 @@ const OrderHistory = ({ user, onLogout }) => {
   // Check and update order status from SMMGen
   const checkOrderStatus = useCallback(async (order) => {
     if (!order.smmgen_order_id) {
-      toast.info('This order does not have a SMMGen order ID');
       return;
     }
 
@@ -189,19 +187,9 @@ const OrderHistory = ({ user, onLogout }) => {
         );
 
         // Automatic refunds disabled - admins must process refunds manually
-        if (mappedStatus === 'canceled' || mappedStatus === 'cancelled') {
-          toast.warning('Order cancelled. Please contact support for a refund.');
-        } else {
-          toast.success(`Order status updated to ${mappedStatus}`);
-        }
-      } else if (mappedStatus === order.status) {
-        toast.info('Order status is already up to date');
-      } else {
-        toast.info('Status check completed (no update needed)');
       }
     } catch (error) {
       console.error('Error checking order status:', error);
-      toast.error(`Failed to check order status: ${error.message || 'Unknown error'}`);
     } finally {
       setCheckingStatus(prev => ({ ...prev, [order.id]: false }));
     }
