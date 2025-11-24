@@ -2236,6 +2236,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                     <SelectItem value="completed">Completed</SelectItem>
                     <SelectItem value="canceled">Canceled</SelectItem>
                     <SelectItem value="refunds">Refunds</SelectItem>
+                    <SelectItem value="refunded">Already Refunded</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -2295,9 +2296,10 @@ const AdminDashboard = ({ user, onLogout }) => {
                                 order.status === 'partial' ? 'bg-orange-100 text-orange-700' :
                                 order.status === 'canceled' || order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
                                 order.status === 'refunds' ? 'bg-purple-100 text-purple-700' :
+                                order.status === 'refunded' ? 'bg-gray-100 text-gray-700' :
                                 'bg-yellow-100 text-yellow-700'
                               }`}>
-                                {order.status ? String(order.status) : 'pending'}
+                                {order.status === 'refunded' ? 'already refunded' : (order.status ? String(order.status) : 'pending')}
                               </span>
                                 {order.refund_status && (
                                   <p className="text-xs text-gray-500 mt-1">
@@ -2371,6 +2373,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                           <SelectItem value="completed">Completed</SelectItem>
                           <SelectItem value="canceled">Canceled</SelectItem>
                           <SelectItem value="refunds">Refunds</SelectItem>
+                          <SelectItem value="refunded">Already Refunded</SelectItem>
                         </SelectContent>
                       </Select>
                                   {/* Show refund button only for canceled orders */}

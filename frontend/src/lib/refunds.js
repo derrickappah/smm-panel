@@ -225,7 +225,7 @@ export const processManualRefund = async (order) => {
     const { error: orderError } = await supabase
       .from('orders')
       .update({
-        status: 'cancelled',
+        status: 'refunded',
         refund_status: 'succeeded',
         refund_error: null
       })
