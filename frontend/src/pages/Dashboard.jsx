@@ -1642,8 +1642,14 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               if (smmgenResponse === null) {
                 // Backend not available, continue with local order
               } else if (smmgenResponse) {
-                smmgenOrderId = smmgenResponse.order || smmgenResponse.id || null;
-                console.log(`SMMGen order placed for ${componentService.name}:`, smmgenOrderId);
+                // SMMGen API might return order ID in different fields
+                smmgenOrderId = smmgenResponse.order || 
+                               smmgenResponse.order_id || 
+                               smmgenResponse.orderId || 
+                               smmgenResponse.id || 
+                               null;
+                console.log(`SMMGen order response for ${componentService.name}:`, smmgenResponse);
+                console.log(`SMMGen order ID extracted:`, smmgenOrderId);
               }
             } catch (smmgenError) {
               if (!smmgenError.message?.includes('Failed to fetch') && 
@@ -1738,8 +1744,15 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             // Silently continue - this is expected when backend/serverless functions aren't available
             // Order will be created locally in Supabase
           } else if (smmgenResponse) {
-            smmgenOrderId = smmgenResponse.order || smmgenResponse.id || null;
-            console.log('SMMGen order placed:', smmgenOrderId);
+            // SMMGen API might return order ID in different fields
+            // Common formats: { order: "12345" }, { id: "12345" }, { order_id: "12345" }, { orderId: "12345" }
+            smmgenOrderId = smmgenResponse.order || 
+                           smmgenResponse.order_id || 
+                           smmgenResponse.orderId || 
+                           smmgenResponse.id || 
+                           null;
+            console.log('SMMGen order response:', smmgenResponse);
+            console.log('SMMGen order ID extracted:', smmgenOrderId);
           }
         } catch (smmgenError) {
           // Only log actual API errors, not connection failures (which are handled gracefully)

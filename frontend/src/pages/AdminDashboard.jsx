@@ -341,8 +341,19 @@ const AdminDashboard = ({ user, onLogout }) => {
         // Use updated orders for stats calculation
         finalOrders = updatedOrders;
         // Update state with updated orders
+        // Debug: Log first order to check smmgen_order_id field
+        if (updatedOrders.length > 0) {
+          console.log('Sample updated order data:', updatedOrders[0]);
+          console.log('SMMGen order ID:', updatedOrders[0].smmgen_order_id);
+          console.log('Full order object keys:', Object.keys(updatedOrders[0]));
+        }
         setOrders(updatedOrders);
       } else {
+        // Debug: Log first order to check smmgen_order_id field
+        if (ordersRes.data && ordersRes.data.length > 0) {
+          console.log('Sample order data (no updates):', ordersRes.data[0]);
+          console.log('SMMGen order ID:', ordersRes.data[0].smmgen_order_id);
+        }
         setOrders(ordersRes.data || []);
       }
 
@@ -2301,7 +2312,10 @@ const AdminDashboard = ({ user, onLogout }) => {
                               {/* SMMGen Order ID */}
                               <div className="col-span-1">
                                 {order.smmgen_order_id ? (
-                                  <p className="font-medium text-gray-900 text-sm">{order.smmgen_order_id}</p>
+                                  <>
+                                    <p className="font-medium text-gray-900 text-sm">{order.smmgen_order_id}</p>
+                                    <p className="text-xs text-gray-500">({typeof order.smmgen_order_id})</p>
+                                  </>
                                 ) : (
                                   <p className="text-xs text-gray-400 italic">N/A</p>
                                 )}
