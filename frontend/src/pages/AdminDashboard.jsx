@@ -299,8 +299,9 @@ const AdminDashboard = ({ user, onLogout }) => {
       if (checkSMMGenStatus && ordersRes.data && ordersRes.data.length > 0) {
         const updatedOrders = await Promise.all(
           ordersRes.data.map(async (order) => {
-            // Check SMMGen status for orders that have SMMGen IDs and aren't completed
-            if (order.smmgen_order_id && order.status !== 'completed') {
+            // Check SMMGen status for orders that have SMMGen IDs and aren't completed or refunded
+            // Skip refunded orders - they should not be overwritten by SMMGen status
+            if (order.smmgen_order_id && order.status !== 'completed' && order.status !== 'refunded') {
               try {
                 const statusData = await getSMMGenOrderStatus(order.smmgen_order_id);
                 const smmgenStatus = statusData.status || statusData.Status;

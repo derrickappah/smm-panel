@@ -355,15 +355,16 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       // Check SMMGen status for orders with SMMGen IDs (check all statuses to catch cancellations)
       const updatedOrders = await Promise.all(
         (data || []).map(async (order) => {
-          // Check SMMGen status for orders that are not completed (pending, processing, or cancelled without refund)
-          if (order.smmgen_order_id && order.status !== 'completed') {
+          // Check SMMGen status for orders that are not completed or refunded
+          // Skip refunded orders - they should not be overwritten by SMMGen status
+          if (order.smmgen_order_id && order.status !== 'completed' && order.status !== 'refunded') {
             try {
               const statusData = await getSMMGenOrderStatus(order.smmgen_order_id);
               const smmgenStatus = statusData.status || statusData.Status;
               const mappedStatus = mapSMMGenStatus(smmgenStatus);
 
-              // Update in database if status changed
-              if (mappedStatus && mappedStatus !== order.status) {
+              // Update in database if status changed, but don't overwrite refunded orders
+              if (mappedStatus && mappedStatus !== order.status && order.status !== 'refunded') {
                 // Save status to history first
                 await saveOrderStatusHistory(
                   order.id,

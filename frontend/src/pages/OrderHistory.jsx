@@ -137,6 +137,11 @@ const OrderHistory = ({ user, onLogout }) => {
       return;
     }
 
+    // Don't check status for refunded orders - they should not be overwritten
+    if (order.status === 'refunded') {
+      return;
+    }
+
     setCheckingStatus(prev => ({ ...prev, [order.id]: true }));
 
     try {
@@ -147,7 +152,8 @@ const OrderHistory = ({ user, onLogout }) => {
       const smmgenStatus = statusData.status || statusData.Status;
       const mappedStatus = mapSMMGenStatus(smmgenStatus);
 
-      if (mappedStatus && mappedStatus !== order.status) {
+      // Don't update if order is refunded or if mapped status would overwrite refunded status
+      if (mappedStatus && mappedStatus !== order.status && order.status !== 'refunded') {
         // Save status to history first
         await saveOrderStatusHistory(
           order.id,
@@ -200,8 +206,9 @@ const OrderHistory = ({ user, onLogout }) => {
     if (!loading && orders.length > 0 && !hasCheckedStatus.current) {
       hasCheckedStatus.current = true;
       const checkAllSMMGenOrders = async () => {
-        // Check all non-completed orders (to catch cancellations)
-        const ordersWithSMMGen = orders.filter(o => o.smmgen_order_id && o.status !== 'completed');
+        // Check all non-completed and non-refunded orders (to catch cancellations)
+        // Skip refunded orders - they should not be overwritten by SMMGen status
+        const ordersWithSMMGen = orders.filter(o => o.smmgen_order_id && o.status !== 'completed' && o.status !== 'refunded');
         
         // Check status for each order (with delay to avoid rate limiting)
         for (let i = 0; i < ordersWithSMMGen.length; i++) {
