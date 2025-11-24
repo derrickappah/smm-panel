@@ -123,11 +123,14 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                 // Payment was successful, update transaction
                 console.log('Found successful payment for pending transaction:', transaction.id);
                 
-                // Update transaction status - FORCE UPDATE (remove status condition)
+                // Update transaction status and store Paystack status
                 // Payment was confirmed, so status must be approved
                 const { error: updateError } = await supabase
                   .from('transactions')
-                  .update({ status: 'approved' })
+                  .update({ 
+                    status: 'approved',
+                    paystack_status: verifyData.status // Store Paystack status
+                  })
                   .eq('id', transaction.id);
 
                 // If update failed, try again without status check
@@ -135,14 +138,17 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                   console.warn('First update attempt failed, retrying without status condition:', updateError);
                   await supabase
                     .from('transactions')
-                    .update({ status: 'approved' })
+                    .update({ 
+                      status: 'approved',
+                      paystack_status: verifyData.status
+                    })
                     .eq('id', transaction.id);
                 }
 
                 // Verify status was updated
                 const { data: statusCheck } = await supabase
                   .from('transactions')
-                  .select('status')
+                  .select('status, paystack_status')
                   .eq('id', transaction.id)
                   .maybeSingle();
 
@@ -151,7 +157,10 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                   console.log('Status not approved yet, forcing update...');
                   await supabase
                     .from('transactions')
-                    .update({ status: 'approved' })
+                    .update({ 
+                      status: 'approved',
+                      paystack_status: verifyData.status
+                    })
                     .eq('id', transaction.id);
                 }
 
@@ -174,16 +183,19 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                   toast.success(`Payment verified! ₵${transaction.amount.toFixed(2)} added to your balance.`);
                 }
               } else if (verifyData.status === 'failed' || verifyData.status === 'abandoned') {
-                // Payment failed or was abandoned, mark as rejected (cancelled)
+                // Payment failed or was abandoned, mark as rejected and store Paystack status
                 console.log('Payment failed or abandoned, marking transaction as rejected:', {
                   transactionId: transaction.id,
                   status: verifyData.status
                 });
                 
-                // Force update to rejected (remove status condition to ensure it updates)
+                // Force update to rejected and store Paystack status
                 const { error: updateError } = await supabase
                   .from('transactions')
-                  .update({ status: 'rejected' })
+                  .update({ 
+                    status: 'rejected',
+                    paystack_status: verifyData.status // Store actual Paystack status
+                  })
                   .eq('id', transaction.id);
                 
                 if (updateError) {
@@ -191,18 +203,33 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                   // Try again without status condition
                   await supabase
                     .from('transactions')
-                    .update({ status: 'rejected' })
+                    .update({ 
+                      status: 'rejected',
+                      paystack_status: verifyData.status
+                    })
                     .eq('id', transaction.id);
                 } else {
                   console.log('Transaction marked as rejected (abandoned/failed):', transaction.id);
                 }
-              } else if (transactionAge > oneHour) {
+              } else {
+                // Store Paystack status even if it's not success/failed/abandoned (e.g., pending)
+                await supabase
+                  .from('transactions')
+                  .update({ paystack_status: verifyData.status })
+                  .eq('id', transaction.id);
+              }
+              
+              // Check if transaction is too old and still pending
+              if (transactionAge > oneHour && verifyData.status !== 'success') {
                 // Transaction is older than 1 hour and payment is still not successful
                 // Mark as rejected to prevent indefinite pending status
                 console.log('Old pending transaction (over 1 hour) with reference but payment not successful, marking as rejected:', transaction.id);
                 await supabase
                   .from('transactions')
-                  .update({ status: 'rejected' })
+                  .update({ 
+                    status: 'rejected',
+                    paystack_status: 'timeout' // Mark as timeout for old pending transactions
+                  })
                   .eq('id', transaction.id)
                   .eq('status', 'pending');
               }
@@ -212,7 +239,10 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                 console.log('Old pending transaction, verification request failed, marking as rejected:', transaction.id);
                 await supabase
                   .from('transactions')
-                  .update({ status: 'rejected' })
+                  .update({ 
+                    status: 'rejected',
+                    paystack_status: 'verification_failed'
+                  })
                   .eq('id', transaction.id)
                   .eq('status', 'pending');
               }
@@ -224,7 +254,10 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               console.log('Old pending transaction, verification error, marking as rejected:', transaction.id);
               await supabase
                 .from('transactions')
-                .update({ status: 'rejected' })
+                .update({ 
+                  status: 'rejected',
+                  paystack_status: 'verification_error'
+                })
                 .eq('id', transaction.id)
                 .eq('status', 'pending');
             }
@@ -240,7 +273,10 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             console.log('Old pending transaction without reference, marking as rejected:', transaction.id);
             await supabase
               .from('transactions')
-              .update({ status: 'rejected' })
+              .update({ 
+                status: 'rejected',
+                paystack_status: 'no_reference' // No reference means payment was never initiated
+              })
               .eq('id', transaction.id)
               .eq('status', 'pending');
           }
@@ -548,11 +584,33 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         reference 
       });
       
+      // Verify payment with Paystack to get the actual status
+      let paystackStatus = 'success'; // Default to success since callback was triggered
+      try {
+        const verifyResponse = await fetch('/api/verify-paystack-payment', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ reference })
+        });
+        
+        if (verifyResponse.ok) {
+          const verifyData = await verifyResponse.json();
+          paystackStatus = verifyData.status || 'success';
+          console.log('Paystack status from verification:', paystackStatus);
+        }
+      } catch (verifyError) {
+        console.warn('Could not verify payment status, assuming success:', verifyError);
+        // Continue with success assumption since callback was triggered
+      }
+      
       // Prepare update object with both status and reference
       // CRITICAL: Always include reference if we have it, even if it was stored before
       // This ensures the reference is never lost
       const updateData = {
-        status: 'approved'
+        status: 'approved',
+        paystack_status: paystackStatus // Store Paystack status
       };
       
       // ALWAYS include reference if we have it (don't check if it exists)
@@ -1129,28 +1187,39 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               return; // Don't mark as cancelled
             }
             
-            // If payment was abandoned or failed, mark as rejected
+            // If payment was abandoned or failed, mark as rejected and store Paystack status
             if (verifyData.status === 'abandoned' || verifyData.status === 'failed') {
               console.log('Payment was abandoned or failed, marking transaction as rejected:', {
                 transactionId,
                 status: verifyData.status
               });
               
-              // Update transaction status to rejected (cancelled)
+              // Update transaction status to rejected and store Paystack status
               const { error: abandonError } = await supabase
                 .from('transactions')
-                .update({ status: 'rejected' })
+                .update({ 
+                  status: 'rejected',
+                  paystack_status: verifyData.status
+                })
                 .eq('id', transactionId);
               
               if (abandonError) {
                 console.error('Error updating abandoned transaction:', abandonError);
               } else {
-                console.log('Transaction marked as rejected (abandoned):', transactionId);
-                toast.info('Payment was abandoned. Transaction has been cancelled.');
+                console.log('Transaction marked as rejected (abandoned/failed):', transactionId);
+                toast.info(`Payment was ${verifyData.status}. Transaction has been cancelled.`);
               }
               
               setPendingTransaction(null);
               return; // Exit early since we've handled the abandoned transaction
+            }
+            
+            // If payment status is something else, still store it
+            if (verifyData.status) {
+              await supabase
+                .from('transactions')
+                .update({ paystack_status: verifyData.status })
+                .eq('id', transactionId);
             }
           }
         } catch (verifyError) {
@@ -1169,7 +1238,10 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       if (existingTransaction?.status === 'pending') {
         const { error: updateError } = await supabase
           .from('transactions')
-          .update({ status: 'rejected' })
+          .update({ 
+            status: 'rejected',
+            paystack_status: 'abandoned' // Mark as abandoned when user cancels
+          })
           .eq('id', transactionId)
           .eq('status', 'pending');
 

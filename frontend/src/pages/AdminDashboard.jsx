@@ -3135,7 +3135,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                                 </span>
                               </div>
                               {/* Status */}
-                              <div className="flex justify-center">
+                              <div className="flex flex-col items-center gap-1">
                                 <span className={`px-3 py-1.5 rounded-full text-xs font-medium ${
                                   transaction.status === 'approved' 
                                     ? 'bg-green-100 text-green-700'
@@ -3145,6 +3145,17 @@ const AdminDashboard = ({ user, onLogout }) => {
                                 }`}>
                                   {transaction.status}
                                 </span>
+                                {/* Show Paystack status for deposit transactions */}
+                                {transaction.type === 'deposit' && transaction.paystack_status && (
+                                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                    transaction.paystack_status === 'success' ? 'bg-green-100 text-green-700' :
+                                    transaction.paystack_status === 'failed' ? 'bg-red-100 text-red-700' :
+                                    transaction.paystack_status === 'abandoned' ? 'bg-orange-100 text-orange-700' :
+                                    'bg-gray-100 text-gray-700'
+                                  }`}>
+                                    {transaction.paystack_status}
+                                  </span>
+                                )}
                               </div>
                               {/* Amount */}
                               <div className="text-center">
