@@ -2294,8 +2294,13 @@ const AdminDashboard = ({ user, onLogout }) => {
                               </div>
                               {/* Order ID */}
                               <div className="col-span-1.5">
-                                <p className="font-medium text-gray-900 text-sm">{order.id.slice(0, 8)}...</p>
-                                <p className="text-xs text-gray-500">{order.id.slice(8, 16)}...</p>
+                                <p className="font-medium text-gray-900 text-sm">ID: {order.id.slice(0, 8)}...</p>
+                                {order.smmgen_order_id && (
+                                  <p className="text-xs text-gray-500">SMMGen: {order.smmgen_order_id}</p>
+                                )}
+                                {!order.smmgen_order_id && (
+                                  <p className="text-xs text-gray-400">No SMMGen ID</p>
+                                )}
                               </div>
                               {/* Quantity */}
                               <div className="col-span-1">

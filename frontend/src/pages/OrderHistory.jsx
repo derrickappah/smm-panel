@@ -353,6 +353,9 @@ const OrderHistory = ({ user, onLogout }) => {
                               <div className="text-center">
                                 <p className="font-medium text-gray-900 text-sm">{service?.name || 'Unknown Service'}</p>
                                 <p className="text-xs text-gray-500 mt-1">ID: {order.id.slice(0, 8)}...</p>
+                                {order.smmgen_order_id && (
+                                  <p className="text-xs text-gray-400 mt-0.5">SMMGen: {order.smmgen_order_id}</p>
+                                )}
                               </div>
                               {/* Link */}
                               <div className="text-center">
