@@ -2039,7 +2039,19 @@ const AdminDashboard = ({ user, onLogout }) => {
             <div className="glass p-4 sm:p-6 rounded-3xl">
               <div className="flex flex-col gap-4 mb-6">
                 <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Payment Deposits</h2>
+                  <div className="flex items-center gap-4">
+                    <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Payment Deposits</h2>
+                    <Button
+                      onClick={() => fetchAllData(true)}
+                      disabled={refreshing}
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center gap-2"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </Button>
+                  </div>
                 <Select value={depositStatusFilter} onValueChange={setDepositStatusFilter}>
                   <SelectTrigger className="w-full sm:w-48">
                     <Filter className="w-4 h-4 mr-2" />
@@ -2222,7 +2234,19 @@ const AdminDashboard = ({ user, onLogout }) => {
             <div className="glass p-4 sm:p-6 rounded-3xl">
               <div className="flex flex-col gap-4 mb-6">
                 <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                  <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Orders</h2>
+                  <div className="flex items-center gap-4">
+                    <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Orders</h2>
+                    <Button
+                      onClick={() => fetchAllData(true)}
+                      disabled={refreshing}
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center gap-2"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </Button>
+                  </div>
                 <Select value={orderStatusFilter} onValueChange={setOrderStatusFilter}>
                   <SelectTrigger className="w-full sm:w-40">
                     <Filter className="w-4 h-4 mr-2" />
@@ -2649,7 +2673,19 @@ const AdminDashboard = ({ user, onLogout }) => {
               {/* Services List */}
               <div className="glass p-4 sm:p-6 rounded-3xl">
                 <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                  <h2 className="text-xl sm:text-2xl font-bold text-gray-900">All Services</h2>
+                  <div className="flex items-center gap-4">
+                    <h2 className="text-xl sm:text-2xl font-bold text-gray-900">All Services</h2>
+                    <Button
+                      onClick={() => fetchAllData(true)}
+                      disabled={refreshing}
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center gap-2"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </Button>
+                  </div>
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                     <Input
@@ -2737,7 +2773,19 @@ const AdminDashboard = ({ user, onLogout }) => {
             <div className="glass p-4 sm:p-6 rounded-3xl">
               <div className="flex flex-col gap-4 mb-6">
                 <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                <h2 className="text-xl sm:text-2xl font-bold text-gray-900">All Users</h2>
+                  <div className="flex items-center gap-4">
+                    <h2 className="text-xl sm:text-2xl font-bold text-gray-900">All Users</h2>
+                    <Button
+                      onClick={() => fetchAllData(true)}
+                      disabled={refreshing}
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center gap-2"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </Button>
+                  </div>
                 </div>
                 {/* Search and Date Filter */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2900,7 +2948,19 @@ const AdminDashboard = ({ user, onLogout }) => {
             <div className="glass p-4 sm:p-6 rounded-3xl">
               <div className="flex flex-col gap-4 mb-6">
                 <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                  <h2 className="text-xl sm:text-2xl font-bold text-gray-900">All Transactions</h2>
+                  <div className="flex items-center gap-4">
+                    <h2 className="text-xl sm:text-2xl font-bold text-gray-900">All Transactions</h2>
+                    <Button
+                      onClick={() => fetchAllData(true)}
+                      disabled={refreshing}
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center gap-2"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </Button>
+                  </div>
                   <div className="flex gap-2">
                     <Select value={transactionTypeFilter} onValueChange={setTransactionTypeFilter}>
                       <SelectTrigger className="w-full sm:w-40">
@@ -3144,7 +3204,19 @@ const AdminDashboard = ({ user, onLogout }) => {
             <div className="glass p-4 sm:p-6 rounded-3xl">
               <div className="flex flex-col gap-4 mb-6">
                 <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Support Tickets</h2>
+                  <div className="flex items-center gap-4">
+                    <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Support Tickets</h2>
+                    <Button
+                      onClick={() => fetchAllData(true)}
+                      disabled={refreshing}
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center gap-2"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </Button>
+                  </div>
                 <Select value={ticketStatusFilter} onValueChange={setTicketStatusFilter}>
                   <SelectTrigger className="w-full sm:w-48">
                     <Filter className="w-4 h-4 mr-2" />
@@ -3424,7 +3496,19 @@ const AdminDashboard = ({ user, onLogout }) => {
               {/* User Balances List */}
               <div className="glass p-4 sm:p-6 rounded-3xl">
                 <div className="flex flex-col gap-4 mb-6">
-                  <h2 className="text-xl sm:text-2xl font-bold text-gray-900">User Balances</h2>
+                  <div className="flex items-center gap-4">
+                    <h2 className="text-xl sm:text-2xl font-bold text-gray-900">User Balances</h2>
+                    <Button
+                      onClick={() => fetchAllData(true)}
+                      disabled={refreshing}
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center gap-2"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </Button>
+                  </div>
                   {/* Search and Date Filter */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="relative">
