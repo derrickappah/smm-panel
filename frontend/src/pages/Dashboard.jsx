@@ -53,15 +53,16 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     }
   }, []);
 
-  // Periodic status checking for orders (every 2 minutes)
+  // Periodic status checking for orders and pending payments (every 2 minutes)
   useEffect(() => {
     if (!user) return;
 
     const interval = setInterval(() => {
-      // Only check if user is authenticated and has orders
+      // Only check if user is authenticated
       if (user) {
-        console.log('Periodic order status check...');
+        console.log('Periodic status check...');
         fetchRecentOrders();
+        verifyPendingPayments(); // Also verify pending payments periodically
       }
     }, 120000); // Check every 2 minutes
 
@@ -74,8 +75,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) return;
 
-      // Find recent pending deposit transactions (within last 30 minutes)
-      const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+      // Find recent pending deposit transactions (within last 2 hours to catch old ones too)
+      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
       
       const { data: pendingTransactions, error } = await supabase
         .from('transactions')
@@ -83,9 +84,9 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         .eq('user_id', authUser.id)
         .eq('type', 'deposit')
         .eq('status', 'pending')
-        .gte('created_at', thirtyMinutesAgo)
+        .gte('created_at', twoHoursAgo)
         .order('created_at', { ascending: false })
-        .limit(5);
+        .limit(10);
 
       if (error) {
         console.error('Error fetching pending transactions for verification:', error);
@@ -98,6 +99,10 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
       // Verify each pending transaction with Paystack
       for (const transaction of pendingTransactions) {
+        const transactionAge = Date.now() - new Date(transaction.created_at).getTime();
+        const tenMinutes = 10 * 60 * 1000;
+        const oneHour = 60 * 60 * 1000;
+        
         // If transaction has a reference stored, verify it
         if (transaction.paystack_reference) {
           try {
@@ -191,19 +196,44 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                 } else {
                   console.log('Transaction marked as rejected (abandoned/failed):', transaction.id);
                 }
+              } else if (transactionAge > oneHour) {
+                // Transaction is older than 1 hour and payment is still not successful
+                // Mark as rejected to prevent indefinite pending status
+                console.log('Old pending transaction (over 1 hour) with reference but payment not successful, marking as rejected:', transaction.id);
+                await supabase
+                  .from('transactions')
+                  .update({ status: 'rejected' })
+                  .eq('id', transaction.id)
+                  .eq('status', 'pending');
+              }
+            } else {
+              // If verification request fails and transaction is old, mark as rejected
+              if (transactionAge > oneHour) {
+                console.log('Old pending transaction, verification request failed, marking as rejected:', transaction.id);
+                await supabase
+                  .from('transactions')
+                  .update({ status: 'rejected' })
+                  .eq('id', transaction.id)
+                  .eq('status', 'pending');
               }
             }
           } catch (verifyError) {
             console.error('Error verifying payment:', verifyError);
+            // If verification throws error and transaction is old, mark as rejected
+            if (transactionAge > oneHour) {
+              console.log('Old pending transaction, verification error, marking as rejected:', transaction.id);
+              await supabase
+                .from('transactions')
+                .update({ status: 'rejected' })
+                .eq('id', transaction.id)
+                .eq('status', 'pending');
+            }
             // Continue with other transactions
           }
         } else {
           // No reference stored - this means callback never fired
           // We can't verify without reference, but we can check if it's been more than 10 minutes
           // If so, it's likely the payment was never completed
-          const transactionAge = Date.now() - new Date(transaction.created_at).getTime();
-          const tenMinutes = 10 * 60 * 1000;
-          
           if (transactionAge > tenMinutes) {
             // Transaction is old and has no reference - likely never completed
             // Mark as rejected after 10 minutes

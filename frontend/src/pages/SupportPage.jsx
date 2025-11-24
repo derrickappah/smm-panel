@@ -23,7 +23,9 @@ import {
   Search,
   Filter,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  PlayCircle,
+  Video
 } from 'lucide-react';
 
 const SupportPage = ({ user, onLogout }) => {
@@ -606,6 +608,68 @@ const SupportPage = ({ user, onLogout }) => {
             )}
           </div>
         )}
+
+        {/* Tutorials Section */}
+        <div className="mt-12">
+          <div className="text-center mb-8">
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">Video Tutorials</h2>
+            <p className="text-gray-600">Watch step-by-step guides to get started</p>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-6 mb-12">
+            {/* Likes Tutorial */}
+            <div className="glass p-6 rounded-3xl animate-slideUp">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-gradient-to-br from-pink-500 to-red-600 rounded-xl flex items-center justify-center">
+                  <Video className="w-5 h-5 text-white" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900">How to Order Likes</h3>
+              </div>
+              <div className="aspect-video rounded-xl overflow-hidden bg-gray-900 mb-4">
+                <video
+                  controls
+                  className="w-full h-full"
+                  preload="metadata"
+                >
+                  <source 
+                    src="https://spihsvdchouynfbsotwq.supabase.co/storage/v1/object/public/storage/likes%20tutorial.mp4" 
+                    type="video/mp4" 
+                  />
+                  Your browser does not support the video tag.
+                </video>
+              </div>
+              <p className="text-sm text-gray-600">
+                Learn how to place an order for Instagram likes step by step.
+              </p>
+            </div>
+
+            {/* Followers Tutorial */}
+            <div className="glass p-6 rounded-3xl animate-slideUp">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
+                  <Video className="w-5 h-5 text-white" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900">How to Order Followers</h3>
+              </div>
+              <div className="aspect-video rounded-xl overflow-hidden bg-gray-900 mb-4">
+                <video
+                  controls
+                  className="w-full h-full"
+                  preload="metadata"
+                >
+                  <source 
+                    src="https://spihsvdchouynfbsotwq.supabase.co/storage/v1/object/public/storage/followers%20tutorial.mp4" 
+                    type="video/mp4" 
+                  />
+                  Your browser does not support the video tag.
+                </video>
+              </div>
+              <p className="text-sm text-gray-600">
+                Learn how to place an order for Instagram followers step by step.
+              </p>
+            </div>
+          </div>
+        </div>
 
         {/* FAQ Section */}
         <div className="mt-12">
