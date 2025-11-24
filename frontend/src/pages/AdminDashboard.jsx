@@ -2744,7 +2744,14 @@ const AdminDashboard = ({ user, onLogout }) => {
                     <p className="text-gray-600 text-center py-8">No services found</p>
                   ) : (
                     filteredServices.map((service) => (
-                      <div key={service.id} className="bg-white/50 p-4 rounded-xl">
+                      <div 
+                        key={service.id} 
+                        className={`p-4 rounded-xl transition-all ${
+                          service.enabled === false 
+                            ? 'bg-gray-100/50 border-2 border-gray-300 opacity-75' 
+                            : 'bg-white/50 border-2 border-green-200'
+                        }`}
+                      >
                         {editingService?.id === service.id ? (
                           <ServiceEditForm 
                             service={service} 
@@ -2754,10 +2761,24 @@ const AdminDashboard = ({ user, onLogout }) => {
                         ) : (
                           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                             <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <p className="font-medium text-gray-900">{service.name}</p>
-                                {service.enabled === false && (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-700 text-xs font-medium rounded-full">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <div className="flex items-center gap-2">
+                                  {service.enabled !== false ? (
+                                    <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse"></div>
+                                  ) : (
+                                    <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                                  )}
+                                  <p className={`font-medium ${service.enabled === false ? 'text-gray-500 line-through' : 'text-gray-900'}`}>
+                                    {service.name}
+                                  </p>
+                                </div>
+                                {service.enabled !== false ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded-full border border-green-300">
+                                    <CheckCircle className="w-3 h-3" />
+                                    Enabled
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-700 text-xs font-medium rounded-full border border-red-300">
                                     <PowerOff className="w-3 h-3" />
                                     Disabled
                                   </span>
@@ -2774,10 +2795,10 @@ const AdminDashboard = ({ user, onLogout }) => {
                                   </span>
                                 )}
                               </div>
-                              <p className="text-sm text-gray-600">
+                              <p className={`text-sm ${service.enabled === false ? 'text-gray-400' : 'text-gray-600'}`}>
                                 {service.platform} • {service.service_type}
                               </p>
-                              <p className="text-sm text-gray-600">
+                              <p className={`text-sm ${service.enabled === false ? 'text-gray-400' : 'text-gray-600'}`}>
                                 Rate: ₵{service.rate}/1K • Qty: {service.min_quantity}-{service.max_quantity}
                               </p>
                               {service.is_combo && service.combo_service_ids && (
