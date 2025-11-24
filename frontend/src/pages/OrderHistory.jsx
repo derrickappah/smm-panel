@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getSMMGenOrderStatus } from '@/lib/smmgen';
-import { processAutomaticRefund } from '@/lib/refunds';
+import { saveOrderStatusHistory } from '@/lib/orderStatusHistory';
 import Navbar from '@/components/Navbar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -49,29 +49,7 @@ const OrderHistory = ({ user, onLogout }) => {
       setOrders(fetchedOrders);
       setServices(servicesRes.data || []);
 
-      // Check for canceled orders without refunds and process them
-      const cancelledOrdersWithoutRefund = fetchedOrders.filter(
-        o => (o.status === 'canceled' || o.status === 'cancelled') && !o.refund_status
-      );
-      
-      for (const order of cancelledOrdersWithoutRefund) {
-        try {
-          await processAutomaticRefund(order);
-          // Refresh order after refund attempt
-          const { data: refreshedOrder } = await supabase
-            .from('orders')
-            .select('*')
-            .eq('id', order.id)
-            .single();
-          if (refreshedOrder) {
-            setOrders(prevOrders =>
-              prevOrders.map(o => o.id === order.id ? refreshedOrder : o)
-            );
-          }
-        } catch (error) {
-          console.error('Error processing automatic refund on load:', error);
-        }
-      }
+      // Automatic refunds disabled - admins must process refunds manually
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -172,6 +150,15 @@ const OrderHistory = ({ user, onLogout }) => {
       const mappedStatus = mapSMMGenStatus(smmgenStatus);
 
       if (mappedStatus && mappedStatus !== order.status) {
+        // Save status to history first
+        await saveOrderStatusHistory(
+          order.id,
+          mappedStatus,
+          'smmgen',
+          statusData, // Full SMMGen response
+          order.status // Previous status
+        );
+
         // Update order status in Supabase
         const { error: updateError } = await supabase
           .from('orders')
@@ -201,33 +188,9 @@ const OrderHistory = ({ user, onLogout }) => {
           )
         );
 
-        // If order was canceled, trigger automatic refund
-        if ((mappedStatus === 'canceled' || mappedStatus === 'cancelled') && updatedOrder && updatedOrder.refund_status !== 'succeeded') {
-          console.log('Order cancelled, processing automatic refund:', order.id);
-          try {
-            const refundResult = await processAutomaticRefund(updatedOrder);
-            if (refundResult.success) {
-              toast.success(`Order cancelled and refund processed. ₵${refundResult.refundAmount?.toFixed(2) || order.total_cost.toFixed(2)} refunded.`);
-              // Refresh order to get updated refund_status
-              const { data: refreshedOrder } = await supabase
-                .from('orders')
-                .select('*')
-                .eq('id', order.id)
-                .single();
-              if (refreshedOrder) {
-                setOrders(prevOrders =>
-                  prevOrders.map(o =>
-                    o.id === order.id ? refreshedOrder : o
-                  )
-                );
-              }
-            } else {
-              toast.warning(`Order cancelled but automatic refund failed: ${refundResult.error}. Please contact support.`);
-            }
-          } catch (refundError) {
-            console.error('Error processing automatic refund:', refundError);
-            toast.warning('Order cancelled but automatic refund failed. Please contact support.');
-          }
+        // Automatic refunds disabled - admins must process refunds manually
+        if (mappedStatus === 'canceled' || mappedStatus === 'cancelled') {
+          toast.warning('Order cancelled. Please contact support for a refund.');
         } else {
           toast.success(`Order status updated to ${mappedStatus}`);
         }

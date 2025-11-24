@@ -261,32 +261,38 @@ const TransactionsPage = ({ user, onLogout }) => {
         .map(o => o.id)
     );
 
-    // Calculate all approved deposits, EXCLUDING refund deposit transactions
-    // (Refund deposits shouldn't exist after the fix, but exclude them just in case)
+    // Calculate all approved deposits
     const allApprovedDeposits = transactions
       .filter(t => 
         t.user_id === transaction.user_id &&
         t.type === 'deposit' &&
-        t.status === 'approved' &&
-        !(t.order_id && refundedOrderIds.has(t.order_id)) // Exclude refund deposits
+        t.status === 'approved'
       )
       .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
 
-    // Calculate orders, EXCLUDING refunded orders (since refund already added balance back directly)
+    // Calculate all approved refunds (money returned to user)
+    const allApprovedRefunds = transactions
+      .filter(t =>
+        t.user_id === transaction.user_id &&
+        t.type === 'refund' &&
+        t.status === 'approved'
+      )
+      .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+
+    // Calculate orders (money spent)
     const allCompletedOrders = transactions
       .filter(t => 
         t.user_id === transaction.user_id &&
         t.type === 'order' &&
-        t.status === 'completed' &&
-        !refundedOrderIds.has(t.order_id) // Exclude transactions for refunded orders
+        t.status === 'approved'
       )
       .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
 
-    // Calculate expected balance (deposits - orders)
-    const expectedBalanceFromTransactions = allApprovedDeposits - allCompletedOrders;
+    // Balance = deposits + refunds - orders
+    const expectedBalanceFromTransactions = allApprovedDeposits + allApprovedRefunds - allCompletedOrders;
     
     // Calculate balance without this specific transaction
-    const balanceWithoutThisTransaction = allApprovedDeposits - transactionAmount - allCompletedOrders;
+    const balanceWithoutThisTransaction = allApprovedDeposits + allApprovedRefunds - transactionAmount - allCompletedOrders;
     const minExpectedBalanceWithTransaction = balanceWithoutThisTransaction + transactionAmount;
 
     // CHECK 1: Current balance is at least equal to expected (allowing for small differences)

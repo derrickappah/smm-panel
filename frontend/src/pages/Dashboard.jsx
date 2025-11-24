@@ -8,7 +8,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { placeSMMGenOrder, getSMMGenOrderStatus } from '@/lib/smmgen';
-import { processAutomaticRefund } from '@/lib/refunds';
+import { saveOrderStatusHistory } from '@/lib/orderStatusHistory';
 import Navbar from '@/components/Navbar';
 import { Wallet, ShoppingCart, Clock, Search, Layers } from 'lucide-react';
 // Paystack will be loaded via react-paystack package
@@ -364,6 +364,16 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
               // Update in database if status changed
               if (mappedStatus && mappedStatus !== order.status) {
+                // Save status to history first
+                await saveOrderStatusHistory(
+                  order.id,
+                  mappedStatus,
+                  'smmgen',
+                  statusData, // Full SMMGen response
+                  order.status // Previous status
+                );
+
+                // Update order status in Supabase
                 await supabase
                   .from('orders')
                   .update({ 
@@ -374,29 +384,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                 
                 const updatedOrder = { ...order, status: mappedStatus };
                 
-                // If order was cancelled or failed, trigger automatic refund
-                if (mappedStatus === 'cancelled' && order.refund_status !== 'succeeded') {
-                  console.log('Order cancelled, processing automatic refund:', order.id);
-                  try {
-                    const refundResult = await processAutomaticRefund(updatedOrder);
-                    if (refundResult.success) {
-                      console.log('Automatic refund processed successfully for order:', order.id);
-                      // Refresh order to get updated refund_status
-                      const { data: refreshedOrder } = await supabase
-                        .from('orders')
-                        .select('*')
-                        .eq('id', order.id)
-                        .single();
-                      if (refreshedOrder) {
-                        return refreshedOrder;
-                      }
-                    } else {
-                      console.warn('Automatic refund failed for order:', order.id, refundResult.error);
-                    }
-                  } catch (refundError) {
-                    console.error('Error processing automatic refund:', refundError);
-                  }
-                }
+                // Automatic refunds disabled - admins must process refunds manually
                 
                 return updatedOrder;
               }
@@ -406,27 +394,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             }
           }
           
-          // Also check if order is cancelled but refund hasn't been processed
-          if ((order.status === 'canceled' || order.status === 'cancelled') && !order.refund_status) {
-            console.log('Found cancelled order without refund, processing automatic refund:', order.id);
-            try {
-              const refundResult = await processAutomaticRefund(order);
-              if (refundResult.success) {
-                console.log('Automatic refund processed successfully for order:', order.id);
-                // Refresh order to get updated refund_status
-                const { data: refreshedOrder } = await supabase
-                  .from('orders')
-                  .select('*')
-                  .eq('id', order.id)
-                  .single();
-                if (refreshedOrder) {
-                  return refreshedOrder;
-                }
-              }
-            } catch (refundError) {
-              console.error('Error processing automatic refund:', refundError);
-            }
-          }
+          // Automatic refunds disabled - admins must process refunds manually
           
           return order;
         })

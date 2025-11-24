@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { processManualRefund } from '@/lib/refunds';
+import { saveOrderStatusHistory } from '@/lib/orderStatusHistory';
 import Navbar from '@/components/Navbar';
 import { 
   Users, ShoppingCart, DollarSign, Package, Search, Edit, Trash2, 
@@ -208,7 +209,7 @@ const AdminDashboard = ({ user, onLogout }) => {
 
       const [usersRes, ordersRes, depositsRes, transactionsRes, servicesRes, ticketsRes] = await Promise.all([
         supabase.from('profiles').select('*').order('created_at', { ascending: false }),
-        supabase.from('orders').select('id, user_id, service_id, link, quantity, total_cost, status, smmgen_order_id, created_at, completed_at, refund_status, refund_attempted_at, refund_error, services(name, platform), profiles(name, email, phone_number)').order('created_at', { ascending: false }),
+        supabase.from('orders').select('*, services(name, platform), profiles(name, email, phone_number)').order('created_at', { ascending: false }),
         supabase.from('transactions').select('*, profiles(email, name)').eq('type', 'deposit').order('created_at', { ascending: false }),
         supabase.from('transactions').select('*, profiles(email, name, balance)').order('created_at', { ascending: false }),
         supabase.from('services').select('*').order('created_at', { ascending: false }),
@@ -261,7 +262,14 @@ const AdminDashboard = ({ user, onLogout }) => {
       // Update state with fetched data (always update even if some queries failed)
       // This ensures UI reflects the latest data immediately
       if (usersRes.data) setUsers(usersRes.data);
-      if (ordersRes.data) setOrders(ordersRes.data);
+      if (ordersRes.data) {
+        // Debug: Log first order to check status field
+        if (ordersRes.data.length > 0) {
+          console.log('Sample order data:', ordersRes.data[0]);
+          console.log('Order status:', ordersRes.data[0].status);
+        }
+        setOrders(ordersRes.data);
+      }
       if (depositsRes.data) setDeposits(depositsRes.data);
       if (transactionsRes.data) {
         setAllTransactions(transactionsRes.data);
@@ -277,10 +285,10 @@ const AdminDashboard = ({ user, onLogout }) => {
       if (servicesRes.data) setServices(servicesRes.data);
       if (ticketsRes.data) setSupportTickets(ticketsRes.data);
 
-      // Calculate enhanced stats using current data
-      const currentDeposits = depositsRes.data || deposits;
-      const currentOrders = ordersRes.data || orders;
-      const currentTickets = ticketsRes.data || supportTickets;
+      // Calculate enhanced stats using current data (always use fresh data from response)
+      const currentDeposits = depositsRes.data || [];
+      const currentOrders = ordersRes.data || [];
+      const currentTickets = ticketsRes.data || [];
       
       const pendingDeposits = currentDeposits.filter(d => d.status === 'pending').length;
       const confirmedDeposits = currentDeposits.filter(d => d.status === 'approved').length;
@@ -299,7 +307,7 @@ const AdminDashboard = ({ user, onLogout }) => {
       const todayEnd = new Date(today);
       todayEnd.setHours(23, 59, 59, 999);
 
-      const usersToday = (usersRes.data || users).filter(u => {
+      const usersToday = (usersRes.data || []).filter(u => {
         const userDate = new Date(u.created_at);
         return userDate >= today && userDate <= todayEnd;
       }).length;
@@ -325,7 +333,15 @@ const AdminDashboard = ({ user, onLogout }) => {
       const cancelledOrders = currentOrders.filter(o => o.status === 'canceled' || o.status === 'cancelled').length;
       const partialOrders = currentOrders.filter(o => o.status === 'partial').length;
       const refundOrders = currentOrders.filter(o => o.status === 'refunds').length;
-      const refundedOrders = currentOrders.filter(o => o.refund_status === 'succeeded').length;
+      // Debug: Log refunded orders calculation
+      const refundedOrders = currentOrders.filter(o => {
+        const isRefunded = o.refund_status === 'succeeded';
+        if (isRefunded) {
+          console.log('Found refunded order:', o.id, 'refund_status:', o.refund_status);
+        }
+        return isRefunded;
+      }).length;
+      console.log('Total refunded orders:', refundedOrders, 'out of', currentOrders.length, 'total orders');
       const failedRefunds = currentOrders.filter(o => o.refund_status === 'failed').length;
       const failedOrders = 0; // No "failed" status in SMMGen - using cancelled_orders instead
       const rejectedDeposits = currentDeposits.filter(d => d.status === 'rejected').length;
@@ -575,29 +591,36 @@ const AdminDashboard = ({ user, onLogout }) => {
         .map(o => o.id)
     );
 
-    // Calculate all approved deposits, EXCLUDING refund deposit transactions
-    // (Refund deposits shouldn't exist after the fix, but exclude them just in case)
+    // Calculate all approved deposits
     const allApprovedDeposits = allTransactions
       .filter(t => 
         t.user_id === transaction.user_id &&
         t.type === 'deposit' &&
-        t.status === 'approved' &&
-        !(t.order_id && refundedOrderIds.has(t.order_id)) // Exclude refund deposits
+        t.status === 'approved'
       )
       .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
 
-    // Calculate orders, EXCLUDING refunded orders (since refund already added balance back directly)
+    // Calculate all approved refunds (money returned to user)
+    const allApprovedRefunds = allTransactions
+      .filter(t =>
+        t.user_id === transaction.user_id &&
+        t.type === 'refund' &&
+        t.status === 'approved'
+      )
+      .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+
+    // Calculate orders (money spent)
     const allCompletedOrders = allTransactions
-      .filter(t => 
+      .filter(t =>
         t.user_id === transaction.user_id &&
         t.type === 'order' &&
-        t.status === 'approved' &&
-        !refundedOrderIds.has(t.order_id) // Exclude transactions for refunded orders
+        t.status === 'approved'
       )
       .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
 
-    const expectedBalanceFromTransactions = allApprovedDeposits - allCompletedOrders;
-    const balanceWithoutThisTransaction = allApprovedDeposits - transactionAmount - allCompletedOrders;
+    // Balance = deposits + refunds - orders
+    const expectedBalanceFromTransactions = allApprovedDeposits + allApprovedRefunds - allCompletedOrders;
+    const balanceWithoutThisTransaction = allApprovedDeposits + allApprovedRefunds - transactionAmount - allCompletedOrders;
     const minExpectedBalanceWithTransaction = balanceWithoutThisTransaction + transactionAmount;
 
     const tolerance = Math.max(0.10, expectedBalanceFromTransactions * 0.01);
@@ -938,6 +961,28 @@ const AdminDashboard = ({ user, onLogout }) => {
   const handleOrderStatusUpdate = async (orderId, status) => {
     setLoading(true);
     try {
+      // Get current order to get previous status
+      const { data: currentOrder } = await supabase
+        .from('orders')
+        .select('status')
+        .eq('id', orderId)
+        .single();
+
+      const previousStatus = currentOrder?.status;
+
+      // Get current user for created_by
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+
+      // Save status to history first
+      await saveOrderStatusHistory(
+        orderId,
+        status,
+        'manual',
+        null, // No SMMGen response for manual changes
+        previousStatus,
+        authUser?.id // Admin who made the change
+      );
+
       const updateData = { status };
       if (status === 'completed') {
         updateData.completed_at = new Date().toISOString();
@@ -1001,8 +1046,9 @@ const AdminDashboard = ({ user, onLogout }) => {
         throw new Error(refundResult.error || 'Failed to process refund');
       }
 
-      // Refresh data to show updated balance
-      await new Promise(resolve => setTimeout(resolve, 300));
+      // Refresh data to show updated balance and stats
+      // Increased delay to ensure database has synced the refund_status update
+      await new Promise(resolve => setTimeout(resolve, 500));
       await fetchAllData();
     } catch (error) {
       console.error('Error processing refund:', error);
@@ -2150,7 +2196,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                           <div key={order.id} className="bg-white/50 hover:bg-white/70 transition-colors">
                             <div className="grid grid-cols-12 gap-4 p-4 items-center">
                               {/* Status */}
-                              <div className="col-span-1.5">
+                              <div className="col-span-1.5 flex flex-col gap-1">
                                 <span className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 w-fit ${
                                 order.status === 'completed' ? 'bg-green-100 text-green-700' :
                                 order.status === 'processing' || order.status === 'in progress' ? 'bg-blue-100 text-blue-700' :
@@ -2159,7 +2205,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                                 order.status === 'refunds' ? 'bg-purple-100 text-purple-700' :
                                 'bg-yellow-100 text-yellow-700'
                               }`}>
-                                {order.status || 'pending'}
+                                {order.status ? String(order.status) : 'pending'}
                               </span>
                                 {order.refund_status && (
                                   <p className="text-xs text-gray-500 mt-1">

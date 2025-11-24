@@ -97,21 +97,21 @@ export const processAutomaticRefund = async (order) => {
       throw new Error('Balance update verification failed');
     }
 
-    // IMPORTANT: Do NOT create a deposit transaction for refunds
-    // The balance has already been updated directly above.
-    // Creating a deposit transaction would cause double-crediting if balance is calculated from transactions:
-    // - Original order transaction: type='order', amount=X (deducts from balance)
-    // - If we create refund transaction: type='deposit', amount=X (adds to balance)
-    // - Balance calculation: deposits - orders = (all_deposits + X) - (all_orders) = correct
-    // BUT the balance was already updated directly, so we'd be double-crediting!
-    // 
-    // Instead, we should mark the original order transaction as refunded or create a reversal transaction.
-    // For now, we'll just update the balance directly without creating a transaction.
-    // The refund_status on the order itself tracks that the refund happened.
-    
-    // Optional: You could create a transaction with type='order' and negative amount, or
-    // add a 'refunded' flag to the original order transaction, but for now we'll skip transaction creation
-    // to prevent double-crediting.
+    // Create a refund transaction record
+    try {
+      await supabase
+        .from('transactions')
+        .insert({
+          user_id: order.user_id,
+          amount: refundAmount,
+          type: 'refund',
+          status: 'approved',
+          order_id: order.id // Link to the order being refunded
+        });
+    } catch (transactionError) {
+      console.warn('Failed to create refund transaction record:', transactionError);
+      // Don't fail the refund if transaction record creation fails - balance was already updated
+    }
 
     // Mark refund as succeeded
     const { error: statusError } = await supabase
@@ -205,10 +205,21 @@ export const processManualRefund = async (order) => {
       throw new Error('Balance update verification failed');
     }
 
-    // IMPORTANT: Do NOT create a deposit transaction for refunds
-    // The balance has already been updated directly above.
-    // Creating a deposit transaction would cause double-crediting if balance is calculated from transactions.
-    // The refund_status on the order itself tracks that the refund happened.
+    // Create a refund transaction record
+    try {
+      await supabase
+        .from('transactions')
+        .insert({
+          user_id: order.user_id,
+          amount: refundAmount,
+          type: 'refund',
+          status: 'approved',
+          order_id: order.id // Link to the order being refunded
+        });
+    } catch (transactionError) {
+      console.warn('Failed to create refund transaction record:', transactionError);
+      // Don't fail the refund if transaction record creation fails - balance was already updated
+    }
 
     // Update order status and refund status
     const { error: orderError } = await supabase
