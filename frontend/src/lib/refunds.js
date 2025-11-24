@@ -98,19 +98,24 @@ export const processAutomaticRefund = async (order) => {
     }
 
     // Create a refund transaction record
-    try {
-      await supabase
-        .from('transactions')
-        .insert({
-          user_id: order.user_id,
-          amount: refundAmount,
-          type: 'refund',
-          status: 'approved',
-          order_id: order.id // Link to the order being refunded
-        });
-    } catch (transactionError) {
-      console.warn('Failed to create refund transaction record:', transactionError);
-      // Don't fail the refund if transaction record creation fails - balance was already updated
+    const { data: refundTransaction, error: transactionError } = await supabase
+      .from('transactions')
+      .insert({
+        user_id: order.user_id,
+        amount: refundAmount,
+        type: 'refund',
+        status: 'approved',
+        order_id: order.id // Link to the order being refunded
+      })
+      .select()
+      .single();
+
+    if (transactionError) {
+      console.error('Failed to create refund transaction record:', transactionError);
+      // Log error but don't fail the refund - balance was already updated
+      // The transaction record is important for audit trail, so log it prominently
+    } else {
+      console.log('Refund transaction created successfully:', refundTransaction);
     }
 
     // Mark refund as succeeded
@@ -206,19 +211,24 @@ export const processManualRefund = async (order) => {
     }
 
     // Create a refund transaction record
-    try {
-      await supabase
-        .from('transactions')
-        .insert({
-          user_id: order.user_id,
-          amount: refundAmount,
-          type: 'refund',
-          status: 'approved',
-          order_id: order.id // Link to the order being refunded
-        });
-    } catch (transactionError) {
-      console.warn('Failed to create refund transaction record:', transactionError);
-      // Don't fail the refund if transaction record creation fails - balance was already updated
+    const { data: refundTransaction, error: transactionError } = await supabase
+      .from('transactions')
+      .insert({
+        user_id: order.user_id,
+        amount: refundAmount,
+        type: 'refund',
+        status: 'approved',
+        order_id: order.id // Link to the order being refunded
+      })
+      .select()
+      .single();
+
+    if (transactionError) {
+      console.error('Failed to create refund transaction record:', transactionError);
+      // Log error but don't fail the refund - balance was already updated
+      // The transaction record is important for audit trail, so log it prominently
+    } else {
+      console.log('Refund transaction created successfully:', refundTransaction);
     }
 
     // Update order status and refund status
