@@ -3176,6 +3176,9 @@ const AdminDashboard = ({ user, onLogout }) => {
                               {/* Transaction ID */}
                               <div className="text-center">
                                 <p className="text-xs text-gray-700 break-all">{transaction.id}</p>
+                                {transaction.paystack_reference && (
+                                  <p className="text-xs text-gray-500">Ref: {transaction.paystack_reference}</p>
+                                )}
                                 {transaction.order_id && (
                                   <p className="text-xs text-gray-500">Order: {transaction.order_id.slice(0, 8)}...</p>
                                 )}

@@ -123,13 +123,14 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                 // Payment was successful, update transaction
                 console.log('Found successful payment for pending transaction:', transaction.id);
                 
-                // Update transaction status and store Paystack status
+                // Update transaction status and store Paystack status and reference
                 // Payment was confirmed, so status must be approved
                 const { error: updateError } = await supabase
                   .from('transactions')
                   .update({ 
                     status: 'approved',
-                    paystack_status: verifyData.status // Store Paystack status
+                    paystack_status: verifyData.status, // Store Paystack status
+                    paystack_reference: verifyData.reference || transaction.paystack_reference // Always store reference from verification
                   })
                   .eq('id', transaction.id);
 
@@ -140,7 +141,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                     .from('transactions')
                     .update({ 
                       status: 'approved',
-                      paystack_status: verifyData.status
+                      paystack_status: verifyData.status,
+                      paystack_reference: verifyData.reference || transaction.paystack_reference
                     })
                     .eq('id', transaction.id);
                 }
@@ -148,7 +150,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                 // Verify status was updated
                 const { data: statusCheck } = await supabase
                   .from('transactions')
-                  .select('status, paystack_status')
+                  .select('status, paystack_status, paystack_reference')
                   .eq('id', transaction.id)
                   .maybeSingle();
 
@@ -159,7 +161,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                     .from('transactions')
                     .update({ 
                       status: 'approved',
-                      paystack_status: verifyData.status
+                      paystack_status: verifyData.status,
+                      paystack_reference: verifyData.reference || transaction.paystack_reference
                     })
                     .eq('id', transaction.id);
                 }
@@ -189,12 +192,13 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                   status: verifyData.status
                 });
                 
-                // Force update to rejected and store Paystack status
+                // Force update to rejected and store Paystack status and reference
                 const { error: updateError } = await supabase
                   .from('transactions')
                   .update({ 
                     status: 'rejected',
-                    paystack_status: verifyData.status // Store actual Paystack status
+                    paystack_status: verifyData.status, // Store actual Paystack status
+                    paystack_reference: verifyData.reference || transaction.paystack_reference // Store reference if available
                   })
                   .eq('id', transaction.id);
                 
@@ -205,17 +209,21 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                     .from('transactions')
                     .update({ 
                       status: 'rejected',
-                      paystack_status: verifyData.status
+                      paystack_status: verifyData.status,
+                      paystack_reference: verifyData.reference || transaction.paystack_reference // Store reference if available
                     })
                     .eq('id', transaction.id);
                 } else {
                   console.log('Transaction marked as rejected (abandoned/failed):', transaction.id);
                 }
               } else {
-                // Store Paystack status even if it's not success/failed/abandoned (e.g., pending)
+                // Store Paystack status and reference even if it's not success/failed/abandoned (e.g., pending)
                 await supabase
                   .from('transactions')
-                  .update({ paystack_status: verifyData.status })
+                  .update({ 
+                    paystack_status: verifyData.status,
+                    paystack_reference: verifyData.reference || transaction.paystack_reference // Store reference if available
+                  })
                   .eq('id', transaction.id);
               }
               
@@ -1144,7 +1152,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       // Fetch transaction to check current status and get reference
       const { data: existingTransaction, error: fetchError } = await supabase
         .from('transactions')
-        .select('status, paystack_reference')
+        .select('status, paystack_reference, amount, user_id')
         .eq('id', transactionId)
         .maybeSingle();
 
@@ -1194,12 +1202,13 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                 status: verifyData.status
               });
               
-              // Update transaction status to rejected and store Paystack status
+              // Update transaction status to rejected and store Paystack status and reference
               const { error: abandonError } = await supabase
                 .from('transactions')
                 .update({ 
                   status: 'rejected',
-                  paystack_status: verifyData.status
+                  paystack_status: verifyData.status,
+                  paystack_reference: verifyData.reference || existingTransaction?.paystack_reference // Store reference if available
                 })
                 .eq('id', transactionId);
               
@@ -1214,11 +1223,14 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               return; // Exit early since we've handled the abandoned transaction
             }
             
-            // If payment status is something else, still store it
+            // If payment status is something else, still store it and reference
             if (verifyData.status) {
               await supabase
                 .from('transactions')
-                .update({ paystack_status: verifyData.status })
+                .update({ 
+                  paystack_status: verifyData.status,
+                  paystack_reference: verifyData.reference || existingTransaction?.paystack_reference // Store reference if available
+                })
                 .eq('id', transactionId);
             }
           }
