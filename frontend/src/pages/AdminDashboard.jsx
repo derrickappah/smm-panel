@@ -1045,8 +1045,24 @@ const AdminDashboard = ({ user, onLogout }) => {
       
       console.log('Updating service with data:', updateData);
       console.log('Service ID:', serviceId);
+      console.log('Service ID type:', typeof serviceId);
       
-      // First, perform the update and check the response
+      // First, verify the service exists
+      const { data: existingService, error: checkError } = await supabase
+        .from('services')
+        .select('id, name, enabled')
+        .eq('id', serviceId)
+        .single();
+      
+      if (checkError || !existingService) {
+        console.error('Service not found or error checking:', checkError);
+        toast.error(`Service not found. ID: ${serviceId}`);
+        return;
+      }
+      
+      console.log('Service exists:', existingService);
+      
+      // Perform the update and check the response
       const { data: updateResponse, error: updateError } = await supabase
         .from('services')
         .update(updateData)
