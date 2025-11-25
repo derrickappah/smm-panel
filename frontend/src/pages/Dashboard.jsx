@@ -2246,12 +2246,12 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                     <br />
                     <span className="mt-1 block">Text us on WhatsApp: </span>
                     <a 
-                      href="https://wa.me/233543774408" 
+                      href="https://wa.me/233559272762" 
                       target="_blank" 
                       rel="noopener noreferrer"
                       className="font-bold text-blue-600 hover:text-blue-800 underline"
                     >
-                      +233 543 774 408
+                      0559272762
                     </a>
                   </p>
                 </div>
@@ -2309,7 +2309,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                     type="number"
                     step="0.01"
                     min="10"
-                    placeholder="Minimum ₵10"
+                    placeholder="Enter the amount you sent"
                     value={manualDepositForm.amount}
                     onChange={(e) => setManualDepositForm({ ...manualDepositForm, amount: e.target.value })}
                     className="rounded-xl bg-white/70"
@@ -2386,12 +2386,12 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                     <br />
                     <span className="mt-1 block">Text us on WhatsApp: </span>
                     <a 
-                      href="https://wa.me/233543774408" 
+                      href="https://wa.me/233559272762" 
                       target="_blank" 
                       rel="noopener noreferrer"
                       className="font-bold text-blue-600 hover:text-blue-800 underline"
                     >
-                      +233 543 774 408
+                      0559272762
                     </a>
                   </p>
                 </div>
