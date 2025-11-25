@@ -1,0 +1,10 @@
+# robots.txt for BoostUp GH - boostupgh.com
+
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /auth
+
+# Sitemap location
+Sitemap: https://boostupgh.com/sitemap.xml
+
