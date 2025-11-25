@@ -1095,13 +1095,36 @@ const AdminDashboard = ({ user, onLogout }) => {
       setEditingService(null);
       
       // Update local state immediately for better UX
-      setServices(prevServices => 
-        prevServices.map(s => s.id === serviceId ? { ...s, ...data } : s)
-      );
+      setServices(prevServices => {
+        const updated = prevServices.map(s => {
+          if (s.id === serviceId) {
+            console.log('Updating service in state:', s.id, 'Old:', s, 'New:', data);
+            // Merge the data properly, ensuring all fields are updated
+            return { ...s, ...data };
+          }
+          return s;
+        });
+        console.log('Updated services state - total services:', updated.length);
+        return updated;
+      });
       
-      // Wait a moment for database to sync, then refresh all data
-      await new Promise(resolve => setTimeout(resolve, 300));
-      await fetchAllData(false); // Skip SMMGen status check on updates
+      // Wait longer for database to sync, then refresh services directly
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Fetch fresh services from database to ensure consistency
+      const { data: freshServices, error: refreshError } = await supabase
+        .from('services')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (!refreshError && freshServices) {
+        console.log('Refreshed services from database:', freshServices.length);
+        setServices(freshServices);
+      } else {
+        console.warn('Error refreshing services, using full refresh:', refreshError);
+        // Fallback to full refresh if direct fetch fails
+        await fetchAllData(false);
+      }
     } catch (error) {
       console.error('Failed to update service:', error);
       toast.error(error.message || 'Failed to update service. Check console for details.');
