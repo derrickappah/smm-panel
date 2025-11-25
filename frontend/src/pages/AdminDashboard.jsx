@@ -1030,9 +1030,17 @@ const AdminDashboard = ({ user, onLogout }) => {
   const handleUpdateService = async (serviceId, updates) => {
     setLoading(true);
     try {
+      // Ensure enabled is explicitly set as boolean
+      const updateData = {
+        ...updates,
+        enabled: Boolean(updates.enabled)
+      };
+      
+      console.log('Updating service with data:', updateData);
+      
       const { data, error } = await supabase
         .from('services')
-        .update(updates)
+        .update(updateData)
         .eq('id', serviceId)
         .select()
         .single();
@@ -4221,7 +4229,7 @@ const ServiceEditForm = ({ service, onSave, onCancel }) => {
     combo_service_ids: service.combo_service_ids || [],
     combo_smmgen_service_ids: service.combo_smmgen_service_ids || [],
     seller_only: service.seller_only || false,
-    enabled: service.enabled !== undefined ? service.enabled : true
+    enabled: service.enabled === true || service.enabled === undefined ? true : false
   });
 
   const handleSubmit = (e) => {
@@ -4240,7 +4248,7 @@ const ServiceEditForm = ({ service, onSave, onCancel }) => {
         ? formData.combo_smmgen_service_ids
         : null,
       seller_only: formData.seller_only || false,
-      enabled: formData.enabled !== undefined ? formData.enabled : true
+      enabled: formData.enabled === true
     });
   };
 
@@ -4341,7 +4349,7 @@ const ServiceEditForm = ({ service, onSave, onCancel }) => {
         <input
           type="checkbox"
           id="edit_enabled"
-          checked={formData.enabled !== false}
+          checked={formData.enabled === true}
           onChange={(e) => setFormData({ ...formData, enabled: e.target.checked })}
           className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
         />
