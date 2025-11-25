@@ -2380,6 +2380,21 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                 <p className="text-sm text-gray-600 text-center">
                   Your deposit will be reviewed and approved within 5 minutes.
                 </p>
+                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-xs sm:text-sm text-blue-800 text-center">
+                    <span className="font-semibold">Having issues with deposits?</span>
+                    <br />
+                    <span className="mt-1 block">Text us on WhatsApp: </span>
+                    <a 
+                      href="https://wa.me/233543774408" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="font-bold text-blue-600 hover:text-blue-800 underline"
+                    >
+                      +233 543 774 408
+                    </a>
+                  </p>
+                </div>
               </form>
             ) : null}
           </div>
