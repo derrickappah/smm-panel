@@ -1044,53 +1044,87 @@ const AdminDashboard = ({ user, onLogout }) => {
       });
       
       console.log('Updating service with data:', updateData);
+      console.log('Service ID:', serviceId);
       
-      // First, perform the update without .single() to avoid coercion issues
-      const { error: updateError } = await supabase
+      // First, perform the update and check the response
+      const { data: updateResponse, error: updateError } = await supabase
         .from('services')
         .update(updateData)
-        .eq('id', serviceId);
+        .eq('id', serviceId)
+        .select();
 
       if (updateError) {
         console.error('Error updating service:', updateError);
+        console.error('Error details:', JSON.stringify(updateError, null, 2));
         
         // Check for specific error types
         if (updateError.code === '42501') {
           // Permission denied (RLS policy issue)
           toast.error('Permission denied. Please ensure RLS policies allow admins to update services.');
+        } else if (updateError.code === '23505') {
+          // Unique constraint violation
+          toast.error('Update failed: Duplicate entry detected.');
         } else {
+          toast.error(`Update failed: ${updateError.message || 'Unknown error'}`);
           throw updateError;
         }
         return;
       }
 
-      // Then fetch the updated service separately
-      const { data, error: fetchError } = await supabase
-        .from('services')
-        .select('*')
-        .eq('id', serviceId)
-        .single();
-
-      if (fetchError) {
-        console.error('Error fetching updated service:', fetchError);
-        // Even if fetch fails, the update might have succeeded, so we'll refresh
-        toast.success('Service updated successfully! (Refreshing...)');
-        setEditingService(null);
-        await new Promise(resolve => setTimeout(resolve, 300));
-        await fetchAllData(false);
+      // Check if update actually affected any rows
+      if (!updateResponse || updateResponse.length === 0) {
+        console.error('Update returned no rows - service might not exist or update failed silently');
+        toast.error('Update failed: No rows were updated. The service might not exist.');
         return;
       }
 
+      console.log('Update response:', updateResponse);
+      console.log('Number of rows updated:', updateResponse.length);
+
+      // Use the data from the update response if available, otherwise fetch separately
+      let data = updateResponse[0];
+      
       if (!data) {
-        // Update might have succeeded but fetch failed, refresh to get latest
-        toast.success('Service updated successfully! (Refreshing...)');
-        setEditingService(null);
-        await new Promise(resolve => setTimeout(resolve, 300));
-        await fetchAllData(false);
-        return;
+        // Fallback: fetch the updated service separately
+        const { data: fetchedData, error: fetchError } = await supabase
+          .from('services')
+          .select('*')
+          .eq('id', serviceId)
+          .single();
+
+        if (fetchError) {
+          console.error('Error fetching updated service:', fetchError);
+          toast.error('Update may have succeeded but could not verify. Please refresh.');
+          setEditingService(null);
+          await new Promise(resolve => setTimeout(resolve, 500));
+          await fetchAllData(false);
+          return;
+        }
+
+        data = fetchedData;
+      }
+
+      // Verify the update actually changed the values
+      const updateSucceeded = Object.keys(updateData).every(key => {
+        if (key === 'enabled') {
+          // Boolean comparison
+          return data[key] === Boolean(updateData[key]);
+        }
+        return String(data[key]) === String(updateData[key]);
+      });
+
+      if (!updateSucceeded) {
+        console.warn('Update verification failed. Expected:', updateData, 'Got:', data);
+        console.warn('Mismatched fields:', Object.keys(updateData).filter(key => {
+          if (key === 'enabled') {
+            return data[key] !== Boolean(updateData[key]);
+          }
+          return String(data[key]) !== String(updateData[key]);
+        }));
       }
 
       console.log('Service updated successfully:', data);
+      console.log('Update verification:', updateSucceeded ? 'PASSED' : 'FAILED');
       toast.success('Service updated successfully!');
       setEditingService(null);
       
