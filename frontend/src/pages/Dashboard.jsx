@@ -82,7 +82,6 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     fetchServices();
     fetchRecentOrders();
     verifyPendingPayments(); // Check for pending payments that might have succeeded
-  }, []);
     
     // Ensure PaystackPop is loaded (react-paystack should load it, but we ensure it's available)
     if (!window.PaystackPop && !document.querySelector('script[src*="paystack"]')) {
