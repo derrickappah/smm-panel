@@ -2381,7 +2381,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                   Your deposit will be reviewed and approved within 5 minutes.
                 </p>
               </form>
-            )}
+            ) : null}
           </div>
 
           {/* Quick Order */}
