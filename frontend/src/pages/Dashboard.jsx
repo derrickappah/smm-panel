@@ -2243,7 +2243,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
                   <h3 className="font-semibold text-blue-900 mb-2">Instructions:</h3>
                   <ol className="text-sm text-blue-800 space-y-1 list-decimal list-inside">
-                    <li>Make payment to <span className="font-bold">0597127605</span> via MTN Mobile Money</li>
+                    <li>Make payment to <span className="font-bold">0559272762</span> via MTN Mobile Money</li>
                     <li>Use your <span className="font-bold">Full Name</span> as Reference</li>
                     <li>Amount must be <span className="font-bold">₵10</span> and above</li>
                     <li>Network: <span className="font-bold">MTN</span></li>
@@ -2252,7 +2252,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                   </ol>
                   <div className="mt-3 p-2 bg-white rounded border border-blue-300">
                     <p className="text-xs text-blue-700 font-medium mb-1">Tap and hold to copy:</p>
-                    <p className="text-lg font-bold text-blue-900 select-all">0597127605</p>
+                    <p className="text-lg font-bold text-blue-900 select-all">0559272762</p>
                   </div>
                 </div>
 
