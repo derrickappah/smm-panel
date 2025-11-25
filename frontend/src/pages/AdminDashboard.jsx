@@ -62,7 +62,8 @@ const AdminDashboard = ({ user, onLogout }) => {
   // Payment method settings
   const [paymentMethodSettings, setPaymentMethodSettings] = useState({
     paystack_enabled: true,
-    manual_enabled: true
+    manual_enabled: true,
+    hubtel_enabled: true
   });
   
   // Search and filter states
@@ -222,7 +223,7 @@ const AdminDashboard = ({ user, onLogout }) => {
         supabase.from('transactions').select('*, profiles(email, name, balance)').order('created_at', { ascending: false }),
         supabase.from('services').select('*').order('created_at', { ascending: false }),
         supabase.from('support_tickets').select('*, profiles(name, email)').order('created_at', { ascending: false }),
-        supabase.from('app_settings').select('*').in('key', ['payment_method_paystack_enabled', 'payment_method_manual_enabled'])
+        supabase.from('app_settings').select('*').in('key', ['payment_method_paystack_enabled', 'payment_method_manual_enabled', 'payment_method_hubtel_enabled'])
       ]);
 
       // Check for errors and provide specific messages
@@ -393,7 +394,8 @@ const AdminDashboard = ({ user, onLogout }) => {
         });
         setPaymentMethodSettings({
           paystack_enabled: settings.payment_method_paystack_enabled !== false, // Default to true
-          manual_enabled: settings.payment_method_manual_enabled !== false // Default to true
+          manual_enabled: settings.payment_method_manual_enabled !== false, // Default to true
+          hubtel_enabled: settings.payment_method_hubtel_enabled !== false // Default to true
         });
       }
 
@@ -834,18 +836,34 @@ const AdminDashboard = ({ user, onLogout }) => {
   // For admin: Manually credit balance for a deposit
   const handleTogglePaymentMethod = async (method, enabled) => {
     try {
-      const settingKey = method === 'paystack' 
-        ? 'payment_method_paystack_enabled' 
-        : 'payment_method_manual_enabled';
+      let settingKey, description, stateKey, displayName;
+      
+      if (method === 'paystack') {
+        settingKey = 'payment_method_paystack_enabled';
+        description = 'Enable/disable Paystack payment method';
+        stateKey = 'paystack_enabled';
+        displayName = 'Paystack';
+      } else if (method === 'manual') {
+        settingKey = 'payment_method_manual_enabled';
+        description = 'Enable/disable Manual (Mobile Money) payment method';
+        stateKey = 'manual_enabled';
+        displayName = 'Manual';
+      } else if (method === 'hubtel') {
+        settingKey = 'payment_method_hubtel_enabled';
+        description = 'Enable/disable Hubtel payment method';
+        stateKey = 'hubtel_enabled';
+        displayName = 'Hubtel';
+      } else {
+        toast.error('Unknown payment method');
+        return;
+      }
       
       const { error } = await supabase
         .from('app_settings')
         .upsert({
           key: settingKey,
           value: enabled ? 'true' : 'false',
-          description: method === 'paystack' 
-            ? 'Enable/disable Paystack payment method'
-            : 'Enable/disable Manual (Mobile Money) payment method'
+          description: description
         }, {
           onConflict: 'key'
         });
@@ -858,10 +876,10 @@ const AdminDashboard = ({ user, onLogout }) => {
 
       setPaymentMethodSettings(prev => ({
         ...prev,
-        [method === 'paystack' ? 'paystack_enabled' : 'manual_enabled']: enabled
+        [stateKey]: enabled
       }));
 
-      toast.success(`${method === 'paystack' ? 'Paystack' : 'Manual'} payment method ${enabled ? 'enabled' : 'disabled'}`);
+      toast.success(`${displayName} payment method ${enabled ? 'enabled' : 'disabled'}`);
     } catch (error) {
       console.error('Error toggling payment method:', error);
       toast.error('Failed to update payment method setting');
@@ -2836,6 +2854,36 @@ const AdminDashboard = ({ user, onLogout }) => {
                       )}
                     </Button>
                   </div>
+                  
+                  <div className="flex items-center justify-between p-4 bg-white/50 rounded-xl border-2 border-gray-200">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-red-600 rounded-lg flex items-center justify-center">
+                        <CheckCircle className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-900">Hubtel</p>
+                        <p className="text-sm text-gray-600">Hubtel payment gateway</p>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={() => handleTogglePaymentMethod('hubtel', !paymentMethodSettings.hubtel_enabled)}
+                      variant={paymentMethodSettings.hubtel_enabled ? "default" : "outline"}
+                      size="sm"
+                      className={paymentMethodSettings.hubtel_enabled ? "bg-green-600 hover:bg-green-700" : ""}
+                    >
+                      {paymentMethodSettings.hubtel_enabled ? (
+                        <>
+                          <Power className="w-4 h-4 mr-2" />
+                          Enabled
+                        </>
+                      ) : (
+                        <>
+                          <PowerOff className="w-4 h-4 mr-2" />
+                          Disabled
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
               
@@ -4233,7 +4281,7 @@ const AdminDashboard = ({ user, onLogout }) => {
               </div>
             </div>
           </TabsContent>
-            </div>
+            </div>add
         </Tabs>
         </div>
       </div>

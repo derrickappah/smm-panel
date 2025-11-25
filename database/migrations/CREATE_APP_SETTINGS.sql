@@ -14,11 +14,12 @@ CREATE TABLE IF NOT EXISTS app_settings (
 -- Create index for faster lookups
 CREATE INDEX IF NOT EXISTS idx_app_settings_key ON app_settings(key);
 
--- Insert default payment method settings (both enabled by default)
+-- Insert default payment method settings (all enabled by default)
 INSERT INTO app_settings (key, value, description) 
 VALUES 
     ('payment_method_paystack_enabled', 'true', 'Enable/disable Paystack payment method'),
-    ('payment_method_manual_enabled', 'true', 'Enable/disable Manual (Mobile Money) payment method')
+    ('payment_method_manual_enabled', 'true', 'Enable/disable Manual (Mobile Money) payment method'),
+    ('payment_method_hubtel_enabled', 'true', 'Enable/disable Hubtel payment method')
 ON CONFLICT (key) DO NOTHING;
 
 -- Add comment

@@ -42,7 +42,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
   const [paymentMethodSettings, setPaymentMethodSettings] = useState({
     paystack_enabled: true,
-    manual_enabled: true
+    manual_enabled: true,
+    hubtel_enabled: true
   });
 
   useEffect(() => {
@@ -52,7 +53,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         const { data, error } = await supabase
           .from('app_settings')
           .select('*')
-          .in('key', ['payment_method_paystack_enabled', 'payment_method_manual_enabled']);
+          .in('key', ['payment_method_paystack_enabled', 'payment_method_manual_enabled', 'payment_method_hubtel_enabled']);
         
         if (!error && data) {
           const settings = {};
@@ -61,18 +62,21 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           });
           const newSettings = {
             paystack_enabled: settings.payment_method_paystack_enabled !== false,
-            manual_enabled: settings.payment_method_manual_enabled !== false
+            manual_enabled: settings.payment_method_manual_enabled !== false,
+            hubtel_enabled: settings.payment_method_hubtel_enabled !== false
           };
           setPaymentMethodSettings(newSettings);
           
           // Auto-select method based on what's enabled
-          if (!newSettings.paystack_enabled && newSettings.manual_enabled) {
+          if (!newSettings.paystack_enabled && newSettings.manual_enabled && !newSettings.hubtel_enabled) {
             setDepositMethod('manual');
-          } else if (newSettings.paystack_enabled && !newSettings.manual_enabled) {
+          } else if (newSettings.paystack_enabled && !newSettings.manual_enabled && !newSettings.hubtel_enabled) {
             setDepositMethod('paystack');
-          } else if (newSettings.paystack_enabled && newSettings.manual_enabled) {
-            // Both enabled, default to paystack
-            setDepositMethod('paystack');
+          } else if (!newSettings.paystack_enabled && !newSettings.manual_enabled && newSettings.hubtel_enabled) {
+            setDepositMethod('hubtel');
+          } else if (newSettings.paystack_enabled || newSettings.manual_enabled || newSettings.hubtel_enabled) {
+            // At least one enabled, default to paystack if available, else first available
+            setDepositMethod(newSettings.paystack_enabled ? 'paystack' : (newSettings.manual_enabled ? 'manual' : 'hubtel'));
           } else {
             // Both disabled
             setDepositMethod(null);
@@ -1665,6 +1669,54 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     }
   };
 
+  const handleHubtelDeposit = async (e) => {
+    e.preventDefault();
+    if (!depositAmount || parseFloat(depositAmount) <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
+    const amount = parseFloat(depositAmount);
+    if (amount < 1) {
+      toast.error('Minimum deposit amount is ₵1');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) throw new Error('Not authenticated');
+
+      // Create transaction record for Hubtel payment
+      const { data: transaction, error } = await supabase
+        .from('transactions')
+        .insert({
+          user_id: authUser.id,
+          amount: amount,
+          type: 'deposit',
+          status: 'pending',
+          deposit_method: 'hubtel'
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating Hubtel deposit transaction:', error);
+        throw error;
+      }
+
+      // TODO: Integrate Hubtel payment API here
+      // For now, show a message that Hubtel integration is pending
+      toast.info('Hubtel payment integration is in progress. Please use Paystack or Manual deposit for now.');
+      setDepositAmount('');
+    } catch (error) {
+      console.error('Hubtel deposit error:', error);
+      toast.error(error.message || 'Failed to process Hubtel deposit. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDeposit = async (e) => {
     e.preventDefault();
     if (!depositAmount || parseFloat(depositAmount) <= 0) {
@@ -2217,7 +2269,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
                 <p className="text-sm text-gray-600 text-center">Loading payment methods...</p>
               </div>
-            ) : (!paymentMethodSettings.paystack_enabled && !paymentMethodSettings.manual_enabled) ? (
+            ) : (!paymentMethodSettings.paystack_enabled && !paymentMethodSettings.manual_enabled && !paymentMethodSettings.hubtel_enabled) ? (
               <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                 <p className="text-sm text-yellow-800 text-center">
                   All payment methods are currently disabled. Please contact support.
