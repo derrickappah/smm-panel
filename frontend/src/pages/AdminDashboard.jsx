@@ -55,6 +55,7 @@ const AdminDashboard = ({ user, onLogout }) => {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [manuallyCrediting, setManuallyCrediting] = useState(null);
+  const [approvingDeposit, setApprovingDeposit] = useState(null);
   const [balanceCheckResults, setBalanceCheckResults] = useState({});
   const [checkingBalances, setCheckingBalances] = useState(false);
   const [userProfiles, setUserProfiles] = useState({});
@@ -212,7 +213,7 @@ const AdminDashboard = ({ user, onLogout }) => {
       const [usersRes, ordersRes, depositsRes, transactionsRes, servicesRes, ticketsRes] = await Promise.all([
         supabase.from('profiles').select('*').order('created_at', { ascending: false }),
         supabase.from('orders').select('*, services(name, platform), profiles(name, email, phone_number)').order('created_at', { ascending: false }),
-        supabase.from('transactions').select('*, profiles(email, name)').eq('type', 'deposit').order('created_at', { ascending: false }),
+        supabase.from('transactions').select('*, profiles(email, name, phone_number)').eq('type', 'deposit').order('created_at', { ascending: false }),
         supabase.from('transactions').select('*, profiles(email, name, balance)').order('created_at', { ascending: false }),
         supabase.from('services').select('*').order('created_at', { ascending: false }),
         supabase.from('support_tickets').select('*, profiles(name, email)').order('created_at', { ascending: false })
@@ -813,6 +814,60 @@ const AdminDashboard = ({ user, onLogout }) => {
   };
 
   // For admin: Manually credit balance for a deposit
+  const handleApproveManualDeposit = async (deposit) => {
+    setApprovingDeposit(deposit.id);
+    try {
+      const userProfile = userProfiles[deposit.user_id];
+      if (!userProfile) {
+        toast.error('User profile not found');
+        return;
+      }
+
+      const currentBalance = parseFloat(userProfile.balance || 0);
+      const depositAmount = parseFloat(deposit.amount || 0);
+      const newBalance = currentBalance + depositAmount;
+
+      // Update transaction status to approved
+      const { error: transactionError } = await supabase
+        .from('transactions')
+        .update({ status: 'approved' })
+        .eq('id', deposit.id);
+
+      if (transactionError) {
+        console.error('Error updating transaction status:', transactionError);
+        toast.error('Failed to update transaction status: ' + transactionError.message);
+        return;
+      }
+
+      // Update user balance
+      const { error: balanceError } = await supabase
+        .from('profiles')
+        .update({ balance: newBalance })
+        .eq('id', deposit.user_id);
+
+      if (balanceError) {
+        console.error('Error updating balance:', balanceError);
+        toast.error('Failed to update balance: ' + balanceError.message);
+        // Try to revert transaction status
+        await supabase
+          .from('transactions')
+          .update({ status: 'pending' })
+          .eq('id', deposit.id);
+        return;
+      }
+
+      toast.success(`Manual deposit approved! ₵${depositAmount.toFixed(2)} added to user's account.`);
+      
+      // Refresh data
+      await fetchAllData(false);
+    } catch (error) {
+      console.error('Error approving manual deposit:', error);
+      toast.error('Failed to approve deposit: ' + error.message);
+    } finally {
+      setApprovingDeposit(null);
+    }
+  };
+
   const handleManualCredit = async (transaction) => {
     setManuallyCrediting(transaction.id);
     try {
@@ -2126,17 +2181,18 @@ const AdminDashboard = ({ user, onLogout }) => {
                   <div className="overflow-hidden rounded-xl border border-white/20">
                     <div className="max-h-[600px] overflow-y-auto overflow-x-auto">
                       {/* Fixed Header */}
-                      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white sticky top-0 z-10 min-w-[1000px]">
-                        <div className="grid grid-cols-12 gap-4 p-4 font-semibold text-sm">
-                          <div className="col-span-2">Status</div>
-                          <div className="col-span-2">Amount</div>
-                          <div className="col-span-2">Time</div>
-                          <div className="col-span-3">User</div>
-                          <div className="col-span-3">Transaction Details</div>
+                      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white sticky top-0 z-10 min-w-[1400px]">
+                        <div className="grid grid-cols-[2fr_2fr_2fr_3fr_3fr_2fr] gap-4 p-4 font-semibold text-sm text-center">
+                          <div>Status</div>
+                          <div>Method</div>
+                          <div>Amount</div>
+                          <div>User</div>
+                          <div>Transaction Details</div>
+                          <div>Actions</div>
                         </div>
                       </div>
                       {/* Scrollable List */}
-                      <div className="divide-y divide-gray-200/50 min-w-[1000px]">
+                      <div className="divide-y divide-gray-200/50 min-w-[1400px]">
                         {paginatedDeposits.map((deposit) => {
                     const statusConfig = {
                       pending: { label: 'Pending', color: 'bg-yellow-100 text-yellow-700', icon: Clock },
@@ -2146,59 +2202,98 @@ const AdminDashboard = ({ user, onLogout }) => {
                     const status = statusConfig[deposit.status] || statusConfig.pending;
                     const StatusIcon = status.icon;
 
+                    const isManual = deposit.deposit_method === 'manual' || deposit.deposit_method === 'momo';
+                    const isPaystack = deposit.deposit_method === 'paystack' || (!deposit.deposit_method && deposit.paystack_reference);
+
                     return (
                           <div key={deposit.id} className="bg-white/50 hover:bg-white/70 transition-colors">
-                            <div className="grid grid-cols-12 gap-4 p-4 items-center">
+                            <div className="grid grid-cols-[2fr_2fr_2fr_3fr_3fr_2fr] gap-4 p-4 items-center">
                               {/* Status */}
-                              <div className="col-span-2">
-                                <span className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 w-fit ${status.color}`}>
+                              <div className="flex justify-center">
+                                <span className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 ${status.color}`}>
                                   <StatusIcon className="w-3.5 h-3.5" />
-                                {status.label}
-                              </span>
-                            </div>
-                              {/* Amount */}
-                              <div className="col-span-2">
-                                <p className="font-semibold text-gray-900">₵{deposit.amount.toFixed(2)}</p>
+                                  {status.label}
+                                </span>
                               </div>
-                              {/* Time */}
-                              <div className="col-span-2">
-                                <p className="text-sm text-gray-700">{new Date(deposit.created_at).toLocaleDateString()}</p>
-                                <p className="text-xs text-gray-500">{new Date(deposit.created_at).toLocaleTimeString()}</p>
+                              {/* Method */}
+                              <div className="flex justify-center">
+                                {isManual ? (
+                                  <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 flex items-center gap-1.5">
+                                    <Wallet className="w-3.5 h-3.5" />
+                                    Manual (MOMO)
+                                  </span>
+                                ) : isPaystack ? (
+                                  <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700 flex items-center gap-1.5">
+                                    <CheckCircle className="w-3.5 h-3.5" />
+                                    Paystack
+                                  </span>
+                                ) : (
+                                  <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                                    Unknown
+                                  </span>
+                                )}
+                              </div>
+                              {/* Amount */}
+                              <div className="text-center">
+                                <p className="font-semibold text-gray-900">₵{deposit.amount.toFixed(2)}</p>
+                                <p className="text-xs text-gray-500">{new Date(deposit.created_at).toLocaleDateString()}</p>
+                                <p className="text-xs text-gray-400">{new Date(deposit.created_at).toLocaleTimeString()}</p>
                               </div>
                               {/* User */}
-                              <div className="col-span-3">
-                                <p className="font-medium text-gray-900">{deposit.profiles?.name || 'Unknown'}</p>
-                                <p className="text-sm text-gray-600">{deposit.profiles?.email || deposit.user_id.slice(0, 8)}</p>
+                              <div className="text-center">
+                                <p className="font-medium text-gray-900 text-sm">{deposit.profiles?.name || 'Unknown'}</p>
+                                <p className="text-xs text-gray-600 break-all">{deposit.profiles?.email || deposit.user_id.slice(0, 8)}</p>
                                 {deposit.profiles?.phone_number && (
                                   <p className="text-xs text-gray-500">📱 {deposit.profiles.phone_number}</p>
                                 )}
+                                {isManual && deposit.momo_number && (
+                                  <p className="text-xs text-blue-600 mt-1">MOMO: {deposit.momo_number}</p>
+                                )}
                               </div>
                               {/* Transaction Details */}
-                              <div className="col-span-3">
-                            {deposit.status === 'approved' && (
-                                  <p className="text-xs text-green-600 flex items-center gap-1.5">
-                                    <CheckCircle className="w-3.5 h-3.5" />
-                                    Payment confirmed via Paystack
-                                  </p>
-                            )}
-                            {deposit.status === 'rejected' && (
-                                  <p className="text-xs text-red-600 flex items-center gap-1.5">
-                                    <XCircle className="w-3.5 h-3.5" />
-                                    Payment was cancelled
-                                  </p>
-                            )}
-                            {deposit.status === 'pending' && (
-                                  <p className="text-xs text-yellow-600 flex items-center gap-1.5">
-                                    <Clock className="w-3.5 h-3.5" />
-                                    Awaiting payment confirmation
-                                  </p>
+                              <div className="text-center">
+                                {isPaystack && deposit.paystack_reference && (
+                                  <p className="text-xs text-gray-600 mb-1">Ref: {deposit.paystack_reference}</p>
                                 )}
-                                {deposit.paystack_reference && (
-                                  <p className="text-xs text-gray-500 mt-1">Ref: {deposit.paystack_reference}</p>
-                            )}
-                      </div>
-                      </div>
-                    </div>
+                                {isManual && deposit.manual_reference && (
+                                  <p className="text-xs text-gray-600 mb-1">Ref: {deposit.manual_reference}</p>
+                                )}
+                                {isManual && deposit.payment_proof_url && (
+                                  <a
+                                    href={deposit.payment_proof_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-blue-600 hover:text-blue-800 underline flex items-center justify-center gap-1"
+                                  >
+                                    <span>View Proof</span>
+                                  </a>
+                                )}
+                                {deposit.status === 'pending' && isManual && (
+                                  <p className="text-xs text-yellow-600 mt-1">Awaiting approval</p>
+                                )}
+                              </div>
+                              {/* Actions */}
+                              <div className="flex justify-center">
+                                {deposit.status === 'pending' && isManual ? (
+                                  <Button
+                                    onClick={() => handleApproveManualDeposit(deposit)}
+                                    disabled={loading || approvingDeposit === deposit.id}
+                                    variant="default"
+                                    size="sm"
+                                    className="bg-green-600 hover:bg-green-700 text-white text-xs"
+                                  >
+                                    {approvingDeposit === deposit.id ? 'Approving...' : 'Approve'}
+                                  </Button>
+                                ) : deposit.status === 'pending' && isPaystack ? (
+                                  <span className="text-xs text-gray-500">Auto-verify</span>
+                                ) : deposit.status === 'approved' ? (
+                                  <span className="text-xs text-green-600">✓ Approved</span>
+                                ) : (
+                                  <span className="text-xs text-red-600">Rejected</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
                     );
                   })}
                 </div>

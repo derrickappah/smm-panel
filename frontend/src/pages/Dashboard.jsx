@@ -28,6 +28,14 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     link: '',
     quantity: ''
   });
+  // Manual deposit states
+  const [depositMethod, setDepositMethod] = useState('paystack'); // 'paystack' or 'manual'
+  const [manualDepositForm, setManualDepositForm] = useState({
+    amount: '',
+    momo_number: '',
+    payment_proof_file: null
+  });
+  const [uploadingProof, setUploadingProof] = useState(false);
 
   // Paystack public key - should be in environment variable
   const paystackPublicKey = process.env.REACT_APP_PAYSTACK_PUBLIC_KEY || 'pk_test_xxxxxxxxxxxxx';
@@ -1512,6 +1520,107 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     }
   }, [pendingTransaction, user?.email, paystackPublicKey]);
 
+  const handleManualDeposit = async (e) => {
+    e.preventDefault();
+    if (!manualDepositForm.amount || parseFloat(manualDepositForm.amount) <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
+    const amount = parseFloat(manualDepositForm.amount);
+    if (amount < 10) {
+      toast.error('Minimum deposit amount is ₵10 for Mobile Money');
+      return;
+    }
+
+    if (!manualDepositForm.momo_number) {
+      toast.error('Please enter your MTN Mobile Money number');
+      return;
+    }
+
+    if (!manualDepositForm.payment_proof_file) {
+      toast.error('Please upload payment proof screenshot');
+      return;
+    }
+
+    setLoading(true);
+    setUploadingProof(true);
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) throw new Error('Not authenticated');
+
+      // Get user's full name for reference
+      const reference = user?.name || authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'user';
+
+      // Upload payment proof to Supabase storage
+      let paymentProofUrl = null;
+      if (manualDepositForm.payment_proof_file) {
+        const fileExt = manualDepositForm.payment_proof_file.name.split('.').pop();
+        const fileName = `payment-proofs/${authUser.id}/${Date.now()}.${fileExt}`;
+        
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('storage')
+          .upload(fileName, manualDepositForm.payment_proof_file, {
+            cacheControl: '3600',
+            upsert: false
+          });
+
+        if (uploadError) {
+          console.error('Error uploading payment proof:', uploadError);
+          
+          // Check if it's an RLS policy error
+          if (uploadError.message?.includes('row-level security') || uploadError.message?.includes('policy')) {
+            throw new Error('Storage access denied. Please contact admin to set up storage policies. Error: ' + uploadError.message);
+          }
+          
+          // Check if bucket doesn't exist
+          if (uploadError.message?.includes('Bucket not found') || uploadError.statusCode === 404) {
+            throw new Error('Storage bucket not found. Please contact admin to create the storage bucket.');
+          }
+          
+          throw new Error('Failed to upload payment proof: ' + (uploadError.message || 'Unknown error'));
+        }
+
+        // Get public URL
+        const { data: urlData } = supabase.storage
+          .from('storage')
+          .getPublicUrl(fileName);
+        
+        paymentProofUrl = urlData.publicUrl;
+      }
+
+      // Create manual deposit transaction
+      const { data: transaction, error } = await supabase
+        .from('transactions')
+        .insert({
+          user_id: authUser.id,
+          amount: amount,
+          type: 'deposit',
+          status: 'pending',
+          deposit_method: 'manual',
+          momo_number: manualDepositForm.momo_number,
+          manual_reference: reference,
+          payment_proof_url: paymentProofUrl
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating manual deposit:', error);
+        throw error;
+      }
+
+      toast.success('Manual deposit submitted! Your funds will be added within 5 minutes after verification.');
+      setManualDepositForm({ amount: '', momo_number: '', payment_proof_file: null });
+    } catch (error) {
+      console.error('Manual deposit error:', error);
+      toast.error(error.message || 'Failed to submit manual deposit. Please try again.');
+    } finally {
+      setLoading(false);
+      setUploadingProof(false);
+    }
+  };
+
   const handleDeposit = async (e) => {
     e.preventDefault();
     if (!depositAmount || parseFloat(depositAmount) <= 0) {
@@ -1615,7 +1724,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         user_id: authUser.id,
           amount: amount,
         type: 'deposit',
-        status: 'pending'
+        status: 'pending',
+        deposit_method: 'paystack'
         })
         .select()
         .single();
@@ -2030,75 +2140,202 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           {/* Add Funds */}
           <div className="glass p-8 rounded-3xl animate-slideUp">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Add Funds</h2>
-            <form onSubmit={handleDeposit} className="space-y-5">
-              <div>
-                <Label htmlFor="amount" className="text-gray-700 font-medium mb-2 block">Amount (GHS)</Label>
-                <Input
-                  id="amount"
-                  data-testid="deposit-amount-input"
-                  type="number"
-                  step="0.01"
-                  min="1"
-                  placeholder="Enter amount"
-                  value={depositAmount}
-                  onChange={(e) => setDepositAmount(e.target.value)}
-                  className="rounded-xl bg-white/70"
-                />
-              </div>
-              <Button
-                data-testid="deposit-submit-btn"
-                type="submit"
-                disabled={loading || !depositAmount}
-                className="w-full btn-hover bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white py-6 rounded-full"
+            
+            {/* Deposit Method Toggle */}
+            <div className="flex gap-2 mb-6 p-1 bg-gray-100 rounded-lg">
+              <button
+                type="button"
+                onClick={() => setDepositMethod('paystack')}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                  depositMethod === 'paystack'
+                    ? 'bg-white text-indigo-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
               >
-                {loading ? 'Processing...' : 'Pay with Paystack'}
-              </Button>
-              <p className="text-sm text-gray-600 text-center">
-                Secure payment via Paystack. Funds are added instantly after successful payment.
-              </p>
-              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-xs sm:text-sm text-blue-800 text-center">
-                  <span className="font-semibold">Having issues with deposits?</span>
-                  <br />
-                  <span className="mt-1 block">Text us on WhatsApp: </span>
-                  <a 
-                    href="https://wa.me/233543774408" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="font-bold text-blue-600 hover:text-blue-800 underline"
-                  >
-                    +233 543 774 408
-                  </a>
+                Paystack
+              </button>
+              <button
+                type="button"
+                onClick={() => setDepositMethod('manual')}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                  depositMethod === 'manual'
+                    ? 'bg-white text-indigo-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Mobile Money
+              </button>
+            </div>
+
+            {depositMethod === 'paystack' ? (
+              <form onSubmit={handleDeposit} className="space-y-5">
+                <div>
+                  <Label htmlFor="amount" className="text-gray-700 font-medium mb-2 block">Amount (GHS)</Label>
+                  <Input
+                    id="amount"
+                    data-testid="deposit-amount-input"
+                    type="number"
+                    step="0.01"
+                    min="1"
+                    placeholder="Enter amount"
+                    value={depositAmount}
+                    onChange={(e) => setDepositAmount(e.target.value)}
+                    className="rounded-xl bg-white/70"
+                  />
+                </div>
+                <Button
+                  data-testid="deposit-submit-btn"
+                  type="submit"
+                  disabled={loading || !depositAmount}
+                  className="w-full btn-hover bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white py-6 rounded-full"
+                >
+                  {loading ? 'Processing...' : 'Pay with Paystack'}
+                </Button>
+                <p className="text-sm text-gray-600 text-center">
+                  Secure payment via Paystack. Funds are added instantly after successful payment.
                 </p>
-              </div>
-              
-              {/* Deposit Tutorial Video - Collapsible */}
-              <div className="mt-6">
-                <Accordion type="single" collapsible className="w-full">
-                  <AccordionItem value="tutorial" className="border border-gray-200 rounded-xl overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 hover:no-underline">
-                      <span className="text-sm font-semibold text-gray-900">📹 How to Deposit - Video Tutorial</span>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-4 pb-4">
-                      <div className="rounded-xl overflow-hidden bg-gray-100">
-                        <video
-                          controls
-                          className="w-full h-auto"
-                          preload="metadata"
-                          style={{ maxHeight: '500px' }}
-                        >
-                          <source
-                            src="https://spihsvdchouynfbsotwq.supabase.co/storage/v1/object/public/storage/tutorial.mp4"
-                            type="video/mp4"
-                          />
-                          Your browser does not support the video tag.
-                        </video>
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
-              </div>
-            </form>
+                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-xs sm:text-sm text-blue-800 text-center">
+                    <span className="font-semibold">Having issues with deposits?</span>
+                    <br />
+                    <span className="mt-1 block">Text us on WhatsApp: </span>
+                    <a 
+                      href="https://wa.me/233543774408" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="font-bold text-blue-600 hover:text-blue-800 underline"
+                    >
+                      +233 543 774 408
+                    </a>
+                  </p>
+                </div>
+                
+                {/* Deposit Tutorial Video - Collapsible */}
+                <div className="mt-6">
+                  <Accordion type="single" collapsible className="w-full">
+                    <AccordionItem value="tutorial" className="border border-gray-200 rounded-xl overflow-hidden">
+                      <AccordionTrigger className="px-4 py-3 hover:no-underline">
+                        <span className="text-sm font-semibold text-gray-900">📹 How to Deposit - Video Tutorial</span>
+                      </AccordionTrigger>
+                      <AccordionContent className="px-4 pb-4">
+                        <div className="rounded-xl overflow-hidden bg-gray-100">
+                          <video
+                            controls
+                            className="w-full h-auto"
+                            preload="metadata"
+                            style={{ maxHeight: '500px' }}
+                          >
+                            <source
+                              src="https://spihsvdchouynfbsotwq.supabase.co/storage/v1/object/public/storage/tutorial.mp4"
+                              type="video/mp4"
+                            />
+                            Your browser does not support the video tag.
+                          </video>
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleManualDeposit} className="space-y-5">
+                {/* Manual Deposit Instructions */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                  <h3 className="font-semibold text-blue-900 mb-2">Instructions:</h3>
+                  <ol className="text-sm text-blue-800 space-y-1 list-decimal list-inside">
+                    <li>Make payment to <span className="font-bold">0597127605</span> via MTN Mobile Money</li>
+                    <li>Use your <span className="font-bold">Full Name</span> as Reference</li>
+                    <li>Amount must be <span className="font-bold">₵10</span> and above</li>
+                    <li>Network: <span className="font-bold">MTN</span></li>
+                    <li>Name: <span className="font-bold">Manasseh Attah Appiah</span></li>
+                    <li>Funds will be added within <span className="font-bold">5 minutes</span></li>
+                  </ol>
+                  <div className="mt-3 p-2 bg-white rounded border border-blue-300">
+                    <p className="text-xs text-blue-700 font-medium mb-1">Tap and hold to copy:</p>
+                    <p className="text-lg font-bold text-blue-900 select-all">0597127605</p>
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="manual-amount" className="text-gray-700 font-medium mb-2 block">Amount (GHS)</Label>
+                  <Input
+                    id="manual-amount"
+                    type="number"
+                    step="0.01"
+                    min="10"
+                    placeholder="Minimum ₵10"
+                    value={manualDepositForm.amount}
+                    onChange={(e) => setManualDepositForm({ ...manualDepositForm, amount: e.target.value })}
+                    className="rounded-xl bg-white/70"
+                    required
+                  />
+                  {parseFloat(manualDepositForm.amount) < 10 && manualDepositForm.amount && (
+                    <p className="text-xs text-red-600 mt-1">Minimum amount is ₵10</p>
+                  )}
+                </div>
+
+                <div>
+                  <Label htmlFor="momo-number" className="text-gray-700 font-medium mb-2 block">Your MTN Mobile Money Number</Label>
+                  <Input
+                    id="momo-number"
+                    type="tel"
+                    placeholder="e.g., 0244123456"
+                    value={manualDepositForm.momo_number}
+                    onChange={(e) => setManualDepositForm({ ...manualDepositForm, momo_number: e.target.value })}
+                    className="rounded-xl bg-white/70"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="payment-proof" className="text-gray-700 font-medium mb-2 block">
+                    Payment Proof Screenshot <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="payment-proof"
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        // Validate file size (max 5MB)
+                        if (file.size > 5 * 1024 * 1024) {
+                          toast.error('File size must be less than 5MB');
+                          return;
+                        }
+                        // Validate file type
+                        if (!file.type.startsWith('image/')) {
+                          toast.error('Please upload an image file');
+                          return;
+                        }
+                        setManualDepositForm({ ...manualDepositForm, payment_proof_file: file });
+                      }
+                    }}
+                    className="rounded-xl bg-white/70"
+                    required
+                  />
+                  {manualDepositForm.payment_proof_file && (
+                    <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-lg">
+                      <p className="text-xs text-green-700">
+                        ✓ Selected: {manualDepositForm.payment_proof_file.name}
+                      </p>
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-500 mt-1">Upload a screenshot of your payment confirmation (Max 5MB)</p>
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={loading || !manualDepositForm.amount || parseFloat(manualDepositForm.amount) < 10 || !manualDepositForm.momo_number || !manualDepositForm.payment_proof_file || uploadingProof}
+                  className="w-full btn-hover bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white py-6 rounded-full"
+                >
+                  {uploadingProof ? 'Uploading...' : loading ? 'Submitting...' : 'Submit Manual Deposit'}
+                </Button>
+                <p className="text-sm text-gray-600 text-center">
+                  Your deposit will be reviewed and approved within 5 minutes.
+                </p>
+              </form>
+            )}
           </div>
 
           {/* Quick Order */}
