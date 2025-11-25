@@ -89,6 +89,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Drop existing trigger if it exists
+DROP TRIGGER IF EXISTS update_app_settings_updated_at ON app_settings;
+
 -- Create trigger to auto-update updated_at
 CREATE TRIGGER update_app_settings_updated_at
 BEFORE UPDATE ON app_settings
