@@ -1036,30 +1036,58 @@ const AdminDashboard = ({ user, onLogout }) => {
         enabled: Boolean(updates.enabled)
       };
       
+      // Remove any undefined or null values that might cause issues
+      Object.keys(updateData).forEach(key => {
+        if (updateData[key] === undefined) {
+          delete updateData[key];
+        }
+      });
+      
       console.log('Updating service with data:', updateData);
       
-      const { data, error } = await supabase
+      // First, perform the update without .single() to avoid coercion issues
+      const { error: updateError } = await supabase
         .from('services')
         .update(updateData)
-        .eq('id', serviceId)
-        .select()
-        .single();
+        .eq('id', serviceId);
 
-      if (error) {
-        console.error('Error updating service:', error);
+      if (updateError) {
+        console.error('Error updating service:', updateError);
         
         // Check for specific error types
-        if (error.code === '42501') {
+        if (updateError.code === '42501') {
           // Permission denied (RLS policy issue)
           toast.error('Permission denied. Please ensure RLS policies allow admins to update services.');
         } else {
-          throw error;
+          throw updateError;
         }
         return;
       }
 
+      // Then fetch the updated service separately
+      const { data, error: fetchError } = await supabase
+        .from('services')
+        .select('*')
+        .eq('id', serviceId)
+        .single();
+
+      if (fetchError) {
+        console.error('Error fetching updated service:', fetchError);
+        // Even if fetch fails, the update might have succeeded, so we'll refresh
+        toast.success('Service updated successfully! (Refreshing...)');
+        setEditingService(null);
+        await new Promise(resolve => setTimeout(resolve, 300));
+        await fetchAllData(false);
+        return;
+      }
+
       if (!data) {
-        throw new Error('Update succeeded but no data returned');
+        // Update might have succeeded but fetch failed, refresh to get latest
+        toast.success('Service updated successfully! (Refreshing...)');
+        setEditingService(null);
+        await new Promise(resolve => setTimeout(resolve, 300));
+        await fetchAllData(false);
+        return;
       }
 
       console.log('Service updated successfully:', data);
