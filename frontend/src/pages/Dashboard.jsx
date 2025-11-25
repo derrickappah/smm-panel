@@ -40,10 +40,49 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
   // Paystack public key - should be in environment variable
   const paystackPublicKey = process.env.REACT_APP_PAYSTACK_PUBLIC_KEY || 'pk_test_xxxxxxxxxxxxx';
 
+  const [paymentMethodSettings, setPaymentMethodSettings] = useState({
+    paystack_enabled: true,
+    manual_enabled: true
+  });
+
   useEffect(() => {
+    // Fetch payment method settings
+    const fetchPaymentSettings = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('app_settings')
+          .select('*')
+          .in('key', ['payment_method_paystack_enabled', 'payment_method_manual_enabled']);
+        
+        if (!error && data) {
+          const settings = {};
+          data.forEach(setting => {
+            settings[setting.key] = setting.value === 'true';
+          });
+          const newSettings = {
+            paystack_enabled: settings.payment_method_paystack_enabled !== false,
+            manual_enabled: settings.payment_method_manual_enabled !== false
+          };
+          setPaymentMethodSettings(newSettings);
+          
+          // Auto-select method if only one is enabled
+          if (!newSettings.paystack_enabled && newSettings.manual_enabled) {
+            setDepositMethod('manual');
+          } else if (newSettings.paystack_enabled && !newSettings.manual_enabled) {
+            setDepositMethod('paystack');
+          }
+        }
+      } catch (error) {
+        console.warn('Error fetching payment method settings:', error);
+        // Default to both enabled if settings can't be fetched
+      }
+    };
+    
+    fetchPaymentSettings();
     fetchServices();
     fetchRecentOrders();
     verifyPendingPayments(); // Check for pending payments that might have succeeded
+  }, []);
     
     // Ensure PaystackPop is loaded (react-paystack should load it, but we ensure it's available)
     if (!window.PaystackPop && !document.querySelector('script[src*="paystack"]')) {
@@ -2141,33 +2180,41 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           <div className="glass p-8 rounded-3xl animate-slideUp">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Add Funds</h2>
             
-            {/* Deposit Method Toggle */}
-            <div className="flex gap-2 mb-6 p-1 bg-gray-100 rounded-lg">
-              <button
-                type="button"
-                onClick={() => setDepositMethod('paystack')}
-                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                  depositMethod === 'paystack'
-                    ? 'bg-white text-indigo-600 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                Paystack
-              </button>
-              <button
-                type="button"
-                onClick={() => setDepositMethod('manual')}
-                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                  depositMethod === 'manual'
-                    ? 'bg-white text-indigo-600 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                Mobile Money
-              </button>
-            </div>
+            {/* Deposit Method Toggle - Only show if both methods are enabled */}
+            {paymentMethodSettings.paystack_enabled && paymentMethodSettings.manual_enabled ? (
+              <div className="flex gap-2 mb-6 p-1 bg-gray-100 rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => setDepositMethod('paystack')}
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                    depositMethod === 'paystack'
+                      ? 'bg-white text-indigo-600 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Paystack
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDepositMethod('manual')}
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                    depositMethod === 'manual'
+                      ? 'bg-white text-indigo-600 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Mobile Money
+                </button>
+              </div>
+            ) : null}
 
-            {depositMethod === 'paystack' ? (
+            {(!paymentMethodSettings.paystack_enabled && !paymentMethodSettings.manual_enabled) ? (
+              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm text-yellow-800 text-center">
+                  All payment methods are currently disabled. Please contact support.
+                </p>
+              </div>
+            ) : (depositMethod === 'paystack' && paymentMethodSettings.paystack_enabled) ? (
               <form onSubmit={handleDeposit} className="space-y-5">
                 <div>
                   <Label htmlFor="amount" className="text-gray-700 font-medium mb-2 block">Amount (GHS)</Label>
@@ -2237,7 +2284,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                   </Accordion>
                 </div>
               </form>
-            ) : (
+            ) : (depositMethod === 'manual' && paymentMethodSettings.manual_enabled) ? (
               <form onSubmit={handleManualDeposit} className="space-y-5">
                 {/* Manual Deposit Instructions */}
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">

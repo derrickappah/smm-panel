@@ -59,6 +59,11 @@ const AdminDashboard = ({ user, onLogout }) => {
   const [balanceCheckResults, setBalanceCheckResults] = useState({});
   const [checkingBalances, setCheckingBalances] = useState(false);
   const [userProfiles, setUserProfiles] = useState({});
+  // Payment method settings
+  const [paymentMethodSettings, setPaymentMethodSettings] = useState({
+    paystack_enabled: true,
+    manual_enabled: true
+  });
   
   // Search and filter states
   const [userSearch, setUserSearch] = useState('');
@@ -210,13 +215,14 @@ const AdminDashboard = ({ user, onLogout }) => {
         return;
       }
 
-      const [usersRes, ordersRes, depositsRes, transactionsRes, servicesRes, ticketsRes] = await Promise.all([
+      const [usersRes, ordersRes, depositsRes, transactionsRes, servicesRes, ticketsRes, settingsRes] = await Promise.all([
         supabase.from('profiles').select('*').order('created_at', { ascending: false }),
         supabase.from('orders').select('*, services(name, platform), profiles(name, email, phone_number)').order('created_at', { ascending: false }),
         supabase.from('transactions').select('*, profiles(email, name, phone_number)').eq('type', 'deposit').order('created_at', { ascending: false }),
         supabase.from('transactions').select('*, profiles(email, name, balance)').order('created_at', { ascending: false }),
         supabase.from('services').select('*').order('created_at', { ascending: false }),
-        supabase.from('support_tickets').select('*, profiles(name, email)').order('created_at', { ascending: false })
+        supabase.from('support_tickets').select('*, profiles(name, email)').order('created_at', { ascending: false }),
+        supabase.from('app_settings').select('*').in('key', ['payment_method_paystack_enabled', 'payment_method_manual_enabled'])
       ]);
 
       // Check for errors and provide specific messages
@@ -378,6 +384,18 @@ const AdminDashboard = ({ user, onLogout }) => {
       }
       if (servicesRes.data) setServices(servicesRes.data);
       if (ticketsRes.data) setSupportTickets(ticketsRes.data);
+      
+      // Process payment method settings
+      if (settingsRes && !settingsRes.error && settingsRes.data) {
+        const settings = {};
+        settingsRes.data.forEach(setting => {
+          settings[setting.key] = setting.value === 'true';
+        });
+        setPaymentMethodSettings({
+          paystack_enabled: settings.payment_method_paystack_enabled !== false, // Default to true
+          manual_enabled: settings.payment_method_manual_enabled !== false // Default to true
+        });
+      }
 
       // Calculate enhanced stats using current data (use updated orders with SMMGen statuses)
       const currentDeposits = depositsRes.data || [];
@@ -814,6 +832,42 @@ const AdminDashboard = ({ user, onLogout }) => {
   };
 
   // For admin: Manually credit balance for a deposit
+  const handleTogglePaymentMethod = async (method, enabled) => {
+    try {
+      const settingKey = method === 'paystack' 
+        ? 'payment_method_paystack_enabled' 
+        : 'payment_method_manual_enabled';
+      
+      const { error } = await supabase
+        .from('app_settings')
+        .upsert({
+          key: settingKey,
+          value: enabled ? 'true' : 'false',
+          description: method === 'paystack' 
+            ? 'Enable/disable Paystack payment method'
+            : 'Enable/disable Manual (Mobile Money) payment method'
+        }, {
+          onConflict: 'key'
+        });
+
+      if (error) {
+        console.error('Error updating payment method setting:', error);
+        toast.error('Failed to update payment method setting');
+        return;
+      }
+
+      setPaymentMethodSettings(prev => ({
+        ...prev,
+        [method === 'paystack' ? 'paystack_enabled' : 'manual_enabled']: enabled
+      }));
+
+      toast.success(`${method === 'paystack' ? 'Paystack' : 'Manual'} payment method ${enabled ? 'enabled' : 'disabled'}`);
+    } catch (error) {
+      console.error('Error toggling payment method:', error);
+      toast.error('Failed to update payment method setting');
+    }
+  };
+
   const handleApproveManualDeposit = async (deposit) => {
     setApprovingDeposit(deposit.id);
     try {
@@ -2610,6 +2664,72 @@ const AdminDashboard = ({ user, onLogout }) => {
             {/* Services Section */}
             <TabsContent value="services" className="lg:mt-0">
             <div className="space-y-6">
+              {/* Payment Methods Settings */}
+              <div className="glass p-4 sm:p-8 rounded-3xl">
+                <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">Payment Methods</h2>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-4 bg-white/50 rounded-xl border-2 border-gray-200">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg flex items-center justify-center">
+                        <CheckCircle className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-900">Paystack</p>
+                        <p className="text-sm text-gray-600">Online payment gateway</p>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={() => handleTogglePaymentMethod('paystack', !paymentMethodSettings.paystack_enabled)}
+                      variant={paymentMethodSettings.paystack_enabled ? "default" : "outline"}
+                      size="sm"
+                      className={paymentMethodSettings.paystack_enabled ? "bg-green-600 hover:bg-green-700" : ""}
+                    >
+                      {paymentMethodSettings.paystack_enabled ? (
+                        <>
+                          <Power className="w-4 h-4 mr-2" />
+                          Enabled
+                        </>
+                      ) : (
+                        <>
+                          <PowerOff className="w-4 h-4 mr-2" />
+                          Disabled
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  
+                  <div className="flex items-center justify-between p-4 bg-white/50 rounded-xl border-2 border-gray-200">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-lg flex items-center justify-center">
+                        <Wallet className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-900">Manual (Mobile Money)</p>
+                        <p className="text-sm text-gray-600">MTN Mobile Money payment</p>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={() => handleTogglePaymentMethod('manual', !paymentMethodSettings.manual_enabled)}
+                      variant={paymentMethodSettings.manual_enabled ? "default" : "outline"}
+                      size="sm"
+                      className={paymentMethodSettings.manual_enabled ? "bg-green-600 hover:bg-green-700" : ""}
+                    >
+                      {paymentMethodSettings.manual_enabled ? (
+                        <>
+                          <Power className="w-4 h-4 mr-2" />
+                          Enabled
+                        </>
+                      ) : (
+                        <>
+                          <PowerOff className="w-4 h-4 mr-2" />
+                          Disabled
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              
               {/* Add Service Form */}
               <div className="glass p-4 sm:p-8 rounded-3xl">
                 <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">Add New Service</h2>
