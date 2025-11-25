@@ -28,6 +28,12 @@ COMMENT ON TABLE app_settings IS 'Application-wide settings stored as key-value 
 -- Enable RLS
 ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if they exist (to allow re-running this migration)
+DROP POLICY IF EXISTS "Admins can read app settings" ON app_settings;
+DROP POLICY IF EXISTS "Admins can update app settings" ON app_settings;
+DROP POLICY IF EXISTS "Admins can insert app settings" ON app_settings;
+DROP POLICY IF EXISTS "Authenticated users can read app settings" ON app_settings;
+
 -- Policy: Admins can read all settings
 CREATE POLICY "Admins can read app settings"
 ON app_settings
