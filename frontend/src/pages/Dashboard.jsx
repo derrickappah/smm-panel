@@ -2352,7 +2352,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                   <h3 className="font-semibold text-blue-900 mb-2">Instructions:</h3>
                   <ol className="text-sm text-blue-800 space-y-1 list-decimal list-inside">
                     <li>Make payment to <span className="font-bold">0559272762</span> via MTN Mobile Money</li>
-                    <li>Use your <span className="font-bold">Full Name</span> as Reference</li>
+                    <li>Use your <span className="font-bold">USERNAME</span> as Reference</li>
                     <li>Amount must be <span className="font-bold">₵10</span> and above</li>
                     <li>Network: <span className="font-bold">MTN</span></li>
                     <li>Name: <span className="font-bold">Manasseh Attah Appiah</span></li>
