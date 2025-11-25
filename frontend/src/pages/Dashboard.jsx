@@ -29,7 +29,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     quantity: ''
   });
   // Manual deposit states
-  const [depositMethod, setDepositMethod] = useState('paystack'); // 'paystack' or 'manual'
+  const [depositMethod, setDepositMethod] = useState(null); // 'paystack' or 'manual' - null until settings are loaded
   const [manualDepositForm, setManualDepositForm] = useState({
     amount: '',
     momo_number: '',
@@ -65,11 +65,17 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           };
           setPaymentMethodSettings(newSettings);
           
-          // Auto-select method if only one is enabled
+          // Auto-select method based on what's enabled
           if (!newSettings.paystack_enabled && newSettings.manual_enabled) {
             setDepositMethod('manual');
           } else if (newSettings.paystack_enabled && !newSettings.manual_enabled) {
             setDepositMethod('paystack');
+          } else if (newSettings.paystack_enabled && newSettings.manual_enabled) {
+            // Both enabled, default to paystack
+            setDepositMethod('paystack');
+          } else {
+            // Both disabled
+            setDepositMethod(null);
           }
         }
       } catch (error) {
@@ -2180,7 +2186,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Add Funds</h2>
             
             {/* Deposit Method Toggle - Only show if both methods are enabled */}
-            {paymentMethodSettings.paystack_enabled && paymentMethodSettings.manual_enabled ? (
+            {paymentMethodSettings.paystack_enabled && paymentMethodSettings.manual_enabled && depositMethod !== null ? (
               <div className="flex gap-2 mb-6 p-1 bg-gray-100 rounded-lg">
                 <button
                   type="button"
@@ -2207,7 +2213,11 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               </div>
             ) : null}
 
-            {(!paymentMethodSettings.paystack_enabled && !paymentMethodSettings.manual_enabled) ? (
+            {depositMethod === null ? (
+              <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                <p className="text-sm text-gray-600 text-center">Loading payment methods...</p>
+              </div>
+            ) : (!paymentMethodSettings.paystack_enabled && !paymentMethodSettings.manual_enabled) ? (
               <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                 <p className="text-sm text-yellow-800 text-center">
                   All payment methods are currently disabled. Please contact support.
