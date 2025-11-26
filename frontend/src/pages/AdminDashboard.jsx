@@ -2552,6 +2552,8 @@ const AdminDashboard = ({ user, onLogout }) => {
 
                     const isManual = deposit.deposit_method === 'manual' || deposit.deposit_method === 'momo';
                     const isPaystack = deposit.deposit_method === 'paystack' || (!deposit.deposit_method && deposit.paystack_reference);
+                    const isHubtel = deposit.deposit_method === 'hubtel';
+                    const isKorapay = deposit.deposit_method === 'korapay';
 
                     return (
                           <div key={deposit.id} className="bg-white hover:bg-gray-50 transition-colors">
@@ -2574,6 +2576,16 @@ const AdminDashboard = ({ user, onLogout }) => {
                                   <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700 flex items-center gap-1.5">
                                     <CheckCircle className="w-3.5 h-3.5" />
                                     Paystack
+                                  </span>
+                                ) : isHubtel ? (
+                                  <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700 flex items-center gap-1.5">
+                                    <CheckCircle className="w-3.5 h-3.5" />
+                                    Hubtel
+                                  </span>
+                                ) : isKorapay ? (
+                                  <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700 flex items-center gap-1.5">
+                                    <CheckCircle className="w-3.5 h-3.5" />
+                                    Korapay
                                   </span>
                                 ) : (
                                   <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
@@ -2632,7 +2644,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                                   >
                                     {approvingDeposit === deposit.id ? 'Approving...' : 'Approve'}
                                   </Button>
-                                ) : deposit.status === 'pending' && isPaystack ? (
+                                ) : deposit.status === 'pending' && (isPaystack || isHubtel || isKorapay) ? (
                                   <span className="text-xs text-gray-500">Auto-verify</span>
                                 ) : deposit.status === 'approved' ? (
                                   <span className="text-xs text-green-600">✓ Approved</span>
