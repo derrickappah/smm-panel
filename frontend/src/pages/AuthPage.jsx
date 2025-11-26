@@ -8,10 +8,78 @@ import { supabase, isConfigured } from '@/lib/supabase';
 import { TrendingUp } from 'lucide-react';
 import SEO from '@/components/SEO';
 
+// Email validation function with TLD validation
+const isValidEmail = (email) => {
+  // Basic email format validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return false;
+  }
+
+  // Extract TLD (top-level domain) from email
+  const parts = email.split('@');
+  if (parts.length !== 2) return false;
+  
+  const domain = parts[1];
+  const domainParts = domain.split('.');
+  if (domainParts.length < 2) return false;
+  
+  // Get the TLD (last part after the last dot)
+  const tld = domainParts[domainParts.length - 1].toLowerCase();
+  
+  // Comprehensive list of valid TLDs (common and country codes)
+  const validTlds = [
+    // Generic TLDs
+    'com', 'org', 'net', 'edu', 'gov', 'mil', 'int',
+    // New generic TLDs
+    'io', 'co', 'ai', 'app', 'dev', 'tech', 'online', 'site', 'website', 'store', 'shop',
+    'blog', 'info', 'xyz', 'me', 'tv', 'cc', 'ws', 'biz', 'name', 'pro', 'mobi',
+    // Country code TLDs (most common)
+    'uk', 'us', 'ca', 'au', 'de', 'fr', 'it', 'es', 'nl', 'be', 'ch', 'at', 'se', 'no', 'dk', 'fi',
+    'pl', 'cz', 'ie', 'pt', 'gr', 'ro', 'hu', 'bg', 'hr', 'sk', 'si', 'lt', 'lv', 'ee',
+    'jp', 'cn', 'kr', 'in', 'sg', 'hk', 'tw', 'my', 'th', 'ph', 'id', 'vn', 'nz',
+    'br', 'mx', 'ar', 'cl', 'co', 'pe', 've', 'ec', 'uy', 'py', 'bo', 'cr', 'pa', 'do',
+    'za', 'eg', 'ma', 'ng', 'ke', 'gh', 'tz', 'et', 'ug', 'zm', 'zw', 'mw', 'rw',
+    'ru', 'ua', 'by', 'kz', 'ge', 'am', 'az', 'md', 'tj', 'kg', 'uz', 'tm',
+    'il', 'ae', 'sa', 'jo', 'kw', 'qa', 'bh', 'om', 'ye', 'iq', 'sy', 'lb', 'ps',
+    'tr', 'ir', 'pk', 'bd', 'lk', 'np', 'mm', 'kh', 'la', 'mn',
+    // Additional common TLDs
+    'ac', 'ad', 'ae', 'af', 'ag', 'ai', 'al', 'am', 'ao', 'aq', 'ar', 'as', 'at', 'au', 'aw', 'ax', 'az',
+    'ba', 'bb', 'bd', 'be', 'bf', 'bg', 'bh', 'bi', 'bj', 'bl', 'bm', 'bn', 'bo', 'bq', 'br', 'bs', 'bt', 'bv', 'bw', 'by', 'bz',
+    'ca', 'cc', 'cd', 'cf', 'cg', 'ch', 'ci', 'ck', 'cl', 'cm', 'cn', 'co', 'cr', 'cu', 'cv', 'cw', 'cx', 'cy', 'cz',
+    'de', 'dj', 'dk', 'dm', 'do', 'dz',
+    'ec', 'ee', 'eg', 'eh', 'er', 'es', 'et',
+    'fi', 'fj', 'fk', 'fm', 'fo', 'fr',
+    'ga', 'gb', 'gd', 'ge', 'gf', 'gg', 'gh', 'gi', 'gl', 'gm', 'gn', 'gp', 'gq', 'gr', 'gs', 'gt', 'gu', 'gw', 'gy',
+    'hk', 'hm', 'hn', 'hr', 'ht', 'hu',
+    'id', 'ie', 'il', 'im', 'in', 'io', 'iq', 'ir', 'is', 'it',
+    'je', 'jm', 'jo', 'jp',
+    'ke', 'kg', 'kh', 'ki', 'km', 'kn', 'kp', 'kr', 'kw', 'ky', 'kz',
+    'la', 'lb', 'lc', 'li', 'lk', 'lr', 'ls', 'lt', 'lu', 'lv', 'ly',
+    'ma', 'mc', 'md', 'me', 'mf', 'mg', 'mh', 'mk', 'ml', 'mm', 'mn', 'mo', 'mp', 'mq', 'mr', 'ms', 'mt', 'mu', 'mv', 'mw', 'mx', 'my', 'mz',
+    'na', 'nc', 'ne', 'nf', 'ng', 'ni', 'nl', 'no', 'np', 'nr', 'nu', 'nz',
+    'om',
+    'pa', 'pe', 'pf', 'pg', 'ph', 'pk', 'pl', 'pm', 'pn', 'pr', 'ps', 'pt', 'pw', 'py',
+    'qa',
+    're', 'ro', 'rs', 'ru', 'rw',
+    'sa', 'sb', 'sc', 'sd', 'se', 'sg', 'sh', 'si', 'sj', 'sk', 'sl', 'sm', 'sn', 'so', 'sr', 'ss', 'st', 'sv', 'sx', 'sy', 'sz',
+    'tc', 'td', 'tf', 'tg', 'th', 'tj', 'tk', 'tl', 'tm', 'tn', 'to', 'tr', 'tt', 'tv', 'tw', 'tz',
+    'ua', 'ug', 'um', 'us', 'uy', 'uz',
+    'va', 'vc', 've', 'vg', 'vi', 'vn', 'vu',
+    'wf', 'ws',
+    'ye', 'yt',
+    'za', 'zm', 'zw'
+  ];
+  
+  // Check if TLD is valid
+  return validTlds.includes(tld);
+};
+
 const AuthPage = () => {
   const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [emailError, setEmailError] = useState('');
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -35,6 +103,12 @@ const AuthPage = () => {
       // Validate inputs
       if (!formData.email.trim()) {
         toast.error('Please enter your email');
+        setLoading(false);
+        return;
+      }
+
+      if (!isValidEmail(formData.email.trim())) {
+        toast.error('Please enter a valid email address');
         setLoading(false);
         return;
       }
@@ -227,7 +301,10 @@ const AuthPage = () => {
           <div className="flex gap-2 mb-6">
             <Button
               type="button"
-              onClick={() => setIsLogin(true)}
+              onClick={() => {
+                setIsLogin(true);
+                setEmailError('');
+              }}
               className={`flex-1 h-10 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
                 isLogin
                   ? 'bg-indigo-600 text-white hover:bg-indigo-700'
@@ -238,7 +315,10 @@ const AuthPage = () => {
             </Button>
             <Button
               type="button"
-              onClick={() => setIsLogin(false)}
+              onClick={() => {
+                setIsLogin(false);
+                setEmailError('');
+              }}
               className={`flex-1 h-10 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
                 !isLogin
                   ? 'bg-indigo-600 text-white hover:bg-indigo-700'
@@ -292,10 +372,32 @@ const AuthPage = () => {
                 type="email"
                 placeholder="you@example.com"
                 value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                onChange={(e) => {
+                  setFormData({ ...formData, email: e.target.value });
+                  // Clear error when user starts typing
+                  if (emailError) {
+                    setEmailError('');
+                  }
+                }}
+                onBlur={(e) => {
+                  // Validate email when user leaves the field
+                  const emailValue = e.target.value.trim();
+                  if (emailValue && !isValidEmail(emailValue)) {
+                    setEmailError('Please enter a valid email address');
+                  } else {
+                    setEmailError('');
+                  }
+                }}
                 required
-                className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                className={`w-full h-11 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
+                  emailError
+                    ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+                    : 'border-gray-300'
+                }`}
               />
+              {emailError && (
+                <p className="mt-1 text-sm text-red-600">{emailError}</p>
+              )}
             </div>
 
             <div>
