@@ -203,7 +203,7 @@ const AuthPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center px-6 py-12">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 sm:px-6 py-8 sm:py-12">
       <SEO
         title="Login or Sign Up - BoostUp GH"
         description="Create your BoostUp GH account to start growing your social media presence. Login or sign up to access our SMM panel services for Instagram, TikTok, YouTube, Facebook, and Twitter."
@@ -212,26 +212,26 @@ const AuthPage = () => {
       />
       <div className="w-full max-w-md">
         {/* Logo */}
-        <div className="text-center mb-8 animate-fadeIn">
-          <div className="inline-flex items-center space-x-2 mb-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center">
-              <TrendingUp className="w-7 h-7 text-white" />
+        <div className="text-center mb-6 sm:mb-8 animate-fadeIn">
+          <div className="inline-flex items-center space-x-2 mb-3 sm:mb-4">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-600 rounded-lg flex items-center justify-center">
+              <TrendingUp className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
             </div>
-            <span className="text-3xl font-bold text-gray-800">BoostUp GH</span>
+            <span className="text-2xl sm:text-3xl font-bold text-gray-900">BoostUp GH</span>
           </div>
-          <p className="text-gray-600">Grow your social media presence</p>
+          <p className="text-sm sm:text-base text-gray-600">Grow your social media presence</p>
         </div>
 
         {/* Auth Form */}
-        <div className="glass rounded-3xl p-8 animate-slideUp">
+        <div className="bg-white border border-gray-200 rounded-lg p-6 sm:p-8 shadow-sm animate-slideUp">
           <div className="flex gap-2 mb-6">
             <Button
               type="button"
               onClick={() => setIsLogin(true)}
-              className={`flex-1 rounded-full ${
+              className={`flex-1 h-10 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
                 isLogin
-                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
-                  : 'bg-white/50 text-gray-700 hover:bg-white/80'
+                  ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
               }`}
             >
               Login
@@ -239,21 +239,21 @@ const AuthPage = () => {
             <Button
               type="button"
               onClick={() => setIsLogin(false)}
-              className={`flex-1 rounded-full ${
+              className={`flex-1 h-10 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
                 !isLogin
-                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
-                  : 'bg-white/50 text-gray-700 hover:bg-white/80'
+                  ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
               }`}
             >
               Register
             </Button>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-4">
             {!isLogin && (
               <>
                 <div>
-                  <Label htmlFor="name" className="text-gray-700 font-medium mb-2 block">
+                  <Label htmlFor="name" className="text-sm font-medium text-gray-700 mb-2 block">
                     Full Name
                   </Label>
                   <Input
@@ -263,11 +263,11 @@ const AuthPage = () => {
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     required={!isLogin}
-                    className="rounded-xl bg-white/70 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500"
+                    className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="phone_number" className="text-gray-700 font-medium mb-2 block">
+                  <Label htmlFor="phone_number" className="text-sm font-medium text-gray-700 mb-2 block">
                     WhatsApp Number
                   </Label>
                   <Input
@@ -277,14 +277,14 @@ const AuthPage = () => {
                     value={formData.phone_number}
                     onChange={(e) => setFormData({ ...formData, phone_number: e.target.value })}
                     required={!isLogin}
-                    className="rounded-xl bg-white/70 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500"
+                    className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   />
                 </div>
               </>
             )}
 
             <div>
-              <Label htmlFor="email" className="text-gray-700 font-medium mb-2 block">
+              <Label htmlFor="email" className="text-sm font-medium text-gray-700 mb-2 block">
                 Email
               </Label>
               <Input
@@ -294,12 +294,12 @@ const AuthPage = () => {
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 required
-                className="rounded-xl bg-white/70 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500"
+                className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               />
             </div>
 
             <div>
-              <Label htmlFor="password" className="text-gray-700 font-medium mb-2 block">
+              <Label htmlFor="password" className="text-sm font-medium text-gray-700 mb-2 block">
                 Password
               </Label>
               <Input
@@ -309,24 +309,24 @@ const AuthPage = () => {
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 required
-                className="rounded-xl bg-white/70 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500"
+                className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               />
             </div>
 
             <Button
               type="submit"
               disabled={loading}
-              className="w-full btn-hover bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white py-6 rounded-full text-base font-medium"
+              className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-base font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
             >
               {loading ? 'Processing...' : isLogin ? 'Login' : 'Create Account'}
             </Button>
           </form>
         </div>
 
-        <p className="text-center text-gray-600 mt-6">
+        <p className="text-center text-sm sm:text-base text-gray-600 mt-6">
           <button
             onClick={() => navigate('/')}
-            className="text-indigo-600 hover:text-indigo-700 font-medium"
+            className="text-indigo-600 hover:text-indigo-700 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 rounded-lg px-2 py-1 transition-colors duration-200"
           >
             ← Back to Home
           </button>
