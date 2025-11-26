@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Clock, CheckCircle, XCircle, Loader, RefreshCw, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
+import SEO from '@/components/SEO';
 
 const OrderHistory = ({ user, onLogout }) => {
   const [orders, setOrders] = useState([]);
@@ -81,20 +82,20 @@ const OrderHistory = ({ user, onLogout }) => {
     const statusLower = String(status || '').toLowerCase();
     switch (statusLower) {
       case 'completed':
-        return 'bg-green-100 text-green-700';
+        return 'bg-green-100 text-green-700 border-green-200';
       case 'canceled':
       case 'cancelled':
-        return 'bg-red-100 text-red-700';
+        return 'bg-red-100 text-red-700 border-red-200';
       case 'processing':
       case 'in progress':
-        return 'bg-blue-100 text-blue-700';
+        return 'bg-blue-100 text-blue-700 border-blue-200';
       case 'partial':
-        return 'bg-orange-100 text-orange-700';
+        return 'bg-orange-100 text-orange-700 border-orange-200';
       case 'refunds':
-        return 'bg-purple-100 text-purple-700';
+        return 'bg-purple-100 text-purple-700 border-purple-200';
       case 'pending':
       default:
-        return 'bg-yellow-100 text-yellow-700';
+        return 'bg-yellow-100 text-yellow-700 border-yellow-200';
     }
   };
 
@@ -262,53 +263,60 @@ const OrderHistory = ({ user, onLogout }) => {
   }, [orderStatusFilter, orderSearch]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+    <div className="min-h-screen bg-gray-50">
+      <SEO
+        title="Order History"
+        description="View and manage your BoostUp GH orders"
+        canonical="/orders"
+        noindex={true}
+      />
       <Navbar user={user} onLogout={onLogout} />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        <div className="mb-6 animate-fadeIn">
-          <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">Order History</h1>
-          <p className="text-gray-600">Track all your orders and their status</p>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <div className="mb-6 sm:mb-8 animate-fadeIn">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">Order History</h1>
+          <p className="text-sm sm:text-base text-gray-600">Track all your orders and their status</p>
         </div>
 
         {loading ? (
           <div className="text-center py-20">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-indigo-600 mx-auto"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-indigo-600 mx-auto"></div>
+            <p className="text-sm text-gray-600 mt-4">Loading orders...</p>
           </div>
         ) : (
-          <div className="glass p-4 sm:p-6 rounded-3xl animate-slideUp">
+          <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm animate-slideUp">
             {/* Search and Filter Section */}
-            <div className="flex flex-col sm:flex-row gap-4 mb-6">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-6">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
                 <Input
                   placeholder="Search by service, link, or order ID..."
                   value={orderSearch}
                   onChange={(e) => setOrderSearch(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 />
               </div>
               <Select value={orderStatusFilter} onValueChange={setOrderStatusFilter}>
-                <SelectTrigger className="w-full sm:w-48">
+                <SelectTrigger className="w-full sm:w-48 h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                   <Filter className="w-4 h-4 mr-2" />
                   <SelectValue />
                 </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="in progress">In Progress</SelectItem>
-                    <SelectItem value="processing">Processing</SelectItem>
-                    <SelectItem value="partial">Partial</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="canceled">Canceled</SelectItem>
-                    <SelectItem value="refunds">Refunds</SelectItem>
-                  </SelectContent>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="in progress">In Progress</SelectItem>
+                  <SelectItem value="processing">Processing</SelectItem>
+                  <SelectItem value="partial">Partial</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="canceled">Canceled</SelectItem>
+                  <SelectItem value="refunds">Refunds</SelectItem>
+                </SelectContent>
               </Select>
             </div>
 
             {filteredOrders.length === 0 ? (
               <div className="text-center py-12">
-                <p className="text-gray-600 text-lg mb-2">
+                <p className="text-gray-600 text-base sm:text-lg mb-2">
                   {orders.length === 0 ? 'No orders yet' : 'No orders match your filters'}
                 </p>
                 <p className="text-gray-500 text-sm">
@@ -318,19 +326,19 @@ const OrderHistory = ({ user, onLogout }) => {
             ) : (
               <>
                 {/* Orders Table */}
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto -mx-4 sm:mx-0">
                   <div className="min-w-[1100px]">
                     {/* Fixed Header */}
-                    <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white sticky top-0 z-10">
-                      <div className="grid grid-cols-[2fr_1fr_1.5fr_1fr_1fr_1.5fr_1.5fr_1fr] gap-4 p-4 font-semibold text-sm text-center">
-                        <div>Service</div>
-                        <div>order_no</div>
-                        <div>Link</div>
-                        <div>Quantity</div>
-                        <div>Cost</div>
-                        <div>Status</div>
-                        <div>Date</div>
-                        <div>Actions</div>
+                    <div className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
+                      <div className="grid grid-cols-[2fr_1fr_1.5fr_1fr_1fr_1.5fr_1.5fr_1fr] gap-4 p-4 font-semibold text-xs sm:text-sm text-gray-700">
+                        <div className="text-center">Service</div>
+                        <div className="text-center">Order No</div>
+                        <div className="text-center">Link</div>
+                        <div className="text-center">Quantity</div>
+                        <div className="text-center">Cost</div>
+                        <div className="text-center">Status</div>
+                        <div className="text-center">Date</div>
+                        <div className="text-center">Actions</div>
                       </div>
                     </div>
 
@@ -342,13 +350,13 @@ const OrderHistory = ({ user, onLogout }) => {
                           <div
                             key={order.id}
                             data-testid={`order-item-${order.id}`}
-                            className="bg-white/50 hover:bg-white/70 transition-colors"
+                            className="bg-white hover:bg-gray-50 transition-colors"
                           >
                             <div className="grid grid-cols-[2fr_1fr_1.5fr_1fr_1fr_1.5fr_1.5fr_1fr] gap-4 p-4 items-center">
                               {/* Service */}
                               <div className="text-center">
                                 <p className="font-medium text-gray-900 text-sm">{service?.name || 'Unknown Service'}</p>
-                                <p className="text-xs text-gray-500 mt-1">ID: {order.id.slice(0, 8)}...</p>
+                                <p className="text-xs text-gray-500 mt-0.5">ID: {order.id.slice(0, 8)}...</p>
                               </div>
                               {/* Order No */}
                               <div className="text-center">
@@ -360,31 +368,31 @@ const OrderHistory = ({ user, onLogout }) => {
                               </div>
                               {/* Link */}
                               <div className="text-center">
-                                <p className="text-sm text-gray-700 break-all line-clamp-2" title={order.link}>
+                                <p className="text-xs sm:text-sm text-gray-700 break-all line-clamp-2" title={order.link}>
                                   {order.link}
                                 </p>
                               </div>
                               {/* Quantity */}
                               <div className="text-center">
-                                <p className="font-semibold text-gray-900">{order.quantity}</p>
+                                <p className="font-semibold text-gray-900 text-sm">{order.quantity.toLocaleString()}</p>
                               </div>
                               {/* Cost */}
                               <div className="text-center">
-                                <p className="font-semibold text-gray-900">₵{order.total_cost.toFixed(2)}</p>
+                                <p className="font-semibold text-gray-900 text-sm">₵{order.total_cost.toFixed(2)}</p>
                               </div>
                               {/* Status */}
                               <div className="flex justify-center">
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-1.5">
                                   {getStatusIcon(order.status)}
-                                  <span className={`text-xs px-2 py-1 rounded-full font-medium whitespace-nowrap ${getStatusColor(order.status)}`}>
+                                  <span className={`text-xs px-2.5 py-1 rounded border font-medium whitespace-nowrap ${getStatusColor(order.status)}`}>
                                     {order.status}
                                   </span>
                                 </div>
                               </div>
                               {/* Date */}
                               <div className="text-center">
-                                <p className="text-sm text-gray-700">{new Date(order.created_at).toLocaleDateString()}</p>
-                                <p className="text-xs text-gray-500">{new Date(order.created_at).toLocaleTimeString()}</p>
+                                <p className="text-xs sm:text-sm text-gray-700">{new Date(order.created_at).toLocaleDateString()}</p>
+                                <p className="text-xs text-gray-500">{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                               </div>
                               {/* Actions */}
                               <div className="flex justify-center">
@@ -394,7 +402,7 @@ const OrderHistory = ({ user, onLogout }) => {
                                     variant="outline"
                                     onClick={() => checkOrderStatus(order)}
                                     disabled={checkingStatus[order.id]}
-                                    className="text-xs"
+                                    className="text-xs h-8 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                                   >
                                     {checkingStatus[order.id] ? (
                                       <>
@@ -421,7 +429,7 @@ const OrderHistory = ({ user, onLogout }) => {
                 {/* Pagination */}
                 {totalOrdersPages > 1 && (
                   <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t border-gray-200">
-                    <p className="text-sm text-gray-600">
+                    <p className="text-xs sm:text-sm text-gray-600">
                       Showing {startOrderIndex + 1} to {Math.min(endOrderIndex, filteredOrders.length)} of {filteredOrders.length} orders
                     </p>
                     <div className="flex items-center gap-2">
@@ -430,6 +438,7 @@ const OrderHistory = ({ user, onLogout }) => {
                         size="sm"
                         onClick={() => setOrdersPage(prev => Math.max(1, prev - 1))}
                         disabled={ordersPage === 1}
+                        className="h-9 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50"
                       >
                         <ChevronLeft className="w-4 h-4" />
                       </Button>
@@ -451,7 +460,9 @@ const OrderHistory = ({ user, onLogout }) => {
                               variant={ordersPage === pageNum ? "default" : "outline"}
                               size="sm"
                               onClick={() => setOrdersPage(pageNum)}
-                              className="w-8 h-8 p-0"
+                              className={`w-9 h-9 p-0 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+                                ordersPage === pageNum ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : ''
+                              }`}
                             >
                               {pageNum}
                             </Button>
@@ -463,6 +474,7 @@ const OrderHistory = ({ user, onLogout }) => {
                         size="sm"
                         onClick={() => setOrdersPage(prev => Math.min(totalOrdersPages, prev + 1))}
                         disabled={ordersPage === totalOrdersPages}
+                        className="h-9 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50"
                       >
                         <ChevronRight className="w-4 h-4" />
                       </Button>

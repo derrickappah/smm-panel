@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, Users, Zap, Shield, TrendingUp, Instagram, Youtube } from 'lucide-react';
+import SEO from '@/components/SEO';
 
 const LandingPage = () => {
   const navigate = useNavigate();
@@ -32,8 +33,64 @@ const LandingPage = () => {
     }
   ];
 
+  const structuredData = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'Organization',
+        '@id': 'https://boostupgh.com/#organization',
+        name: 'BoostUp GH',
+        url: 'https://boostupgh.com',
+        logo: 'https://boostupgh.com/favicon.svg',
+        description: 'The most reliable SMM panel for boosting your followers, likes, views, and engagement across all major social media platforms',
+        sameAs: [],
+        contactPoint: {
+          '@type': 'ContactPoint',
+          contactType: 'Customer Service',
+          availableLanguage: 'English'
+        }
+      },
+      {
+        '@type': 'WebSite',
+        '@id': 'https://boostupgh.com/#website',
+        url: 'https://boostupgh.com',
+        name: 'BoostUp GH',
+        description: 'Grow your social media presence instantly with our reliable SMM panel',
+        publisher: {
+          '@id': 'https://boostupgh.com/#organization'
+        },
+        potentialAction: {
+          '@type': 'SearchAction',
+          target: {
+            '@type': 'EntryPoint',
+            urlTemplate: 'https://boostupgh.com/services?search={search_term_string}'
+          },
+          'query-input': 'required name=search_term_string'
+        }
+      },
+      {
+        '@type': 'Service',
+        '@id': 'https://boostupgh.com/#service',
+        name: 'Social Media Marketing Services',
+        description: 'Professional SMM panel services for Instagram, TikTok, YouTube, Facebook, and Twitter. Get followers, likes, views, and engagement instantly.',
+        provider: {
+          '@id': 'https://boostupgh.com/#organization'
+        },
+        areaServed: 'Worldwide',
+        serviceType: 'Social Media Marketing'
+      }
+    ]
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+      <SEO
+        title="Boost Your Social Media Presence - SMM Panel | BoostUp GH"
+        description="Grow your social media presence instantly with BoostUp GH. The most reliable SMM panel for Instagram followers, TikTok views, YouTube subscribers, Facebook likes, and Twitter followers. Instant delivery, secure & safe."
+        keywords="SMM panel, social media marketing, Instagram followers, TikTok views, YouTube subscribers, Facebook likes, Twitter followers, social media growth, SMM services, boost followers, increase engagement"
+        canonical="/"
+        structuredData={structuredData}
+      />
       {/* Navigation */}
       <nav className="glass fixed top-0 left-0 right-0 z-50 border-b border-white/20">
         <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">

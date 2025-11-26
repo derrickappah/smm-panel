@@ -11,6 +11,7 @@ import { placeSMMGenOrder, getSMMGenOrderStatus } from '@/lib/smmgen';
 import { saveOrderStatusHistory } from '@/lib/orderStatusHistory';
 import Navbar from '@/components/Navbar';
 import { Wallet, ShoppingCart, Clock, Search, Layers } from 'lucide-react';
+import SEO from '@/components/SEO';
 // Paystack will be loaded via react-paystack package
 
 const Dashboard = ({ user, onLogout, onUpdateUser }) => {
@@ -39,11 +40,15 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
   // Paystack public key - should be in environment variable
   const paystackPublicKey = process.env.REACT_APP_PAYSTACK_PUBLIC_KEY || 'pk_test_xxxxxxxxxxxxx';
+  
+  // Korapay public key - should be in environment variable
+  const korapayPublicKey = process.env.REACT_APP_KORAPAY_PUBLIC_KEY || '';
 
   const [paymentMethodSettings, setPaymentMethodSettings] = useState({
     paystack_enabled: true,
     manual_enabled: true,
-    hubtel_enabled: true
+    hubtel_enabled: true,
+    korapay_enabled: true
   });
 
   useEffect(() => {
@@ -53,7 +58,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         const { data, error } = await supabase
           .from('app_settings')
           .select('*')
-          .in('key', ['payment_method_paystack_enabled', 'payment_method_manual_enabled', 'payment_method_hubtel_enabled']);
+          .in('key', ['payment_method_paystack_enabled', 'payment_method_manual_enabled', 'payment_method_hubtel_enabled', 'payment_method_korapay_enabled']);
         
         if (!error && data) {
           const settings = {};
@@ -63,11 +68,13 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           const newSettings = {
             paystack_enabled: settings.payment_method_paystack_enabled !== false,
             manual_enabled: settings.payment_method_manual_enabled !== false,
-            hubtel_enabled: settings.payment_method_hubtel_enabled !== false
+            hubtel_enabled: settings.payment_method_hubtel_enabled !== false,
+            korapay_enabled: settings.payment_method_korapay_enabled !== false
           };
           setPaymentMethodSettings(newSettings);
           
           // Auto-select method based on what's enabled
+          // Note: Korapay is disabled by default due to CORS restrictions - requires server-side integration
           if (!newSettings.paystack_enabled && newSettings.manual_enabled && !newSettings.hubtel_enabled) {
             setDepositMethod('manual');
           } else if (newSettings.paystack_enabled && !newSettings.manual_enabled && !newSettings.hubtel_enabled) {
@@ -76,9 +83,12 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             setDepositMethod('hubtel');
           } else if (newSettings.paystack_enabled || newSettings.manual_enabled || newSettings.hubtel_enabled) {
             // At least one enabled, default to paystack if available, else first available
-            setDepositMethod(newSettings.paystack_enabled ? 'paystack' : (newSettings.manual_enabled ? 'manual' : 'hubtel'));
+            setDepositMethod(
+              newSettings.paystack_enabled ? 'paystack' : 
+              (newSettings.manual_enabled ? 'manual' : 'hubtel')
+            );
           } else {
-            // Both disabled
+            // All disabled
             setDepositMethod(null);
           }
         }
@@ -88,10 +98,18 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       }
     };
     
-    fetchPaymentSettings();
-    fetchServices();
-    fetchRecentOrders();
-    verifyPendingPayments(); // Check for pending payments that might have succeeded
+    fetchPaymentSettings().catch((error) => {
+      console.error('Error fetching payment settings:', error);
+    });
+    fetchServices().catch((error) => {
+      console.error('Error fetching services:', error);
+    });
+    fetchRecentOrders().catch((error) => {
+      console.error('Error fetching recent orders:', error);
+    });
+    verifyPendingPayments().catch((error) => {
+      console.error('Error verifying pending payments:', error);
+    });
     
     // Ensure PaystackPop is loaded (react-paystack should load it, but we ensure it's available)
     if (!window.PaystackPop && !document.querySelector('script[src*="paystack"]')) {
@@ -107,6 +125,41 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       };
       document.head.appendChild(script);
     }
+    
+    // Korapay is now handled via serverless functions - no SDK needed
+  }, []);
+
+  // Global error handler for unhandled promise rejections
+  useEffect(() => {
+    const handleUnhandledRejection = (event) => {
+      console.error('Unhandled promise rejection:', event.reason);
+      // Prevent the default browser error handling
+      event.preventDefault();
+      // Log the error for debugging
+      if (event.reason) {
+        console.error('Rejection reason:', event.reason);
+        if (event.reason.message) {
+          console.error('Error message:', event.reason.message);
+        }
+        if (event.reason.stack) {
+          console.error('Error stack:', event.reason.stack);
+        }
+      }
+      // Don't show toast for CORS errors - they're expected and already handled
+      if (event.reason && typeof event.reason === 'object') {
+        const errorMsg = event.reason.message || event.reason.toString() || '';
+        if (!errorMsg.includes('CORS') && !errorMsg.includes('Failed to fetch') && !errorMsg.includes('timed out')) {
+          // Only show toast for unexpected errors
+          toast.error('An unexpected error occurred. Please try again.');
+        }
+      }
+    };
+
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
+    return () => {
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    };
   }, []);
 
   // Periodic status checking for orders and pending payments (every 2 minutes)
@@ -117,8 +170,12 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       // Only check if user is authenticated
       if (user) {
         console.log('Periodic status check...');
-        fetchRecentOrders();
-        verifyPendingPayments(); // Also verify pending payments periodically
+        fetchRecentOrders().catch((error) => {
+          console.error('Error in periodic order status check:', error);
+        });
+        verifyPendingPayments().catch((error) => {
+          console.error('Error in periodic payment verification:', error);
+        });
       }
     }, 120000); // Check every 2 minutes
 
@@ -153,14 +210,14 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         return;
       }
 
-      // Verify each pending transaction with Paystack
+      // Verify each pending transaction with Paystack or Korapay
       for (const transaction of pendingTransactions) {
         const transactionAge = Date.now() - new Date(transaction.created_at).getTime();
         const tenMinutes = 10 * 60 * 1000;
         const oneHour = 60 * 60 * 1000;
         
-        // If transaction has a reference stored, verify it
-        if (transaction.paystack_reference) {
+        // Verify Paystack transactions
+        if (transaction.paystack_reference && transaction.deposit_method === 'paystack') {
           try {
             const verifyResponse = await fetch('/api/verify-paystack-payment', {
               method: 'POST',
@@ -1705,8 +1762,54 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         throw error;
       }
 
-      // TODO: Integrate Hubtel payment API here
-      // For now, show a message that Hubtel integration is pending
+      // ============================================
+      // HUBTEL API INTEGRATION - ADD YOUR CODE HERE
+      // ============================================
+      // 
+      // Example integration structure:
+      // 
+      // 1. Initialize Hubtel payment
+      // const hubtelResponse = await fetch('https://api.hubtel.com/v1/merchantaccount/onlinecheckout/invoice/create', {
+      //   method: 'POST',
+      //   headers: {
+      //     'Content-Type': 'application/json',
+      //     'Authorization': `Basic ${btoa(CLIENT_ID + ':' + CLIENT_SECRET)}`
+      //   },
+      //   body: JSON.stringify({
+      //     totalAmount: amount,
+      //     description: `Deposit of ₵${amount}`,
+      //     callbackUrl: `${window.location.origin}/payment-callback`,
+      //     returnUrl: `${window.location.origin}/dashboard`,
+      //     merchantReference: transaction.id,
+      //     customerName: user.name,
+      //     customerEmail: user.email,
+      //     customerMsisdn: user.phone_number
+      //   })
+      // });
+      // 
+      // const hubtelData = await hubtelResponse.json();
+      // 
+      // 2. If successful, redirect to Hubtel payment page
+      // if (hubtelData.responseCode === '0000') {
+      //   window.location.href = hubtelData.data.checkoutUrl;
+      // } else {
+      //   throw new Error(hubtelData.responseMessage || 'Failed to initialize Hubtel payment');
+      // }
+      // 
+      // 3. Update transaction with Hubtel reference
+      // await supabase
+      //   .from('transactions')
+      //   .update({
+      //     hubtel_reference: hubtelData.data.transactionId,
+      //     hubtel_checkout_url: hubtelData.data.checkoutUrl
+      //   })
+      //   .eq('id', transaction.id);
+      //
+      // ============================================
+      // END OF HUBTEL API INTEGRATION
+      // ============================================
+
+      // Temporary: Show message until Hubtel API is integrated
       toast.info('Hubtel payment integration is in progress. Please use Paystack or Manual deposit for now.');
       setDepositAmount('');
     } catch (error) {
@@ -1714,6 +1817,164 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       toast.error(error.message || 'Failed to process Hubtel deposit. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleKorapayDeposit = async (e) => {
+    e.preventDefault();
+    if (!depositAmount || parseFloat(depositAmount) <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
+    const amount = parseFloat(depositAmount);
+    if (amount < 1) {
+      toast.error('Minimum deposit amount is ₵1');
+      return;
+    }
+
+    setLoading(true);
+    let transaction = null; // Declare outside try block so it's accessible in catch
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) throw new Error('Not authenticated');
+
+      // Create transaction record for Korapay payment
+      const { data: transactionData, error } = await supabase
+        .from('transactions')
+        .insert({
+          user_id: authUser.id,
+          amount: amount,
+          type: 'deposit',
+          status: 'pending',
+          deposit_method: 'korapay'
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating Korapay deposit transaction:', error);
+        throw error;
+      }
+      
+      transaction = transactionData; // Assign to outer variable
+
+      // Check if Korapay SDK is loaded
+      if (!window.Korapay) {
+        // Wait a bit for script to load, then retry
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        if (!window.Korapay) {
+          // Try loading the script again
+          const korapayScript = document.createElement('script');
+          korapayScript.src = 'https://korablobstorage.blob.core.windows.net/modal-bucket/korapay-collections.min.js';
+          korapayScript.async = true;
+          document.head.appendChild(korapayScript);
+          
+          // Wait a bit more for script to load
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          if (!window.Korapay) {
+            toast.error('Korapay payment gateway is not available. Please refresh the page and try again.');
+            setLoading(false);
+            return;
+          }
+        }
+      }
+
+      // Generate unique reference for this transaction
+      const korapayReference = `KORA_${transaction.id}_${Date.now()}`;
+
+      // Initialize Korapay payment via serverless function to bypass CORS
+      try {
+        const initResponse = await fetch('/api/korapay-init', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            amount: amount,
+            currency: 'GHS',
+            reference: korapayReference,
+            customer: {
+              name: user?.name || authUser.user_metadata?.name || 'Customer',
+              email: user?.email || authUser.email || ''
+            },
+            notification_url: `${window.location.origin}/api/payment-callback/korapay`,
+            callback_url: `${window.location.origin}/payment/callback?method=korapay`
+          })
+        });
+
+        if (!initResponse.ok) {
+          const errorData = await initResponse.json().catch(() => ({ error: 'Unknown error' }));
+          throw new Error(errorData.error || 'Failed to initialize Korapay payment');
+        }
+
+        const initData = await initResponse.json();
+
+        if (!initData.success || !initData.authorization_url) {
+          throw new Error(initData.error || 'Failed to get payment authorization URL');
+        }
+
+        // Update transaction with Korapay reference
+        await supabase
+          .from('transactions')
+          .update({
+            korapay_reference: korapayReference,
+            korapay_status: 'pending'
+          })
+          .eq('id', transaction.id);
+
+        // Redirect user to Korapay payment page
+        window.location.href = initData.authorization_url;
+
+        // Note: User will be redirected back via callback_url after payment
+        // The callback handler should verify the payment and update the transaction
+
+      } catch (initError) {
+        console.error('Error initializing Korapay payment:', initError);
+        toast.error(initError.message || 'Failed to initialize payment. Please try again or use another payment method.');
+        setLoading(false);
+        
+        // Update transaction to rejected
+        supabase
+          .from('transactions')
+          .update({
+            status: 'rejected',
+            korapay_reference: korapayReference,
+            korapay_status: 'failed',
+            korapay_error: initError.message || 'Initialization failed'
+          })
+          .eq('id', transaction.id)
+          .then(() => {
+            // Update successful
+          })
+          .catch((updateError) => {
+            console.error('Error updating transaction:', updateError);
+          });
+      }
+
+    } catch (error) {
+      console.error('Korapay deposit error:', error);
+      toast.error(error.message || 'Failed to initialize Korapay payment. Please try again.');
+      setLoading(false);
+      
+      // Update transaction to rejected if it was created
+      if (transaction?.id) {
+        supabase
+          .from('transactions')
+          .update({
+            status: 'rejected',
+            korapay_status: 'failed',
+            korapay_error: error.message || 'Initialization failed'
+          })
+          .eq('id', transaction.id)
+          .then(() => {
+            // Update successful
+          })
+          .catch((updateError) => {
+            console.error('Error updating transaction:', updateError);
+          });
+      }
     }
   };
 
@@ -2039,7 +2300,9 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         toast.success(`Combo order placed successfully! ${componentServices.length} orders created.`);
         setOrderForm({ service_id: '', link: '', quantity: '' });
         await onUpdateUser();
-        fetchRecentOrders();
+        fetchRecentOrders().catch((error) => {
+          console.error('Error fetching recent orders:', error);
+        });
         return;
       }
 
@@ -2145,7 +2408,9 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       await onUpdateUser();
       // Wait a moment for database to sync, then refresh orders
       await new Promise(resolve => setTimeout(resolve, 500));
-      await fetchRecentOrders();
+      await fetchRecentOrders().catch((error) => {
+        console.error('Error fetching recent orders:', error);
+      });
     } catch (error) {
       toast.error(error.message || 'Failed to place order');
     } finally {
@@ -2199,173 +2464,218 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
   });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+    <div className="min-h-screen bg-gray-50">
+      <SEO
+        title="Dashboard"
+        description="Manage your BoostUp GH account, place orders, and track your social media growth"
+        canonical="/dashboard"
+        noindex={true}
+      />
       <Navbar user={user} onLogout={onLogout} />
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         {/* Welcome Section */}
-        <div className="mb-8 animate-fadeIn">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Welcome back, {user.name}!</h1>
-          <p className="text-gray-600">Manage your orders and grow your social presence</p>
+        <div className="mb-6 sm:mb-8 animate-fadeIn">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">Welcome back, {user.name}!</h1>
+          <p className="text-sm sm:text-base text-gray-600">Manage your orders and grow your social presence</p>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 gap-4 sm:gap-6 mb-8 animate-slideUp">
-          <div className="glass p-4 sm:p-6 rounded-2xl card-hover">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 sm:mb-8 animate-slideUp">
+          <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm hover:shadow-md transition-shadow duration-200">
             <div className="flex items-center justify-between mb-4">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center">
-                <Wallet className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                <Wallet className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
               </div>
             </div>
-            <p className="text-gray-600 text-xs sm:text-sm mb-1">Current Balance</p>
-            <h3 data-testid="user-balance" className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">₵{user.balance.toFixed(2)}</h3>
+            <p className="text-xs sm:text-sm font-medium text-gray-600 mb-1">Current Balance</p>
+            <h3 data-testid="user-balance" className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">₵{user.balance.toFixed(2)}</h3>
           </div>
 
-          <div className="glass p-4 sm:p-6 rounded-2xl card-hover">
+          <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm hover:shadow-md transition-shadow duration-200">
             <div className="flex items-center justify-between mb-4">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-                <ShoppingCart className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-100 rounded-lg flex items-center justify-center">
+                <ShoppingCart className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-600" />
               </div>
             </div>
-            <p className="text-gray-600 text-xs sm:text-sm mb-1">Total Orders</p>
-            <h3 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">{recentOrders.length}</h3>
+            <p className="text-xs sm:text-sm font-medium text-gray-600 mb-1">Total Orders</p>
+            <h3 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">{recentOrders.length}</h3>
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-8">
+        <div className="grid lg:grid-cols-2 gap-6 lg:gap-8">
           {/* Add Funds */}
-          <div className="glass p-8 rounded-3xl animate-slideUp">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Add Funds</h2>
+          <div className="bg-white border border-gray-200 rounded-lg p-6 sm:p-8 shadow-sm animate-slideUp">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">Add Funds</h2>
             
-            {/* Deposit Method Toggle - Only show if both methods are enabled */}
-            {paymentMethodSettings.paystack_enabled && paymentMethodSettings.manual_enabled && depositMethod !== null ? (
-              <div className="flex gap-2 mb-6 p-1 bg-gray-100 rounded-lg">
-                <button
-                  type="button"
-                  onClick={() => setDepositMethod('paystack')}
-                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                    depositMethod === 'paystack'
-                      ? 'bg-white text-indigo-600 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Paystack
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDepositMethod('manual')}
-                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                    depositMethod === 'manual'
-                      ? 'bg-white text-indigo-600 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Mobile Money
-                </button>
-              </div>
-            ) : null}
+            {/* Deposit Method Toggle - Show if multiple methods are enabled */}
+            {(() => {
+              const enabledMethods = [
+                paymentMethodSettings.paystack_enabled && 'paystack',
+                paymentMethodSettings.manual_enabled && 'manual',
+                paymentMethodSettings.hubtel_enabled && 'hubtel',
+                paymentMethodSettings.korapay_enabled && 'korapay'
+              ].filter(Boolean);
+              
+              return enabledMethods.length > 1 && depositMethod !== null ? (
+                <div className="flex gap-2 mb-6 p-1 bg-gray-100 rounded-lg">
+                  {paymentMethodSettings.paystack_enabled && (
+                    <button
+                      type="button"
+                      onClick={() => setDepositMethod('paystack')}
+                      className={`flex-1 py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+                        depositMethod === 'paystack'
+                          ? 'bg-white text-indigo-600 shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                      }`}
+                    >
+                      Paystack
+                    </button>
+                  )}
+                  {paymentMethodSettings.manual_enabled && (
+                    <button
+                      type="button"
+                      onClick={() => setDepositMethod('manual')}
+                      className={`flex-1 py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+                        depositMethod === 'manual'
+                          ? 'bg-white text-indigo-600 shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                      }`}
+                    >
+                      Mobile Money
+                    </button>
+                  )}
+                  {paymentMethodSettings.hubtel_enabled && (
+                    <button
+                      type="button"
+                      onClick={() => setDepositMethod('hubtel')}
+                      className={`flex-1 py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+                        depositMethod === 'hubtel'
+                          ? 'bg-white text-indigo-600 shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                      }`}
+                    >
+                      Hubtel
+                    </button>
+                  )}
+                  {paymentMethodSettings.korapay_enabled && (
+                    <button
+                      type="button"
+                      onClick={() => setDepositMethod('korapay')}
+                      className={`flex-1 py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+                        depositMethod === 'korapay'
+                          ? 'bg-white text-indigo-600 shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                      }`}
+                    >
+                      Korapay
+                    </button>
+                  )}
+                </div>
+              ) : null;
+            })()}
 
             {depositMethod === null ? (
               <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
                 <p className="text-sm text-gray-600 text-center">Loading payment methods...</p>
               </div>
-            ) : (!paymentMethodSettings.paystack_enabled && !paymentMethodSettings.manual_enabled && !paymentMethodSettings.hubtel_enabled) ? (
+            ) : (!paymentMethodSettings.paystack_enabled && !paymentMethodSettings.manual_enabled && !paymentMethodSettings.hubtel_enabled && !paymentMethodSettings.korapay_enabled) ? (
               <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                 <p className="text-sm text-yellow-800 text-center">
                   All payment methods are currently disabled. Please contact support.
                 </p>
               </div>
             ) : (depositMethod === 'paystack' && paymentMethodSettings.paystack_enabled) ? (
-              <form onSubmit={handleDeposit} className="space-y-5">
-                <div>
-                  <Label htmlFor="amount" className="text-gray-700 font-medium mb-2 block">Amount (GHS)</Label>
-                  <Input
-                    id="amount"
-                    data-testid="deposit-amount-input"
-                    type="number"
-                    step="0.01"
-                    min="1"
-                    placeholder="Enter amount"
-                    value={depositAmount}
-                    onChange={(e) => setDepositAmount(e.target.value)}
-                    className="rounded-xl bg-white/70"
-                  />
-                </div>
-                <Button
-                  data-testid="deposit-submit-btn"
-                  type="submit"
-                  disabled={loading || !depositAmount}
-                  className="w-full btn-hover bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white py-6 rounded-full"
-                >
-                  {loading ? 'Processing...' : 'Pay with Paystack'}
-                </Button>
-                <p className="text-sm text-gray-600 text-center">
-                  Secure payment via Paystack. Funds are added instantly after successful payment.
-                </p>
-                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-xs sm:text-sm text-blue-800 text-center">
-                    <span className="font-semibold">Having issues with deposits?</span>
-                    <br />
-                    <span className="mt-1 block">Text us on WhatsApp: </span>
-                    <a 
+            <form onSubmit={handleDeposit} className="space-y-4">
+              <div>
+                <Label htmlFor="amount" className="text-sm font-medium text-gray-700 mb-2 block">Amount (GHS)</Label>
+                <Input
+                  id="amount"
+                  data-testid="deposit-amount-input"
+                  type="number"
+                  step="0.01"
+                  min="1"
+                  placeholder="Enter amount"
+                  value={depositAmount}
+                  onChange={(e) => setDepositAmount(e.target.value)}
+                  className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                />
+              </div>
+              <Button
+                data-testid="deposit-submit-btn"
+                type="submit"
+                disabled={loading || !depositAmount}
+                className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Processing...' : 'Pay with Paystack'}
+              </Button>
+              <p className="text-xs sm:text-sm text-gray-600 text-center">
+                Secure payment via Paystack. Funds are added instantly after successful payment.
+              </p>
+              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-xs sm:text-sm text-blue-800 text-center">
+                  <span className="font-semibold">Having issues with deposits?</span>
+                  <br />
+                  <span className="mt-1 block">Text us on WhatsApp: </span>
+                  <a 
                       href="https://wa.me/233559272762" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="font-bold text-blue-600 hover:text-blue-800 underline"
-                    >
-                      0559272762
-                    </a>
-                  </p>
-                </div>
-                
-                {/* Deposit Tutorial Video - Collapsible */}
-                <div className="mt-6">
-                  <Accordion type="single" collapsible className="w-full">
-                    <AccordionItem value="tutorial" className="border border-gray-200 rounded-xl overflow-hidden">
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline">
-                        <span className="text-sm font-semibold text-gray-900">📹 How to Deposit - Video Tutorial</span>
-                      </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-4">
-                        <div className="rounded-xl overflow-hidden bg-gray-100">
-                          <video
-                            controls
-                            className="w-full h-auto"
-                            preload="metadata"
-                            style={{ maxHeight: '500px' }}
-                          >
-                            <source
-                              src="https://spihsvdchouynfbsotwq.supabase.co/storage/v1/object/public/storage/tutorial.mp4"
-                              type="video/mp4"
-                            />
-                            Your browser does not support the video tag.
-                          </video>
-                        </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  </Accordion>
-                </div>
-              </form>
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                  >
+                    0559272762
+                  </a>
+                </p>
+              </div>
+              
+              {/* Deposit Tutorial Video - Collapsible */}
+              <div className="mt-6">
+                <Accordion type="single" collapsible className="w-full">
+                  <AccordionItem value="tutorial" className="border border-gray-200 rounded-lg overflow-hidden">
+                    <AccordionTrigger className="px-4 py-3 hover:no-underline focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-lg">
+                      <span className="text-sm font-semibold text-gray-900">📹 How to Deposit - Video Tutorial</span>
+                    </AccordionTrigger>
+                    <AccordionContent className="px-4 pb-4">
+                      <div className="rounded-lg overflow-hidden bg-gray-100">
+                        <video
+                          controls
+                          className="w-full h-auto"
+                          preload="metadata"
+                          style={{ maxHeight: '500px' }}
+                        >
+                          <source
+                            src="https://spihsvdchouynfbsotwq.supabase.co/storage/v1/object/public/storage/tutorial.mp4"
+                            type="video/mp4"
+                          />
+                          Your browser does not support the video tag.
+                        </video>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              </div>
+            </form>
             ) : (depositMethod === 'manual' && paymentMethodSettings.manual_enabled) ? (
-              <form onSubmit={handleManualDeposit} className="space-y-5">
+              <form onSubmit={handleManualDeposit} className="space-y-4">
                 {/* Manual Deposit Instructions */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                  <h3 className="font-semibold text-blue-900 mb-2">Instructions:</h3>
-                  <ol className="text-sm text-blue-800 space-y-1 list-decimal list-inside">
-                    <li>Make payment to <span className="font-bold">0559272762</span> via MTN Mobile Money</li>
-                    <li>Use your <span className="font-bold">USERNAME</span> as Reference</li>
-                    <li>Amount must be <span className="font-bold">₵10</span> and above</li>
-                    <li>Network: <span className="font-bold">MTN</span></li>
-                    <li>Name: <span className="font-bold">Manasseh Attah Appiah</span></li>
-                    <li>Funds will be added within <span className="font-bold">5 minutes</span></li>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <h3 className="text-sm font-semibold text-blue-900 mb-3">Instructions:</h3>
+                  <ol className="text-xs sm:text-sm text-blue-800 space-y-1.5 list-decimal list-inside">
+                    <li>Make payment to <span className="font-semibold">0559272762</span> via MTN Mobile Money</li>
+                    <li>Use your <span className="font-semibold">Full Name</span> as Reference</li>
+                    <li>Amount must be <span className="font-semibold">₵10</span> and above</li>
+                    <li>Network: <span className="font-semibold">MTN</span></li>
+                    <li>Name: <span className="font-semibold">Manasseh Attah Appiah</span></li>
+                    <li>Funds will be added within <span className="font-semibold">5 minutes</span></li>
                   </ol>
-                  <div className="mt-3 p-2 bg-white rounded border border-blue-300">
+                  <div className="mt-3 p-3 bg-white rounded-lg border border-blue-300">
                     <p className="text-xs text-blue-700 font-medium mb-1">Tap and hold to copy:</p>
-                    <p className="text-lg font-bold text-blue-900 select-all">0559272762</p>
+                    <p className="text-base sm:text-lg font-bold text-blue-900 select-all">0559272762</p>
                   </div>
                 </div>
 
                 <div>
-                  <Label htmlFor="manual-amount" className="text-gray-700 font-medium mb-2 block">Amount (GHS)</Label>
+                  <Label htmlFor="manual-amount" className="text-sm font-medium text-gray-700 mb-2 block">Amount (GHS)</Label>
                   <Input
                     id="manual-amount"
                     type="number"
@@ -2374,7 +2684,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                     placeholder="Enter the amount you sent"
                     value={manualDepositForm.amount}
                     onChange={(e) => setManualDepositForm({ ...manualDepositForm, amount: e.target.value })}
-                    className="rounded-xl bg-white/70"
+                    className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                     required
                   />
                   {parseFloat(manualDepositForm.amount) < 10 && manualDepositForm.amount && (
@@ -2383,20 +2693,20 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                 </div>
 
                 <div>
-                  <Label htmlFor="momo-number" className="text-gray-700 font-medium mb-2 block">Your MTN Mobile Money Number</Label>
+                  <Label htmlFor="momo-number" className="text-sm font-medium text-gray-700 mb-2 block">Your MTN Mobile Money Number</Label>
                   <Input
                     id="momo-number"
                     type="tel"
                     placeholder="e.g., 0244123456"
                     value={manualDepositForm.momo_number}
                     onChange={(e) => setManualDepositForm({ ...manualDepositForm, momo_number: e.target.value })}
-                    className="rounded-xl bg-white/70"
+                    className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                     required
                   />
                 </div>
 
                 <div>
-                  <Label htmlFor="payment-proof" className="text-gray-700 font-medium mb-2 block">
+                  <Label htmlFor="payment-proof" className="text-sm font-medium text-gray-700 mb-2 block">
                     Payment Proof Screenshot <span className="text-red-500">*</span>
                   </Label>
                   <Input
@@ -2419,7 +2729,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                         setManualDepositForm({ ...manualDepositForm, payment_proof_file: file });
                       }
                     }}
-                    className="rounded-xl bg-white/70"
+                    className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 file:mr-4 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
                     required
                   />
                   {manualDepositForm.payment_proof_file && (
@@ -2435,11 +2745,11 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                 <Button
                   type="submit"
                   disabled={loading || !manualDepositForm.amount || parseFloat(manualDepositForm.amount) < 10 || !manualDepositForm.momo_number || !manualDepositForm.payment_proof_file || uploadingProof}
-                  className="w-full btn-hover bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white py-6 rounded-full"
+                  className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {uploadingProof ? 'Uploading...' : loading ? 'Submitting...' : 'Submit Manual Deposit'}
                 </Button>
-                <p className="text-sm text-gray-600 text-center">
+                <p className="text-xs sm:text-sm text-gray-600 text-center">
                   Your deposit will be reviewed and approved within 5 minutes.
                 </p>
                 <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -2451,7 +2761,91 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                       href="https://wa.me/233559272762" 
                       target="_blank" 
                       rel="noopener noreferrer"
-                      className="font-bold text-blue-600 hover:text-blue-800 underline"
+                      className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                    >
+                      0559272762
+                    </a>
+                  </p>
+                </div>
+              </form>
+            ) : (depositMethod === 'hubtel' && paymentMethodSettings.hubtel_enabled) ? (
+              <form onSubmit={handleHubtelDeposit} className="space-y-4">
+                <div>
+                  <Label htmlFor="hubtel-amount" className="text-sm font-medium text-gray-700 mb-2 block">Amount (GHS)</Label>
+                  <Input
+                    id="hubtel-amount"
+                    type="number"
+                    step="0.01"
+                    min="1"
+                    placeholder="Enter the amount you sent"
+                    value={depositAmount}
+                    onChange={(e) => setDepositAmount(e.target.value)}
+                    className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    required
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  disabled={loading || !depositAmount}
+                  className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? 'Processing...' : 'Pay with Hubtel'}
+                </Button>
+                <p className="text-xs sm:text-sm text-gray-600 text-center">
+                  Secure payment via Hubtel. Funds are added instantly after successful payment.
+                </p>
+                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-xs sm:text-sm text-blue-800 text-center">
+                    <span className="font-semibold">Having issues with deposits?</span>
+                    <br />
+                    <span className="mt-1 block">Text us on WhatsApp: </span>
+                    <a 
+                      href="https://wa.me/233559272762" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                    >
+                      0559272762
+                    </a>
+                  </p>
+                </div>
+              </form>
+            ) : (depositMethod === 'korapay' && paymentMethodSettings.korapay_enabled) ? (
+              <form onSubmit={handleKorapayDeposit} className="space-y-4">
+                <div>
+                  <Label htmlFor="korapay-amount" className="text-sm font-medium text-gray-700 mb-2 block">Amount (GHS)</Label>
+                  <Input
+                    id="korapay-amount"
+                    type="number"
+                    step="0.01"
+                    min="1"
+                    placeholder="Enter the amount you sent"
+                    value={depositAmount}
+                    onChange={(e) => setDepositAmount(e.target.value)}
+                    className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    required
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  disabled={loading || !depositAmount}
+                  className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? 'Processing...' : 'Pay with Korapay'}
+                </Button>
+                <p className="text-xs sm:text-sm text-gray-600 text-center">
+                  Secure payment via Korapay. Funds are added instantly after successful payment.
+                </p>
+                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-xs sm:text-sm text-blue-800 text-center">
+                    <span className="font-semibold">Having issues with deposits?</span>
+                    <br />
+                    <span className="mt-1 block">Text us on WhatsApp: </span>
+                    <a 
+                      href="https://wa.me/233559272762" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
                     >
                       0559272762
                     </a>
@@ -2462,11 +2856,11 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           </div>
 
           {/* Quick Order */}
-          <div className="glass p-8 rounded-3xl animate-slideUp" id="order-form-section">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Place New Order</h2>
-            <form onSubmit={handleOrder} className="space-y-5">
+          <div className="bg-white border border-gray-200 rounded-lg p-6 sm:p-8 shadow-sm animate-slideUp" id="order-form-section">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">Place New Order</h2>
+            <form onSubmit={handleOrder} className="space-y-4">
               <div className="relative">
-                <Label htmlFor="service" className="text-gray-700 font-medium mb-2 block">Service</Label>
+                <Label htmlFor="service" className="text-sm font-medium text-gray-700 mb-2 block">Service</Label>
                 {/* Search Input with Dropdown */}
                 <div className="relative service-dropdown-container">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none z-20" />
@@ -2501,7 +2895,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                         }
                       }, 150);
                     }}
-                    className="rounded-xl bg-white/70 pl-10 z-10"
+                    className="w-full h-11 rounded-lg border-gray-300 pl-10 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 z-10"
                     autoComplete="off"
                     id="service-search-input"
                   />
@@ -2509,7 +2903,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                   {/* Dropdown positioned below search input */}
                   {selectOpen && (
                     <div 
-                      className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 max-h-[300px] overflow-y-auto"
+                      className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-[300px] overflow-y-auto"
                       onMouseDown={(e) => {
                         // Prevent blur when clicking on dropdown
                         e.preventDefault();
@@ -2529,13 +2923,22 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                                 setServiceSearch('');
                                 setSelectOpen(false);
                               }}
-                              className="px-3 py-2 rounded-md hover:bg-gray-100 cursor-pointer transition-colors"
+                              className="px-3 py-2 rounded-md hover:bg-gray-100 cursor-pointer transition-colors focus-within:bg-gray-100"
+                              tabIndex={0}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  setOrderForm({ ...orderForm, service_id: service.id });
+                                  setServiceSearch('');
+                                  setSelectOpen(false);
+                                }
+                              }}
                             >
                               <div className="flex flex-col">
                                 <div className="flex items-center gap-2">
                                   <span className="font-medium text-gray-900">{service.name}</span>
                                   {service.is_combo && (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full">
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded">
                                       <Layers className="w-3 h-3" />
                                       Combo
                                     </span>
@@ -2571,11 +2974,11 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                 
                 {/* Selected service display */}
                 {orderForm.service_id && services.find(s => s.id === orderForm.service_id) && (
-                  <div className="mt-3 p-3 bg-indigo-50 rounded-xl">
+                  <div className="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
                     <p className="text-sm font-medium text-gray-900">
                       Selected: {services.find(s => s.id === orderForm.service_id).name}
                     </p>
-                    <p className="text-xs text-gray-600">
+                    <p className="text-xs text-gray-600 mt-0.5">
                       ₵{services.find(s => s.id === orderForm.service_id).rate}/1000
                     </p>
                   </div>
@@ -2589,7 +2992,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               </div>
 
               <div>
-                <Label htmlFor="link" className="text-gray-700 font-medium mb-2 block">Link</Label>
+                <Label htmlFor="link" className="text-sm font-medium text-gray-700 mb-2 block">Link</Label>
                 <Input
                   id="link"
                   data-testid="order-link-input"
@@ -2597,12 +3000,12 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                   placeholder="put your link here"
                   value={orderForm.link}
                   onChange={(e) => setOrderForm({ ...orderForm, link: e.target.value })}
-                  className="rounded-xl bg-white/70"
+                  className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 />
               </div>
 
               <div>
-                <Label htmlFor="quantity" className="text-gray-700 font-medium mb-2 block">Quantity</Label>
+                <Label htmlFor="quantity" className="text-sm font-medium text-gray-700 mb-2 block">Quantity</Label>
                 <Input
                   id="quantity"
                   data-testid="order-quantity-input"
@@ -2610,16 +3013,16 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                   placeholder="1000"
                   value={orderForm.quantity}
                   onChange={(e) => setOrderForm({ ...orderForm, quantity: e.target.value })}
-                  className="rounded-xl bg-white/70"
+                  className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 />
                 {selectedService && (
                   <div className="mt-2 space-y-1">
-                    <p className="text-sm text-gray-600">
+                    <p className="text-xs sm:text-sm text-gray-600">
                       Min: {selectedService.min_quantity} | Max: {selectedService.max_quantity}
                     </p>
                     {selectedService.is_combo && selectedService.combo_service_ids && (
-                      <div className="mt-2 p-2 bg-purple-50 rounded-lg border border-purple-200">
-                        <p className="text-xs font-medium text-purple-900 mb-1 flex items-center gap-1">
+                      <div className="mt-2 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                        <p className="text-xs font-medium text-purple-900 mb-1.5 flex items-center gap-1">
                           <Layers className="w-3 h-3" />
                           Combo includes:
                         </p>
@@ -2627,7 +3030,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                           {selectedService.combo_service_ids.map((serviceId, idx) => {
                             const componentService = services.find(s => s.id === serviceId);
                             return componentService ? (
-                              <li key={serviceId} className="flex items-center gap-1">
+                              <li key={serviceId} className="flex items-center gap-1.5">
                                 <span className="w-1 h-1 bg-purple-500 rounded-full"></span>
                                 {componentService.name} (₵{componentService.rate}/1000)
                               </li>
@@ -2640,16 +3043,16 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                 )}
               </div>
 
-              <div className="bg-indigo-50 p-4 rounded-xl">
-                <p className="text-sm text-gray-600 mb-1">Estimated Cost</p>
-                <p data-testid="order-estimated-cost" className="text-2xl font-bold text-indigo-600">₵{estimatedCost}</p>
+              <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-lg">
+                <p className="text-xs sm:text-sm text-gray-600 mb-1">Estimated Cost</p>
+                <p data-testid="order-estimated-cost" className="text-xl sm:text-2xl font-bold text-indigo-600">₵{estimatedCost}</p>
               </div>
 
               <Button
                 data-testid="order-submit-btn"
                 type="submit"
                 disabled={loading || !orderForm.service_id}
-                className="w-full btn-hover bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white py-6 rounded-full"
+                className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? 'Processing...' : 'Place Order'}
               </Button>
@@ -2659,14 +3062,14 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
         {/* Recent Orders */}
         {recentOrders.length > 0 && (
-          <div className="mt-8 glass p-8 rounded-3xl animate-slideUp">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">Recent Orders</h2>
+          <div className="mt-6 sm:mt-8 bg-white border border-gray-200 rounded-lg p-6 sm:p-8 shadow-sm animate-slideUp">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Recent Orders</h2>
               <Button
                 data-testid="view-all-orders-btn"
                 variant="ghost"
                 onClick={() => navigate('/orders')}
-                className="text-indigo-600 hover:text-indigo-700"
+                className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-lg"
               >
                 View All
               </Button>
@@ -2674,24 +3077,35 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             <div className="space-y-3">
               {recentOrders.map((order) => {
                 const service = services.find(s => s.id === order.service_id);
+                const statusLower = order.status?.toLowerCase() || '';
+                const getStatusStyles = () => {
+                  if (statusLower === 'completed') {
+                    return 'bg-green-100 text-green-700 border-green-200';
+                  } else if (statusLower === 'processing' || statusLower.includes('in progress')) {
+                    return 'bg-blue-100 text-blue-700 border-blue-200';
+                  } else if (statusLower === 'partial') {
+                    return 'bg-orange-100 text-orange-700 border-orange-200';
+                  } else if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower.includes('cancel')) {
+                    return 'bg-red-100 text-red-700 border-red-200';
+                  } else if (statusLower === 'refunds' || statusLower.includes('refund')) {
+                    return 'bg-purple-100 text-purple-700 border-purple-200';
+                  } else {
+                    return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+                  }
+                };
                 return (
-                  <div key={order.id} className="bg-white/50 p-4 rounded-xl flex justify-between items-center">
-                    <div>
-                      <p className="font-medium text-gray-900">{service?.name || 'Service'}</p>
-                      <p className="text-sm text-gray-600">Quantity: {order.quantity}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium text-gray-900">₵{order.total_cost.toFixed(2)}</p>
-                      <span className={`text-xs px-3 py-1 rounded-full ${
-                                  order.status === 'completed' ? 'bg-green-100 text-green-700' :
-                                  order.status === 'processing' || order.status === 'in progress' ? 'bg-blue-100 text-blue-700' :
-                                  order.status === 'partial' ? 'bg-orange-100 text-orange-700' :
-                                  order.status === 'canceled' || order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-                                  order.status === 'refunds' ? 'bg-purple-100 text-purple-700' :
-                        'bg-yellow-100 text-yellow-700'
-                      }`}>
-                        {order.status}
-                      </span>
+                  <div key={order.id} className="bg-gray-50 border border-gray-200 p-4 rounded-lg hover:border-gray-300 transition-colors">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm sm:text-base font-medium text-gray-900 truncate">{service?.name || 'Service'}</p>
+                        <p className="text-xs sm:text-sm text-gray-600 mt-0.5">Quantity: {order.quantity.toLocaleString()}</p>
+                      </div>
+                      <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+                        <p className="text-sm sm:text-base font-semibold text-gray-900">₵{order.total_cost.toFixed(2)}</p>
+                        <span className={`text-xs font-medium px-2.5 py-1 rounded border ${getStatusStyles()}`}>
+                          {order.status}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 );

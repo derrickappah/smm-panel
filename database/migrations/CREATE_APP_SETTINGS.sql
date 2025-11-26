@@ -19,7 +19,8 @@ INSERT INTO app_settings (key, value, description)
 VALUES 
     ('payment_method_paystack_enabled', 'true', 'Enable/disable Paystack payment method'),
     ('payment_method_manual_enabled', 'true', 'Enable/disable Manual (Mobile Money) payment method'),
-    ('payment_method_hubtel_enabled', 'true', 'Enable/disable Hubtel payment method')
+    ('payment_method_hubtel_enabled', 'true', 'Enable/disable Hubtel payment method'),
+    ('payment_method_korapay_enabled', 'true', 'Enable/disable Korapay payment method')
 ON CONFLICT (key) DO NOTHING;
 
 -- Add comment

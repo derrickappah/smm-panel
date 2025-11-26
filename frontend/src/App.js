@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { HelmetProvider } from "react-helmet-async";
 import LandingPage from "@/pages/LandingPage";
 import AuthPage from "@/pages/AuthPage";
 import Dashboard from "@/pages/Dashboard";
@@ -9,6 +10,7 @@ import OrderHistory from "@/pages/OrderHistory";
 import AdminDashboard from "@/pages/AdminDashboard";
 import SupportPage from "@/pages/SupportPage";
 import TransactionsPage from "@/pages/TransactionsPage";
+import PaymentCallback from "@/pages/PaymentCallback";
 import SupabaseSetup from "@/components/SupabaseSetup";
 import { Toaster } from "@/components/ui/sonner";
 import { supabase, isConfigured } from "@/lib/supabase";
@@ -36,13 +38,27 @@ function App() {
     // Listen for auth state changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        loadUserProfile(session.user.id);
-      } else {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state changed:', event, session?.user?.id);
+      
+      // Only clear user on explicit sign out events
+      if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
         setUser(null);
         setLoading(false);
+        return;
       }
+      
+      // For SIGNED_IN, TOKEN_REFRESHED, USER_UPDATED, and other events
+      // Only update if we have a valid session
+      if (session?.user) {
+        // Reload user profile to get latest data
+        // This handles SIGNED_IN, TOKEN_REFRESHED, USER_UPDATED, etc.
+        loadUserProfile(session.user.id);
+      }
+      // For TOKEN_REFRESHED or other events without session, don't clear user
+      // This prevents redirects during normal session refresh
+      // The user state will remain until we explicitly sign out
+      // This is important because token refresh might temporarily have no session
     });
 
     return () => {
@@ -52,28 +68,23 @@ function App() {
 
   const loadUserProfile = async (userId) => {
     try {
-      // First, get auth user as fallback
-      const { data: { user: authUser } } = await supabase.auth.getUser();
+      // First, get auth user
+      const { data: { user: authUser }, error: getUserError } = await supabase.auth.getUser();
       
       if (!authUser) {
+        // Check if it's a token expiration error (which might be temporary during refresh)
+        if (getUserError?.message?.includes('expired') || getUserError?.message?.includes('refresh')) {
+          // Token is being refreshed - don't clear user, let the refresh complete
+          console.log('Token refresh in progress, keeping user state');
+          return;
+        }
+        // For other errors or no user, clear the user state
         setUser(null);
         setLoading(false);
         return;
       }
 
-      // Set user from auth data immediately (so app works even without profile table)
-      const fallbackUser = {
-        id: authUser.id,
-        email: authUser.email || '',
-        name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
-        balance: 0.0,
-        role: 'user',
-      };
-
-      setUser(fallbackUser);
-      setLoading(false);
-
-      // Try to load profile from database (non-blocking)
+      // Try to load profile from database FIRST to get correct role
       try {
         const { data: profile, error } = await supabase
           .from('profiles')
@@ -85,7 +96,16 @@ function App() {
           // Handle 500 errors and table not found errors
           if (error.code === 'PGRST301' || error.message?.includes('500') || error.message?.includes('Internal Server Error')) {
             console.warn('Profiles table may not exist or RLS policy issue. Using fallback user data.');
-            // User already set from fallback, so continue
+            // Use fallback user
+            const fallbackUser = {
+              id: authUser.id,
+              email: authUser.email || '',
+              name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
+              balance: 0.0,
+              role: 'user',
+            };
+            setUser(fallbackUser);
+            setLoading(false);
             return;
           }
 
@@ -107,10 +127,16 @@ function App() {
 
               if (insertError) {
                 console.error('Profile creation error:', insertError);
-                // If insert fails due to RLS, that's okay - we'll use fallback
-                if (insertError.code !== '42501' && !insertError.message?.includes('permission')) {
-                  console.warn('Profile creation failed:', insertError.message);
-                }
+                // If insert fails, use fallback
+                const fallbackUser = {
+                  id: authUser.id,
+                  email: authUser.email || '',
+                  name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
+                  balance: 0.0,
+                  role: 'user',
+                };
+                setUser(fallbackUser);
+                setLoading(false);
               } else if (newProfile) {
                 console.log('Profile created successfully:', newProfile);
                 setUser({
@@ -120,14 +146,35 @@ function App() {
                   balance: newProfile.balance || 0.0,
                   role: newProfile.role || 'user',
                 });
+                setLoading(false);
               }
             } catch (insertErr) {
-              // Insert failed - might be RLS or table issue, continue with fallback
+              // Insert failed - use fallback
               console.warn('Profile creation failed (non-critical):', insertErr);
+              const fallbackUser = {
+                id: authUser.id,
+                email: authUser.email || '',
+                name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
+                balance: 0.0,
+                role: 'user',
+              };
+              setUser(fallbackUser);
+              setLoading(false);
             }
+          } else {
+            // Other error - use fallback
+            const fallbackUser = {
+              id: authUser.id,
+              email: authUser.email || '',
+              name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
+              balance: 0.0,
+              role: 'user',
+            };
+            setUser(fallbackUser);
+            setLoading(false);
           }
         } else if (profile) {
-          // Update with full profile data
+          // Profile loaded successfully - set user with correct role immediately
           setUser({
             id: profile.id,
             email: profile.email,
@@ -135,10 +182,20 @@ function App() {
             balance: profile.balance || 0.0,
             role: profile.role || 'user',
           });
+          setLoading(false);
         }
       } catch (err) {
-        // Profile fetch failed - user already set from fallback, so continue
+        // Profile fetch failed - use fallback
         console.warn('Profile fetch error (non-critical):', err);
+        const fallbackUser = {
+          id: authUser.id,
+          email: authUser.email || '',
+          name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
+          balance: 0.0,
+          role: 'user',
+        };
+        setUser(fallbackUser);
+        setLoading(false);
       }
     } catch (error) {
       console.error('Error loading user:', error);
@@ -170,17 +227,22 @@ function App() {
   }
 
   return (
-    <div className="App">
-      <Toaster position="top-right" />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={user ? <Navigate to="/dashboard" /> : <LandingPage />} />
-          <Route path="/auth" element={user ? <Navigate to="/dashboard" /> : <AuthPage />} />
+    <HelmetProvider>
+      <div className="App">
+        <Toaster position="top-right" />
+        <BrowserRouter>
+          <Routes>
+          <Route path="/" element={user ? <Navigate to={user?.role === 'admin' ? '/admin' : '/dashboard'} /> : <LandingPage />} />
+          <Route path="/auth" element={user ? <Navigate to={user?.role === 'admin' ? '/admin' : '/dashboard'} /> : <AuthPage />} />
           <Route
             path="/dashboard"
             element={
               user ? (
-                <Dashboard user={user} onLogout={logout} onUpdateUser={() => loadUserProfile(user.id)} />
+                user?.role === 'admin' ? (
+                  <Navigate to="/admin" />
+                ) : (
+                  <Dashboard user={user} onLogout={logout} onUpdateUser={() => loadUserProfile(user.id)} />
+                )
               ) : (
                 <Navigate to="/auth" />
               )
@@ -224,9 +286,16 @@ function App() {
               )
             }
           />
-        </Routes>
-      </BrowserRouter>
-    </div>
+          <Route
+            path="/payment/callback"
+            element={
+              <PaymentCallback onUpdateUser={() => user && loadUserProfile(user.id)} />
+            }
+          />
+          </Routes>
+        </BrowserRouter>
+      </div>
+    </HelmetProvider>
   );
 }
 

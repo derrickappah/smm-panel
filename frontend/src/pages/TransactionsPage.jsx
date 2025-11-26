@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import SEO from '@/components/SEO';
 import { 
   Clock, 
   CheckCircle, 
@@ -25,6 +26,7 @@ import { toast } from 'sonner';
 const TransactionsPage = ({ user, onLogout }) => {
   const [transactions, setTransactions] = useState([]);
   const [userProfiles, setUserProfiles] = useState({}); // For admin: user_id -> profile data
+  const [orders, setOrders] = useState([]); // For admin: orders to check refund status
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -486,25 +488,25 @@ const TransactionsPage = ({ user, onLogout }) => {
       case 'approved':
         return { 
           label: 'Approved', 
-          color: 'bg-green-100 text-green-700', 
+          color: 'bg-green-100 text-green-700 border-green-200', 
           icon: CheckCircle 
         };
       case 'pending':
         return { 
           label: 'Pending', 
-          color: 'bg-yellow-100 text-yellow-700', 
+          color: 'bg-yellow-100 text-yellow-700 border-yellow-200', 
           icon: Clock 
         };
       case 'rejected':
         return { 
           label: 'Rejected', 
-          color: 'bg-red-100 text-red-700', 
+          color: 'bg-red-100 text-red-700 border-red-200', 
           icon: XCircle 
         };
       default:
         return { 
           label: status || 'Unknown', 
-          color: 'bg-gray-100 text-gray-700', 
+          color: 'bg-gray-100 text-gray-700 border-gray-200', 
           icon: AlertCircle 
         };
     }
@@ -515,25 +517,25 @@ const TransactionsPage = ({ user, onLogout }) => {
       case 'deposit':
         return { 
           label: 'Deposit', 
-          color: 'bg-blue-100 text-blue-700', 
+          color: 'bg-blue-100 text-blue-700 border-blue-200', 
           icon: TrendingUp 
         };
       case 'order':
         return { 
           label: 'Order', 
-          color: 'bg-purple-100 text-purple-700', 
+          color: 'bg-purple-100 text-purple-700 border-purple-200', 
           icon: DollarSign 
         };
       case 'refund':
         return { 
           label: 'Refund', 
-          color: 'bg-green-100 text-green-700', 
+          color: 'bg-green-100 text-green-700 border-green-200', 
           icon: RefreshCw 
         };
       default:
         return { 
           label: type || 'Unknown', 
-          color: 'bg-gray-100 text-gray-700', 
+          color: 'bg-gray-100 text-gray-700 border-gray-200', 
           icon: AlertCircle 
         };
     }
@@ -587,28 +589,37 @@ const TransactionsPage = ({ user, onLogout }) => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+      <div className="min-h-screen bg-gray-50">
         <Navbar user={user} onLogout={onLogout} />
         <div className="flex items-center justify-center min-h-[60vh]">
-          <Loader className="w-8 h-8 animate-spin text-indigo-600" />
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-indigo-600 mx-auto"></div>
+            <p className="text-sm text-gray-600 mt-4">Loading transactions...</p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+    <div className="min-h-screen bg-gray-50">
+      <SEO
+        title="Transactions"
+        description="View your BoostUp GH transaction history"
+        canonical="/transactions"
+        noindex={true}
+      />
       <Navbar user={user} onLogout={onLogout} />
       
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-        <div className="glass p-6 sm:p-8 rounded-3xl">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 lg:p-8 shadow-sm">
           {/* Header */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
                 {isAdmin ? 'All Transactions' : 'My Transactions'}
               </h1>
-              <p className="text-gray-600">
+              <p className="text-sm sm:text-base text-gray-600">
                 {isAdmin 
                   ? 'View and manage all user transactions' 
                   : 'Track your deposits and payments'}
@@ -641,7 +652,7 @@ const TransactionsPage = ({ user, onLogout }) => {
                   }}
                   disabled={checkingBalances}
                   variant="outline"
-                  className="flex items-center gap-2"
+                  className="flex items-center gap-2 h-10 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                   title="Re-check all balances with triple verification"
                 >
                   <RefreshCw className={`w-4 h-4 ${checkingBalances ? 'animate-spin' : ''}`} />
@@ -652,7 +663,7 @@ const TransactionsPage = ({ user, onLogout }) => {
                 onClick={handleRefresh}
                 disabled={refreshing}
                 variant="outline"
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 h-10 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
               >
                 <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
                 Refresh
@@ -661,21 +672,21 @@ const TransactionsPage = ({ user, onLogout }) => {
           </div>
 
           {/* Filters */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
             {/* Search */}
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
               <Input
                 placeholder={isAdmin ? "Search by user, amount, ID..." : "Search by amount, ID..."}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
+                className="pl-10 h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               />
             </div>
 
             {/* Status Filter */}
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger>
+              <SelectTrigger className="h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                 <Filter className="w-4 h-4 mr-2" />
                 <SelectValue placeholder="All Status" />
               </SelectTrigger>
@@ -689,7 +700,7 @@ const TransactionsPage = ({ user, onLogout }) => {
 
             {/* Type Filter */}
             <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger>
+              <SelectTrigger className="h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                 <Filter className="w-4 h-4 mr-2" />
                 <SelectValue placeholder="All Types" />
               </SelectTrigger>
@@ -705,7 +716,7 @@ const TransactionsPage = ({ user, onLogout }) => {
           {/* Transactions Table */}
           {filteredTransactions.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-gray-600 text-lg">
+              <p className="text-gray-600 text-base sm:text-lg">
                 {transactions.length === 0 ? 'No transactions yet' : 'No transactions match your filters'}
               </p>
               {searchTerm || statusFilter !== 'all' || typeFilter !== 'all' ? (
@@ -716,7 +727,7 @@ const TransactionsPage = ({ user, onLogout }) => {
                     setTypeFilter('all');
                   }}
                   variant="outline"
-                  className="mt-4"
+                  className="mt-4 h-10 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                 >
                   Clear Filters
                 </Button>
@@ -724,19 +735,19 @@ const TransactionsPage = ({ user, onLogout }) => {
             </div>
           ) : (
             <>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto -mx-4 sm:mx-0">
                 <div className="min-w-[1200px]">
                   {/* Fixed Header */}
-                  <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white sticky top-0 z-10">
-                    <div className={`grid gap-4 p-4 font-semibold text-sm text-center ${isAdmin ? 'grid-cols-[1.5fr_1.5fr_1.5fr_1.5fr_2fr_2fr_1fr_1fr]' : 'grid-cols-[1.5fr_1.5fr_1.5fr_1.5fr_2fr_1fr_1fr]'}`}>
-                      <div>Type</div>
-                      <div>Status</div>
-                      <div>Amount</div>
-                      <div>Time</div>
-                      {isAdmin && <div>User</div>}
-                      <div>Transaction ID</div>
-                      {isAdmin && <div>Balance Status</div>}
-                      <div>Actions</div>
+                  <div className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
+                    <div className={`grid gap-4 p-4 font-semibold text-xs sm:text-sm text-gray-700 ${isAdmin ? 'grid-cols-[1.5fr_1.5fr_1.5fr_1.5fr_2fr_2fr_1fr_1fr]' : 'grid-cols-[1.5fr_1.5fr_1.5fr_1.5fr_2fr_1fr_1fr]'}`}>
+                      <div className="text-center">Type</div>
+                      <div className="text-center">Status</div>
+                      <div className="text-center">Amount</div>
+                      <div className="text-center">Time</div>
+                      {isAdmin && <div className="text-center">User</div>}
+                      <div className="text-center">Transaction ID</div>
+                      {isAdmin && <div className="text-center">Balance Status</div>}
+                      <div className="text-center">Actions</div>
                     </div>
                   </div>
 
@@ -751,28 +762,28 @@ const TransactionsPage = ({ user, onLogout }) => {
                       const userProfile = isAdmin ? userProfiles[transaction.user_id] : null;
 
                       return (
-                        <div key={transaction.id} className="bg-white/50 hover:bg-white/70 transition-colors">
+                        <div key={transaction.id} className="bg-white hover:bg-gray-50 transition-colors">
                           <div className={`grid gap-4 p-4 items-center ${isAdmin ? 'grid-cols-[1.5fr_1.5fr_1.5fr_1.5fr_2fr_2fr_1fr_1fr]' : 'grid-cols-[1.5fr_1.5fr_1.5fr_1.5fr_2fr_1fr_1fr]'}`}>
                             {/* Type */}
                             <div className="flex justify-center">
-                              <span className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 ${typeConfig.color}`}>
+                              <span className={`px-2.5 py-1 rounded border text-xs font-medium flex items-center gap-1.5 ${typeConfig.color}`}>
                                 <TypeIcon className="w-3 h-3" />
                                 {typeConfig.label}
                               </span>
                             </div>
                             {/* Status */}
                             <div className="flex flex-col items-center gap-1">
-                              <span className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 ${statusConfig.color}`}>
+                              <span className={`px-2.5 py-1 rounded border text-xs font-medium flex items-center gap-1.5 ${statusConfig.color}`}>
                                 <StatusIcon className="w-3 h-3" />
                                 {statusConfig.label}
                               </span>
                               {/* Show Paystack status for deposit transactions */}
                               {transaction.type === 'deposit' && transaction.paystack_status && (
-                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                                  transaction.paystack_status === 'success' ? 'bg-green-100 text-green-700' :
-                                  transaction.paystack_status === 'failed' ? 'bg-red-100 text-red-700' :
-                                  transaction.paystack_status === 'abandoned' ? 'bg-orange-100 text-orange-700' :
-                                  'bg-gray-100 text-gray-700'
+                                <span className={`px-2 py-0.5 rounded border text-xs font-medium ${
+                                  transaction.paystack_status === 'success' ? 'bg-green-100 text-green-700 border-green-200' :
+                                  transaction.paystack_status === 'failed' ? 'bg-red-100 text-red-700 border-red-200' :
+                                  transaction.paystack_status === 'abandoned' ? 'bg-orange-100 text-orange-700 border-orange-200' :
+                                  'bg-gray-100 text-gray-700 border-gray-200'
                                 }`}>
                                   {transaction.paystack_status}
                                 </span>
@@ -786,8 +797,8 @@ const TransactionsPage = ({ user, onLogout }) => {
                             </div>
                             {/* Time */}
                             <div className="text-center">
-                              <p className="text-sm text-gray-700">{new Date(transaction.created_at).toLocaleDateString()}</p>
-                              <p className="text-xs text-gray-500">{new Date(transaction.created_at).toLocaleTimeString()}</p>
+                              <p className="text-xs sm:text-sm text-gray-700">{new Date(transaction.created_at).toLocaleDateString()}</p>
+                              <p className="text-xs text-gray-500">{new Date(transaction.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                             </div>
                             {/* User (Admin only) */}
                             {isAdmin && (
@@ -810,25 +821,25 @@ const TransactionsPage = ({ user, onLogout }) => {
                                   if (transaction.type === 'deposit' && transaction.status === 'approved') {
                                     if (balanceCheck === 'not_updated') {
                                       return (
-                                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 whitespace-nowrap">
+                                        <span className="px-2.5 py-1 rounded border text-xs font-medium bg-red-100 text-red-700 border-red-200 whitespace-nowrap">
                                           not-updated
                                         </span>
                                       );
                                     } else if (balanceCheck === 'updated') {
                                       return (
-                                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 whitespace-nowrap">
+                                        <span className="px-2.5 py-1 rounded border text-xs font-medium bg-green-100 text-green-700 border-green-200 whitespace-nowrap">
                                           Updated
                                         </span>
                                       );
                                     } else if (balanceCheck === 'checking') {
                                       return (
-                                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700 whitespace-nowrap">
+                                        <span className="px-2.5 py-1 rounded border text-xs font-medium bg-yellow-100 text-yellow-700 border-yellow-200 whitespace-nowrap">
                                           Checking...
                                         </span>
                                       );
                                     } else if (balanceCheck === 'unknown') {
                                       return (
-                                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 whitespace-nowrap">
+                                        <span className="px-2.5 py-1 rounded border text-xs font-medium bg-gray-100 text-gray-700 border-gray-200 whitespace-nowrap">
                                           Unknown
                                         </span>
                                       );
@@ -846,7 +857,7 @@ const TransactionsPage = ({ user, onLogout }) => {
                                   disabled={manuallyCrediting === transaction.id}
                                   variant="outline"
                                   size="sm"
-                                  className="text-xs whitespace-nowrap text-green-600 hover:text-green-700 border-green-300"
+                                  className="text-xs whitespace-nowrap h-8 text-green-600 hover:text-green-700 border-green-300 hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
                                   title="Credit balance to user"
                                 >
                                   {manuallyCrediting === transaction.id ? 'Crediting...' : 'Credit Balance'}
@@ -870,7 +881,7 @@ const TransactionsPage = ({ user, onLogout }) => {
               {/* Pagination */}
               {totalTransactionsPages > 1 && (
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t border-gray-200">
-                  <p className="text-sm text-gray-600">
+                  <p className="text-xs sm:text-sm text-gray-600">
                     Showing {startTransactionIndex + 1} to {Math.min(endTransactionIndex, filteredTransactions.length)} of {filteredTransactions.length} transactions
                   </p>
                   <div className="flex items-center gap-2">
@@ -879,6 +890,7 @@ const TransactionsPage = ({ user, onLogout }) => {
                       size="sm"
                       onClick={() => setTransactionsPage(prev => Math.max(1, prev - 1))}
                       disabled={transactionsPage === 1}
+                      className="h-9 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50"
                     >
                       <ChevronLeft className="w-4 h-4" />
                     </Button>
@@ -900,7 +912,9 @@ const TransactionsPage = ({ user, onLogout }) => {
                             variant={transactionsPage === pageNum ? "default" : "outline"}
                             size="sm"
                             onClick={() => setTransactionsPage(pageNum)}
-                            className={`w-8 h-8 p-0 ${transactionsPage === pageNum ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white' : ''}`}
+                            className={`w-9 h-9 p-0 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+                              transactionsPage === pageNum ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : ''
+                            }`}
                           >
                             {pageNum}
                           </Button>
@@ -912,6 +926,7 @@ const TransactionsPage = ({ user, onLogout }) => {
                       size="sm"
                       onClick={() => setTransactionsPage(prev => Math.min(totalTransactionsPages, prev + 1))}
                       disabled={transactionsPage === totalTransactionsPages}
+                      className="h-9 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50"
                     >
                       <ChevronRight className="w-4 h-4" />
                     </Button>
@@ -923,25 +938,25 @@ const TransactionsPage = ({ user, onLogout }) => {
 
           {/* Summary Stats */}
           {!isAdmin && filteredTransactions.length > 0 && (
-            <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 gap-4">
-              <div className="bg-white/50 p-4 rounded-xl">
-                <p className="text-sm text-gray-600 mb-1">Total Deposits</p>
-                <p className="text-2xl font-bold text-gray-900">
+            <div className="mt-6 sm:mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
+                <p className="text-xs sm:text-sm font-medium text-gray-600 mb-1">Total Deposits</p>
+                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">
                   ₵{filteredTransactions
                     .filter(t => t.type === 'deposit' && t.status === 'approved')
                     .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0)
                     .toFixed(2)}
                 </p>
               </div>
-              <div className="bg-white/50 p-4 rounded-xl">
-                <p className="text-sm text-gray-600 mb-1">Pending</p>
-                <p className="text-2xl font-bold text-yellow-600">
+              <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
+                <p className="text-xs sm:text-sm font-medium text-gray-600 mb-1">Pending</p>
+                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-yellow-600">
                   {filteredTransactions.filter(t => t.status === 'pending').length}
                 </p>
               </div>
-              <div className="bg-white/50 p-4 rounded-xl">
-                <p className="text-sm text-gray-600 mb-1">Approved</p>
-                <p className="text-2xl font-bold text-green-600">
+              <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
+                <p className="text-xs sm:text-sm font-medium text-gray-600 mb-1">Approved</p>
+                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-green-600">
                   {filteredTransactions.filter(t => t.status === 'approved').length}
                 </p>
               </div>

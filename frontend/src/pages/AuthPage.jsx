@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { supabase, isConfigured } from '@/lib/supabase';
 import { TrendingUp } from 'lucide-react';
+import SEO from '@/components/SEO';
 
 const AuthPage = () => {
   const navigate = useNavigate();
@@ -203,6 +204,12 @@ const AuthPage = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center px-6 py-12">
+      <SEO
+        title="Login or Sign Up - BoostUp GH"
+        description="Create your BoostUp GH account to start growing your social media presence. Login or sign up to access our SMM panel services for Instagram, TikTok, YouTube, Facebook, and Twitter."
+        keywords="BoostUp GH login, sign up, create account, SMM panel account, social media marketing account"
+        canonical="/auth"
+      />
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8 animate-fadeIn">

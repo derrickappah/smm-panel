@@ -11,6 +11,7 @@ import { processManualRefund } from '@/lib/refunds';
 import { saveOrderStatusHistory } from '@/lib/orderStatusHistory';
 import { getSMMGenOrderStatus } from '@/lib/smmgen';
 import Navbar from '@/components/Navbar';
+import SEO from '@/components/SEO';
 import { 
   Users, ShoppingCart, DollarSign, Package, Search, Edit, Trash2, 
   Plus, Minus, TrendingUp, CheckCircle, XCircle, Clock, Filter,
@@ -63,7 +64,8 @@ const AdminDashboard = ({ user, onLogout }) => {
   const [paymentMethodSettings, setPaymentMethodSettings] = useState({
     paystack_enabled: true,
     manual_enabled: true,
-    hubtel_enabled: true
+    hubtel_enabled: true,
+    korapay_enabled: true
   });
   
   // Search and filter states
@@ -216,19 +218,26 @@ const AdminDashboard = ({ user, onLogout }) => {
         return;
       }
 
-      const [usersRes, ordersRes, depositsRes, transactionsRes, servicesRes, ticketsRes, settingsRes] = await Promise.all([
+      const [usersRes, ordersRes, depositsRes, transactionsRes, transactionsCountRes, servicesRes, ticketsRes, settingsRes] = await Promise.all([
         supabase.from('profiles').select('*').order('created_at', { ascending: false }),
         supabase.from('orders').select('*, services(name, platform), profiles(name, email, phone_number)').order('created_at', { ascending: false }),
         supabase.from('transactions').select('*, profiles(email, name, phone_number)').eq('type', 'deposit').order('created_at', { ascending: false }),
         supabase.from('transactions').select('*, profiles(email, name, balance)').order('created_at', { ascending: false }),
+        supabase.from('transactions').select('*', { count: 'exact', head: true }),
         supabase.from('services').select('*').order('created_at', { ascending: false }),
         supabase.from('support_tickets').select('*, profiles(name, email)').order('created_at', { ascending: false }),
-        supabase.from('app_settings').select('*').in('key', ['payment_method_paystack_enabled', 'payment_method_manual_enabled', 'payment_method_hubtel_enabled'])
+        supabase.from('app_settings').select('*').in('key', ['payment_method_paystack_enabled', 'payment_method_manual_enabled', 'payment_method_hubtel_enabled', 'payment_method_korapay_enabled'])
       ]);
 
       // Check for errors and provide specific messages
       if (usersRes.error) {
         console.error('Error fetching users:', usersRes.error);
+        // Handle network errors gracefully
+        if (usersRes.error.message?.includes('Failed to fetch') || usersRes.error.message?.includes('NetworkError')) {
+          toast.error('Network error: Unable to connect to server. Please check your internet connection.');
+          setLoading(false);
+          return;
+        }
         if (usersRes.error.code === '42501' || usersRes.error.message?.includes('permission') || usersRes.error.message?.includes('policy')) {
           toast.error('RLS Policy Error: Cannot view all users. Please run database/fixes/FIX_ADMIN_RLS.sql in Supabase SQL Editor.');
         } else {
@@ -258,6 +267,10 @@ const AdminDashboard = ({ user, onLogout }) => {
         } else {
           throw transactionsRes.error;
         }
+      }
+      if (transactionsCountRes.error) {
+        console.warn('Error fetching transactions count:', transactionsCountRes.error);
+        // Non-critical - we'll fallback to array length
       }
       if (servicesRes.error) {
         console.error('Error fetching services:', servicesRes.error);
@@ -385,7 +398,7 @@ const AdminDashboard = ({ user, onLogout }) => {
       }
       if (servicesRes.data) setServices(servicesRes.data);
       if (ticketsRes.data) setSupportTickets(ticketsRes.data);
-      
+
       // Process payment method settings
       if (settingsRes && !settingsRes.error && settingsRes.data) {
         const settings = {};
@@ -395,7 +408,8 @@ const AdminDashboard = ({ user, onLogout }) => {
         setPaymentMethodSettings({
           paystack_enabled: settings.payment_method_paystack_enabled !== false, // Default to true
           manual_enabled: settings.payment_method_manual_enabled !== false, // Default to true
-          hubtel_enabled: settings.payment_method_hubtel_enabled !== false // Default to true
+          hubtel_enabled: settings.payment_method_hubtel_enabled !== false, // Default to true
+          korapay_enabled: settings.payment_method_korapay_enabled !== false // Default to true
         });
       }
 
@@ -461,7 +475,8 @@ const AdminDashboard = ({ user, onLogout }) => {
       const rejectedDeposits = currentDeposits.filter(d => d.status === 'rejected').length;
       const inProgressTickets = currentTickets.filter(t => t.status === 'in_progress').length;
       const resolvedTickets = currentTickets.filter(t => t.status === 'resolved' || t.status === 'closed').length;
-      const totalTransactions = (transactionsRes.data || allTransactions || []).length;
+      // Use count query result for accurate total, fallback to array length if count unavailable
+      const totalTransactions = transactionsCountRes?.count ?? (transactionsRes.data || allTransactions || []).length;
       const averageOrderValue = completedOrders > 0 ? totalRevenue / completedOrders : 0;
 
       setStats({
@@ -500,7 +515,12 @@ const AdminDashboard = ({ user, onLogout }) => {
       console.log('Admin data refreshed successfully');
     } catch (error) {
       console.error('Error fetching admin data:', error);
+      // Handle network errors gracefully
+      if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError') || error.code === '') {
+        toast.error('Network error: Unable to connect to server. Please check your internet connection and try again.');
+      } else {
       toast.error(error.message || 'Failed to load admin data. Check RLS policies.');
+      }
       // Don't clear existing data on error - keep showing what we have
     } finally {
       setRefreshing(false);
@@ -853,6 +873,11 @@ const AdminDashboard = ({ user, onLogout }) => {
         description = 'Enable/disable Hubtel payment method';
         stateKey = 'hubtel_enabled';
         displayName = 'Hubtel';
+      } else if (method === 'korapay') {
+        settingKey = 'payment_method_korapay_enabled';
+        description = 'Enable/disable Korapay payment method';
+        stateKey = 'korapay_enabled';
+        displayName = 'Korapay';
       } else {
         toast.error('Unknown payment method');
         return;
@@ -1004,7 +1029,7 @@ const AdminDashboard = ({ user, onLogout }) => {
           ? serviceForm.combo_smmgen_service_ids
           : null,
         seller_only: serviceForm.seller_only || false,
-        enabled: serviceForm.enabled !== undefined ? serviceForm.enabled : true
+        enabled: Boolean(serviceForm.enabled !== false) // Default to true if undefined/null
       }).select().single();
 
       if (error) {
@@ -1048,13 +1073,24 @@ const AdminDashboard = ({ user, onLogout }) => {
   const handleUpdateService = async (serviceId, updates) => {
     setLoading(true);
     try {
-      // Ensure enabled is explicitly set as boolean
+      // Ensure all boolean fields are explicitly set as booleans
       const updateData = {
-        ...updates,
-        enabled: Boolean(updates.enabled)
+        platform: updates.platform,
+        service_type: updates.service_type,
+        name: updates.name,
+        rate: updates.rate,
+        min_quantity: updates.min_quantity,
+        max_quantity: updates.max_quantity,
+        description: updates.description !== undefined ? updates.description : null,
+        smmgen_service_id: updates.smmgen_service_id !== undefined ? updates.smmgen_service_id : null,
+        is_combo: Boolean(updates.is_combo),
+        combo_service_ids: updates.combo_service_ids !== undefined ? updates.combo_service_ids : null,
+        combo_smmgen_service_ids: updates.combo_smmgen_service_ids !== undefined ? updates.combo_smmgen_service_ids : null,
+        seller_only: Boolean(updates.seller_only),
+        enabled: Boolean(updates.enabled) // Explicitly convert to boolean
       };
       
-      // Remove any undefined or null values that might cause issues
+      // Remove any undefined values
       Object.keys(updateData).forEach(key => {
         if (updateData[key] === undefined) {
           delete updateData[key];
@@ -1071,7 +1107,7 @@ const AdminDashboard = ({ user, onLogout }) => {
         .select('id, name, enabled')
         .eq('id', serviceId)
         .single();
-      
+
       if (checkError || !existingService) {
         console.error('Service not found or error checking:', checkError);
         toast.error(`Service not found. ID: ${serviceId}`);
@@ -1080,16 +1116,17 @@ const AdminDashboard = ({ user, onLogout }) => {
       
       console.log('Service exists:', existingService);
       
-      // Perform the update and check the response
+      // Perform the update and check the response (explicitly select columns to avoid issues)
       const { data: updateResponse, error: updateError } = await supabase
         .from('services')
         .update(updateData)
         .eq('id', serviceId)
-        .select();
+        .select('*'); // Select all columns explicitly
 
       if (updateError) {
         console.error('Error updating service:', updateError);
         console.error('Error details:', JSON.stringify(updateError, null, 2));
+        console.error('Update data that failed:', updateData);
         
         // Check for specific error types
         if (updateError.code === '42501') {
@@ -1098,9 +1135,14 @@ const AdminDashboard = ({ user, onLogout }) => {
         } else if (updateError.code === '23505') {
           // Unique constraint violation
           toast.error('Update failed: Duplicate entry detected.');
+        } else if (updateError.code === 'PGRST116') {
+          // No rows returned (PostgREST specific)
+          toast.error('Update failed: No rows were updated. The service might not exist or you may not have permission.');
+        } else if (updateError.message && updateError.message.includes('406')) {
+          // 406 Not Acceptable - usually means format issue
+          toast.error('Update failed: Server format error. Please try again or refresh the page.');
         } else {
           toast.error(`Update failed: ${updateError.message || 'Unknown error'}`);
-          throw updateError;
         }
         return;
       }
@@ -1108,7 +1150,21 @@ const AdminDashboard = ({ user, onLogout }) => {
       // Check if update actually affected any rows
       if (!updateResponse || updateResponse.length === 0) {
         console.error('Update returned no rows - service might not exist or update failed silently');
-        toast.error('Update failed: No rows were updated. The service might not exist.');
+        console.error('Service ID:', serviceId);
+        console.error('Update data:', updateData);
+        
+        // Try to fetch the service to see if it exists
+        const { data: verifyService, error: verifyError } = await supabase
+          .from('services')
+          .select('id, name')
+          .eq('id', serviceId)
+          .single();
+        
+        if (verifyError || !verifyService) {
+          toast.error('Update failed: Service not found. It may have been deleted.');
+        } else {
+          toast.error('Update failed: No rows were updated. You may not have permission to update this service.');
+        }
         return;
       }
 
@@ -1117,7 +1173,7 @@ const AdminDashboard = ({ user, onLogout }) => {
 
       // Use the data from the update response if available, otherwise fetch separately
       let data = updateResponse[0];
-      
+
       if (!data) {
         // Fallback: fetch the updated service separately
         const { data: fetchedData, error: fetchError } = await supabase
@@ -1138,27 +1194,39 @@ const AdminDashboard = ({ user, onLogout }) => {
         data = fetchedData;
       }
 
-      // Verify the update actually changed the values
+      // Verify the update actually changed the values (especially enabled)
       const updateSucceeded = Object.keys(updateData).every(key => {
         if (key === 'enabled') {
-          // Boolean comparison
-          return data[key] === Boolean(updateData[key]);
+          // Strict boolean comparison
+          const expected = Boolean(updateData[key]);
+          const actual = Boolean(data[key]);
+          const matches = expected === actual;
+          if (!matches) {
+            console.warn(`Enabled mismatch: expected ${expected}, got ${actual}`);
+          }
+          return matches;
         }
-        return String(data[key]) === String(updateData[key]);
+        // For other fields, compare as strings (handles null/undefined)
+        const expected = updateData[key] === null || updateData[key] === undefined ? null : String(updateData[key]);
+        const actual = data[key] === null || data[key] === undefined ? null : String(data[key]);
+        return expected === actual;
       });
 
       if (!updateSucceeded) {
         console.warn('Update verification failed. Expected:', updateData, 'Got:', data);
         console.warn('Mismatched fields:', Object.keys(updateData).filter(key => {
           if (key === 'enabled') {
-            return data[key] !== Boolean(updateData[key]);
+            return Boolean(data[key]) !== Boolean(updateData[key]);
           }
-          return String(data[key]) !== String(updateData[key]);
+          const expected = updateData[key] === null || updateData[key] === undefined ? null : String(updateData[key]);
+          const actual = data[key] === null || data[key] === undefined ? null : String(data[key]);
+          return expected !== actual;
         }));
+      } else {
+        console.log('Update verification: PASSED');
       }
 
       console.log('Service updated successfully:', data);
-      console.log('Update verification:', updateSucceeded ? 'PASSED' : 'FAILED');
       toast.success('Service updated successfully!');
       setEditingService(null);
       
@@ -1166,17 +1234,16 @@ const AdminDashboard = ({ user, onLogout }) => {
       setServices(prevServices => {
         const updated = prevServices.map(s => {
           if (s.id === serviceId) {
-            console.log('Updating service in state:', s.id, 'Old:', s, 'New:', data);
+            console.log('Updating service in state:', s.id);
             // Merge the data properly, ensuring all fields are updated
             return { ...s, ...data };
           }
           return s;
         });
-        console.log('Updated services state - total services:', updated.length);
         return updated;
       });
       
-      // Wait longer for database to sync, then refresh services directly
+      // Wait for database to sync, then refresh services directly
       await new Promise(resolve => setTimeout(resolve, 500));
       
       // Fetch fresh services from database to ensure consistency
@@ -1188,6 +1255,8 @@ const AdminDashboard = ({ user, onLogout }) => {
       if (!refreshError && freshServices) {
         console.log('Refreshed services from database:', freshServices.length);
         setServices(freshServices);
+      } else if (refreshError) {
+        console.error('Error refreshing services:', refreshError);
       } else {
         console.warn('Error refreshing services, using full refresh:', refreshError);
         // Fallback to full refresh if direct fetch fails
@@ -1204,24 +1273,71 @@ const AdminDashboard = ({ user, onLogout }) => {
   const handleToggleService = async (serviceId, currentEnabled) => {
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from('services')
-        .update({ enabled: !currentEnabled })
-        .eq('id', serviceId);
+      // Ensure currentEnabled is a proper boolean
+      const isCurrentlyEnabled = currentEnabled === true;
+      const newEnabledValue = !isCurrentlyEnabled;
 
-      if (error) {
-        console.error('Error toggling service:', error);
-        throw error;
+      console.log('Toggling service:', serviceId, 'Current:', isCurrentlyEnabled, 'New:', newEnabledValue);
+
+      // First verify the service exists
+      const { data: existingService, error: checkError } = await supabase
+        .from('services')
+        .select('id, name, enabled')
+        .eq('id', serviceId)
+        .single();
+
+      if (checkError || !existingService) {
+        console.error('Service not found or error checking:', checkError);
+        toast.error(`Service not found. Please refresh and try again.`);
+        return;
       }
 
-      toast.success(`Service ${!currentEnabled ? 'enabled' : 'disabled'} successfully!`);
+      // Perform the update (without .single() to avoid 406 errors)
+      const { data: updateData, error: updateError } = await supabase
+        .from('services')
+        .update({ enabled: newEnabledValue })
+        .eq('id', serviceId)
+        .select('id, enabled');
+
+      if (updateError) {
+        console.error('Error toggling service:', updateError);
+        console.error('Error details:', JSON.stringify(updateError, null, 2));
+        
+        // Check for specific error types
+        if (updateError.code === '42501') {
+          toast.error('Permission denied. Please ensure RLS policies allow admins to update services.');
+        } else if (updateError.code === 'PGRST116') {
+          toast.error('No rows were updated. The service might not exist.');
+        } else {
+          toast.error(`Failed to toggle service: ${updateError.message || 'Unknown error'}`);
+        }
+        throw updateError;
+      }
+
+      // Check if any rows were actually updated
+      if (!updateData || updateData.length === 0) {
+        console.error('Update returned no rows');
+        toast.error('Update failed: No rows were updated. The service might not exist or you may not have permission.');
+        return;
+      }
+
+      console.log('Service toggled successfully:', updateData[0]);
+      toast.success(`Service ${newEnabledValue ? 'enabled' : 'disabled'} successfully!`);
+      
+      // Update local state immediately
+      setServices(prevServices => 
+        prevServices.map(s => s.id === serviceId ? { ...s, enabled: newEnabledValue } : s)
+      );
       
       // Wait a moment for database to sync, then refresh
       await new Promise(resolve => setTimeout(resolve, 300));
       await fetchAllData(false); // Skip SMMGen status check on updates
     } catch (error) {
       console.error('Failed to toggle service:', error);
-      toast.error(error.message || 'Failed to toggle service');
+      // Don't show duplicate error messages
+      if (!error.message || !error.message.includes('Permission denied') && !error.message.includes('No rows')) {
+        toast.error(error.message || 'Failed to toggle service. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -1756,93 +1872,111 @@ const AdminDashboard = ({ user, onLogout }) => {
   }, [depositStatusFilter, depositSearch, depositDateFilter]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+    <div className="min-h-screen bg-gray-50">
+      <SEO
+        title="Admin Dashboard"
+        description="BoostUp GH admin panel"
+        canonical="/admin"
+        noindex={true}
+        nofollow={true}
+      />
       {user?.role !== 'admin' && <Navbar user={user} onLogout={onLogout} />}
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 lg:pl-[280px]">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:pl-[280px]">
         {/* Navigation - Sidebar for desktop, Tabs for mobile */}
         <div className="flex flex-col lg:flex-row gap-6 animate-slideUp">
           {/* Sidebar Navigation - Desktop */}
           <div className="hidden lg:block fixed top-0 left-0 bottom-0 w-64 z-40 pt-4 pb-6 px-6">
-            <div className="glass p-4 rounded-2xl h-full flex flex-col overflow-y-auto">
-              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4 px-2">Navigation</h3>
+            <div className="bg-white border border-gray-200 rounded-lg p-4 h-full flex flex-col overflow-y-auto shadow-sm">
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4 px-2">Navigation</h3>
               <nav className="space-y-1">
                 <button
                   onClick={() => setActiveSection('dashboard')}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
                     activeSection === 'dashboard'
-                      ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
-                      : 'text-gray-700 hover:bg-white/50'
+                      ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                      : 'text-gray-700 hover:bg-gray-100'
                   }`}
                 >
                   <Layers className="w-5 h-5" />
-                  <span className="font-medium">Dashboard</span>
+                  <span className="font-medium text-sm">Dashboard</span>
                 </button>
                 <button
                   onClick={() => setActiveSection('deposits')}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
                     activeSection === 'deposits'
-                      ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
-                      : 'text-gray-700 hover:bg-white/50'
+                      ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                      : 'text-gray-700 hover:bg-gray-100'
                   }`}
                 >
                   <DollarSign className="w-5 h-5" />
-                  <span className="font-medium">Deposits</span>
+                  <span className="font-medium text-sm">Deposits</span>
                 </button>
                 <button
                   onClick={() => setActiveSection('orders')}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
                     activeSection === 'orders'
-                      ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
-                      : 'text-gray-700 hover:bg-white/50'
+                      ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                      : 'text-gray-700 hover:bg-gray-100'
                   }`}
                 >
                   <ShoppingCart className="w-5 h-5" />
-                  <span className="font-medium">Orders</span>
+                  <span className="font-medium text-sm">Orders</span>
                 </button>
                 <button
                   onClick={() => setActiveSection('services')}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
                     activeSection === 'services'
-                      ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
-                      : 'text-gray-700 hover:bg-white/50'
+                      ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                      : 'text-gray-700 hover:bg-gray-100'
                   }`}
                 >
                   <Package className="w-5 h-5" />
-                  <span className="font-medium">Services</span>
+                  <span className="font-medium text-sm">Services</span>
+                </button>
+                <button
+                  onClick={() => setActiveSection('payment-methods')}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+                    activeSection === 'payment-methods'
+                      ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <Wallet className="w-5 h-5" />
+                  <span className="font-medium text-sm">Payment Methods</span>
                 </button>
                 <button
                   onClick={() => setActiveSection('users')}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
                     activeSection === 'users'
-                      ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
-                      : 'text-gray-700 hover:bg-white/50'
+                      ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                      : 'text-gray-700 hover:bg-gray-100'
                   }`}
                 >
                   <Users className="w-5 h-5" />
-                  <span className="font-medium">Users</span>
+                  <span className="font-medium text-sm">Users</span>
                 </button>
                 <button
                   onClick={() => setActiveSection('transactions')}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
                     activeSection === 'transactions'
-                      ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
-                      : 'text-gray-700 hover:bg-white/50'
+                      ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                      : 'text-gray-700 hover:bg-gray-100'
                   }`}
                 >
                   <Receipt className="w-5 h-5" />
-                  <span className="font-medium">Transactions</span>
+                  <span className="font-medium text-sm">Transactions</span>
                 </button>
                 <button
                   onClick={() => setActiveSection('support')}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
                     activeSection === 'support'
-                      ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
-                      : 'text-gray-700 hover:bg-white/50'
+                      ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                      : 'text-gray-700 hover:bg-gray-100'
                   }`}
                 >
                   <MessageSquare className="w-5 h-5" />
-                  <span className="font-medium">Support</span>
+                  <span className="font-medium text-sm">Support</span>
                   {stats.open_tickets > 0 && (
                     <span className="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
                       {stats.open_tickets}
@@ -1851,19 +1985,19 @@ const AdminDashboard = ({ user, onLogout }) => {
                 </button>
                 <button
                   onClick={() => setActiveSection('balance')}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
                     activeSection === 'balance'
-                      ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
-                      : 'text-gray-700 hover:bg-white/50'
+                      ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                      : 'text-gray-700 hover:bg-gray-100'
                   }`}
                 >
                   <Wallet className="w-5 h-5" />
-                  <span className="font-medium">Balance</span>
+                  <span className="font-medium text-sm">Balance</span>
                 </button>
               </nav>
               
               {/* User Info at Bottom */}
-              <div className="mt-auto pt-4 border-t border-white/20">
+              <div className="mt-auto pt-4 border-t border-gray-200">
                 <div className="px-3 py-3 space-y-2">
                   <div>
                     <p className="text-sm font-semibold text-gray-900 truncate">{user?.name || 'Admin'}</p>
@@ -1877,7 +2011,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                     onClick={onLogout}
                     variant="outline"
                     size="sm"
-                    className="w-full mt-2 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                    className="w-full mt-2 h-9 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
                   >
                     <span className="text-xs">Logout</span>
                   </Button>
@@ -1888,17 +2022,18 @@ const AdminDashboard = ({ user, onLogout }) => {
 
           {/* Tabs Navigation - Mobile */}
           <Tabs value={activeSection} onValueChange={setActiveSection} className="w-full">
-            <TabsList className="glass mb-6 flex-wrap w-full lg:hidden">
-            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-            <TabsTrigger value="deposits">Deposits</TabsTrigger>
-            <TabsTrigger value="orders">Orders</TabsTrigger>
-            <TabsTrigger value="services">Services</TabsTrigger>
-            <TabsTrigger value="users">Users</TabsTrigger>
-            <TabsTrigger value="transactions">Transactions</TabsTrigger>
-            <TabsTrigger value="support">
+            <TabsList className="bg-white border border-gray-200 mb-6 flex-wrap w-full lg:hidden shadow-sm">
+            <TabsTrigger value="dashboard" className="focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">Dashboard</TabsTrigger>
+            <TabsTrigger value="deposits" className="focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">Deposits</TabsTrigger>
+            <TabsTrigger value="orders" className="focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">Orders</TabsTrigger>
+            <TabsTrigger value="services" className="focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">Services</TabsTrigger>
+            <TabsTrigger value="payment-methods" className="focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">Payment Methods</TabsTrigger>
+            <TabsTrigger value="users" className="focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">Users</TabsTrigger>
+            <TabsTrigger value="transactions" className="focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">Transactions</TabsTrigger>
+            <TabsTrigger value="support" className="focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
               Support {stats.open_tickets > 0 && <span className="ml-1 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">{stats.open_tickets}</span>}
             </TabsTrigger>
-            <TabsTrigger value="balance">Balance</TabsTrigger>
+            <TabsTrigger value="balance" className="focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">Balance</TabsTrigger>
           </TabsList>
 
             {/* Content Area */}
@@ -1907,177 +2042,209 @@ const AdminDashboard = ({ user, onLogout }) => {
               <TabsContent value="dashboard" className="lg:mt-0">
                 <div className="space-y-6">
                   {/* Header Section */}
-                  <div className="glass p-6 sm:p-8 rounded-3xl">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-                      <div>
-                        <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">Admin Dashboard</h1>
-                        <p className="text-gray-600">Manage users, orders, and services</p>
-                      </div>
-                      <Button
+                  <div className="bg-white border border-gray-200 rounded-lg p-6 sm:p-8 shadow-sm">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+            <div>
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">Admin Dashboard</h1>
+          <p className="text-sm sm:text-base text-gray-600">Manage users, orders, and services</p>
+            </div>
+            <Button
                         onClick={() => fetchAllData(true)} // Check SMMGen status on manual refresh
-                        disabled={refreshing}
-                        variant="outline"
-                        className="flex items-center gap-2"
-                      >
-                        <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-                        Refresh
-                      </Button>
-                    </div>
-                  </div>
+              disabled={refreshing}
+              variant="outline"
+              className="flex items-center gap-2 h-10 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
 
-                  {/* Enhanced Stats Cards */}
-                  <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3 sm:gap-4">
+        {/* Enhanced Stats Cards */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3 sm:gap-4">
                     {/* Users Today */}
-                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('users')}>
-                      <div className="flex items-center justify-between mb-1">
-                        <Users className="w-4 h-4 text-indigo-600" />
-                        <span className="text-lg font-bold text-gray-900">{stats.users_today}</span>
-                      </div>
-                      <p className="text-gray-600 text-[10px] font-medium">Users Today</p>
-                      <p className="text-gray-400 text-[9px] mt-0.5">{stats.total_users} Total</p>
-                    </div>
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('users')}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
+                          <Users className="w-4 h-4 text-indigo-600" />
+                        </div>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">{stats.users_today}</span>
+            </div>
+                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Users Today</p>
+                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{stats.total_users} Total</p>
+          </div>
                     {/* Orders Today */}
-                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('orders')}>
-                      <div className="flex items-center justify-between mb-1">
-                        <ShoppingCart className="w-4 h-4 text-blue-600" />
-                        <span className="text-lg font-bold text-gray-900">{stats.orders_today}</span>
-                      </div>
-                      <p className="text-gray-600 text-[10px] font-medium">Orders Today</p>
-                      <p className="text-gray-400 text-[9px] mt-0.5">{stats.total_orders} Total</p>
-                    </div>
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('orders')}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <ShoppingCart className="w-4 h-4 text-blue-600" />
+                        </div>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">{stats.orders_today}</span>
+            </div>
+                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Orders Today</p>
+                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{stats.total_orders} Total</p>
+          </div>
                     {/* Deposits Today */}
-                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('deposits')}>
-                      <div className="flex items-center justify-between mb-1">
-                        <DollarSign className="w-4 h-4 text-emerald-600" />
-                        <span className="text-lg font-bold text-gray-900">{stats.deposits_today}</span>
-                      </div>
-                      <p className="text-gray-600 text-[10px] font-medium">Deposits Today</p>
-                      <p className="text-gray-400 text-[9px] mt-0.5">{stats.pending_deposits} Pending</p>
-                    </div>
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('deposits')}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
+                          <DollarSign className="w-4 h-4 text-emerald-600" />
+                        </div>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">{stats.deposits_today}</span>
+            </div>
+                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Deposits Today</p>
+                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{stats.pending_deposits} Pending</p>
+          </div>
                     {/* Cancelled Orders */}
-                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('orders')}>
-                      <div className="flex items-center justify-between mb-1">
-                        <XCircle className="w-4 h-4 text-orange-600" />
-                        <span className="text-lg font-bold text-gray-900">{stats.cancelled_orders}</span>
-                      </div>
-                      <p className="text-gray-600 text-[10px] font-medium">Cancelled</p>
-                      <p className="text-gray-400 text-[9px] mt-0.5">Orders</p>
-                    </div>
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('orders')}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
+                          <XCircle className="w-4 h-4 text-orange-600" />
+                        </div>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">{stats.cancelled_orders}</span>
+            </div>
+                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Cancelled</p>
+                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">Orders</p>
+          </div>
                     {/* Total Revenue */}
-                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('transactions')}>
-                      <div className="flex items-center justify-between mb-1">
-                        <TrendingUp className="w-4 h-4 text-green-600" />
-                        <span className="text-lg font-bold text-gray-900">₵{stats.total_revenue_amount.toFixed(0)}</span>
-                      </div>
-                      <p className="text-gray-600 text-[10px] font-medium">Total Revenue</p>
-                      <p className="text-gray-400 text-[9px] mt-0.5">{stats.completed_orders} Orders</p>
-                    </div>
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('transactions')}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                          <TrendingUp className="w-4 h-4 text-green-600" />
+                        </div>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">₵{stats.total_revenue_amount.toFixed(0)}</span>
+            </div>
+                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Total Revenue</p>
+                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{stats.completed_orders} Orders</p>
+          </div>
                     {/* Average Order Value */}
-                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('orders')}>
-                      <div className="flex items-center justify-between mb-1">
-                        <BarChart3 className="w-4 h-4 text-purple-600" />
-                        <span className="text-lg font-bold text-gray-900">₵{stats.average_order_value.toFixed(0)}</span>
-                      </div>
-                      <p className="text-gray-600 text-[10px] font-medium">Avg Order</p>
-                      <p className="text-gray-400 text-[9px] mt-0.5">Per Order</p>
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('orders')}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                          <BarChart3 className="w-4 h-4 text-purple-600" />
+                        </div>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">₵{stats.average_order_value.toFixed(0)}</span>
+            </div>
+                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Avg Order</p>
+                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">Per Order</p>
                     </div>
                     {/* Completed Orders */}
-                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('orders')}>
-                      <div className="flex items-center justify-between mb-1">
-                        <CheckCircle className="w-4 h-4 text-green-600" />
-                        <span className="text-lg font-bold text-gray-900">{stats.completed_orders}</span>
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('orders')}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                          <CheckCircle className="w-4 h-4 text-green-600" />
+                        </div>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">{stats.completed_orders}</span>
                       </div>
-                      <p className="text-gray-600 text-[10px] font-medium">Completed</p>
-                      <p className="text-gray-400 text-[9px] mt-0.5">{stats.processing_orders} Processing</p>
+                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Completed</p>
+                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{stats.processing_orders} Processing</p>
                     </div>
                     {/* Processing Orders */}
-                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('orders')}>
-                      <div className="flex items-center justify-between mb-1">
-                        <Clock className="w-4 h-4 text-blue-600" />
-                        <span className="text-lg font-bold text-gray-900">{stats.processing_orders}</span>
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('orders')}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <Clock className="w-4 h-4 text-blue-600" />
+                        </div>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">{stats.processing_orders}</span>
                       </div>
-                      <p className="text-gray-600 text-[10px] font-medium">Processing</p>
-                      <p className="text-gray-400 text-[9px] mt-0.5">{stats.cancelled_orders} Cancelled</p>
+                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Processing</p>
+                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{stats.cancelled_orders} Cancelled</p>
                     </div>
                     {/* Pending Deposits */}
-                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('deposits')}>
-                      <div className="flex items-center justify-between mb-1">
-                        <AlertCircle className="w-4 h-4 text-yellow-600" />
-                        <span className="text-lg font-bold text-gray-900">{stats.pending_deposits}</span>
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('deposits')}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center">
+                          <AlertCircle className="w-4 h-4 text-yellow-600" />
+                        </div>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">{stats.pending_deposits}</span>
                       </div>
-                      <p className="text-gray-600 text-[10px] font-medium">Pending</p>
-                      <p className="text-gray-400 text-[9px] mt-0.5">{stats.confirmed_deposits} Confirmed</p>
+                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Pending</p>
+                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{stats.confirmed_deposits} Confirmed</p>
                     </div>
                     {/* Rejected Deposits */}
-                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('deposits')}>
-                      <div className="flex items-center justify-between mb-1">
-                        <XCircle className="w-4 h-4 text-red-600" />
-                        <span className="text-lg font-bold text-gray-900">{stats.rejected_deposits}</span>
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('deposits')}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
+                          <XCircle className="w-4 h-4 text-red-600" />
+                        </div>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">{stats.rejected_deposits}</span>
                       </div>
-                      <p className="text-gray-600 text-[10px] font-medium">Rejected</p>
-                      <p className="text-gray-400 text-[9px] mt-0.5">Deposits</p>
+                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Rejected</p>
+                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">Deposits</p>
                     </div>
                     {/* Failed Orders */}
-                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('orders')}>
-                      <div className="flex items-center justify-between mb-1">
-                        <XCircle className="w-4 h-4 text-red-600" />
-                        <span className="text-lg font-bold text-gray-900">{stats.failed_orders}</span>
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('orders')}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
+                          <XCircle className="w-4 h-4 text-red-600" />
+                        </div>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">{stats.failed_orders}</span>
                       </div>
-                      <p className="text-gray-600 text-[10px] font-medium">Failed</p>
-                      <p className="text-gray-400 text-[9px] mt-0.5">Orders</p>
+                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Failed</p>
+                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">Orders</p>
                     </div>
                     {/* Refunded Orders */}
-                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('orders')}>
-                      <div className="flex items-center justify-between mb-1">
-                        <Receipt className="w-4 h-4 text-orange-600" />
-                        <span className="text-lg font-bold text-gray-900">{stats.refunded_orders}</span>
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('orders')}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
+                          <Receipt className="w-4 h-4 text-orange-600" />
+                        </div>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">{stats.refunded_orders}</span>
                       </div>
-                      <p className="text-gray-600 text-[10px] font-medium">Refunded</p>
-                      <p className="text-gray-400 text-[9px] mt-0.5">{stats.failed_refunds} Failed</p>
+                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Refunded</p>
+                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{stats.failed_refunds} Failed</p>
                     </div>
                     {/* Open Support Tickets */}
-                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('support')}>
-                      <div className="flex items-center justify-between mb-1">
-                        <MessageSquare className="w-4 h-4 text-blue-600" />
-                        <span className="text-lg font-bold text-gray-900">{stats.open_tickets}</span>
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('support')}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <MessageSquare className="w-4 h-4 text-blue-600" />
+                        </div>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">{stats.open_tickets}</span>
                       </div>
-                      <p className="text-gray-600 text-[10px] font-medium">Open Tickets</p>
-                      <p className="text-gray-400 text-[9px] mt-0.5">{stats.in_progress_tickets} In Progress</p>
+                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Open Tickets</p>
+                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{stats.in_progress_tickets} In Progress</p>
                     </div>
                     {/* Resolved Tickets */}
-                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('support')}>
-                      <div className="flex items-center justify-between mb-1">
-                        <CheckCircle className="w-4 h-4 text-green-600" />
-                        <span className="text-lg font-bold text-gray-900">{stats.resolved_tickets}</span>
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('support')}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                          <CheckCircle className="w-4 h-4 text-green-600" />
+                        </div>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">{stats.resolved_tickets}</span>
                       </div>
-                      <p className="text-gray-600 text-[10px] font-medium">Resolved</p>
-                      <p className="text-gray-400 text-[9px] mt-0.5">Tickets</p>
+                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Resolved</p>
+                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">Tickets</p>
                     </div>
                     {/* Total Transactions */}
-                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('transactions')}>
-                      <div className="flex items-center justify-between mb-1">
-                        <Receipt className="w-4 h-4 text-indigo-600" />
-                        <span className="text-lg font-bold text-gray-900">{stats.total_transactions}</span>
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('transactions')}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
+                          <Receipt className="w-4 h-4 text-indigo-600" />
+                        </div>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">{stats.total_transactions}</span>
                       </div>
-                      <p className="text-gray-600 text-[10px] font-medium">Transactions</p>
-                      <p className="text-gray-400 text-[9px] mt-0.5">All Time</p>
+                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Transactions</p>
+                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">All Time</p>
                     </div>
                     {/* Total Services */}
-                    <div className="glass p-3 rounded-xl hover:scale-105 transition-transform cursor-pointer" onClick={() => setActiveSection('services')}>
-                      <div className="flex items-center justify-between mb-1">
-                        <Package className="w-4 h-4 text-purple-600" />
-                        <span className="text-lg font-bold text-gray-900">{stats.total_services}</span>
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('services')}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                          <Package className="w-4 h-4 text-purple-600" />
+                        </div>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">{stats.total_services}</span>
                       </div>
-                      <p className="text-gray-600 text-[10px] font-medium">Services</p>
-                      <p className="text-gray-400 text-[9px] mt-0.5">Active</p>
+                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Services</p>
+                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">Active</p>
                     </div>
                   </div>
+                </div>
 
                   {/* Quick Actions & Alerts */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
                     {/* Quick Actions */}
-                    <div className="glass p-6 rounded-3xl">
-                      <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <div className="bg-white border border-gray-200 rounded-lg p-5 sm:p-6 shadow-sm">
+                      <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
                         <Activity className="w-5 h-5 text-indigo-600" />
                         Quick Actions
                       </h3>
@@ -2085,7 +2252,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                         <Button
                           onClick={() => setActiveSection('deposits')}
                           variant="outline"
-                          className="flex flex-col items-center gap-2 h-auto py-4 hover:bg-indigo-50"
+                          className="flex flex-col items-center gap-2 h-auto py-4 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                         >
                           <DollarSign className="w-5 h-5 text-indigo-600" />
                           <span className="text-xs">Review Deposits</span>
@@ -2098,7 +2265,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                         <Button
                           onClick={() => setActiveSection('support')}
                           variant="outline"
-                          className="flex flex-col items-center gap-2 h-auto py-4 hover:bg-indigo-50"
+                          className="flex flex-col items-center gap-2 h-auto py-4 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                         >
                           <MessageSquare className="w-5 h-5 text-indigo-600" />
                           <span className="text-xs">Support Tickets</span>
@@ -2111,7 +2278,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                         <Button
                           onClick={() => setActiveSection('orders')}
                           variant="outline"
-                          className="flex flex-col items-center gap-2 h-auto py-4 hover:bg-indigo-50"
+                          className="flex flex-col items-center gap-2 h-auto py-4 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                         >
                           <ShoppingCart className="w-5 h-5 text-indigo-600" />
                           <span className="text-xs">View Orders</span>
@@ -2119,7 +2286,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                         <Button
                           onClick={() => setActiveSection('users')}
                           variant="outline"
-                          className="flex flex-col items-center gap-2 h-auto py-4 hover:bg-indigo-50"
+                          className="flex flex-col items-center gap-2 h-auto py-4 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                         >
                           <Users className="w-5 h-5 text-indigo-600" />
                           <span className="text-xs">Manage Users</span>
@@ -2128,8 +2295,8 @@ const AdminDashboard = ({ user, onLogout }) => {
                     </div>
 
                     {/* Alerts & Notifications */}
-                    <div className="glass p-6 rounded-3xl">
-                      <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <div className="bg-white border border-gray-200 rounded-lg p-5 sm:p-6 shadow-sm">
+                      <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
                         <Bell className="w-5 h-5 text-yellow-600" />
                         Alerts & Notifications
                       </h3>
@@ -2145,7 +2312,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                               onClick={() => setActiveSection('deposits')}
                               size="sm"
                               variant="outline"
-                              className="text-xs"
+                              className="text-xs h-8 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                             >
                               Review
                             </Button>
@@ -2162,7 +2329,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                               onClick={() => setActiveSection('support')}
                               size="sm"
                               variant="outline"
-                              className="text-xs"
+                              className="text-xs h-8 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                             >
                               View
                             </Button>
@@ -2201,11 +2368,11 @@ const AdminDashboard = ({ user, onLogout }) => {
                   </div>
 
                   {/* Recent Activity */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
                     {/* Recent Orders */}
-                    <div className="glass p-6 rounded-3xl">
+                    <div className="bg-white border border-gray-200 rounded-lg p-5 sm:p-6 shadow-sm">
                       <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                        <h3 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2">
                           <ShoppingCart className="w-5 h-5 text-blue-600" />
                           Recent Orders
                         </h3>
@@ -2213,25 +2380,25 @@ const AdminDashboard = ({ user, onLogout }) => {
                           onClick={() => setActiveSection('orders')}
                           variant="ghost"
                           size="sm"
-                          className="text-xs"
+                          className="text-xs h-8 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                         >
                           View All
                         </Button>
                       </div>
                       <div className="space-y-3 max-h-[300px] overflow-y-auto">
                         {orders.slice(0, 5).map((order) => (
-                          <div key={order.id} className="flex items-center justify-between p-3 bg-white/50 rounded-lg hover:bg-white/70 transition-colors">
+                          <div key={order.id} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors">
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-gray-900 truncate">{order.services?.name || 'Unknown Service'}</p>
                               <div className="flex flex-col gap-1 mt-1">
                                 <div className="flex items-center gap-2">
-                                  <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                    order.status === 'completed' ? 'bg-green-100 text-green-700' :
-                                    order.status === 'processing' || order.status === 'in progress' ? 'bg-blue-100 text-blue-700' :
-                                    order.status === 'partial' ? 'bg-orange-100 text-orange-700' :
-                                    order.status === 'canceled' || order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-                                    order.status === 'refunds' ? 'bg-purple-100 text-purple-700' :
-                                    'bg-yellow-100 text-yellow-700'
+                                  <span className={`text-xs px-2.5 py-1 rounded border ${
+                                    order.status === 'completed' ? 'bg-green-100 text-green-700 border-green-200' :
+                                    order.status === 'processing' || order.status === 'in progress' ? 'bg-blue-100 text-blue-700 border-blue-200' :
+                                    order.status === 'partial' ? 'bg-orange-100 text-orange-700 border-orange-200' :
+                                    order.status === 'canceled' || order.status === 'cancelled' ? 'bg-red-100 text-red-700 border-red-200' :
+                                    order.status === 'refunds' ? 'bg-purple-100 text-purple-700 border-purple-200' :
+                                    'bg-yellow-100 text-yellow-700 border-yellow-200'
                                   }`}>
                                     {order.status}
                                   </span>
@@ -2255,9 +2422,9 @@ const AdminDashboard = ({ user, onLogout }) => {
                     </div>
 
                     {/* Recent Deposits */}
-                    <div className="glass p-6 rounded-3xl">
+                    <div className="bg-white border border-gray-200 rounded-lg p-5 sm:p-6 shadow-sm">
                       <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                        <h3 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2">
                           <DollarSign className="w-5 h-5 text-emerald-600" />
                           Recent Deposits
                         </h3>
@@ -2265,21 +2432,21 @@ const AdminDashboard = ({ user, onLogout }) => {
                           onClick={() => setActiveSection('deposits')}
                           variant="ghost"
                           size="sm"
-                          className="text-xs"
+                          className="text-xs h-8 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                         >
                           View All
                         </Button>
                       </div>
                       <div className="space-y-3 max-h-[300px] overflow-y-auto">
                         {deposits.slice(0, 5).map((deposit) => (
-                          <div key={deposit.id} className="flex items-center justify-between p-3 bg-white/50 rounded-lg hover:bg-white/70 transition-colors">
+                          <div key={deposit.id} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors">
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-gray-900 truncate">{deposit.profiles?.name || deposit.profiles?.email || 'Unknown User'}</p>
                               <div className="flex items-center gap-2 mt-1">
-                                <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                  deposit.status === 'approved' ? 'bg-green-100 text-green-700' :
-                                  deposit.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                                  'bg-red-100 text-red-700'
+                                <span className={`text-xs px-2.5 py-1 rounded border ${
+                                  deposit.status === 'approved' ? 'bg-green-100 text-green-700 border-green-200' :
+                                  deposit.status === 'pending' ? 'bg-yellow-100 text-yellow-700 border-yellow-200' :
+                                  'bg-red-100 text-red-700 border-red-200'
                                 }`}>
                                   {deposit.status}
                                 </span>
@@ -2301,11 +2468,11 @@ const AdminDashboard = ({ user, onLogout }) => {
               </TabsContent>
               {/* Deposits Section */}
               <TabsContent value="deposits" className="lg:mt-0">
-            <div className="glass p-4 sm:p-6 rounded-3xl">
+            <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
               <div className="flex flex-col gap-4 mb-6">
                 <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Payment Deposits</h2>
+                <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Payment Deposits</h2>
                     <Button
                       onClick={() => fetchAllData(true)}
                       disabled={refreshing}
@@ -2318,7 +2485,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                     </Button>
                   </div>
                 <Select value={depositStatusFilter} onValueChange={setDepositStatusFilter}>
-                  <SelectTrigger className="w-full sm:w-48">
+                  <SelectTrigger className="w-full sm:w-48 h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                     <Filter className="w-4 h-4 mr-2" />
                     <SelectValue />
                   </SelectTrigger>
@@ -2362,8 +2529,8 @@ const AdminDashboard = ({ user, onLogout }) => {
                   <div className="overflow-hidden rounded-xl border border-white/20">
                     <div className="max-h-[600px] overflow-y-auto overflow-x-auto">
                       {/* Fixed Header */}
-                      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white sticky top-0 z-10 min-w-[1400px]">
-                        <div className="grid grid-cols-[2fr_2fr_2fr_3fr_3fr_2fr] gap-4 p-4 font-semibold text-sm text-center">
+                      <div className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10 min-w-[1400px]">
+                        <div className="grid grid-cols-[2fr_2fr_2fr_3fr_3fr_2fr] gap-4 p-4 font-semibold text-xs sm:text-sm text-gray-700 text-center">
                           <div>Status</div>
                           <div>Method</div>
                           <div>Amount</div>
@@ -2373,12 +2540,12 @@ const AdminDashboard = ({ user, onLogout }) => {
                         </div>
                       </div>
                       {/* Scrollable List */}
-                      <div className="divide-y divide-gray-200/50 min-w-[1400px]">
+                      <div className="divide-y divide-gray-200 min-w-[1400px]">
                         {paginatedDeposits.map((deposit) => {
                     const statusConfig = {
-                      pending: { label: 'Pending', color: 'bg-yellow-100 text-yellow-700', icon: Clock },
-                      approved: { label: 'Confirmed', color: 'bg-green-100 text-green-700', icon: CheckCircle },
-                      rejected: { label: 'Cancelled', color: 'bg-red-100 text-red-700', icon: XCircle }
+                      pending: { label: 'Pending', color: 'bg-yellow-100 text-yellow-700 border-yellow-200', icon: Clock },
+                      approved: { label: 'Confirmed', color: 'bg-green-100 text-green-700 border-green-200', icon: CheckCircle },
+                      rejected: { label: 'Cancelled', color: 'bg-red-100 text-red-700 border-red-200', icon: XCircle }
                     };
                     const status = statusConfig[deposit.status] || statusConfig.pending;
                     const StatusIcon = status.icon;
@@ -2387,15 +2554,15 @@ const AdminDashboard = ({ user, onLogout }) => {
                     const isPaystack = deposit.deposit_method === 'paystack' || (!deposit.deposit_method && deposit.paystack_reference);
 
                     return (
-                          <div key={deposit.id} className="bg-white/50 hover:bg-white/70 transition-colors">
+                          <div key={deposit.id} className="bg-white hover:bg-gray-50 transition-colors">
                             <div className="grid grid-cols-[2fr_2fr_2fr_3fr_3fr_2fr] gap-4 p-4 items-center">
                               {/* Status */}
                               <div className="flex justify-center">
-                                <span className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 ${status.color}`}>
+                                <span className={`px-2.5 py-1 rounded border text-xs font-medium flex items-center gap-1.5 ${status.color}`}>
                                   <StatusIcon className="w-3.5 h-3.5" />
-                                  {status.label}
-                                </span>
-                              </div>
+                                {status.label}
+                              </span>
+                            </div>
                               {/* Method */}
                               <div className="flex justify-center">
                                 {isManual ? (
@@ -2429,8 +2596,8 @@ const AdminDashboard = ({ user, onLogout }) => {
                                 )}
                                 {isManual && deposit.momo_number && (
                                   <p className="text-xs text-blue-600 mt-1">MOMO: {deposit.momo_number}</p>
-                                )}
-                              </div>
+                            )}
+                      </div>
                               {/* Transaction Details */}
                               <div className="text-center">
                                 {isPaystack && deposit.paystack_reference && (
@@ -2473,8 +2640,8 @@ const AdminDashboard = ({ user, onLogout }) => {
                                   <span className="text-xs text-red-600">Rejected</span>
                                 )}
                               </div>
-                            </div>
-                          </div>
+                      </div>
+                    </div>
                     );
                   })}
                 </div>
@@ -2512,7 +2679,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                               onClick={() => setDepositsPage(pageNum)}
                               variant={depositsPage === pageNum ? "default" : "outline"}
                               size="sm"
-                              className={depositsPage === pageNum ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white" : ""}
+                              className={depositsPage === pageNum ? "bg-indigo-600 hover:bg-indigo-700 text-white" : ""}
                             >
                               {pageNum}
                             </Button>
@@ -2536,7 +2703,7 @@ const AdminDashboard = ({ user, onLogout }) => {
 
             {/* Orders Section */}
             <TabsContent value="orders" className="lg:mt-0">
-            <div className="glass p-4 sm:p-6 rounded-3xl">
+            <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
               <div className="flex flex-col gap-4 mb-6">
                 <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
                   <div className="flex items-center gap-4">
@@ -2551,9 +2718,9 @@ const AdminDashboard = ({ user, onLogout }) => {
                       <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
                       Refresh
                     </Button>
-                  </div>
+                </div>
                 <Select value={orderStatusFilter} onValueChange={setOrderStatusFilter}>
-                  <SelectTrigger className="w-full sm:w-40">
+                  <SelectTrigger className="w-full sm:w-40 h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                     <Filter className="w-4 h-4 mr-2" />
                     <SelectValue />
                   </SelectTrigger>
@@ -2599,7 +2766,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                   <div className="overflow-hidden rounded-xl border border-white/20">
                     <div className="max-h-[600px] overflow-y-auto overflow-x-auto">
                       {/* Fixed Header */}
-                      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white sticky top-0 z-10 min-w-[1500px]">
+                      <div className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10 min-w-[1500px]">
                         <div className="grid grid-cols-12 gap-4 p-4 font-semibold text-sm">
                           <div className="col-span-1.5">Status</div>
                           <div className="col-span-1">Order ID</div>
@@ -2652,7 +2819,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                                 ) : (
                                   <p className="text-xs text-gray-400 italic">N/A</p>
                                 )}
-                              </div>
+                      </div>
                               {/* Quantity */}
                               <div className="col-span-1">
                                 <p className="font-semibold text-gray-900 text-base">{order.quantity}</p>
@@ -2766,7 +2933,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                               onClick={() => setOrdersPage(pageNum)}
                               variant={ordersPage === pageNum ? "default" : "outline"}
                               size="sm"
-                              className={ordersPage === pageNum ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white" : ""}
+                              className={ordersPage === pageNum ? "bg-indigo-600 hover:bg-indigo-700 text-white" : ""}
                             >
                               {pageNum}
                             </Button>
@@ -2788,12 +2955,29 @@ const AdminDashboard = ({ user, onLogout }) => {
             </div>
           </TabsContent>
 
-            {/* Services Section */}
-            <TabsContent value="services" className="lg:mt-0">
+            {/* Payment Methods Section */}
+            <TabsContent value="payment-methods" className="lg:mt-0">
             <div className="space-y-6">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">Payment Methods</h2>
+                  <p className="text-gray-600 mt-1">Enable or disable payment methods for users</p>
+                </div>
+                <Button
+                  onClick={() => fetchAllData(true)}
+                  disabled={refreshing}
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-2"
+                >
+                  <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+              </div>
+
               {/* Payment Methods Settings */}
-              <div className="glass p-4 sm:p-8 rounded-3xl">
-                <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">Payment Methods</h2>
+              <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-8 shadow-sm">
+                <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">Available Payment Methods</h2>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between p-4 bg-white/50 rounded-xl border-2 border-gray-200">
                     <div className="flex items-center gap-3">
@@ -2884,11 +3068,46 @@ const AdminDashboard = ({ user, onLogout }) => {
                       )}
                     </Button>
                   </div>
+                  
+                  <div className="flex items-center justify-between p-4 bg-white/50 rounded-xl border-2 border-gray-200">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-teal-600 rounded-lg flex items-center justify-center">
+                        <CheckCircle className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-900">Korapay</p>
+                        <p className="text-sm text-gray-600">Korapay payment gateway</p>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={() => handleTogglePaymentMethod('korapay', !paymentMethodSettings.korapay_enabled)}
+                      variant={paymentMethodSettings.korapay_enabled ? "default" : "outline"}
+                      size="sm"
+                      className={paymentMethodSettings.korapay_enabled ? "bg-green-600 hover:bg-green-700" : ""}
+                    >
+                      {paymentMethodSettings.korapay_enabled ? (
+                        <>
+                          <Power className="w-4 h-4 mr-2" />
+                          Enabled
+                        </>
+                      ) : (
+                        <>
+                          <PowerOff className="w-4 h-4 mr-2" />
+                          Disabled
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
-              
+            </div>
+          </TabsContent>
+
+            {/* Services Section */}
+            <TabsContent value="services" className="lg:mt-0">
+            <div className="space-y-6">
               {/* Add Service Form */}
-              <div className="glass p-4 sm:p-8 rounded-3xl">
+              <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-8 shadow-sm">
                 <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">Add New Service</h2>
               <form onSubmit={handleCreateService} className="space-y-5">
                 <div className="grid md:grid-cols-2 gap-4">
@@ -3066,8 +3285,12 @@ const AdminDashboard = ({ user, onLogout }) => {
                     <input
                       type="checkbox"
                       id="enabled"
-                      checked={serviceForm.enabled !== false}
-                      onChange={(e) => setServiceForm({ ...serviceForm, enabled: e.target.checked })}
+                      checked={Boolean(serviceForm.enabled !== false)}
+                      onChange={(e) => {
+                        const newEnabled = e.target.checked;
+                        console.log('Create form enabled changed:', newEnabled);
+                        setServiceForm({ ...serviceForm, enabled: newEnabled });
+                      }}
                       className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
                     />
                     <Label htmlFor="enabled" className="text-sm font-medium text-gray-900">
@@ -3078,7 +3301,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                 <Button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white py-6 rounded-full"
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white h-11 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                 >
                   {loading ? 'Creating...' : 'Create Service'}
                 </Button>
@@ -3086,10 +3309,10 @@ const AdminDashboard = ({ user, onLogout }) => {
               </div>
 
               {/* Services List */}
-              <div className="glass p-4 sm:p-6 rounded-3xl">
+              <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
                 <div className="flex flex-col sm:flex-row gap-4 mb-6">
                   <div className="flex items-center gap-4">
-                    <h2 className="text-xl sm:text-2xl font-bold text-gray-900">All Services</h2>
+                  <h2 className="text-xl sm:text-2xl font-bold text-gray-900">All Services</h2>
                     <Button
                       onClick={() => fetchAllData(true)}
                       disabled={refreshing}
@@ -3134,7 +3357,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                             <div className="flex-1">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2">
                                   {service.enabled !== false ? (
                                     <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse"></div>
                                   ) : (
@@ -3186,16 +3409,17 @@ const AdminDashboard = ({ user, onLogout }) => {
                             </div>
                             <div className="flex gap-2">
                               <Button
-                                onClick={() => handleToggleService(service.id, service.enabled !== false)}
-                                variant={service.enabled === false ? "default" : "outline"}
+                                onClick={() => handleToggleService(service.id, service.enabled === true)}
+                                variant={service.enabled === true ? "outline" : "default"}
                                 size="sm"
-                                className={service.enabled === false ? "bg-green-600 hover:bg-green-700" : ""}
-                                title={service.enabled === false ? "Enable service" : "Disable service"}
+                                className={service.enabled === true ? "" : "bg-green-600 hover:bg-green-700 text-white"}
+                                title={service.enabled === true ? "Disable service" : "Enable service"}
+                                disabled={loading}
                               >
-                                {service.enabled === false ? (
-                                  <Power className="w-4 h-4" />
-                                ) : (
+                                {service.enabled === true ? (
                                   <PowerOff className="w-4 h-4" />
+                                ) : (
+                                  <Power className="w-4 h-4" />
                                 )}
                               </Button>
                               <Button
@@ -3225,11 +3449,11 @@ const AdminDashboard = ({ user, onLogout }) => {
 
             {/* Users Section */}
             <TabsContent value="users" className="lg:mt-0">
-            <div className="glass p-4 sm:p-6 rounded-3xl">
+            <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
               <div className="flex flex-col gap-4 mb-6">
                 <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <h2 className="text-xl sm:text-2xl font-bold text-gray-900">All Users</h2>
+                <h2 className="text-xl sm:text-2xl font-bold text-gray-900">All Users</h2>
                     <Button
                       onClick={() => fetchAllData(true)}
                       disabled={refreshing}
@@ -3271,7 +3495,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                   <div className="overflow-hidden rounded-xl border border-white/20">
                     <div className="max-h-[600px] overflow-y-auto overflow-x-auto">
                       {/* Fixed Header */}
-                      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white sticky top-0 z-10 min-w-[1200px]">
+                      <div className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10 min-w-[1200px]">
                         <div className="grid grid-cols-12 gap-4 p-4 font-semibold text-sm">
                           <div className="col-span-2">Name</div>
                           <div className="col-span-3">Email</div>
@@ -3376,7 +3600,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                               onClick={() => setUsersPage(pageNum)}
                               variant={usersPage === pageNum ? "default" : "outline"}
                               size="sm"
-                              className={usersPage === pageNum ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white" : ""}
+                              className={usersPage === pageNum ? "bg-indigo-600 hover:bg-indigo-700 text-white" : ""}
                             >
                               {pageNum}
                             </Button>
@@ -3400,7 +3624,7 @@ const AdminDashboard = ({ user, onLogout }) => {
 
             {/* Transactions Section */}
             <TabsContent value="transactions" className="lg:mt-0">
-            <div className="glass p-4 sm:p-6 rounded-3xl">
+            <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
               <div className="flex flex-col gap-4 mb-6">
                 <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
                   <div className="flex items-center gap-4">
@@ -3418,7 +3642,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                   </div>
                   <div className="flex gap-2">
                     <Select value={transactionTypeFilter} onValueChange={setTransactionTypeFilter}>
-                      <SelectTrigger className="w-full sm:w-40">
+                      <SelectTrigger className="w-full sm:w-40 h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                         <Filter className="w-4 h-4 mr-2" />
                         <SelectValue placeholder="Type" />
                       </SelectTrigger>
@@ -3430,7 +3654,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                       </SelectContent>
                     </Select>
                     <Select value={transactionStatusFilter} onValueChange={setTransactionStatusFilter}>
-                      <SelectTrigger className="w-full sm:w-40">
+                      <SelectTrigger className="w-full sm:w-40 h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                         <Filter className="w-4 h-4 mr-2" />
                         <SelectValue placeholder="Status" />
                       </SelectTrigger>
@@ -3472,7 +3696,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                   <div className="overflow-hidden rounded-xl border border-white/20">
                     <div className="max-h-[600px] overflow-y-auto overflow-x-auto">
                       {/* Fixed Header */}
-                      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white sticky top-0 z-10 min-w-[1200px]">
+                      <div className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10 min-w-[1200px]">
                         <div className="grid grid-cols-[1.5fr_1.5fr_1.5fr_1.5fr_2fr_2fr_1fr_1fr] gap-4 p-4 font-semibold text-sm">
                           <div className="text-center">Type</div>
                           <div className="text-center">Status</div>
@@ -3492,8 +3716,8 @@ const AdminDashboard = ({ user, onLogout }) => {
                               {/* Type */}
                               <div className="flex justify-center">
                                 <span className={`px-3 py-1.5 rounded-full text-xs font-medium ${
-                                  transaction.type === 'deposit' 
-                                    ? 'bg-green-100 text-green-700' 
+                              transaction.type === 'deposit' 
+                                ? 'bg-green-100 text-green-700' 
                                     : transaction.type === 'refund'
                                     ? 'bg-green-100 text-green-700'
                                     : transaction.type === 'order'
@@ -3504,19 +3728,19 @@ const AdminDashboard = ({ user, onLogout }) => {
                                    transaction.type === 'refund' ? 'Refund' :
                                    transaction.type === 'order' ? 'Order' : 
                                    transaction.type}
-                                </span>
+                            </span>
                               </div>
                               {/* Status */}
                               <div className="flex flex-col items-center gap-1">
                                 <span className={`px-3 py-1.5 rounded-full text-xs font-medium ${
-                                  transaction.status === 'approved' 
-                                    ? 'bg-green-100 text-green-700'
-                                    : transaction.status === 'pending'
-                                    ? 'bg-yellow-100 text-yellow-700'
-                                    : 'bg-red-100 text-red-700'
-                                }`}>
-                                  {transaction.status}
-                                </span>
+                              transaction.status === 'approved' 
+                                ? 'bg-green-100 text-green-700'
+                                : transaction.status === 'pending'
+                                ? 'bg-yellow-100 text-yellow-700'
+                                : 'bg-red-100 text-red-700'
+                            }`}>
+                              {transaction.status}
+                            </span>
                                 {/* Show Paystack status for deposit transactions */}
                                 {transaction.type === 'deposit' && transaction.paystack_status && (
                                   <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -3528,23 +3752,23 @@ const AdminDashboard = ({ user, onLogout }) => {
                                     {transaction.paystack_status}
                                   </span>
                                 )}
-                              </div>
+                          </div>
                               {/* Amount */}
                               <div className="text-center">
                                 <p className={`font-semibold ${transaction.type === 'deposit' || transaction.type === 'refund' ? 'text-green-600' : 'text-red-600'}`}>
                                   {transaction.type === 'deposit' || transaction.type === 'refund' ? '+' : '-'}₵{transaction.amount.toFixed(2)}
                                 </p>
-                              </div>
+                        </div>
                               {/* Time */}
                               <div className="text-center">
                                 <p className="text-sm text-gray-700">{new Date(transaction.created_at).toLocaleDateString()}</p>
                                 <p className="text-xs text-gray-500">{new Date(transaction.created_at).toLocaleTimeString()}</p>
-                              </div>
+                      </div>
                               {/* User */}
                               <div className="text-center">
                                 <p className="font-medium text-gray-900 text-sm">{transaction.profiles?.name || 'Unknown'}</p>
                                 <p className="text-xs text-gray-600 break-all">{transaction.profiles?.email || transaction.user_id.slice(0, 8)}</p>
-                              </div>
+                    </div>
                               {/* Transaction ID */}
                               <div className="text-center">
                                 <p className="text-xs text-gray-700 break-all">{transaction.id}</p>
@@ -3553,8 +3777,8 @@ const AdminDashboard = ({ user, onLogout }) => {
                                 )}
                                 {transaction.order_id && (
                                   <p className="text-xs text-gray-500">Order: {transaction.order_id.slice(0, 8)}...</p>
-                                )}
-                              </div>
+                )}
+              </div>
                               {/* Balance Status */}
                               <div className="flex justify-center">
                                 {(() => {
@@ -3646,7 +3870,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                               onClick={() => setTransactionsPage(pageNum)}
                               variant={transactionsPage === pageNum ? "default" : "outline"}
                               size="sm"
-                              className={transactionsPage === pageNum ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white" : ""}
+                              className={transactionsPage === pageNum ? "bg-indigo-600 hover:bg-indigo-700 text-white" : ""}
                             >
                               {pageNum}
                             </Button>
@@ -3670,11 +3894,11 @@ const AdminDashboard = ({ user, onLogout }) => {
 
             {/* Support Section */}
             <TabsContent value="support" className="lg:mt-0">
-            <div className="glass p-4 sm:p-6 rounded-3xl">
+            <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
               <div className="flex flex-col gap-4 mb-6">
                 <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Support Tickets</h2>
+                <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Support Tickets</h2>
                     <Button
                       onClick={() => fetchAllData(true)}
                       disabled={refreshing}
@@ -3687,7 +3911,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                     </Button>
                   </div>
                 <Select value={ticketStatusFilter} onValueChange={setTicketStatusFilter}>
-                  <SelectTrigger className="w-full sm:w-48">
+                  <SelectTrigger className="w-full sm:w-48 h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                     <Filter className="w-4 h-4 mr-2" />
                     <SelectValue />
                   </SelectTrigger>
@@ -3730,7 +3954,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                   <div className="overflow-hidden rounded-xl border border-white/20">
                     <div className="max-h-[600px] overflow-y-auto overflow-x-auto">
                       {/* Fixed Header */}
-                      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white sticky top-0 z-10 min-w-[1400px]">
+                      <div className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10 min-w-[1400px]">
                         <div className="grid grid-cols-12 gap-4 p-4 font-semibold text-sm">
                           <div className="col-span-1.5">Status</div>
                           <div className="col-span-1.5">Ticket ID</div>
@@ -3831,7 +4055,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                                   <Button
                                     size="sm"
                                     onClick={() => handleAddTicketResponse(ticket.id)}
-                                      className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
+                                      className="bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                                   >
                                     <Send className="w-4 h-4 mr-1" />
                                     Send Response
@@ -3891,7 +4115,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                                   setEditingTicket(ticket.id);
                                   setTicketResponse(ticket.admin_response || '');
                                 }}
-                                      className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-xs whitespace-nowrap"
+                                      className="bg-indigo-600 hover:bg-indigo-700 text-xs whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                               >
                                       <Edit className="w-3 h-3 mr-1" />
                                 Respond
@@ -3937,7 +4161,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                               onClick={() => setTicketsPage(pageNum)}
                               variant={ticketsPage === pageNum ? "default" : "outline"}
                               size="sm"
-                              className={ticketsPage === pageNum ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white" : ""}
+                              className={ticketsPage === pageNum ? "bg-indigo-600 hover:bg-indigo-700 text-white" : ""}
                             >
                               {pageNum}
                             </Button>
@@ -3963,7 +4187,7 @@ const AdminDashboard = ({ user, onLogout }) => {
             <TabsContent value="balance" className="lg:mt-0">
             <div className="space-y-6">
               {/* User Balances List */}
-              <div className="glass p-4 sm:p-6 rounded-3xl">
+              <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
                 <div className="flex flex-col gap-4 mb-6">
                   <div className="flex items-center gap-4">
                     <h2 className="text-xl sm:text-2xl font-bold text-gray-900">User Balances</h2>
@@ -4007,7 +4231,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                     <div className="overflow-hidden rounded-xl border border-white/20">
                       <div className="max-h-[600px] overflow-y-auto overflow-x-auto">
                         {/* Fixed Header */}
-                        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white sticky top-0 z-10 min-w-[1100px]">
+                        <div className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10 min-w-[1100px]">
                           <div className="grid grid-cols-12 gap-4 p-4 font-semibold text-sm">
                             <div className="col-span-2">Name</div>
                             <div className="col-span-3">Email</div>
@@ -4112,7 +4336,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                                 onClick={() => setBalancePage(pageNum)}
                                 variant={balancePage === pageNum ? "default" : "outline"}
                                 size="sm"
-                                className={balancePage === pageNum ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white" : ""}
+                                className={balancePage === pageNum ? "bg-indigo-600 hover:bg-indigo-700 text-white" : ""}
                               >
                                 {pageNum}
                               </Button>
@@ -4134,7 +4358,7 @@ const AdminDashboard = ({ user, onLogout }) => {
               </div>
               
               {/* Manual Balance Adjustment Form */}
-              <div className="glass p-4 sm:p-8 rounded-3xl max-w-2xl" data-balance-form>
+              <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-8 shadow-sm max-w-2xl" data-balance-form>
               <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">Manual Balance Adjustment</h2>
               <div className="space-y-5">
                 <div>
@@ -4272,7 +4496,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                 </div>
                 <Button
                   onClick={handleAdjustBalance}
-                  className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white py-6 rounded-full"
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white h-11 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                 >
                   {balanceAdjustment.type === 'add' ? <Plus className="w-4 h-4 mr-2" /> : <Minus className="w-4 h-4 mr-2" />}
                   {balanceAdjustment.type === 'add' ? 'Add' : 'Subtract'} Balance
@@ -4281,7 +4505,7 @@ const AdminDashboard = ({ user, onLogout }) => {
               </div>
             </div>
           </TabsContent>
-            </div>add
+            </div>
         </Tabs>
         </div>
       </div>
@@ -4378,27 +4602,33 @@ const ServiceEditForm = ({ service, onSave, onCancel }) => {
     combo_service_ids: service.combo_service_ids || [],
     combo_smmgen_service_ids: service.combo_smmgen_service_ids || [],
     seller_only: service.seller_only || false,
-    enabled: service.enabled === true || service.enabled === undefined ? true : false
+    enabled: service.enabled === true // Explicitly check for true, default to false if null/undefined
   });
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSave({
-      ...formData,
+    const updateData = {
+      platform: formData.platform,
+      service_type: formData.service_type,
+      name: formData.name,
       rate: parseFloat(formData.rate),
       min_quantity: parseInt(formData.min_quantity),
       max_quantity: parseInt(formData.max_quantity),
+      description: formData.description || null,
       smmgen_service_id: formData.smmgen_service_id || null,
-      is_combo: formData.is_combo || false,
+      is_combo: Boolean(formData.is_combo),
       combo_service_ids: formData.is_combo && formData.combo_service_ids.length > 0 
         ? formData.combo_service_ids 
         : null,
       combo_smmgen_service_ids: formData.is_combo && formData.combo_smmgen_service_ids.length > 0
         ? formData.combo_smmgen_service_ids
         : null,
-      seller_only: formData.seller_only || false,
-      enabled: formData.enabled === true
-    });
+      seller_only: Boolean(formData.seller_only),
+      enabled: Boolean(formData.enabled) // Explicitly convert to boolean
+    };
+    
+    console.log('ServiceEditForm submitting:', updateData);
+    onSave(updateData);
   };
 
   return (
@@ -4498,8 +4728,12 @@ const ServiceEditForm = ({ service, onSave, onCancel }) => {
         <input
           type="checkbox"
           id="edit_enabled"
-          checked={formData.enabled === true}
-          onChange={(e) => setFormData({ ...formData, enabled: e.target.checked })}
+          checked={Boolean(formData.enabled)}
+          onChange={(e) => {
+            const newEnabled = e.target.checked;
+            console.log('Enabled checkbox changed:', newEnabled);
+            setFormData({ ...formData, enabled: newEnabled });
+          }}
           className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
         />
         <Label htmlFor="edit_enabled" className="text-sm font-medium text-gray-900">
