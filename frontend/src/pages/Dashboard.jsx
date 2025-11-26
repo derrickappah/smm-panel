@@ -188,8 +188,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) return;
 
-      // Find recent pending deposit transactions (within last 2 hours to catch old ones too)
-      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+      // Find recent pending deposit transactions (within last 48 hours to catch old ones too)
+      const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
       
       const { data: pendingTransactions, error } = await supabase
         .from('transactions')
@@ -197,9 +197,9 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         .eq('user_id', authUser.id)
         .eq('type', 'deposit')
         .eq('status', 'pending')
-        .gte('created_at', twoHoursAgo)
+        .gte('created_at', fortyEightHoursAgo)
         .order('created_at', { ascending: false })
-        .limit(10);
+        .limit(20);
 
       if (error) {
         console.error('Error fetching pending transactions for verification:', error);
@@ -213,7 +213,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       // Verify each pending transaction with Paystack or Korapay
       for (const transaction of pendingTransactions) {
         const transactionAge = Date.now() - new Date(transaction.created_at).getTime();
-        const tenMinutes = 10 * 60 * 1000;
+        const thirtyMinutes = 30 * 60 * 1000;
         const oneHour = 60 * 60 * 1000;
         
         // Verify Paystack transactions
@@ -386,11 +386,11 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           }
         } else {
           // No reference stored - this means callback never fired
-          // We can't verify without reference, but we can check if it's been more than 10 minutes
+          // We can't verify without reference, but we can check if it's been more than 30 minutes
           // If so, it's likely the payment was never completed
-          if (transactionAge > tenMinutes) {
+          if (transactionAge > thirtyMinutes) {
             // Transaction is old and has no reference - likely never completed
-            // Mark as rejected after 10 minutes
+            // Mark as rejected after 30 minutes (increased from 10 to account for slower payment processing)
             console.log('Old pending transaction without reference, marking as rejected:', transaction.id);
             await supabase
               .from('transactions')
