@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -77,15 +77,37 @@ const isValidEmail = (email) => {
 
 const AuthPage = () => {
   const navigate = useNavigate();
-  const [isLogin, setIsLogin] = useState(true);
+  const [searchParams] = useSearchParams();
+  // Check if referral code exists in URL - if so, default to signup form
+  const hasReferralCode = searchParams.get('ref');
+  const [isLogin, setIsLogin] = useState(!hasReferralCode); // Show signup if referral code exists
   const [loading, setLoading] = useState(false);
   const [emailError, setEmailError] = useState('');
+  const [referralCode, setReferralCode] = useState('');
+  const [manualReferralCode, setManualReferralCode] = useState('');
   const [formData, setFormData] = useState({
     email: '',
     password: '',
     name: '',
     phone_number: '',
   });
+
+  // Read referral code from URL query params and pre-fill input
+  useEffect(() => {
+    const ref = searchParams.get('ref');
+    if (ref) {
+      const trimmedRef = ref.trim();
+      setReferralCode(trimmedRef);
+      setManualReferralCode(trimmedRef); // Pre-fill the input field
+      // Automatically switch to signup form when referral code is present
+      setIsLogin(false);
+    }
+  }, [searchParams]);
+
+  // Get the active referral code (manual input takes precedence over URL param)
+  const getActiveReferralCode = () => {
+    return manualReferralCode.trim() || referralCode.trim();
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -181,14 +203,22 @@ const AuthPage = () => {
       } else {
         // SIGNUP
         try {
+          const signupMetadata = {
+            name: formData.name.trim(),
+            phone_number: formData.phone_number.trim(),
+          };
+
+          // Add referral code to metadata if provided (manual input takes precedence)
+          const activeReferralCode = getActiveReferralCode();
+          if (activeReferralCode) {
+            signupMetadata.referral_code = activeReferralCode;
+          }
+
           const { data, error } = await supabase.auth.signUp({
             email: formData.email.trim(),
             password: formData.password,
             options: {
-              data: {
-                name: formData.name.trim(),
-                phone_number: formData.phone_number.trim(),
-              },
+              data: signupMetadata,
             },
           });
 
@@ -230,31 +260,27 @@ const AuthPage = () => {
           }
 
           if (data.user) {
-            // Create profile
-            try {
-              const { error: profileError } = await supabase.from('profiles').insert({
-                id: data.user.id,
-                email: formData.email.trim(),
-                name: formData.name.trim(),
-                phone_number: formData.phone_number.trim(),
-                balance: 0.0,
-                role: 'user',
-              });
-
-              if (profileError && !profileError.message?.includes('duplicate')) {
-                console.warn('Profile creation warning:', profileError);
-              }
-            } catch (err) {
-              console.warn('Profile creation error:', err);
-            }
+            // Profile is automatically created by database trigger (handle_new_user)
+            // No need to manually create it - this prevents 409 conflicts
+            // The trigger also handles referral code and referral relationship creation
 
             if (data.session) {
               // User is automatically logged in
-              toast.success('Account created successfully!');
+              const activeReferralCode = getActiveReferralCode();
+              if (activeReferralCode) {
+                toast.success('Account created successfully! You signed up with a referral code.');
+              } else {
+                toast.success('Account created successfully!');
+              }
               navigate('/dashboard');
             } else {
               // Email confirmation required
-              toast.success('Account created! Please check your email to confirm your account.');
+              const activeReferralCode = getActiveReferralCode();
+              if (activeReferralCode) {
+                toast.success('Account created! Please check your email to confirm your account. You signed up with a referral code.');
+              } else {
+                toast.success('Account created! Please check your email to confirm your account.');
+              }
               navigate('/auth');
             }
           } else {
@@ -414,6 +440,22 @@ const AuthPage = () => {
                 className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               />
             </div>
+
+            {!isLogin && (
+              <div>
+                <Label htmlFor="referral_code" className="text-sm font-medium text-gray-700 mb-2 block">
+                  Referral Code <span className="text-gray-400 font-normal">(Optional)</span>
+                </Label>
+                <Input
+                  id="referral_code"
+                  type="text"
+                  placeholder="Enter referral code (e.g., REFABC123)"
+                  value={manualReferralCode}
+                  onChange={(e) => setManualReferralCode(e.target.value.toUpperCase().trim())}
+                  className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono"
+                />
+              </div>
+            )}
 
             <Button
               type="submit"

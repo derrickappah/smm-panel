@@ -12,6 +12,7 @@ import { saveOrderStatusHistory } from '@/lib/orderStatusHistory';
 import Navbar from '@/components/Navbar';
 import { Wallet, ShoppingCart, Clock, Search, Layers } from 'lucide-react';
 import SEO from '@/components/SEO';
+import ReferralSection from '@/components/ReferralSection';
 // Paystack will be loaded via react-paystack package
 
 const Dashboard = ({ user, onLogout, onUpdateUser }) => {
@@ -3113,6 +3114,11 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             </div>
           </div>
         )}
+
+        {/* Referral Section */}
+        <div className="mt-6 sm:mt-8 animate-slideUp">
+          <ReferralSection user={user} />
+        </div>
       </div>
     </div>
   );
