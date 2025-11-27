@@ -1,0 +1,9 @@
+{
+  "name": "boostup-gh-api",
+  "version": "1.0.0",
+  "description": "API serverless functions for BoostUp GH",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.84.0"
+  }
+}
+
