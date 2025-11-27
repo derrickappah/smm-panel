@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import LandingPage from "@/pages/LandingPage";
 import AuthPage from "@/pages/AuthPage";
 import Dashboard from "@/pages/Dashboard";
@@ -294,6 +295,7 @@ function App() {
           />
           </Routes>
         </BrowserRouter>
+        <SpeedInsights />
       </div>
     </HelmetProvider>
   );
