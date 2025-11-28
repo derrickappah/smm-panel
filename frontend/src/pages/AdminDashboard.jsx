@@ -2969,6 +2969,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                     const isPaystack = deposit.deposit_method === 'paystack' || (!deposit.deposit_method && deposit.paystack_reference);
                     const isHubtel = deposit.deposit_method === 'hubtel';
                     const isKorapay = deposit.deposit_method === 'korapay';
+                    const isRefBonus = deposit.deposit_method === 'ref_bonus';
 
                     return (
                           <div key={deposit.id} className="bg-white hover:bg-gray-50 transition-colors">
@@ -3001,6 +3002,11 @@ const AdminDashboard = ({ user, onLogout }) => {
                                   <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700 flex items-center gap-1.5">
                                     <CheckCircle className="w-3.5 h-3.5" />
                                     Korapay
+                                  </span>
+                                ) : isRefBonus ? (
+                                  <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-teal-100 text-teal-700 flex items-center gap-1.5">
+                                    <TrendingUp className="w-3.5 h-3.5" />
+                                    Ref Bonus
                                   </span>
                                 ) : (
                                   <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">

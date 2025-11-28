@@ -341,12 +341,13 @@ BEGIN
                 
                 -- Create transaction record for the bonus (optional - for tracking)
                 -- This helps track referral bonuses in transaction history
-                INSERT INTO transactions (user_id, amount, type, status)
+                INSERT INTO transactions (user_id, amount, type, status, deposit_method)
                 VALUES (
                     referral_record.referrer_id,
                     bonus_amount,
                     'deposit', -- or we could add 'referral_bonus' type if needed
-                    'approved'
+                    'approved',
+                    'ref_bonus'
                 );
             END IF;
         END IF;

@@ -289,8 +289,8 @@ BEGIN
                     bonus_awarded_at = NOW()
                 WHERE id = referral_record.id;
                 
-                INSERT INTO transactions (user_id, amount, type, status)
-                VALUES (referral_record.referrer_id, bonus_amount, 'deposit', 'approved');
+                INSERT INTO transactions (user_id, amount, type, status, deposit_method)
+                VALUES (referral_record.referrer_id, bonus_amount, 'deposit', 'approved', 'ref_bonus');
             END IF;
         END IF;
     END IF;

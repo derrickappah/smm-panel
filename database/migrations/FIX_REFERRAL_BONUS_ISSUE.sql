@@ -253,12 +253,13 @@ BEGIN
 
     -- Create transaction record for the bonus
     -- Note: description column may not exist, so we'll insert without it
-    INSERT INTO transactions (user_id, amount, type, status)
+    INSERT INTO transactions (user_id, amount, type, status, deposit_method)
     VALUES (
         v_referral_record.referrer_id,
         v_bonus_amount,
         'deposit',
-        'approved'
+        'approved',
+        'ref_bonus'
     );
 
     -- Return success result
@@ -356,12 +357,13 @@ BEGIN
 
     -- Create transaction record for the bonus
     -- Note: description column may not exist, so we'll insert without it
-    INSERT INTO transactions (user_id, amount, type, status)
+    INSERT INTO transactions (user_id, amount, type, status, deposit_method)
     VALUES (
         referral_record.referrer_id,
         bonus_amount,
         'deposit',
-        'approved'
+        'approved',
+        'ref_bonus'
     );
 
     RETURN NEW;
