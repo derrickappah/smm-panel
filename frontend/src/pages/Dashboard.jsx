@@ -51,6 +51,14 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     hubtel_enabled: true,
     korapay_enabled: true
   });
+  
+  // Minimum deposit settings
+  const [minDepositSettings, setMinDepositSettings] = useState({
+    paystack_min: 10,
+    manual_min: 10,
+    hubtel_min: 1,
+    korapay_min: 1
+  });
 
   useEffect(() => {
     // Fetch payment method settings
@@ -59,20 +67,37 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         const { data, error } = await supabase
           .from('app_settings')
           .select('*')
-          .in('key', ['payment_method_paystack_enabled', 'payment_method_manual_enabled', 'payment_method_hubtel_enabled', 'payment_method_korapay_enabled']);
+          .in('key', [
+            'payment_method_paystack_enabled', 
+            'payment_method_manual_enabled', 
+            'payment_method_hubtel_enabled', 
+            'payment_method_korapay_enabled',
+            'payment_method_paystack_min_deposit',
+            'payment_method_manual_min_deposit',
+            'payment_method_hubtel_min_deposit',
+            'payment_method_korapay_min_deposit'
+          ]);
         
         if (!error && data) {
           const settings = {};
           data.forEach(setting => {
-            settings[setting.key] = setting.value === 'true';
+            settings[setting.key] = setting.value;
           });
           const newSettings = {
-            paystack_enabled: settings.payment_method_paystack_enabled !== false,
-            manual_enabled: settings.payment_method_manual_enabled !== false,
-            hubtel_enabled: settings.payment_method_hubtel_enabled !== false,
-            korapay_enabled: settings.payment_method_korapay_enabled !== false
+            paystack_enabled: settings.payment_method_paystack_enabled !== 'false',
+            manual_enabled: settings.payment_method_manual_enabled !== 'false',
+            hubtel_enabled: settings.payment_method_hubtel_enabled !== 'false',
+            korapay_enabled: settings.payment_method_korapay_enabled !== 'false'
           };
           setPaymentMethodSettings(newSettings);
+          
+          // Set minimum deposit settings with fallback to defaults
+          setMinDepositSettings({
+            paystack_min: parseFloat(settings.payment_method_paystack_min_deposit) || 10,
+            manual_min: parseFloat(settings.payment_method_manual_min_deposit) || 10,
+            hubtel_min: parseFloat(settings.payment_method_hubtel_min_deposit) || 1,
+            korapay_min: parseFloat(settings.payment_method_korapay_min_deposit) || 1
+          });
           
           // Auto-select method based on what's enabled
           // Note: Korapay is disabled by default due to CORS restrictions - requires server-side integration
@@ -1406,9 +1431,10 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
           // Validate inputs before calling Paystack
           const amountInPesewas = Math.round(pendingTransaction.amount * 100);
+          const minPesewas = Math.round(minDepositSettings.paystack_min * 100);
           
-          if (!amountInPesewas || amountInPesewas < 1000) {
-            throw new Error('Amount must be at least ₵10.00 (1000 pesewas)');
+          if (!amountInPesewas || amountInPesewas < minPesewas) {
+            throw new Error(`Amount must be at least ₵${minDepositSettings.paystack_min.toFixed(2)} (${minPesewas} pesewas)`);
           }
 
           if (!user.email || !user.email.includes('@')) {
@@ -1551,7 +1577,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           // Check for specific error messages
           const errorMessage = error.message || '';
           if (errorMessage.includes('400') || errorMessage.includes('Bad Request')) {
-            toast.error('Invalid payment request. Please check: 1) Paystack key is valid, 2) Amount is at least ₵1, 3) Email is valid.');
+            toast.error(`Invalid payment request. Please check: 1) Paystack key is valid, 2) Amount is at least ₵${minDepositSettings.paystack_min}, 3) Email is valid.`);
           } else if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
             toast.error('Invalid Paystack public key. Please check your REACT_APP_PAYSTACK_PUBLIC_KEY in .env file.');
           } else {
@@ -1634,8 +1660,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     }
 
     const amount = parseFloat(manualDepositForm.amount);
-    if (amount < 10) {
-      toast.error('Minimum deposit amount is ₵10 for Mobile Money');
+    if (amount < minDepositSettings.manual_min) {
+      toast.error(`Minimum deposit amount is ₵${minDepositSettings.manual_min} for Mobile Money`);
       return;
     }
 
@@ -1735,8 +1761,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     }
 
     const amount = parseFloat(depositAmount);
-    if (amount < 1) {
-      toast.error('Minimum deposit amount is ₵1');
+    if (amount < minDepositSettings.hubtel_min) {
+      toast.error(`Minimum deposit amount is ₵${minDepositSettings.hubtel_min}`);
       return;
     }
 
@@ -1829,8 +1855,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     }
 
     const amount = parseFloat(depositAmount);
-    if (amount < 1) {
-      toast.error('Minimum deposit amount is ₵1');
+    if (amount < minDepositSettings.korapay_min) {
+      toast.error(`Minimum deposit amount is ₵${minDepositSettings.korapay_min}`);
       return;
     }
 
@@ -1987,8 +2013,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     }
 
     const amount = parseFloat(depositAmount);
-    if (amount < 10) {
-      toast.error('Minimum deposit amount is ₵10');
+    if (amount < minDepositSettings.paystack_min) {
+      toast.error(`Minimum deposit amount is ₵${minDepositSettings.paystack_min}`);
       return;
     }
 
@@ -2664,7 +2690,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                   <ol className="text-xs sm:text-sm text-blue-800 space-y-1.5 list-decimal list-inside">
                     <li>Make payment to <span className="font-semibold">0559272762</span> via MTN Mobile Money</li>
                     <li>Use your <span className="font-semibold">Full Name</span> as Reference</li>
-                    <li>Amount must be <span className="font-semibold">₵10</span> and above</li>
+                    <li>Amount must be <span className="font-semibold">₵{minDepositSettings.manual_min}</span> and above</li>
                     <li>Network: <span className="font-semibold">MTN</span></li>
                     <li>Name: <span className="font-semibold">Manasseh Attah Appiah</span></li>
                     <li>Funds will be added within <span className="font-semibold">5 minutes</span></li>
@@ -2681,15 +2707,15 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                     id="manual-amount"
                     type="number"
                     step="0.01"
-                    min="10"
+                    min={minDepositSettings.manual_min}
                     placeholder="Enter the amount you sent"
                     value={manualDepositForm.amount}
                     onChange={(e) => setManualDepositForm({ ...manualDepositForm, amount: e.target.value })}
                     className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                     required
                   />
-                  {parseFloat(manualDepositForm.amount) < 10 && manualDepositForm.amount && (
-                    <p className="text-xs text-red-600 mt-1">Minimum amount is ₵10</p>
+                  {parseFloat(manualDepositForm.amount) < minDepositSettings.manual_min && manualDepositForm.amount && (
+                    <p className="text-xs text-red-600 mt-1">Minimum amount is ₵{minDepositSettings.manual_min}</p>
                   )}
                 </div>
 

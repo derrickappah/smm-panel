@@ -76,6 +76,14 @@ const AdminDashboard = ({ user, onLogout }) => {
     korapay_enabled: true
   });
   
+  // Minimum deposit settings
+  const [minDepositSettings, setMinDepositSettings] = useState({
+    paystack_min: 10,
+    manual_min: 10,
+    hubtel_min: 1,
+    korapay_min: 1
+  });
+  
   // Search and filter states
   const [userSearch, setUserSearch] = useState('');
   const [orderSearch, setOrderSearch] = useState('');
@@ -245,7 +253,16 @@ const AdminDashboard = ({ user, onLogout }) => {
         supabase.from('transactions').select('*', { count: 'exact', head: true }),
         supabase.from('services').select('*').order('created_at', { ascending: false }),
         supabase.from('support_tickets').select('*, profiles(name, email)').order('created_at', { ascending: false }),
-        supabase.from('app_settings').select('*').in('key', ['payment_method_paystack_enabled', 'payment_method_manual_enabled', 'payment_method_hubtel_enabled', 'payment_method_korapay_enabled'])
+        supabase.from('app_settings').select('*').in('key', [
+          'payment_method_paystack_enabled', 
+          'payment_method_manual_enabled', 
+          'payment_method_hubtel_enabled', 
+          'payment_method_korapay_enabled',
+          'payment_method_paystack_min_deposit',
+          'payment_method_manual_min_deposit',
+          'payment_method_hubtel_min_deposit',
+          'payment_method_korapay_min_deposit'
+        ])
       ]);
 
       // Check for errors and provide specific messages
@@ -422,13 +439,21 @@ const AdminDashboard = ({ user, onLogout }) => {
       if (settingsRes && !settingsRes.error && settingsRes.data) {
         const settings = {};
         settingsRes.data.forEach(setting => {
-          settings[setting.key] = setting.value === 'true';
+          settings[setting.key] = setting.value;
         });
         setPaymentMethodSettings({
-          paystack_enabled: settings.payment_method_paystack_enabled !== false, // Default to true
-          manual_enabled: settings.payment_method_manual_enabled !== false, // Default to true
-          hubtel_enabled: settings.payment_method_hubtel_enabled !== false, // Default to true
-          korapay_enabled: settings.payment_method_korapay_enabled !== false // Default to true
+          paystack_enabled: settings.payment_method_paystack_enabled !== 'false', // Default to true
+          manual_enabled: settings.payment_method_manual_enabled !== 'false', // Default to true
+          hubtel_enabled: settings.payment_method_hubtel_enabled !== 'false', // Default to true
+          korapay_enabled: settings.payment_method_korapay_enabled !== 'false' // Default to true
+        });
+        
+        // Process minimum deposit settings
+        setMinDepositSettings({
+          paystack_min: parseFloat(settings.payment_method_paystack_min_deposit) || 10,
+          manual_min: parseFloat(settings.payment_method_manual_min_deposit) || 10,
+          hubtel_min: parseFloat(settings.payment_method_hubtel_min_deposit) || 1,
+          korapay_min: parseFloat(settings.payment_method_korapay_min_deposit) || 1
         });
       }
 
@@ -1171,6 +1196,71 @@ const AdminDashboard = ({ user, onLogout }) => {
     } catch (error) {
       console.error('Error toggling payment method:', error);
       toast.error('Failed to update payment method setting');
+    }
+  };
+
+  // Handler to update minimum deposit for a payment method
+  const handleUpdateMinDeposit = async (method, minAmount) => {
+    try {
+      // Validate input
+      const amount = parseFloat(minAmount);
+      if (isNaN(amount) || amount <= 0) {
+        toast.error('Minimum deposit must be a positive number');
+        return;
+      }
+
+      let settingKey, description, stateKey, displayName;
+      
+      if (method === 'paystack') {
+        settingKey = 'payment_method_paystack_min_deposit';
+        description = 'Minimum deposit amount for Paystack payment method';
+        stateKey = 'paystack_min';
+        displayName = 'Paystack';
+      } else if (method === 'manual') {
+        settingKey = 'payment_method_manual_min_deposit';
+        description = 'Minimum deposit amount for Manual (Mobile Money) payment method';
+        stateKey = 'manual_min';
+        displayName = 'Manual';
+      } else if (method === 'hubtel') {
+        settingKey = 'payment_method_hubtel_min_deposit';
+        description = 'Minimum deposit amount for Hubtel payment method';
+        stateKey = 'hubtel_min';
+        displayName = 'Hubtel';
+      } else if (method === 'korapay') {
+        settingKey = 'payment_method_korapay_min_deposit';
+        description = 'Minimum deposit amount for Korapay payment method';
+        stateKey = 'korapay_min';
+        displayName = 'Korapay';
+      } else {
+        toast.error('Unknown payment method');
+        return;
+      }
+      
+      const { error } = await supabase
+        .from('app_settings')
+        .upsert({
+          key: settingKey,
+          value: amount.toString(),
+          description: description
+        }, {
+          onConflict: 'key'
+        });
+
+      if (error) {
+        console.error('Error updating minimum deposit setting:', error);
+        toast.error('Failed to update minimum deposit setting');
+        return;
+      }
+
+      setMinDepositSettings(prev => ({
+        ...prev,
+        [stateKey]: amount
+      }));
+
+      toast.success(`${displayName} minimum deposit updated to ₵${amount}`);
+    } catch (error) {
+      console.error('Error updating minimum deposit:', error);
+      toast.error('Failed to update minimum deposit setting');
     }
   };
 
@@ -3276,24 +3366,49 @@ const AdminDashboard = ({ user, onLogout }) => {
                         <p className="text-sm text-gray-600">Online payment gateway</p>
                       </div>
                     </div>
-                    <Button
-                      onClick={() => handleTogglePaymentMethod('paystack', !paymentMethodSettings.paystack_enabled)}
-                      variant={paymentMethodSettings.paystack_enabled ? "default" : "outline"}
-                      size="sm"
-                      className={paymentMethodSettings.paystack_enabled ? "bg-green-600 hover:bg-green-700" : ""}
-                    >
-                      {paymentMethodSettings.paystack_enabled ? (
-                        <>
-                          <Power className="w-4 h-4 mr-2" />
-                          Enabled
-                        </>
-                      ) : (
-                        <>
-                          <PowerOff className="w-4 h-4 mr-2" />
-                          Disabled
-                        </>
-                      )}
-                    </Button>
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="paystack-min" className="text-sm text-gray-700 whitespace-nowrap">Min: ₵</Label>
+                        <Input
+                          id="paystack-min"
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          value={minDepositSettings.paystack_min}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === '' || parseFloat(value) >= 0) {
+                              setMinDepositSettings(prev => ({ ...prev, paystack_min: value }));
+                            }
+                          }}
+                          onBlur={(e) => {
+                            const value = parseFloat(e.target.value);
+                            if (!isNaN(value) && value > 0) {
+                              handleUpdateMinDeposit('paystack', value);
+                            }
+                          }}
+                          className="w-20 h-9 text-sm"
+                        />
+                      </div>
+                      <Button
+                        onClick={() => handleTogglePaymentMethod('paystack', !paymentMethodSettings.paystack_enabled)}
+                        variant={paymentMethodSettings.paystack_enabled ? "default" : "outline"}
+                        size="sm"
+                        className={paymentMethodSettings.paystack_enabled ? "bg-green-600 hover:bg-green-700" : ""}
+                      >
+                        {paymentMethodSettings.paystack_enabled ? (
+                          <>
+                            <Power className="w-4 h-4 mr-2" />
+                            Enabled
+                          </>
+                        ) : (
+                          <>
+                            <PowerOff className="w-4 h-4 mr-2" />
+                            Disabled
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   </div>
                   
                   <div className="flex items-center justify-between p-4 bg-white/50 rounded-xl border-2 border-gray-200">
@@ -3306,24 +3421,49 @@ const AdminDashboard = ({ user, onLogout }) => {
                         <p className="text-sm text-gray-600">MTN Mobile Money payment</p>
                       </div>
                     </div>
-                    <Button
-                      onClick={() => handleTogglePaymentMethod('manual', !paymentMethodSettings.manual_enabled)}
-                      variant={paymentMethodSettings.manual_enabled ? "default" : "outline"}
-                      size="sm"
-                      className={paymentMethodSettings.manual_enabled ? "bg-green-600 hover:bg-green-700" : ""}
-                    >
-                      {paymentMethodSettings.manual_enabled ? (
-                        <>
-                          <Power className="w-4 h-4 mr-2" />
-                          Enabled
-                        </>
-                      ) : (
-                        <>
-                          <PowerOff className="w-4 h-4 mr-2" />
-                          Disabled
-                        </>
-                      )}
-                    </Button>
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="manual-min" className="text-sm text-gray-700 whitespace-nowrap">Min: ₵</Label>
+                        <Input
+                          id="manual-min"
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          value={minDepositSettings.manual_min}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === '' || parseFloat(value) >= 0) {
+                              setMinDepositSettings(prev => ({ ...prev, manual_min: value }));
+                            }
+                          }}
+                          onBlur={(e) => {
+                            const value = parseFloat(e.target.value);
+                            if (!isNaN(value) && value > 0) {
+                              handleUpdateMinDeposit('manual', value);
+                            }
+                          }}
+                          className="w-20 h-9 text-sm"
+                        />
+                      </div>
+                      <Button
+                        onClick={() => handleTogglePaymentMethod('manual', !paymentMethodSettings.manual_enabled)}
+                        variant={paymentMethodSettings.manual_enabled ? "default" : "outline"}
+                        size="sm"
+                        className={paymentMethodSettings.manual_enabled ? "bg-green-600 hover:bg-green-700" : ""}
+                      >
+                        {paymentMethodSettings.manual_enabled ? (
+                          <>
+                            <Power className="w-4 h-4 mr-2" />
+                            Enabled
+                          </>
+                        ) : (
+                          <>
+                            <PowerOff className="w-4 h-4 mr-2" />
+                            Disabled
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   </div>
                   
                   <div className="flex items-center justify-between p-4 bg-white/50 rounded-xl border-2 border-gray-200">
@@ -3336,24 +3476,49 @@ const AdminDashboard = ({ user, onLogout }) => {
                         <p className="text-sm text-gray-600">Hubtel payment gateway</p>
                       </div>
                     </div>
-                    <Button
-                      onClick={() => handleTogglePaymentMethod('hubtel', !paymentMethodSettings.hubtel_enabled)}
-                      variant={paymentMethodSettings.hubtel_enabled ? "default" : "outline"}
-                      size="sm"
-                      className={paymentMethodSettings.hubtel_enabled ? "bg-green-600 hover:bg-green-700" : ""}
-                    >
-                      {paymentMethodSettings.hubtel_enabled ? (
-                        <>
-                          <Power className="w-4 h-4 mr-2" />
-                          Enabled
-                        </>
-                      ) : (
-                        <>
-                          <PowerOff className="w-4 h-4 mr-2" />
-                          Disabled
-                        </>
-                      )}
-                    </Button>
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="hubtel-min" className="text-sm text-gray-700 whitespace-nowrap">Min: ₵</Label>
+                        <Input
+                          id="hubtel-min"
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          value={minDepositSettings.hubtel_min}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === '' || parseFloat(value) >= 0) {
+                              setMinDepositSettings(prev => ({ ...prev, hubtel_min: value }));
+                            }
+                          }}
+                          onBlur={(e) => {
+                            const value = parseFloat(e.target.value);
+                            if (!isNaN(value) && value > 0) {
+                              handleUpdateMinDeposit('hubtel', value);
+                            }
+                          }}
+                          className="w-20 h-9 text-sm"
+                        />
+                      </div>
+                      <Button
+                        onClick={() => handleTogglePaymentMethod('hubtel', !paymentMethodSettings.hubtel_enabled)}
+                        variant={paymentMethodSettings.hubtel_enabled ? "default" : "outline"}
+                        size="sm"
+                        className={paymentMethodSettings.hubtel_enabled ? "bg-green-600 hover:bg-green-700" : ""}
+                      >
+                        {paymentMethodSettings.hubtel_enabled ? (
+                          <>
+                            <Power className="w-4 h-4 mr-2" />
+                            Enabled
+                          </>
+                        ) : (
+                          <>
+                            <PowerOff className="w-4 h-4 mr-2" />
+                            Disabled
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   </div>
                   
                   <div className="flex items-center justify-between p-4 bg-white/50 rounded-xl border-2 border-gray-200">
@@ -3366,24 +3531,49 @@ const AdminDashboard = ({ user, onLogout }) => {
                         <p className="text-sm text-gray-600">Korapay payment gateway</p>
                       </div>
                     </div>
-                    <Button
-                      onClick={() => handleTogglePaymentMethod('korapay', !paymentMethodSettings.korapay_enabled)}
-                      variant={paymentMethodSettings.korapay_enabled ? "default" : "outline"}
-                      size="sm"
-                      className={paymentMethodSettings.korapay_enabled ? "bg-green-600 hover:bg-green-700" : ""}
-                    >
-                      {paymentMethodSettings.korapay_enabled ? (
-                        <>
-                          <Power className="w-4 h-4 mr-2" />
-                          Enabled
-                        </>
-                      ) : (
-                        <>
-                          <PowerOff className="w-4 h-4 mr-2" />
-                          Disabled
-                        </>
-                      )}
-                    </Button>
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="korapay-min" className="text-sm text-gray-700 whitespace-nowrap">Min: ₵</Label>
+                        <Input
+                          id="korapay-min"
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          value={minDepositSettings.korapay_min}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === '' || parseFloat(value) >= 0) {
+                              setMinDepositSettings(prev => ({ ...prev, korapay_min: value }));
+                            }
+                          }}
+                          onBlur={(e) => {
+                            const value = parseFloat(e.target.value);
+                            if (!isNaN(value) && value > 0) {
+                              handleUpdateMinDeposit('korapay', value);
+                            }
+                          }}
+                          className="w-20 h-9 text-sm"
+                        />
+                      </div>
+                      <Button
+                        onClick={() => handleTogglePaymentMethod('korapay', !paymentMethodSettings.korapay_enabled)}
+                        variant={paymentMethodSettings.korapay_enabled ? "default" : "outline"}
+                        size="sm"
+                        className={paymentMethodSettings.korapay_enabled ? "bg-green-600 hover:bg-green-700" : ""}
+                      >
+                        {paymentMethodSettings.korapay_enabled ? (
+                          <>
+                            <Power className="w-4 h-4 mr-2" />
+                            Enabled
+                          </>
+                        ) : (
+                          <>
+                            <PowerOff className="w-4 h-4 mr-2" />
+                            Disabled
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
