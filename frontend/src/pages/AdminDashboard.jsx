@@ -669,11 +669,29 @@ const AdminDashboard = ({ user, onLogout }) => {
         return;
       }
 
+      // If first_deposit_amount is missing, use the database function to process it
       if (!referral.first_deposit_amount) {
-        toast.error('No deposit amount recorded. Cannot award bonus.');
+        // Use the database function to process the bonus (it will find the first deposit)
+        const { data, error } = await supabase.rpc('process_referral_bonus_manual', {
+          p_user_id: referral.referee_id,
+          p_transaction_id: null
+        });
+
+        if (error) {
+          throw error;
+        }
+
+        if (!data || !data.success) {
+          throw new Error(data?.error || 'Failed to process bonus');
+        }
+
+        toast.success(`Bonus awarded successfully! ₵${parseFloat(data.bonus_amount).toFixed(2)} added to referrer's balance.`);
+        await fetchReferrals();
+        await fetchAllData(false);
         return;
       }
 
+      // Original logic for when first_deposit_amount exists
       const bonusAmount = parseFloat(referral.referral_bonus) || (parseFloat(referral.first_deposit_amount) * 0.1);
 
       // Update referral record
@@ -735,6 +753,38 @@ const AdminDashboard = ({ user, onLogout }) => {
       toast.error(error.message || 'Failed to award bonus');
     } finally {
       setAwardingBonus(null);
+    }
+  };
+
+  const handleProcessAllMissedBonuses = async () => {
+    if (!confirm('This will process all missed referral bonuses. Continue?')) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.rpc('process_all_missed_referral_bonuses');
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data || !data.success) {
+        throw new Error('Failed to process missed bonuses');
+      }
+
+      toast.success(
+        `Processed ${data.processed_count} bonus(es) successfully. ` +
+        (data.error_count > 0 ? `${data.error_count} error(s) occurred.` : '')
+      );
+
+      await fetchReferrals();
+      await fetchAllData(false);
+    } catch (error) {
+      console.error('Error processing missed bonuses:', error);
+      toast.error(error.message || 'Failed to process missed bonuses');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -5054,33 +5104,55 @@ const AdminDashboard = ({ user, onLogout }) => {
                   </div>
 
                   {/* Search and Filters */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <div className="space-y-4 mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                        <Input
+                          placeholder="Search by referrer or referee..."
+                          value={referralSearch}
+                          onChange={(e) => setReferralSearch(e.target.value)}
+                          className="pl-10"
+                        />
+                      </div>
+                      <Select value={referralStatusFilter} onValueChange={setReferralStatusFilter}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Filter by status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Status</SelectItem>
+                          <SelectItem value="awarded">Awarded</SelectItem>
+                          <SelectItem value="pending">Pending</SelectItem>
+                          <SelectItem value="no_deposit">No Deposit</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <Input
-                        placeholder="Search by referrer or referee..."
-                        value={referralSearch}
-                        onChange={(e) => setReferralSearch(e.target.value)}
-                        className="pl-10"
+                        type="date"
+                        placeholder="Filter by date"
+                        value={referralDateFilter}
+                        onChange={(e) => setReferralDateFilter(e.target.value)}
                       />
                     </div>
-                    <Select value={referralStatusFilter} onValueChange={setReferralStatusFilter}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Filter by status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Status</SelectItem>
-                        <SelectItem value="awarded">Awarded</SelectItem>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="no_deposit">No Deposit</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      type="date"
-                      placeholder="Filter by date"
-                      value={referralDateFilter}
-                      onChange={(e) => setReferralDateFilter(e.target.value)}
-                    />
+                    <div className="flex justify-end">
+                      <Button
+                        onClick={handleProcessAllMissedBonuses}
+                        disabled={loading}
+                        variant="outline"
+                        className="whitespace-nowrap"
+                      >
+                        {loading ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle className="w-4 h-4 mr-2" />
+                            Process All Missed Bonuses
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   </div>
 
                   {/* Referrals Table */}
@@ -5192,7 +5264,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                                       )}
                                     </td>
                                     <td className="px-4 py-3">
-                                      {status === 'pending' && (
+                                      {(status === 'pending' || status === 'no_deposit') && !referral.bonus_awarded && (
                                         <Button
                                           onClick={() => handleManualBonusAward(referral.id)}
                                           disabled={awardingBonus === referral.id}
@@ -5208,7 +5280,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                                           ) : (
                                             <>
                                               <CheckCircle className="w-3 h-3 mr-1" />
-                                              Award Bonus
+                                              {status === 'no_deposit' ? 'Find & Award Bonus' : 'Award Bonus'}
                                             </>
                                           )}
                                         </Button>
