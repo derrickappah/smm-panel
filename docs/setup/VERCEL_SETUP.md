@@ -27,6 +27,17 @@ REACT_APP_SUPABASE_ANON_KEY=your-anon-key-here
 REACT_APP_PAYSTACK_PUBLIC_KEY=pk_test_your-paystack-key
 ```
 
+#### Required for Paystack Webhook (Server-Side):
+```
+PAYSTACK_SECRET_KEY=sk_test_your-paystack-secret-key
+SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key
+```
+
+**Note:** These are required for the Paystack webhook endpoint (`/api/paystack-webhook`) to work properly:
+- `PAYSTACK_SECRET_KEY`: Your Paystack secret key (starts with `sk_`). Get this from Paystack Dashboard → Settings → API Keys & Webhooks
+- `SUPABASE_SERVICE_ROLE_KEY`: Your Supabase service role key (for server-side database operations). Get this from Supabase Dashboard → Project Settings → API → service_role key (keep this secret!)
+- The webhook can use either `SUPABASE_URL` or `REACT_APP_SUPABASE_URL` (already set above)
+
 #### Required for SMMGen Integration (if using SMMGen):
 ```
 SMMGEN_API_URL=https://smmgen.com/api/v2
@@ -50,6 +61,9 @@ REACT_APP_BACKEND_URL=https://your-backend-url.com
 4. Copy:
    - **Project URL** → Use for `REACT_APP_SUPABASE_URL`
    - **anon public** key → Use for `REACT_APP_SUPABASE_ANON_KEY`
+   - **service_role** key → Use for `SUPABASE_SERVICE_ROLE_KEY` (⚠️ Keep this secret! Only use server-side)
+
+**Important:** The `service_role` key has admin privileges and bypasses Row Level Security. Never expose it in client-side code. Only use it in serverless functions.
 
 ### Step 4: Set Environment Variables in Vercel
 
@@ -82,6 +96,34 @@ This usually means:
 ### Error: "Failed to execute 'clone' on 'Response'"
 
 This is a secondary error caused by the monitoring tool (rrweb-recorder) trying to clone a response that's already been consumed. The real issue is the underlying 422 error from Supabase. Fix the Supabase configuration issue first.
+
+### Error: Paystack Webhook "Invalid webhook signature" (401)
+
+If you see `POST 401` errors on `/api/paystack-webhook` with "Invalid webhook signature":
+
+1. **Verify `PAYSTACK_SECRET_KEY` is set correctly:**
+   - Go to Vercel Dashboard → Settings → Environment Variables
+   - Ensure `PAYSTACK_SECRET_KEY` is set with your Paystack secret key (starts with `sk_`)
+   - Make sure you're using the correct key (test vs live)
+   - The key in Vercel must match the key in your Paystack Dashboard
+
+2. **Check Paystack Dashboard webhook configuration:**
+   - Go to Paystack Dashboard → Settings → API Keys & Webhooks
+   - Verify your webhook URL is correct: `https://your-domain.com/api/paystack-webhook`
+   - Ensure the webhook is enabled
+
+3. **Verify Supabase credentials:**
+   - Ensure `SUPABASE_SERVICE_ROLE_KEY` is set in Vercel
+   - Ensure `REACT_APP_SUPABASE_URL` or `SUPABASE_URL` is set
+
+4. **Redeploy after adding variables:**
+   - After adding environment variables, you must redeploy for changes to take effect
+   - Go to Deployments → Click ⋯ on latest deployment → Redeploy
+
+5. **Note on signature verification:**
+   - Paystack signs the exact raw request body
+   - Vercel automatically parses JSON bodies, which may cause signature mismatches
+   - If issues persist, check Vercel logs for detailed error information
 
 ### Verify Environment Variables
 

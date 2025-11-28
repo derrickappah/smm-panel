@@ -51,21 +51,47 @@ export default async function handler(req, res) {
       });
     }
 
-    // Verify webhook signature
+    // Get raw body for signature verification
+    // Paystack signs the exact raw body string, so we must use the unparsed body
+    // In Vercel serverless functions, we need to read raw body before it's parsed
+    let rawBody;
+    
+    // Try to get raw body from request stream
+    // Vercel may have already parsed it, so we check both scenarios
+    if (req.body && typeof req.body === 'string') {
+      // Body is still a string (raw, not parsed)
+      rawBody = req.body;
+    } else if (req.body && typeof req.body === 'object') {
+      // Body is already parsed by Vercel
+      // Reconstruct JSON string - this may not match Paystack's exact format
+      // but should work if Paystack uses standard JSON formatting
+      rawBody = JSON.stringify(req.body);
+    } else {
+      // No body or unexpected type
+      console.error('Unexpected body type:', typeof req.body);
+      return res.status(400).json({ error: 'Invalid request body' });
+    }
+
+    // Verify webhook signature using raw body
     const hash = crypto
       .createHmac('sha512', PAYSTACK_SECRET_KEY)
-      .update(JSON.stringify(req.body))
+      .update(rawBody)
       .digest('hex');
 
     const signature = req.headers['x-paystack-signature'];
 
     if (hash !== signature) {
-      console.error('Invalid webhook signature');
+      console.error('Invalid webhook signature', {
+        computedHash: hash.substring(0, 20) + '...',
+        receivedSignature: signature ? signature.substring(0, 20) + '...' : 'missing',
+        bodyType: typeof req.body,
+        rawBodyLength: rawBody ? rawBody.length : 0
+      });
       return res.status(401).json({ error: 'Invalid signature' });
     }
 
     // Parse webhook event
-    const event = req.body;
+    const event = typeof rawBody === 'string' && rawBody ? JSON.parse(rawBody) : req.body;
     console.log('Paystack webhook event received:', event.event);
 
     // Handle different event types
