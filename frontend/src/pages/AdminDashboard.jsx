@@ -16,7 +16,8 @@ import {
   Users, ShoppingCart, DollarSign, Package, Search, Edit, Trash2, 
   Plus, Minus, TrendingUp, CheckCircle, XCircle, Clock, Filter,
   Download, RefreshCw, MessageSquare, Send, Layers, Wallet, Receipt, HelpCircle,
-  AlertCircle, BarChart3, Activity, FileText, Settings, Bell, Power, PowerOff
+  AlertCircle, BarChart3, Activity, FileText, Settings, Bell, Power, PowerOff,
+  UserPlus
 } from 'lucide-react';
 
 const AdminDashboard = ({ user, onLogout }) => {
@@ -53,6 +54,13 @@ const AdminDashboard = ({ user, onLogout }) => {
   const [allTransactions, setAllTransactions] = useState([]);
   const [services, setServices] = useState([]);
   const [supportTickets, setSupportTickets] = useState([]);
+  const [referrals, setReferrals] = useState([]);
+  const [referralStats, setReferralStats] = useState({
+    total_referrals: 0,
+    total_bonuses_paid: 0,
+    pending_bonuses: 0,
+    total_bonus_amount: 0
+  });
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [manuallyCrediting, setManuallyCrediting] = useState(null);
@@ -87,6 +95,14 @@ const AdminDashboard = ({ user, onLogout }) => {
   const ticketsPerPage = 20;
   const [balancePage, setBalancePage] = useState(1);
   const balancePerPage = 20;
+  const [referralsPage, setReferralsPage] = useState(1);
+  const referralsPerPage = 20;
+  
+  // Referral search and filter states
+  const [referralSearch, setReferralSearch] = useState('');
+  const [referralStatusFilter, setReferralStatusFilter] = useState('all');
+  const [referralDateFilter, setReferralDateFilter] = useState('');
+  const [awardingBonus, setAwardingBonus] = useState(null);
   
   // Deposit search state
   const [depositSearch, setDepositSearch] = useState('');
@@ -141,6 +157,9 @@ const AdminDashboard = ({ user, onLogout }) => {
 
   useEffect(() => {
     fetchAllData(true); // Check SMMGen status on initial load
+    if (activeSection === 'referrals') {
+      fetchReferrals();
+    }
 
     // Subscribe to real-time updates for transactions (deposits)
     // Listen to ALL transaction changes, then filter in callback for better reliability
@@ -195,7 +214,7 @@ const AdminDashboard = ({ user, onLogout }) => {
       supabase.removeChannel(transactionsChannel);
       clearInterval(pollInterval);
     };
-  }, []);
+  }, [activeSection]);
 
   const fetchAllData = async (checkSMMGenStatus = false) => {
     setRefreshing(true);
@@ -525,6 +544,250 @@ const AdminDashboard = ({ user, onLogout }) => {
     } finally {
       setRefreshing(false);
     }
+  };
+
+  // Referrals Management Functions
+  const fetchReferrals = async () => {
+    try {
+      // Fetch all referrals
+      const { data: referralsData, error: referralsError } = await supabase
+        .from('referrals')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (referralsError) {
+        console.error('Error fetching referrals:', referralsError);
+        if (referralsError.code === '42501' || referralsError.message?.includes('permission')) {
+          toast.error('RLS Policy Error: Cannot view referrals. Please check RLS policies.');
+        } else {
+          toast.error('Failed to fetch referrals');
+        }
+        return;
+      }
+
+      if (referralsData && referralsData.length > 0) {
+        // Fetch referrer and referee profiles separately
+        const referrerIds = [...new Set(referralsData.map(ref => ref.referrer_id))];
+        const refereeIds = [...new Set(referralsData.map(ref => ref.referee_id))];
+        const allUserIds = [...new Set([...referrerIds, ...refereeIds])];
+
+        const { data: profilesData, error: profilesError } = await supabase
+          .from('profiles')
+          .select('id, name, email')
+          .in('id', allUserIds);
+
+        if (profilesError) {
+          console.error('Error fetching profiles:', profilesError);
+        }
+
+        // Combine referral data with profiles
+        const referralsWithProfiles = referralsData.map(referral => {
+          const referrerProfile = profilesData?.find(p => p.id === referral.referrer_id);
+          const refereeProfile = profilesData?.find(p => p.id === referral.referee_id);
+          return {
+            ...referral,
+            referrer: referrerProfile || { id: referral.referrer_id, name: null, email: null },
+            referee: refereeProfile || { id: referral.referee_id, name: null, email: null }
+          };
+        });
+
+        // Calculate statistics
+        const totalReferrals = referralsWithProfiles.length;
+        const totalBonusesPaid = referralsWithProfiles.reduce((sum, ref) => {
+          return sum + (ref.bonus_awarded ? (parseFloat(ref.referral_bonus) || 0) : 0);
+        }, 0);
+        const pendingBonuses = referralsWithProfiles.filter(ref => {
+          return !ref.bonus_awarded || !ref.first_deposit_amount;
+        }).length;
+        const totalBonusAmount = referralsWithProfiles.reduce((sum, ref) => {
+          return sum + (parseFloat(ref.referral_bonus) || 0);
+        }, 0);
+
+        setReferralStats({
+          total_referrals: totalReferrals,
+          total_bonuses_paid: totalBonusesPaid,
+          pending_bonuses: pendingBonuses,
+          total_bonus_amount: totalBonusAmount
+        });
+
+        setReferrals(referralsWithProfiles);
+      } else {
+        setReferrals([]);
+        setReferralStats({
+          total_referrals: 0,
+          total_bonuses_paid: 0,
+          pending_bonuses: 0,
+          total_bonus_amount: 0
+        });
+      }
+    } catch (error) {
+      console.error('Error in fetchReferrals:', error);
+      toast.error('Failed to load referrals data');
+    }
+  };
+
+  const handleManualBonusAward = async (referralId) => {
+    if (!confirm('Are you sure you want to manually award this bonus? This will update the referrer\'s balance.')) {
+      return;
+    }
+
+    setAwardingBonus(referralId);
+    try {
+      // Get the referral record
+      const referral = referrals.find(r => r.id === referralId);
+      if (!referral) {
+        throw new Error('Referral not found');
+      }
+
+      if (referral.bonus_awarded) {
+        toast.error('Bonus already awarded');
+        return;
+      }
+
+      if (!referral.first_deposit_amount) {
+        toast.error('No deposit amount recorded. Cannot award bonus.');
+        return;
+      }
+
+      const bonusAmount = parseFloat(referral.referral_bonus) || (parseFloat(referral.first_deposit_amount) * 0.1);
+
+      // Update referral record
+      const { error: updateError } = await supabase
+        .from('referrals')
+        .update({
+          bonus_awarded: true,
+          bonus_awarded_at: new Date().toISOString(),
+          referral_bonus: bonusAmount
+        })
+        .eq('id', referralId);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      // Get referrer's current balance
+      const { data: referrerProfile, error: profileError } = await supabase
+        .from('profiles')
+        .select('balance')
+        .eq('id', referral.referrer_id)
+        .single();
+
+      if (profileError) {
+        throw profileError;
+      }
+
+      // Update referrer's balance
+      const newBalance = (parseFloat(referrerProfile.balance) || 0) + bonusAmount;
+      const { error: balanceError } = await supabase
+        .from('profiles')
+        .update({ balance: newBalance })
+        .eq('id', referral.referrer_id);
+
+      if (balanceError) {
+        throw balanceError;
+      }
+
+      // Create transaction record for the bonus
+      const { error: transactionError } = await supabase
+        .from('transactions')
+        .insert({
+          user_id: referral.referrer_id,
+          amount: bonusAmount,
+          type: 'deposit',
+          status: 'approved'
+        });
+
+      if (transactionError) {
+        console.warn('Failed to create transaction record:', transactionError);
+        // Don't fail the whole operation if transaction creation fails
+      }
+
+      toast.success('Bonus awarded successfully!');
+      await fetchReferrals();
+      await fetchAllData(false); // Refresh all data to update stats
+    } catch (error) {
+      console.error('Error awarding bonus:', error);
+      toast.error(error.message || 'Failed to award bonus');
+    } finally {
+      setAwardingBonus(null);
+    }
+  };
+
+  const exportReferralsToCSV = () => {
+    const filteredReferrals = getFilteredReferrals();
+    const headers = ['Referrer Name', 'Referrer Email', 'Referee Name', 'Referee Email', 'First Deposit', 'Bonus Amount', 'Status', 'Created At', 'Bonus Awarded At'];
+    const rows = filteredReferrals.map(ref => [
+      ref.referrer?.name || ref.referrer?.email || 'N/A',
+      ref.referrer?.email || 'N/A',
+      ref.referee?.name || ref.referee?.email || 'N/A',
+      ref.referee?.email || 'N/A',
+      ref.first_deposit_amount ? `₵${parseFloat(ref.first_deposit_amount).toFixed(2)}` : 'N/A',
+      ref.referral_bonus ? `₵${parseFloat(ref.referral_bonus).toFixed(2)}` : 'N/A',
+      ref.bonus_awarded ? 'Awarded' : (ref.first_deposit_amount ? 'Pending' : 'No Deposit'),
+      new Date(ref.created_at).toLocaleString(),
+      ref.bonus_awarded_at ? new Date(ref.bonus_awarded_at).toLocaleString() : 'N/A'
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `referrals_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const getFilteredReferrals = () => {
+    let filtered = [...referrals];
+
+    // Search filter
+    if (referralSearch) {
+      const searchLower = referralSearch.toLowerCase();
+      filtered = filtered.filter(ref => {
+        const referrerName = (ref.referrer?.name || '').toLowerCase();
+        const referrerEmail = (ref.referrer?.email || '').toLowerCase();
+        const refereeName = (ref.referee?.name || '').toLowerCase();
+        const refereeEmail = (ref.referee?.email || '').toLowerCase();
+        return referrerName.includes(searchLower) || referrerEmail.includes(searchLower) ||
+               refereeName.includes(searchLower) || refereeEmail.includes(searchLower);
+      });
+    }
+
+    // Status filter
+    if (referralStatusFilter !== 'all') {
+      filtered = filtered.filter(ref => {
+        if (referralStatusFilter === 'awarded') {
+          return ref.bonus_awarded === true;
+        } else if (referralStatusFilter === 'pending') {
+          return ref.first_deposit_amount && !ref.bonus_awarded;
+        } else if (referralStatusFilter === 'no_deposit') {
+          return !ref.first_deposit_amount;
+        }
+        return true;
+      });
+    }
+
+    // Date filter
+    if (referralDateFilter) {
+      const filterDate = new Date(referralDateFilter);
+      filterDate.setHours(0, 0, 0, 0);
+      const filterDateEnd = new Date(filterDate);
+      filterDateEnd.setHours(23, 59, 59, 999);
+      
+      filtered = filtered.filter(ref => {
+        const refDate = new Date(ref.created_at);
+        return refDate >= filterDate && refDate <= filterDateEnd;
+      });
+    }
+
+    return filtered;
   };
 
   // User Management Functions
@@ -1994,6 +2257,17 @@ const AdminDashboard = ({ user, onLogout }) => {
                   <Wallet className="w-5 h-5" />
                   <span className="font-medium text-sm">Balance</span>
                 </button>
+                <button
+                  onClick={() => setActiveSection('referrals')}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+                    activeSection === 'referrals'
+                      ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <UserPlus className="w-5 h-5" />
+                  <span className="font-medium text-sm">Referrals</span>
+                </button>
               </nav>
               
               {/* User Info at Bottom */}
@@ -2034,6 +2308,7 @@ const AdminDashboard = ({ user, onLogout }) => {
               Support {stats.open_tickets > 0 && <span className="ml-1 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">{stats.open_tickets}</span>}
             </TabsTrigger>
             <TabsTrigger value="balance" className="focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">Balance</TabsTrigger>
+            <TabsTrigger value="referrals" className="focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">Referrals</TabsTrigger>
           </TabsList>
 
             {/* Content Area */}
@@ -4517,6 +4792,302 @@ const AdminDashboard = ({ user, onLogout }) => {
               </div>
             </div>
           </TabsContent>
+
+            {/* Referrals Section */}
+            <TabsContent value="referrals" className="lg:mt-0">
+              <div className="space-y-6">
+                {/* Statistics Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">Total Referrals</p>
+                        <p className="text-2xl font-bold text-gray-900 mt-1">{referralStats.total_referrals}</p>
+                      </div>
+                      <UserPlus className="w-8 h-8 text-indigo-600" />
+                    </div>
+                  </div>
+                  <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">Total Bonuses Paid</p>
+                        <p className="text-2xl font-bold text-gray-900 mt-1">₵{referralStats.total_bonuses_paid.toFixed(2)}</p>
+                      </div>
+                      <DollarSign className="w-8 h-8 text-green-600" />
+                    </div>
+                  </div>
+                  <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">Pending Bonuses</p>
+                        <p className="text-2xl font-bold text-gray-900 mt-1">{referralStats.pending_bonuses}</p>
+                      </div>
+                      <Clock className="w-8 h-8 text-yellow-600" />
+                    </div>
+                  </div>
+                  <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">Total Bonus Amount</p>
+                        <p className="text-2xl font-bold text-gray-900 mt-1">₵{referralStats.total_bonus_amount.toFixed(2)}</p>
+                      </div>
+                      <TrendingUp className="w-8 h-8 text-blue-600" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Referrals Table */}
+                <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                    <h2 className="text-xl sm:text-2xl font-bold text-gray-900">All Referrals</h2>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        onClick={fetchReferrals}
+                        disabled={refreshing}
+                        variant="outline"
+                        size="sm"
+                        className="flex items-center gap-2"
+                      >
+                        <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                        Refresh
+                      </Button>
+                      <Button
+                        onClick={exportReferralsToCSV}
+                        variant="outline"
+                        size="sm"
+                        className="flex items-center gap-2"
+                      >
+                        <Download className="w-4 h-4" />
+                        Export CSV
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Search and Filters */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                      <Input
+                        placeholder="Search by referrer or referee..."
+                        value={referralSearch}
+                        onChange={(e) => setReferralSearch(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+                    <Select value={referralStatusFilter} onValueChange={setReferralStatusFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Filter by status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Status</SelectItem>
+                        <SelectItem value="awarded">Awarded</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="no_deposit">No Deposit</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="date"
+                      placeholder="Filter by date"
+                      value={referralDateFilter}
+                      onChange={(e) => setReferralDateFilter(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Referrals Table */}
+                  {getFilteredReferrals().length === 0 ? (
+                    <p className="text-gray-600 text-center py-8">No referrals found</p>
+                  ) : (
+                    <>
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="bg-gray-50 border-b border-gray-200">
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Referrer</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Referee</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">First Deposit</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Bonus Amount</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Status</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Created At</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Bonus Awarded At</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200">
+                            {getFilteredReferrals()
+                              .slice((referralsPage - 1) * referralsPerPage, referralsPage * referralsPerPage)
+                              .map((referral) => {
+                                const status = referral.bonus_awarded 
+                                  ? 'awarded' 
+                                  : (referral.first_deposit_amount ? 'pending' : 'no_deposit');
+                                return (
+                                  <tr key={referral.id} className="hover:bg-gray-50">
+                                    <td className="px-4 py-3">
+                                      <div>
+                                        <p className="text-sm font-medium text-gray-900">
+                                          {referral.referrer?.name || referral.referrer?.email || 'N/A'}
+                                        </p>
+                                        <p className="text-xs text-gray-500">{referral.referrer?.email}</p>
+                                      </div>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <div>
+                                        <p className="text-sm font-medium text-gray-900">
+                                          {referral.referee?.name || referral.referee?.email || 'N/A'}
+                                        </p>
+                                        <p className="text-xs text-gray-500">{referral.referee?.email}</p>
+                                      </div>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <p className="text-sm text-gray-900">
+                                        {referral.first_deposit_amount 
+                                          ? `₵${parseFloat(referral.first_deposit_amount).toFixed(2)}` 
+                                          : 'N/A'}
+                                      </p>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <p className="text-sm font-semibold text-gray-900">
+                                        {referral.referral_bonus 
+                                          ? `₵${parseFloat(referral.referral_bonus).toFixed(2)}` 
+                                          : referral.first_deposit_amount 
+                                            ? `₵${(parseFloat(referral.first_deposit_amount) * 0.1).toFixed(2)}` 
+                                            : 'N/A'}
+                                      </p>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                        status === 'awarded' 
+                                          ? 'bg-green-100 text-green-800' 
+                                          : status === 'pending'
+                                          ? 'bg-yellow-100 text-yellow-800'
+                                          : 'bg-gray-100 text-gray-800'
+                                      }`}>
+                                        {status === 'awarded' ? (
+                                          <>
+                                            <CheckCircle className="w-3 h-3 mr-1" />
+                                            Awarded
+                                          </>
+                                        ) : status === 'pending' ? (
+                                          <>
+                                            <Clock className="w-3 h-3 mr-1" />
+                                            Pending
+                                          </>
+                                        ) : (
+                                          <>
+                                            <XCircle className="w-3 h-3 mr-1" />
+                                            No Deposit
+                                          </>
+                                        )}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <p className="text-sm text-gray-900">
+                                        {new Date(referral.created_at).toLocaleDateString()}
+                                      </p>
+                                      <p className="text-xs text-gray-500">
+                                        {new Date(referral.created_at).toLocaleTimeString()}
+                                      </p>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      {referral.bonus_awarded_at ? (
+                                        <>
+                                          <p className="text-sm text-gray-900">
+                                            {new Date(referral.bonus_awarded_at).toLocaleDateString()}
+                                          </p>
+                                          <p className="text-xs text-gray-500">
+                                            {new Date(referral.bonus_awarded_at).toLocaleTimeString()}
+                                          </p>
+                                        </>
+                                      ) : (
+                                        <p className="text-sm text-gray-400">N/A</p>
+                                      )}
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      {status === 'pending' && (
+                                        <Button
+                                          onClick={() => handleManualBonusAward(referral.id)}
+                                          disabled={awardingBonus === referral.id}
+                                          variant="outline"
+                                          size="sm"
+                                          className="text-xs"
+                                        >
+                                          {awardingBonus === referral.id ? (
+                                            <>
+                                              <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
+                                              Awarding...
+                                            </>
+                                          ) : (
+                                            <>
+                                              <CheckCircle className="w-3 h-3 mr-1" />
+                                              Award Bonus
+                                            </>
+                                          )}
+                                        </Button>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Pagination */}
+                      {Math.ceil(getFilteredReferrals().length / referralsPerPage) > 1 && (
+                        <div className="flex items-center justify-between mt-4">
+                          <div className="text-sm text-gray-600">
+                            Showing {((referralsPage - 1) * referralsPerPage) + 1} to {Math.min(referralsPage * referralsPerPage, getFilteredReferrals().length)} of {getFilteredReferrals().length} referrals
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              onClick={() => setReferralsPage(prev => Math.max(1, prev - 1))}
+                              disabled={referralsPage === 1}
+                              variant="outline"
+                              size="sm"
+                            >
+                              Previous
+                            </Button>
+                            <div className="flex items-center gap-1">
+                              {Array.from({ length: Math.min(5, Math.ceil(getFilteredReferrals().length / referralsPerPage)) }, (_, i) => {
+                                const totalPages = Math.ceil(getFilteredReferrals().length / referralsPerPage);
+                                let pageNum;
+                                if (totalPages <= 5) {
+                                  pageNum = i + 1;
+                                } else if (referralsPage <= 3) {
+                                  pageNum = i + 1;
+                                } else if (referralsPage >= totalPages - 2) {
+                                  pageNum = totalPages - 4 + i;
+                                } else {
+                                  pageNum = referralsPage - 2 + i;
+                                }
+                                return (
+                                  <Button
+                                    key={pageNum}
+                                    onClick={() => setReferralsPage(pageNum)}
+                                    variant={referralsPage === pageNum ? "default" : "outline"}
+                                    size="sm"
+                                    className={referralsPage === pageNum ? "bg-indigo-600 hover:bg-indigo-700 text-white" : ""}
+                                  >
+                                    {pageNum}
+                                  </Button>
+                                );
+                              })}
+                            </div>
+                            <Button
+                              onClick={() => setReferralsPage(prev => Math.min(Math.ceil(getFilteredReferrals().length / referralsPerPage), prev + 1))}
+                              disabled={referralsPage >= Math.ceil(getFilteredReferrals().length / referralsPerPage)}
+                              variant="outline"
+                              size="sm"
+                            >
+                              Next
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            </TabsContent>
             </div>
         </Tabs>
         </div>
