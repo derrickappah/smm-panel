@@ -16,6 +16,32 @@
 import * as crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 
+// Disable automatic body parsing to get raw body for signature verification
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
+
+/**
+ * Read raw body from request stream
+ * This is needed because Paystack signs the exact raw body string
+ */
+async function getRawBody(req) {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    req.on('data', (chunk) => {
+      data += chunk.toString('utf8');
+    });
+    req.on('end', () => {
+      resolve(data);
+    });
+    req.on('error', (err) => {
+      reject(err);
+    });
+  });
+}
+
 export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -53,22 +79,11 @@ export default async function handler(req, res) {
 
     // Get raw body for signature verification
     // Paystack signs the exact raw body string, so we must use the unparsed body
-    // In Vercel serverless functions, we need to read raw body before it's parsed
-    let rawBody;
+    // Read raw body from request stream (bodyParser is disabled)
+    const rawBody = await getRawBody(req);
     
-    // Try to get raw body from request stream
-    // Vercel may have already parsed it, so we check both scenarios
-    if (req.body && typeof req.body === 'string') {
-      // Body is still a string (raw, not parsed)
-      rawBody = req.body;
-    } else if (req.body && typeof req.body === 'object') {
-      // Body is already parsed by Vercel
-      // Reconstruct JSON string - this may not match Paystack's exact format
-      // but should work if Paystack uses standard JSON formatting
-      rawBody = JSON.stringify(req.body);
-    } else {
-      // No body or unexpected type
-      console.error('Unexpected body type:', typeof req.body);
+    if (!rawBody) {
+      console.error('Failed to read raw body from request');
       return res.status(400).json({ error: 'Invalid request body' });
     }
 
@@ -90,8 +105,8 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'Invalid signature' });
     }
 
-    // Parse webhook event
-    const event = typeof rawBody === 'string' && rawBody ? JSON.parse(rawBody) : req.body;
+    // Parse webhook event from raw body
+    const event = JSON.parse(rawBody);
     console.log('Paystack webhook event received:', event.event);
 
     // Handle different event types
