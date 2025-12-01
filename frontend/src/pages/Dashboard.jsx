@@ -2669,13 +2669,18 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             </form>
             ) : (depositMethod === 'manual' && paymentMethodSettings.manual_enabled) ? (
               <form onSubmit={handleManualDeposit} className="space-y-6">
-                {/* Payment Instructions - Black Background Design */}
-                <div className="bg-black rounded-lg p-6 space-y-4">
-                  <p className="text-white text-base sm:text-lg">Make payment to</p>
-                  <p className="text-yellow-400 text-xl sm:text-2xl font-semibold underline">0559272762</p>
-                  <p className="text-white text-base sm:text-lg">MTN APPIAH MANASSEH ATTAH</p>
-                  <p className="text-white text-base sm:text-lg">USE YOUR USERNAME AS REFERENCE</p>
-                  <p className="text-white text-base sm:text-lg">SEND A SCREENSHOT OF PAYMENT WHEN DONE</p>
+                {/* Payment Instructions */}
+                <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
+                  <p className="text-gray-900 text-base sm:text-lg">
+                    Make <span className="bg-yellow-300 font-semibold">PAYMENT</span> to <span className="text-yellow-500 font-semibold underline">0559272762</span>
+                  </p>
+                  <p className="text-gray-900 text-base sm:text-lg font-semibold">MTN - APPIAH MANASSEH ATTAH</p>
+                  <p className="text-gray-900 text-base sm:text-lg">
+                    use your <span className="bg-yellow-300 font-semibold">USERNAME</span> as reference
+                  </p>
+                  <p className="text-gray-900 text-base sm:text-lg">
+                    send <span className="bg-yellow-300 font-semibold">SCREENSHOT</span> of <span className="bg-yellow-300 font-semibold">PAYMENT</span> when done
+                  </p>
                 </div>
 
                 <div>
