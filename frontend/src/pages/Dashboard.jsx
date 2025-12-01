@@ -1654,21 +1654,6 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
   const handleManualDeposit = async (e) => {
     e.preventDefault();
-    if (!manualDepositForm.amount || parseFloat(manualDepositForm.amount) <= 0) {
-      toast.error('Please enter a valid amount');
-      return;
-    }
-
-    const amount = parseFloat(manualDepositForm.amount);
-    if (amount < minDepositSettings.manual_min) {
-      toast.error(`Minimum deposit amount is ₵${minDepositSettings.manual_min} for Mobile Money`);
-      return;
-    }
-
-    if (!manualDepositForm.momo_number) {
-      toast.error('Please enter your MTN Mobile Money number');
-      return;
-    }
 
     if (!manualDepositForm.payment_proof_file) {
       toast.error('Please upload payment proof screenshot');
@@ -1726,11 +1711,11 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         .from('transactions')
         .insert({
           user_id: authUser.id,
-          amount: amount,
+          amount: 0,
           type: 'deposit',
           status: 'pending',
           deposit_method: 'manual',
-          momo_number: manualDepositForm.momo_number,
+          momo_number: '',
           manual_reference: reference,
           payment_proof_url: paymentProofUrl
         })
@@ -2683,53 +2668,14 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               </div>
             </form>
             ) : (depositMethod === 'manual' && paymentMethodSettings.manual_enabled) ? (
-              <form onSubmit={handleManualDeposit} className="space-y-4">
-                {/* Manual Deposit Instructions */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <h3 className="text-sm font-semibold text-blue-900 mb-3">Instructions:</h3>
-                  <ol className="text-xs sm:text-sm text-blue-800 space-y-1.5 list-decimal list-inside">
-                    <li>Make payment to <span className="font-semibold">0559272762</span> via MTN Mobile Money</li>
-                    <li>Use your <span className="font-semibold">Full Name</span> as Reference</li>
-                    <li>Amount must be <span className="font-semibold">₵{minDepositSettings.manual_min}</span> and above</li>
-                    <li>Network: <span className="font-semibold">MTN</span></li>
-                    <li>Name: <span className="font-semibold">Manasseh Attah Appiah</span></li>
-                    <li>Funds will be added within <span className="font-semibold">5 minutes</span></li>
-                  </ol>
-                  <div className="mt-3 p-3 bg-white rounded-lg border border-blue-300">
-                    <p className="text-xs text-blue-700 font-medium mb-1">Tap and hold to copy:</p>
-                    <p className="text-base sm:text-lg font-bold text-blue-900 select-all">0559272762</p>
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="manual-amount" className="text-sm font-medium text-gray-700 mb-2 block">Amount (GHS)</Label>
-                  <Input
-                    id="manual-amount"
-                    type="number"
-                    step="0.01"
-                    min={minDepositSettings.manual_min}
-                    placeholder="Enter the amount you sent"
-                    value={manualDepositForm.amount}
-                    onChange={(e) => setManualDepositForm({ ...manualDepositForm, amount: e.target.value })}
-                    className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    required
-                  />
-                  {parseFloat(manualDepositForm.amount) < minDepositSettings.manual_min && manualDepositForm.amount && (
-                    <p className="text-xs text-red-600 mt-1">Minimum amount is ₵{minDepositSettings.manual_min}</p>
-                  )}
-                </div>
-
-                <div>
-                  <Label htmlFor="momo-number" className="text-sm font-medium text-gray-700 mb-2 block">Your MTN Mobile Money Number</Label>
-                  <Input
-                    id="momo-number"
-                    type="tel"
-                    placeholder="e.g., 0244123456"
-                    value={manualDepositForm.momo_number}
-                    onChange={(e) => setManualDepositForm({ ...manualDepositForm, momo_number: e.target.value })}
-                    className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    required
-                  />
+              <form onSubmit={handleManualDeposit} className="space-y-6">
+                {/* Payment Instructions - Black Background Design */}
+                <div className="bg-black rounded-lg p-6 space-y-4">
+                  <p className="text-white text-base sm:text-lg">Make payment to</p>
+                  <p className="text-yellow-400 text-xl sm:text-2xl font-semibold underline">0559272762</p>
+                  <p className="text-white text-base sm:text-lg">MTN APPIAH MANASSEH ATTAH</p>
+                  <p className="text-white text-base sm:text-lg">USE YOUR USERNAME AS REFERENCE</p>
+                  <p className="text-white text-base sm:text-lg">SEND A SCREENSHOT OF PAYMENT WHEN DONE</p>
                 </div>
 
                 <div>
@@ -2771,7 +2717,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
                 <Button
                   type="submit"
-                  disabled={loading || !manualDepositForm.amount || parseFloat(manualDepositForm.amount) < 10 || !manualDepositForm.momo_number || !manualDepositForm.payment_proof_file || uploadingProof}
+                  disabled={loading || !manualDepositForm.payment_proof_file || uploadingProof}
                   className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {uploadingProof ? 'Uploading...' : loading ? 'Submitting...' : 'Submit Manual Deposit'}
@@ -2779,21 +2725,6 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                 <p className="text-xs sm:text-sm text-gray-600 text-center">
                   Your deposit will be reviewed and approved within 5 minutes.
                 </p>
-                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-xs sm:text-sm text-blue-800 text-center">
-                    <span className="font-semibold">Having issues with deposits?</span>
-                    <br />
-                    <span className="mt-1 block">Text us on WhatsApp: </span>
-                    <a 
-                      href="https://wa.me/233559272762" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-                    >
-                      0559272762
-                    </a>
-                  </p>
-                </div>
               </form>
             ) : (depositMethod === 'hubtel' && paymentMethodSettings.hubtel_enabled) ? (
               <form onSubmit={handleHubtelDeposit} className="space-y-4">
