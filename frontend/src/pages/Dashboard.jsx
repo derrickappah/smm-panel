@@ -2671,16 +2671,18 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               <form onSubmit={handleManualDeposit} className="space-y-6">
                 {/* Payment Instructions */}
                 <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
-                  <p className="text-gray-900 text-base sm:text-lg">
-                    Make <span className="bg-yellow-300 font-semibold">PAYMENT</span> to <span className="text-yellow-500 font-semibold underline">0559272762</span>
-                  </p>
-                  <p className="text-gray-900 text-base sm:text-lg font-semibold">MTN - APPIAH MANASSEH ATTAH</p>
-                  <p className="text-gray-900 text-base sm:text-lg">
-                    use your <span className="bg-yellow-300 font-semibold">USERNAME</span> as reference
-                  </p>
-                  <p className="text-gray-900 text-base sm:text-lg">
-                    send <span className="bg-yellow-300 font-semibold">SCREENSHOT</span> of <span className="bg-yellow-300 font-semibold">PAYMENT</span> when done
-                  </p>
+                  <ol className="list-decimal list-inside space-y-3 text-gray-900 text-base sm:text-lg">
+                    <li>
+                      Make <span className="text-blue-600 font-semibold">PAYMENT</span> to 0559272762
+                    </li>
+                    <li className="font-semibold">MTN - APPIAH MANASSEH ATTAH</li>
+                    <li>
+                      use your <span className="text-blue-600 font-semibold">USERNAME</span> as reference
+                    </li>
+                    <li>
+                      send <span className="text-blue-600 font-semibold">SCREENSHOT</span> of <span className="text-blue-600 font-semibold">PAYMENT</span> when done
+                    </li>
+                  </ol>
                 </div>
 
                 <div>
