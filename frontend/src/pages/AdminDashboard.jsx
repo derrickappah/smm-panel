@@ -90,6 +90,10 @@ const AdminDashboard = ({ user, onLogout }) => {
   const [orderStatusFilter, setOrderStatusFilter] = useState('all');
   const [serviceSearch, setServiceSearch] = useState('');
   
+  // Date range filter for dashboard stats
+  const [dateRangeStart, setDateRangeStart] = useState('');
+  const [dateRangeEnd, setDateRangeEnd] = useState('');
+  
   // Pagination states
   const [depositsPage, setDepositsPage] = useState(1);
   const depositsPerPage = 20;
@@ -224,6 +228,61 @@ const AdminDashboard = ({ user, onLogout }) => {
     };
   }, [activeSection]);
 
+  // Helper function to check if a date is within the selected date range
+  const isDateInRange = (dateString) => {
+    if (!dateRangeStart && !dateRangeEnd) return true; // No filter applied
+    
+    const itemDate = new Date(dateString);
+    itemDate.setHours(0, 0, 0, 0);
+    
+    if (dateRangeStart && dateRangeEnd) {
+      const start = new Date(dateRangeStart);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(dateRangeEnd);
+      end.setHours(23, 59, 59, 999);
+      return itemDate >= start && itemDate <= end;
+    } else if (dateRangeStart) {
+      const start = new Date(dateRangeStart);
+      start.setHours(0, 0, 0, 0);
+      return itemDate >= start;
+    } else if (dateRangeEnd) {
+      const end = new Date(dateRangeEnd);
+      end.setHours(23, 59, 59, 999);
+      return itemDate <= end;
+    }
+    
+    return true;
+  };
+
+  // Helper function to fetch all records using pagination
+  const fetchAllRecords = async (queryBuilder, batchSize = 1000) => {
+    let allRecords = [];
+    let from = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      const to = from + batchSize - 1;
+      // Create a new query for each batch to avoid mutation issues
+      const query = queryBuilder.range(from, to);
+      const { data, error } = await query;
+      
+      if (error) {
+        throw error;
+      }
+
+      if (data && data.length > 0) {
+        allRecords = [...allRecords, ...data];
+        // If we got fewer records than batchSize, we've reached the end
+        hasMore = data.length === batchSize;
+        from = to + 1;
+      } else {
+        hasMore = false;
+      }
+    }
+
+    return allRecords;
+  };
+
   const fetchAllData = async (checkSMMGenStatus = false) => {
     setRefreshing(true);
     try {
@@ -245,14 +304,15 @@ const AdminDashboard = ({ user, onLogout }) => {
         return;
       }
 
-      const [usersRes, ordersRes, depositsRes, transactionsRes, transactionsCountRes, servicesRes, ticketsRes, settingsRes] = await Promise.all([
-        supabase.from('profiles').select('*').order('created_at', { ascending: false }),
-        supabase.from('orders').select('*, services(name, platform), profiles(name, email, phone_number)').order('created_at', { ascending: false }),
-        supabase.from('transactions').select('*, profiles(email, name, phone_number)').eq('type', 'deposit').order('created_at', { ascending: false }),
-        supabase.from('transactions').select('*, profiles(email, name, balance)').order('created_at', { ascending: false }),
+      // Fetch all records using pagination
+      const [usersData, ordersData, depositsData, transactionsData, transactionsCountRes, servicesData, ticketsData, settingsResResult] = await Promise.all([
+        fetchAllRecords(supabase.from('profiles').select('*').order('created_at', { ascending: false })),
+        fetchAllRecords(supabase.from('orders').select('*, services(name, platform), profiles(name, email, phone_number)').order('created_at', { ascending: false })),
+        fetchAllRecords(supabase.from('transactions').select('*, profiles(email, name, phone_number)').eq('type', 'deposit').order('created_at', { ascending: false })),
+        fetchAllRecords(supabase.from('transactions').select('*, profiles(email, name, balance)').order('created_at', { ascending: false })),
         supabase.from('transactions').select('*', { count: 'exact', head: true }),
-        supabase.from('services').select('*').order('created_at', { ascending: false }),
-        supabase.from('support_tickets').select('*, profiles(name, email)').order('created_at', { ascending: false }),
+        fetchAllRecords(supabase.from('services').select('*').order('created_at', { ascending: false })),
+        fetchAllRecords(supabase.from('support_tickets').select('*, profiles(name, email)').order('created_at', { ascending: false })),
         supabase.from('app_settings').select('*').in('key', [
           'payment_method_paystack_enabled', 
           'payment_method_manual_enabled', 
@@ -264,6 +324,15 @@ const AdminDashboard = ({ user, onLogout }) => {
           'payment_method_korapay_min_deposit'
         ])
       ]);
+
+      // Wrap data in response-like objects for compatibility
+      const usersRes = { data: usersData, error: null };
+      const ordersRes = { data: ordersData, error: null };
+      const depositsRes = { data: depositsData, error: null };
+      const transactionsRes = { data: transactionsData, error: null };
+      const servicesRes = { data: servicesData, error: null };
+      const ticketsRes = { data: ticketsData, error: null };
+      const settingsRes = settingsResResult;
 
       // Check for errors and provide specific messages
       if (usersRes.error) {
@@ -458,9 +527,11 @@ const AdminDashboard = ({ user, onLogout }) => {
       }
 
       // Calculate enhanced stats using current data (use updated orders with SMMGen statuses)
-      const currentDeposits = depositsRes.data || [];
-      const currentOrders = finalOrders; // Use orders with updated SMMGen statuses
-      const currentTickets = ticketsRes.data || [];
+      // Filter by date range if specified
+      const currentDeposits = (depositsRes.data || []).filter(d => isDateInRange(d.created_at));
+      const currentOrders = (finalOrders || []).filter(o => isDateInRange(o.created_at)); // Use orders with updated SMMGen statuses
+      const currentTickets = (ticketsRes.data || []).filter(t => isDateInRange(t.created_at));
+      const currentUsers = (usersRes.data || []).filter(u => isDateInRange(u.created_at));
       
       const pendingDeposits = currentDeposits.filter(d => d.status === 'pending').length;
       const confirmedDeposits = currentDeposits.filter(d => d.status === 'approved').length;
@@ -473,13 +544,13 @@ const AdminDashboard = ({ user, onLogout }) => {
         .filter(d => d.status === 'approved')
         .reduce((sum, d) => sum + parseFloat(d.amount || 0), 0);
 
-      // Calculate today's metrics
+      // Calculate today's metrics (only if no date filter is applied, otherwise use filtered data)
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const todayEnd = new Date(today);
       todayEnd.setHours(23, 59, 59, 999);
 
-      const usersToday = (usersRes.data || []).filter(u => {
+      const usersToday = currentUsers.filter(u => {
         const userDate = new Date(u.created_at);
         return userDate >= today && userDate <= todayEnd;
       }).length;
@@ -520,11 +591,12 @@ const AdminDashboard = ({ user, onLogout }) => {
       const inProgressTickets = currentTickets.filter(t => t.status === 'in_progress').length;
       const resolvedTickets = currentTickets.filter(t => t.status === 'resolved' || t.status === 'closed').length;
       // Use count query result for accurate total, fallback to array length if count unavailable
-      const totalTransactions = transactionsCountRes?.count ?? (transactionsRes.data || allTransactions || []).length;
+      const filteredTransactions = (transactionsRes.data || allTransactions || []).filter(t => isDateInRange(t.created_at));
+      const totalTransactions = transactionsCountRes?.count ?? filteredTransactions.length;
       const averageOrderValue = completedOrders > 0 ? totalRevenue / completedOrders : 0;
 
       setStats({
-        total_users: (usersRes.data || users).length,
+        total_users: currentUsers.length,
         total_orders: currentOrders.length,
         pending_deposits: pendingDeposits,
         total_revenue: totalRevenue,
@@ -2472,6 +2544,58 @@ const AdminDashboard = ({ user, onLogout }) => {
               <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
+          </div>
+
+          {/* Date Range Selector */}
+          <div className="bg-white border border-gray-200 rounded-lg p-4 mb-6">
+            <div className="flex flex-col sm:flex-row gap-4 items-end">
+              <div className="flex-1">
+                <Label htmlFor="date-start" className="text-sm font-medium text-gray-700 mb-2 block">
+                  Start Date
+                </Label>
+                <Input
+                  id="date-start"
+                  type="date"
+                  value={dateRangeStart}
+                  onChange={(e) => {
+                    setDateRangeStart(e.target.value);
+                    fetchAllData(false);
+                  }}
+                  className="w-full"
+                />
+              </div>
+              <div className="flex-1">
+                <Label htmlFor="date-end" className="text-sm font-medium text-gray-700 mb-2 block">
+                  End Date
+                </Label>
+                <Input
+                  id="date-end"
+                  type="date"
+                  value={dateRangeEnd}
+                  onChange={(e) => {
+                    setDateRangeEnd(e.target.value);
+                    fetchAllData(false);
+                  }}
+                  className="w-full"
+                />
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setDateRangeStart('');
+                  setDateRangeEnd('');
+                  fetchAllData(false);
+                }}
+                className="h-10"
+              >
+                Clear Filter
+              </Button>
+            </div>
+            {(dateRangeStart || dateRangeEnd) && (
+              <p className="text-xs text-gray-500 mt-2">
+                Showing stats for: {dateRangeStart || 'All time'} to {dateRangeEnd || 'All time'}
+              </p>
+            )}
           </div>
 
         {/* Enhanced Stats Cards */}
