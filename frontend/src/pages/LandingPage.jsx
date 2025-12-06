@@ -1,11 +1,59 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, Zap, Shield, TrendingUp, Instagram, Youtube, Facebook, Twitter, Music } from 'lucide-react';
+import { ArrowRight, Zap, Shield, TrendingUp, Instagram, Youtube, Facebook, Twitter, Music, Users, Heart, Eye, MessageCircle } from 'lucide-react';
 import SEO from '@/components/SEO';
+import { supabase } from '@/lib/supabase';
+
+// Animated Number Component
+const AnimatedNumber = ({ value, duration = 2000, formatter = (v) => v.toLocaleString() }) => {
+  const [displayValue, setDisplayValue] = useState(0);
+
+  useEffect(() => {
+    if (value === 0) {
+      setDisplayValue(0);
+      return;
+    }
+
+    const startValue = 0;
+    const endValue = value || 0;
+    const startTime = Date.now();
+
+    const animate = () => {
+      const now = Date.now();
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      // Easing function for smooth animation
+      const easeOutCubic = 1 - Math.pow(1 - progress, 3);
+      const currentValue = Math.floor(startValue + (endValue - startValue) * easeOutCubic);
+      
+      setDisplayValue(currentValue);
+
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        setDisplayValue(endValue);
+      }
+    };
+
+    requestAnimationFrame(animate);
+  }, [value, duration]);
+
+  return <span>{formatter(displayValue)}</span>;
+};
 
 const LandingPage = () => {
   const navigate = useNavigate();
+  const [stats, setStats] = useState({
+    totalOrders: 0,
+    totalLikes: 0,
+    totalFollowers: 0,
+    totalViews: 0,
+    totalUsers: 0,
+    totalComments: 0
+  });
+  const [loading, setLoading] = useState(true);
 
   const platforms = [
     { name: 'Instagram', icon: Instagram, color: 'text-pink-600' },
@@ -32,6 +80,151 @@ const LandingPage = () => {
       description: 'High-quality engagement from real accounts'
     }
   ];
+
+  // Helper function to fetch all records using pagination
+  const fetchAllRecords = async (table, select, filters = {}, batchSize = 1000) => {
+    let allRecords = [];
+    let from = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      const to = from + batchSize - 1;
+      // Create a fresh query for each batch to avoid mutation
+      let query = supabase.from(table).select(select);
+      
+      // Apply filters
+      if (filters.eq) {
+        Object.entries(filters.eq).forEach(([field, val]) => {
+          query = query.eq(field, val);
+        });
+      }
+      
+      if (filters.orderBy) {
+        query = query.order(filters.orderBy.field, { ascending: filters.orderBy.ascending !== false });
+      }
+      
+      // Apply range last
+      query = query.range(from, to);
+
+      const { data, error } = await query;
+      
+      if (error) {
+        console.error(`Error fetching batch ${from}-${to}:`, error);
+        throw error;
+      }
+
+      if (data && data.length > 0) {
+        allRecords = [...allRecords, ...data];
+        hasMore = data.length === batchSize;
+        from = to + 1;
+      } else {
+        hasMore = false;
+      }
+    }
+
+    console.log(`Fetched ${allRecords.length} total records from ${table}`);
+    return allRecords;
+  };
+
+  // Fetch public statistics
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        console.log('Starting to fetch stats...');
+        // Fetch ALL completed orders with pagination to get accurate totals
+        const [ordersDataResult, ordersCountResult, usersResult] = await Promise.allSettled([
+          fetchAllRecords(
+            'orders',
+            'quantity, services(name, service_type)',
+            {
+              eq: { status: 'completed' },
+              orderBy: { field: 'created_at', ascending: false }
+            }
+          ),
+          supabase
+            .from('orders')
+            .select('*', { count: 'exact', head: true })
+            .eq('status', 'completed'),
+          supabase
+            .from('profiles')
+            .select('*', { count: 'exact', head: true })
+        ]);
+
+        let totalLikes = 0;
+        let totalFollowers = 0;
+        let totalViews = 0;
+        let totalComments = 0;
+        let ordersCount = 0;
+        let usersCount = 0;
+
+        // Process orders data - fetch ALL records
+        if (ordersDataResult.status === 'fulfilled' && ordersDataResult.value) {
+          const ordersData = ordersDataResult.value;
+          console.log(`Processing ${ordersData.length} orders...`);
+          
+          ordersData.forEach(order => {
+            const quantity = parseInt(order.quantity || 0);
+            if (isNaN(quantity) || quantity <= 0) return;
+
+            const serviceType = (order.services?.service_type || '').toLowerCase();
+            const serviceName = (order.services?.name || '').toLowerCase();
+
+            if (serviceType.includes('like') || serviceName.includes('like')) {
+              totalLikes += quantity;
+            }
+            if (serviceType.includes('follower') || serviceName.includes('follower')) {
+              totalFollowers += quantity;
+            }
+            if (serviceType.includes('view') || serviceName.includes('view')) {
+              totalViews += quantity;
+            }
+            if (serviceType.includes('comment') || serviceName.includes('comment')) {
+              totalComments += quantity;
+            }
+          });
+          
+          console.log('Calculated totals:', { totalLikes, totalFollowers, totalViews, totalComments });
+        } else if (ordersDataResult.status === 'rejected') {
+          console.error('Failed to fetch orders:', ordersDataResult.reason);
+        }
+
+        // Process orders count
+        if (ordersCountResult.status === 'fulfilled' && !ordersCountResult.value.error) {
+          ordersCount = ordersCountResult.value.count || 0;
+        }
+
+        // Process users count
+        if (usersResult.status === 'fulfilled' && !usersResult.value.error) {
+          usersCount = usersResult.value.count || 0;
+        }
+
+        // Update stats with actual data
+        setStats({
+          totalOrders: ordersCount,
+          totalLikes: totalLikes,
+          totalFollowers: totalFollowers,
+          totalViews: totalViews,
+          totalUsers: usersCount,
+          totalComments: totalComments
+        });
+      } catch (error) {
+        console.error('Error fetching stats:', error);
+        // If error, keep current stats or set to 0
+        setStats(prev => ({
+          totalOrders: prev.totalOrders || 0,
+          totalLikes: prev.totalLikes || 0,
+          totalFollowers: prev.totalFollowers || 0,
+          totalViews: prev.totalViews || 0,
+          totalUsers: prev.totalUsers || 0,
+          totalComments: prev.totalComments || 0
+        }));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, []);
 
   const structuredData = {
     '@context': 'https://schema.org',
@@ -144,6 +337,82 @@ const LandingPage = () => {
                 <span className="text-xs sm:text-sm font-medium text-gray-700">{platform.name}</span>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Statistics Section */}
+      <section className="py-12 sm:py-16 lg:py-20 px-4 sm:px-6 bg-white">
+        <div className="max-w-6xl mx-auto">
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-center text-gray-900 mb-8 sm:mb-12">
+            Our Impact in Numbers
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-6">
+            {/* Total Orders */}
+            <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 border border-indigo-200 rounded-lg p-4 sm:p-6 text-center shadow-sm hover:shadow-md transition-shadow duration-200">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-indigo-600 rounded-lg flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                <TrendingUp className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+              </div>
+              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-1 sm:mb-2">
+                {loading ? '...' : <AnimatedNumber value={stats.totalOrders} />}
+              </div>
+              <p className="text-xs sm:text-sm text-gray-600 font-medium">Orders Completed</p>
+            </div>
+
+            {/* Total Likes */}
+            <div className="bg-gradient-to-br from-pink-50 to-pink-100 border border-pink-200 rounded-lg p-4 sm:p-6 text-center shadow-sm hover:shadow-md transition-shadow duration-200">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-pink-600 rounded-lg flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                <Heart className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+              </div>
+              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-1 sm:mb-2">
+                {loading ? '...' : <AnimatedNumber value={stats.totalLikes} formatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(1)}K` : v.toLocaleString()} />}
+              </div>
+              <p className="text-xs sm:text-sm text-gray-600 font-medium">Likes Sent</p>
+            </div>
+
+            {/* Total Followers */}
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-lg p-4 sm:p-6 text-center shadow-sm hover:shadow-md transition-shadow duration-200">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-blue-600 rounded-lg flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                <Users className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+              </div>
+              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-1 sm:mb-2">
+                {loading ? '...' : <AnimatedNumber value={stats.totalFollowers} formatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(1)}K` : v.toLocaleString()} />}
+              </div>
+              <p className="text-xs sm:text-sm text-gray-600 font-medium">Followers Sent</p>
+            </div>
+
+            {/* Total Views */}
+            <div className="bg-gradient-to-br from-cyan-50 to-cyan-100 border border-cyan-200 rounded-lg p-4 sm:p-6 text-center shadow-sm hover:shadow-md transition-shadow duration-200">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-cyan-600 rounded-lg flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                <Eye className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+              </div>
+              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-1 sm:mb-2">
+                {loading ? '...' : <AnimatedNumber value={stats.totalViews} formatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(1)}K` : v.toLocaleString()} />}
+              </div>
+              <p className="text-xs sm:text-sm text-gray-600 font-medium">Views Sent</p>
+            </div>
+
+            {/* Total Comments */}
+            <div className="bg-gradient-to-br from-green-50 to-green-100 border border-green-200 rounded-lg p-4 sm:p-6 text-center shadow-sm hover:shadow-md transition-shadow duration-200">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-green-600 rounded-lg flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                <MessageCircle className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+              </div>
+              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-1 sm:mb-2">
+                {loading ? '...' : <AnimatedNumber value={stats.totalComments} formatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(1)}K` : v.toLocaleString()} />}
+              </div>
+              <p className="text-xs sm:text-sm text-gray-600 font-medium">Comments Sent</p>
+            </div>
+
+            {/* Total Users */}
+            <div className="bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200 rounded-lg p-4 sm:p-6 text-center shadow-sm hover:shadow-md transition-shadow duration-200">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-purple-600 rounded-lg flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                <Users className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+              </div>
+              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-1 sm:mb-2">
+                {loading ? '...' : <AnimatedNumber value={stats.totalUsers} formatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(1)}K` : v.toLocaleString()} />}
+              </div>
+              <p className="text-xs sm:text-sm text-gray-600 font-medium">Happy Users</p>
+            </div>
           </div>
         </div>
       </section>

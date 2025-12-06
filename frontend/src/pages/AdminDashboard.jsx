@@ -17,8 +17,52 @@ import {
   Plus, Minus, TrendingUp, CheckCircle, XCircle, Clock, Filter,
   Download, RefreshCw, MessageSquare, Send, Layers, Wallet, Receipt, HelpCircle,
   AlertCircle, BarChart3, Activity, FileText, Settings, Bell, Power, PowerOff,
-  UserPlus
+  UserPlus, Heart, Eye, MessageCircle, Share2, UserCheck
 } from 'lucide-react';
+
+// Animated Number Component
+const AnimatedNumber = ({ value, previousValue, duration = 1000, formatter = (v) => v.toLocaleString() }) => {
+  const [displayValue, setDisplayValue] = useState(previousValue || 0);
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  useEffect(() => {
+    if (value !== previousValue && previousValue !== undefined) {
+      setIsAnimating(true);
+      const startValue = previousValue || 0;
+      const endValue = value || 0;
+      const startTime = Date.now();
+
+      const animate = () => {
+        const now = Date.now();
+        const elapsed = now - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        
+        // Easing function for smooth animation
+        const easeOutCubic = 1 - Math.pow(1 - progress, 3);
+        const currentValue = Math.floor(startValue + (endValue - startValue) * easeOutCubic);
+        
+        setDisplayValue(currentValue);
+
+        if (progress < 1) {
+          requestAnimationFrame(animate);
+        } else {
+          setDisplayValue(endValue);
+          setIsAnimating(false);
+        }
+      };
+
+      requestAnimationFrame(animate);
+    } else {
+      setDisplayValue(value || 0);
+    }
+  }, [value, previousValue, duration]);
+
+  return (
+    <span className={`transition-all duration-300 ${isAnimating ? 'scale-110 text-indigo-600' : ''}`}>
+      {formatter(displayValue)}
+    </span>
+  );
+};
 
 const AdminDashboard = ({ user, onLogout }) => {
   const [stats, setStats] = useState({ 
@@ -46,8 +90,15 @@ const AdminDashboard = ({ user, onLogout }) => {
     total_transactions: 0,
     rejected_deposits: 0,
     in_progress_tickets: 0,
-    resolved_tickets: 0
+    resolved_tickets: 0,
+    total_likes_sent: 0,
+    total_followers_sent: 0,
+    total_views_sent: 0,
+    total_comments_sent: 0,
+    total_shares_sent: 0,
+    total_subscribers_sent: 0
   });
+  const [previousStats, setPreviousStats] = useState({});
   const [users, setUsers] = useState([]);
   const [orders, setOrders] = useState([]);
   const [deposits, setDeposits] = useState([]);
@@ -173,45 +224,83 @@ const AdminDashboard = ({ user, onLogout }) => {
       fetchReferrals();
     }
 
-    // Subscribe to real-time updates for transactions (deposits)
-    // Listen to ALL transaction changes, then filter in callback for better reliability
+    // Subscribe to real-time updates for all relevant tables
+    const refreshData = () => {
+      setTimeout(() => {
+        fetchAllData(false); // Skip SMMGen status check on real-time updates
+      }, 200);
+    };
+
+    // Transactions channel
     const transactionsChannel = supabase
       .channel('admin-transactions-changes')
       .on(
         'postgres_changes',
         {
-          event: '*', // Listen to all changes (INSERT, UPDATE, DELETE)
+          event: '*',
           schema: 'public',
           table: 'transactions'
         },
         (payload) => {
-          // Only process deposit transactions
           const isDeposit = payload.new?.type === 'deposit' || payload.old?.type === 'deposit';
           if (isDeposit) {
-            console.log('Deposit transaction change detected:', {
-              eventType: payload.eventType,
-              id: payload.new?.id || payload.old?.id,
-              oldStatus: payload.old?.status,
-              newStatus: payload.new?.status
-            });
-            // Refresh deposits when transaction status changes
-            // Use setTimeout to debounce rapid updates
-            setTimeout(() => {
-              console.log('Refreshing deposits after transaction change...');
-              fetchAllData(false); // Skip SMMGen status check on transaction updates
-            }, 200);
+            console.log('Transaction change detected');
+            refreshData();
           }
         }
       )
-      .subscribe((status) => {
-        console.log('Transaction subscription status:', status);
-        if (status === 'SUBSCRIBED') {
-          console.log('✅ Successfully subscribed to transaction changes');
-        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.warn('⚠️ Real-time subscription issue, status:', status);
-          console.log('Will rely on manual refresh and periodic polling');
+      .subscribe();
+
+    // Orders channel
+    const ordersChannel = supabase
+      .channel('admin-orders-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'orders'
+        },
+        () => {
+          console.log('Order change detected');
+          refreshData();
         }
-      });
+      )
+      .subscribe();
+
+    // Profiles channel
+    const profilesChannel = supabase
+      .channel('admin-profiles-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'profiles'
+        },
+        () => {
+          console.log('Profile change detected');
+          refreshData();
+        }
+      )
+      .subscribe();
+
+    // Support tickets channel
+    const ticketsChannel = supabase
+      .channel('admin-tickets-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'support_tickets'
+        },
+        () => {
+          console.log('Support ticket change detected');
+          refreshData();
+        }
+      )
+      .subscribe();
 
     // Set up periodic polling as backup (every 20 seconds)
     // This ensures updates even if real-time fails
@@ -220,10 +309,13 @@ const AdminDashboard = ({ user, onLogout }) => {
       fetchAllData(false); // Skip SMMGen status check on periodic refresh
     }, 20000); // Poll every 20 seconds as backup
 
-    // Cleanup subscription and polling on unmount
+    // Cleanup subscriptions and polling on unmount
     return () => {
-      console.log('Cleaning up transaction subscription and polling');
+      console.log('Cleaning up subscriptions and polling');
       supabase.removeChannel(transactionsChannel);
+      supabase.removeChannel(ordersChannel);
+      supabase.removeChannel(profilesChannel);
+      supabase.removeChannel(ticketsChannel);
       clearInterval(pollInterval);
     };
   }, [activeSection]);
@@ -307,7 +399,7 @@ const AdminDashboard = ({ user, onLogout }) => {
       // Fetch all records using pagination
       const [usersData, ordersData, depositsData, transactionsData, transactionsCountRes, servicesData, ticketsData, settingsResResult] = await Promise.all([
         fetchAllRecords(supabase.from('profiles').select('*').order('created_at', { ascending: false })),
-        fetchAllRecords(supabase.from('orders').select('*, services(name, platform), profiles(name, email, phone_number)').order('created_at', { ascending: false })),
+        fetchAllRecords(supabase.from('orders').select('*, services(name, platform, service_type), profiles(name, email, phone_number)').order('created_at', { ascending: false })),
         fetchAllRecords(supabase.from('transactions').select('*, profiles(email, name, phone_number)').eq('type', 'deposit').order('created_at', { ascending: false })),
         fetchAllRecords(supabase.from('transactions').select('*, profiles(email, name, balance)').order('created_at', { ascending: false })),
         supabase.from('transactions').select('*', { count: 'exact', head: true }),
@@ -595,7 +687,58 @@ const AdminDashboard = ({ user, onLogout }) => {
       const totalTransactions = transactionsCountRes?.count ?? filteredTransactions.length;
       const averageOrderValue = completedOrders > 0 ? totalRevenue / completedOrders : 0;
 
-      setStats({
+      // Calculate service type totals from completed orders
+      const completedOrdersList = currentOrders.filter(o => o.status === 'completed');
+      
+      const totalLikesSent = completedOrdersList
+        .filter(o => {
+          const serviceType = (o.services?.service_type || '').toLowerCase();
+          const serviceName = (o.services?.name || '').toLowerCase();
+          return serviceType.includes('like') || serviceName.includes('like');
+        })
+        .reduce((sum, o) => sum + parseInt(o.quantity || 0), 0);
+
+      const totalFollowersSent = completedOrdersList
+        .filter(o => {
+          const serviceType = (o.services?.service_type || '').toLowerCase();
+          const serviceName = (o.services?.name || '').toLowerCase();
+          return serviceType.includes('follower') || serviceName.includes('follower');
+        })
+        .reduce((sum, o) => sum + parseInt(o.quantity || 0), 0);
+
+      const totalViewsSent = completedOrdersList
+        .filter(o => {
+          const serviceType = (o.services?.service_type || '').toLowerCase();
+          const serviceName = (o.services?.name || '').toLowerCase();
+          return serviceType.includes('view') || serviceName.includes('view');
+        })
+        .reduce((sum, o) => sum + parseInt(o.quantity || 0), 0);
+
+      const totalCommentsSent = completedOrdersList
+        .filter(o => {
+          const serviceType = (o.services?.service_type || '').toLowerCase();
+          const serviceName = (o.services?.name || '').toLowerCase();
+          return serviceType.includes('comment') || serviceName.includes('comment');
+        })
+        .reduce((sum, o) => sum + parseInt(o.quantity || 0), 0);
+
+      const totalSharesSent = completedOrdersList
+        .filter(o => {
+          const serviceType = (o.services?.service_type || '').toLowerCase();
+          const serviceName = (o.services?.name || '').toLowerCase();
+          return serviceType.includes('share') || serviceName.includes('share');
+        })
+        .reduce((sum, o) => sum + parseInt(o.quantity || 0), 0);
+
+      const totalSubscribersSent = completedOrdersList
+        .filter(o => {
+          const serviceType = (o.services?.service_type || '').toLowerCase();
+          const serviceName = (o.services?.name || '').toLowerCase();
+          return serviceType.includes('subscriber') || serviceName.includes('subscriber');
+        })
+        .reduce((sum, o) => sum + parseInt(o.quantity || 0), 0);
+
+      const newStats = {
         total_users: currentUsers.length,
         total_orders: currentOrders.length,
         pending_deposits: pendingDeposits,
@@ -620,8 +763,17 @@ const AdminDashboard = ({ user, onLogout }) => {
         total_transactions: totalTransactions,
         rejected_deposits: rejectedDeposits,
         in_progress_tickets: inProgressTickets,
-        resolved_tickets: resolvedTickets
-      });
+        resolved_tickets: resolvedTickets,
+        total_likes_sent: totalLikesSent,
+        total_followers_sent: totalFollowersSent,
+        total_views_sent: totalViewsSent,
+        total_comments_sent: totalCommentsSent,
+        total_shares_sent: totalSharesSent,
+        total_subscribers_sent: totalSubscribersSent
+      };
+      
+      setPreviousStats(stats);
+      setStats(newStats);
 
       // Show warning if only seeing own data
       if (usersRes.data && usersRes.data.length === 1 && usersRes.data[0].id === currentUser.user.id) {
@@ -2599,36 +2751,51 @@ const AdminDashboard = ({ user, onLogout }) => {
           </div>
 
         {/* Enhanced Stats Cards */}
+                  <style>{`
+                    @keyframes pulse-update {
+                      0%, 100% { transform: scale(1); }
+                      50% { transform: scale(1.02); }
+                    }
+                    .animate-pulse-on-update {
+                      animation: pulse-update 0.6s ease-in-out;
+                    }
+                  `}</style>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3 sm:gap-4">
                     {/* Users Today */}
-                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('users')}>
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer animate-pulse-on-update" onClick={() => setActiveSection('users')}>
                       <div className="flex items-center justify-between mb-2">
                         <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
                           <Users className="w-4 h-4 text-indigo-600" />
                         </div>
-                        <span className="text-base sm:text-lg font-bold text-gray-900">{stats.users_today}</span>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">
+                          <AnimatedNumber value={stats.users_today} previousValue={previousStats.users_today} />
+                        </span>
             </div>
                       <p className="text-xs sm:text-[10px] font-medium text-gray-600">Users Today</p>
                       <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{stats.total_users} Total</p>
           </div>
                     {/* Orders Today */}
-                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('orders')}>
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer animate-pulse-on-update" onClick={() => setActiveSection('orders')}>
                       <div className="flex items-center justify-between mb-2">
                         <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
                           <ShoppingCart className="w-4 h-4 text-blue-600" />
                         </div>
-                        <span className="text-base sm:text-lg font-bold text-gray-900">{stats.orders_today}</span>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">
+                          <AnimatedNumber value={stats.orders_today} previousValue={previousStats.orders_today} />
+                        </span>
             </div>
                       <p className="text-xs sm:text-[10px] font-medium text-gray-600">Orders Today</p>
                       <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{stats.total_orders} Total</p>
           </div>
                     {/* Deposits Today */}
-                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('deposits')}>
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer animate-pulse-on-update" onClick={() => setActiveSection('deposits')}>
                       <div className="flex items-center justify-between mb-2">
                         <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
                           <DollarSign className="w-4 h-4 text-emerald-600" />
                         </div>
-                        <span className="text-base sm:text-lg font-bold text-gray-900">{stats.deposits_today}</span>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">
+                          <AnimatedNumber value={stats.deposits_today} previousValue={previousStats.deposits_today} />
+                        </span>
             </div>
                       <p className="text-xs sm:text-[10px] font-medium text-gray-600">Deposits Today</p>
                       <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{stats.pending_deposits} Pending</p>
@@ -2650,7 +2817,9 @@ const AdminDashboard = ({ user, onLogout }) => {
                         <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
                           <TrendingUp className="w-4 h-4 text-green-600" />
                         </div>
-                        <span className="text-base sm:text-lg font-bold text-gray-900">₵{stats.total_revenue_amount.toFixed(0)}</span>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">
+                          ₵<AnimatedNumber value={stats.total_revenue_amount} previousValue={previousStats.total_revenue_amount} formatter={(v) => Math.floor(v).toLocaleString()} />
+                        </span>
             </div>
                       <p className="text-xs sm:text-[10px] font-medium text-gray-600">Total Revenue</p>
                       <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{stats.completed_orders} Orders</p>
@@ -2672,7 +2841,9 @@ const AdminDashboard = ({ user, onLogout }) => {
                         <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
                           <CheckCircle className="w-4 h-4 text-green-600" />
                         </div>
-                        <span className="text-base sm:text-lg font-bold text-gray-900">{stats.completed_orders}</span>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">
+                          <AnimatedNumber value={stats.completed_orders} previousValue={previousStats.completed_orders} />
+                        </span>
                       </div>
                       <p className="text-xs sm:text-[10px] font-medium text-gray-600">Completed</p>
                       <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{stats.processing_orders} Processing</p>
@@ -2710,16 +2881,16 @@ const AdminDashboard = ({ user, onLogout }) => {
                       <p className="text-xs sm:text-[10px] font-medium text-gray-600">Rejected</p>
                       <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">Deposits</p>
                     </div>
-                    {/* Failed Orders */}
-                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('orders')}>
+                    {/* Referrals */}
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('referrals')}>
                       <div className="flex items-center justify-between mb-2">
-                        <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
-                          <XCircle className="w-4 h-4 text-red-600" />
+                        <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                          <UserPlus className="w-4 h-4 text-purple-600" />
                         </div>
-                        <span className="text-base sm:text-lg font-bold text-gray-900">{stats.failed_orders}</span>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">{referralStats.total_referrals}</span>
                       </div>
-                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Failed</p>
-                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">Orders</p>
+                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Referrals</p>
+                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{referralStats.pending_bonuses} Pending</p>
                     </div>
                     {/* Refunded Orders */}
                     <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('orders')}>
@@ -2775,6 +2946,91 @@ const AdminDashboard = ({ user, onLogout }) => {
                       </div>
                       <p className="text-xs sm:text-[10px] font-medium text-gray-600">Services</p>
                       <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">Active</p>
+                    </div>
+                  </div>
+
+                  {/* Service Type Stats Cards */}
+                  <div className="mt-6">
+                    <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">Service Statistics</h2>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
+                      {/* Total Likes Sent */}
+                      <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer animate-pulse-on-update" onClick={() => setActiveSection('orders')}>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="w-8 h-8 bg-pink-100 rounded-lg flex items-center justify-center">
+                            <Heart className="w-4 h-4 text-pink-600" />
+                          </div>
+                          <span className="text-base sm:text-lg font-bold text-gray-900">
+                          <AnimatedNumber value={stats.total_likes_sent} previousValue={previousStats.total_likes_sent} />
+                        </span>
+                        </div>
+                        <p className="text-xs sm:text-[10px] font-medium text-gray-600">Likes Sent</p>
+                        <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">Total</p>
+                      </div>
+                      {/* Total Followers Sent */}
+                      <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer animate-pulse-on-update" onClick={() => setActiveSection('orders')}>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                            <Users className="w-4 h-4 text-blue-600" />
+                          </div>
+                          <span className="text-base sm:text-lg font-bold text-gray-900">
+                          <AnimatedNumber value={stats.total_followers_sent} previousValue={previousStats.total_followers_sent} />
+                        </span>
+                        </div>
+                        <p className="text-xs sm:text-[10px] font-medium text-gray-600">Followers Sent</p>
+                        <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">Total</p>
+                      </div>
+                      {/* Total Views Sent */}
+                      <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer animate-pulse-on-update" onClick={() => setActiveSection('orders')}>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="w-8 h-8 bg-cyan-100 rounded-lg flex items-center justify-center">
+                            <Eye className="w-4 h-4 text-cyan-600" />
+                          </div>
+                          <span className="text-base sm:text-lg font-bold text-gray-900">
+                          <AnimatedNumber value={stats.total_views_sent} previousValue={previousStats.total_views_sent} />
+                        </span>
+                        </div>
+                        <p className="text-xs sm:text-[10px] font-medium text-gray-600">Views Sent</p>
+                        <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">Total</p>
+                      </div>
+                      {/* Total Comments Sent */}
+                      <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('orders')}>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                            <MessageCircle className="w-4 h-4 text-green-600" />
+                          </div>
+                          <span className="text-base sm:text-lg font-bold text-gray-900">
+                          <AnimatedNumber value={stats.total_comments_sent} previousValue={previousStats.total_comments_sent} />
+                        </span>
+                        </div>
+                        <p className="text-xs sm:text-[10px] font-medium text-gray-600">Comments Sent</p>
+                        <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">Total</p>
+                      </div>
+                      {/* Total Shares Sent */}
+                      <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('orders')}>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
+                            <Share2 className="w-4 h-4 text-orange-600" />
+                          </div>
+                          <span className="text-base sm:text-lg font-bold text-gray-900">
+                          <AnimatedNumber value={stats.total_shares_sent} previousValue={previousStats.total_shares_sent} />
+                        </span>
+                        </div>
+                        <p className="text-xs sm:text-[10px] font-medium text-gray-600">Shares Sent</p>
+                        <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">Total</p>
+                      </div>
+                      {/* Total Subscribers Sent */}
+                      <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('orders')}>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
+                            <UserCheck className="w-4 h-4 text-red-600" />
+                          </div>
+                          <span className="text-base sm:text-lg font-bold text-gray-900">
+                          <AnimatedNumber value={stats.total_subscribers_sent} previousValue={previousStats.total_subscribers_sent} />
+                        </span>
+                        </div>
+                        <p className="text-xs sm:text-[10px] font-medium text-gray-600">Subscribers Sent</p>
+                        <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">Total</p>
+                      </div>
                     </div>
                   </div>
                 </div>
