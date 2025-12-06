@@ -75,6 +75,41 @@ const isValidEmail = (email) => {
   return validTlds.includes(tld);
 };
 
+// Phone number validation - only accepts 0XXXXXXXXX format (10 digits starting with 0)
+const isValidGhanaPhone = (phone) => {
+  // Remove all non-digit characters for validation
+  const cleaned = phone.replace(/\D/g, '');
+  
+  // Only accept exactly 10 digits starting with 0
+  return /^0\d{9}$/.test(cleaned);
+};
+
+const formatGhanaPhone = (value) => {
+  // Remove all non-digit characters
+  let cleaned = value.replace(/\D/g, '');
+  
+  // Only allow digits, must start with 0
+  if (cleaned.length === 0) {
+    return '';
+  }
+  
+  // If first digit is not 0, add 0 at the start
+  if (!cleaned.startsWith('0')) {
+    // If user typed digits without 0, add 0
+    if (cleaned.length <= 9) {
+      cleaned = '0' + cleaned;
+    } else {
+      // If more than 9 digits without 0, only take first 9 and add 0
+      cleaned = '0' + cleaned.substring(0, 9);
+    }
+  }
+  
+  // Limit to 10 digits maximum
+  cleaned = cleaned.substring(0, 10);
+  
+  return cleaned;
+};
+
 const AuthPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -83,6 +118,7 @@ const AuthPage = () => {
   const [isLogin, setIsLogin] = useState(!hasReferralCode); // Show signup if referral code exists
   const [loading, setLoading] = useState(false);
   const [emailError, setEmailError] = useState('');
+  const [phoneError, setPhoneError] = useState('');
   const [referralCode, setReferralCode] = useState('');
   const [manualReferralCode, setManualReferralCode] = useState('');
   const [formData, setFormData] = useState({
@@ -149,6 +185,14 @@ const AuthPage = () => {
 
       if (!isLogin && !formData.phone_number.trim()) {
         toast.error('Please enter your WhatsApp number');
+        setPhoneError('Please enter your WhatsApp number');
+        setLoading(false);
+        return;
+      }
+
+      if (!isLogin && !isValidGhanaPhone(formData.phone_number.trim())) {
+        toast.error('Please enter a valid phone number in the format: 0559272762');
+        setPhoneError('Phone number must be 10 digits starting with 0 (e.g., 0559272762)');
         setLoading(false);
         return;
       }
@@ -203,9 +247,12 @@ const AuthPage = () => {
       } else {
         // SIGNUP
         try {
+          // Phone number is already in 0XXXXXXXXX format from formatting function
+          const normalizedPhone = formData.phone_number.trim().replace(/\D/g, '');
+          
           const signupMetadata = {
             name: formData.name.trim(),
-            phone_number: formData.phone_number.trim(),
+            phone_number: normalizedPhone,
           };
 
           // Add referral code to metadata if provided (manual input takes precedence)
@@ -379,12 +426,36 @@ const AuthPage = () => {
                   <Input
                     id="phone_number"
                     type="tel"
-                    placeholder="+233 XX XXX XXXX"
+                    placeholder="0559272762"
                     value={formData.phone_number}
-                    onChange={(e) => setFormData({ ...formData, phone_number: e.target.value })}
+                    onChange={(e) => {
+                      const formatted = formatGhanaPhone(e.target.value);
+                      setFormData({ ...formData, phone_number: formatted });
+                      // Clear error when user starts typing
+                      if (phoneError) {
+                        setPhoneError('');
+                      }
+                    }}
+                    onBlur={(e) => {
+                      // Validate phone when user leaves the field
+                      const phoneValue = e.target.value.trim();
+                      if (phoneValue && !isValidGhanaPhone(phoneValue)) {
+                        setPhoneError('Phone number must be 10 digits starting with 0 (e.g., 0559272762)');
+                      } else {
+                        setPhoneError('');
+                      }
+                    }}
                     required={!isLogin}
-                    className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    className={`w-full h-11 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
+                      phoneError
+                        ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+                        : 'border-gray-300'
+                    }`}
                   />
+                  {phoneError && (
+                    <p className="mt-1 text-sm text-red-600">{phoneError}</p>
+                  )}
+                  <p className="mt-1 text-xs text-gray-500">Format: 0559272762 (10 digits starting with 0)</p>
                 </div>
               </>
             )}

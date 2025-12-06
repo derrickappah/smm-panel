@@ -199,6 +199,7 @@ const AdminDashboard = ({ user, onLogout }) => {
   const [balanceAdjustment, setBalanceAdjustment] = useState({ userId: '', amount: '', type: 'add' });
   const [balanceUserSearch, setBalanceUserSearch] = useState('');
   const [balanceUserDropdownOpen, setBalanceUserDropdownOpen] = useState(false);
+  const [userExportFormat, setUserExportFormat] = useState('name-phone'); // 'name-phone' or 'name-email'
   
   // Active section state (for sidebar navigation)
   const [activeSection, setActiveSection] = useState('dashboard');
@@ -1054,6 +1055,41 @@ const AdminDashboard = ({ user, onLogout }) => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const exportUsersToCSV = (format = userExportFormat) => {
+    let headers, rows;
+    
+    if (format === 'name-phone') {
+      headers = ['Name', 'Phone Number'];
+      rows = filteredUsers.map(user => [
+        user.name || 'N/A',
+        user.phone_number || 'N/A'
+      ]);
+    } else {
+      headers = ['Name', 'Email'];
+      rows = filteredUsers.map(user => [
+        user.name || 'N/A',
+        user.email || 'N/A'
+      ]);
+    }
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    const formatLabel = format === 'name-phone' ? 'name-phone' : 'name-email';
+    link.setAttribute('download', `users_${formatLabel}_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Users exported successfully');
   };
 
   const getFilteredReferrals = () => {
@@ -4379,7 +4415,7 @@ const AdminDashboard = ({ user, onLogout }) => {
             <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
               <div className="flex flex-col gap-4 mb-6">
                 <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-4 flex-wrap">
                 <h2 className="text-xl sm:text-2xl font-bold text-gray-900">All Users</h2>
                     <Button
                       onClick={() => fetchAllData(true)}
@@ -4391,6 +4427,27 @@ const AdminDashboard = ({ user, onLogout }) => {
                       <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
                       Refresh
                     </Button>
+                    <div className="flex items-center gap-2">
+                      <Select value={userExportFormat} onValueChange={setUserExportFormat}>
+                        <SelectTrigger className="w-[180px] h-9">
+                          <SelectValue placeholder="Export format" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="name-phone">Name & Phone</SelectItem>
+                          <SelectItem value="name-email">Name & Email</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        onClick={() => exportUsersToCSV(userExportFormat)}
+                        variant="outline"
+                        size="sm"
+                        className="flex items-center gap-2"
+                        disabled={filteredUsers.length === 0}
+                      >
+                        <Download className="w-4 h-4" />
+                        Export CSV
+                      </Button>
+                    </div>
                   </div>
                 </div>
                 {/* Search and Date Filter */}
