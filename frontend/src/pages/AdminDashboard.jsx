@@ -17,7 +17,7 @@ import {
   Plus, Minus, TrendingUp, CheckCircle, XCircle, Clock, Filter,
   Download, RefreshCw, MessageSquare, Send, Layers, Wallet, Receipt, HelpCircle,
   AlertCircle, BarChart3, Activity, FileText, Settings, Bell, Power, PowerOff,
-  UserPlus, Heart, Eye, MessageCircle, Share2, UserCheck
+  UserPlus, Heart, Eye, MessageCircle, Share2, UserCheck, CreditCard
 } from 'lucide-react';
 
 // Animated Number Component
@@ -78,6 +78,7 @@ const AdminDashboard = ({ user, onLogout }) => {
     users_today: 0,
     orders_today: 0,
     deposits_today: 0,
+    deposits_amount_today: 0,
     revenue_today: 0,
     processing_orders: 0,
     cancelled_orders: 0,
@@ -96,7 +97,8 @@ const AdminDashboard = ({ user, onLogout }) => {
     total_views_sent: 0,
     total_comments_sent: 0,
     total_shares_sent: 0,
-    total_subscribers_sent: 0
+    total_subscribers_sent: 0,
+    active_payment_methods: 0
   });
   const [previousStats, setPreviousStats] = useState({});
   const [users, setUsers] = useState([]);
@@ -220,14 +222,16 @@ const AdminDashboard = ({ user, onLogout }) => {
 
   useEffect(() => {
     fetchAllData(true); // Check SMMGen status on initial load
+    fetchReferrals(); // Always fetch referral stats for dashboard card
     if (activeSection === 'referrals') {
-      fetchReferrals();
+      // Additional fetch if already on referrals page (handles refresh)
     }
 
     // Subscribe to real-time updates for all relevant tables
     const refreshData = () => {
       setTimeout(() => {
         fetchAllData(false); // Skip SMMGen status check on real-time updates
+        fetchReferrals(); // Also refresh referral stats
       }, 200);
     };
 
@@ -657,6 +661,13 @@ const AdminDashboard = ({ user, onLogout }) => {
         return depositDate >= today && depositDate <= todayEnd;
       }).length;
 
+      const depositsAmountToday = currentDeposits
+        .filter(d => {
+          const depositDate = new Date(d.created_at);
+          return depositDate >= today && depositDate <= todayEnd && d.status === 'approved';
+        })
+        .reduce((sum, d) => sum + parseFloat(d.amount || 0), 0);
+
       const revenueToday = currentOrders
         .filter(o => {
           const orderDate = new Date(o.created_at);
@@ -751,6 +762,7 @@ const AdminDashboard = ({ user, onLogout }) => {
         users_today: usersToday,
         orders_today: ordersToday,
         deposits_today: depositsToday,
+        deposits_amount_today: depositsAmountToday,
         revenue_today: revenueToday,
         processing_orders: processingOrders,
         cancelled_orders: cancelledOrders,
@@ -769,7 +781,8 @@ const AdminDashboard = ({ user, onLogout }) => {
         total_views_sent: totalViewsSent,
         total_comments_sent: totalCommentsSent,
         total_shares_sent: totalSharesSent,
-        total_subscribers_sent: totalSubscribersSent
+        total_subscribers_sent: totalSubscribersSent,
+        active_payment_methods: Object.values(paymentMethodSettings).filter(enabled => enabled === true).length
       };
       
       setPreviousStats(stats);
@@ -2761,7 +2774,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                     }
                   `}</style>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3 sm:gap-4">
-                    {/* Users Today */}
+                    {/* Users Today - Growth Metric - First Card */}
                     <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer animate-pulse-on-update" onClick={() => setActiveSection('users')}>
                       <div className="flex items-center justify-between mb-2">
                         <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
@@ -2774,7 +2787,32 @@ const AdminDashboard = ({ user, onLogout }) => {
                       <p className="text-xs sm:text-[10px] font-medium text-gray-600">Users Today</p>
                       <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{stats.total_users} Total</p>
           </div>
-                    {/* Orders Today */}
+                    {/* Deposits Today (Amount) - Most Important Financial Metric */}
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer animate-pulse-on-update" onClick={() => setActiveSection('deposits')}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
+                          <DollarSign className="w-4 h-4 text-emerald-600" />
+                        </div>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">
+                          ₵<AnimatedNumber value={stats.deposits_amount_today} previousValue={previousStats.deposits_amount_today} formatter={(v) => Math.floor(v).toLocaleString()} />
+                        </span>
+            </div>
+                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Deposits Today</p>
+          </div>
+                    {/* Total Deposits - All Time Financial */}
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('deposits')}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
+                          <Wallet className="w-4 h-4 text-emerald-600" />
+                        </div>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">
+                          ₵<AnimatedNumber value={stats.total_deposits_amount} previousValue={previousStats.total_deposits_amount} formatter={(v) => Math.floor(v).toLocaleString()} />
+                        </span>
+                      </div>
+                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Total Deposits</p>
+                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{stats.confirmed_deposits} Confirmed</p>
+                    </div>
+                    {/* Orders Today - Today's Activity */}
                     <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer animate-pulse-on-update" onClick={() => setActiveSection('orders')}>
                       <div className="flex items-center justify-between mb-2">
                         <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -2787,55 +2825,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                       <p className="text-xs sm:text-[10px] font-medium text-gray-600">Orders Today</p>
                       <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{stats.total_orders} Total</p>
           </div>
-                    {/* Deposits Today */}
-                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer animate-pulse-on-update" onClick={() => setActiveSection('deposits')}>
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
-                          <DollarSign className="w-4 h-4 text-emerald-600" />
-                        </div>
-                        <span className="text-base sm:text-lg font-bold text-gray-900">
-                          <AnimatedNumber value={stats.deposits_today} previousValue={previousStats.deposits_today} />
-                        </span>
-            </div>
-                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Deposits Today</p>
-                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{stats.pending_deposits} Pending</p>
-          </div>
-                    {/* Cancelled Orders */}
-                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('orders')}>
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
-                          <XCircle className="w-4 h-4 text-orange-600" />
-                        </div>
-                        <span className="text-base sm:text-lg font-bold text-gray-900">{stats.cancelled_orders}</span>
-            </div>
-                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Cancelled</p>
-                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">Orders</p>
-          </div>
-                    {/* Total Revenue */}
-                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('transactions')}>
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                          <TrendingUp className="w-4 h-4 text-green-600" />
-                        </div>
-                        <span className="text-base sm:text-lg font-bold text-gray-900">
-                          ₵<AnimatedNumber value={stats.total_revenue_amount} previousValue={previousStats.total_revenue_amount} formatter={(v) => Math.floor(v).toLocaleString()} />
-                        </span>
-            </div>
-                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Total Revenue</p>
-                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{stats.completed_orders} Orders</p>
-          </div>
-                    {/* Average Order Value */}
-                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('orders')}>
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
-                          <BarChart3 className="w-4 h-4 text-purple-600" />
-                        </div>
-                        <span className="text-base sm:text-lg font-bold text-gray-900">₵{stats.average_order_value.toFixed(0)}</span>
-            </div>
-                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Avg Order</p>
-                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">Per Order</p>
-                    </div>
-                    {/* Completed Orders */}
+                    {/* Completed Orders - Success Metric */}
                     <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('orders')}>
                       <div className="flex items-center justify-between mb-2">
                         <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
@@ -2848,18 +2838,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                       <p className="text-xs sm:text-[10px] font-medium text-gray-600">Completed</p>
                       <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{stats.processing_orders} Processing</p>
                     </div>
-                    {/* Processing Orders */}
-                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('orders')}>
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                          <Clock className="w-4 h-4 text-blue-600" />
-                        </div>
-                        <span className="text-base sm:text-lg font-bold text-gray-900">{stats.processing_orders}</span>
-                      </div>
-                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Processing</p>
-                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{stats.cancelled_orders} Cancelled</p>
-                    </div>
-                    {/* Pending Deposits */}
+                    {/* Pending Deposits - Action Required */}
                     <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('deposits')}>
                       <div className="flex items-center justify-between mb-2">
                         <div className="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center">
@@ -2870,40 +2849,18 @@ const AdminDashboard = ({ user, onLogout }) => {
                       <p className="text-xs sm:text-[10px] font-medium text-gray-600">Pending</p>
                       <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{stats.confirmed_deposits} Confirmed</p>
                     </div>
-                    {/* Rejected Deposits */}
-                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('deposits')}>
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
-                          <XCircle className="w-4 h-4 text-red-600" />
-                        </div>
-                        <span className="text-base sm:text-lg font-bold text-gray-900">{stats.rejected_deposits}</span>
-                      </div>
-                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Rejected</p>
-                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">Deposits</p>
-                    </div>
-                    {/* Referrals */}
-                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('referrals')}>
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
-                          <UserPlus className="w-4 h-4 text-purple-600" />
-                        </div>
-                        <span className="text-base sm:text-lg font-bold text-gray-900">{referralStats.total_referrals}</span>
-                      </div>
-                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Referrals</p>
-                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{referralStats.pending_bonuses} Pending</p>
-                    </div>
-                    {/* Refunded Orders */}
+                    {/* Processing Orders - Operational */}
                     <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('orders')}>
                       <div className="flex items-center justify-between mb-2">
-                        <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
-                          <Receipt className="w-4 h-4 text-orange-600" />
+                        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <Clock className="w-4 h-4 text-blue-600" />
                         </div>
-                        <span className="text-base sm:text-lg font-bold text-gray-900">{stats.refunded_orders}</span>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">{stats.processing_orders}</span>
                       </div>
-                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Refunded</p>
-                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{stats.failed_refunds} Failed</p>
+                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Processing</p>
+                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{stats.cancelled_orders} Cancelled</p>
                     </div>
-                    {/* Open Support Tickets */}
+                    {/* Open Support Tickets - Support Priority */}
                     <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('support')}>
                       <div className="flex items-center justify-between mb-2">
                         <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -2914,18 +2871,29 @@ const AdminDashboard = ({ user, onLogout }) => {
                       <p className="text-xs sm:text-[10px] font-medium text-gray-600">Open Tickets</p>
                       <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{stats.in_progress_tickets} In Progress</p>
                     </div>
-                    {/* Resolved Tickets */}
-                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('support')}>
+                    {/* Referrals - Growth */}
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('referrals')}>
                       <div className="flex items-center justify-between mb-2">
-                        <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                          <CheckCircle className="w-4 h-4 text-green-600" />
+                        <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                          <UserPlus className="w-4 h-4 text-purple-600" />
                         </div>
-                        <span className="text-base sm:text-lg font-bold text-gray-900">{stats.resolved_tickets}</span>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">{referralStats.total_referrals}</span>
                       </div>
-                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Resolved</p>
-                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">Tickets</p>
+                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Referrals</p>
+                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{referralStats.pending_bonuses} Pending</p>
                     </div>
-                    {/* Total Transactions */}
+                    {/* Total Services - Inventory */}
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('services')}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                          <Package className="w-4 h-4 text-purple-600" />
+                        </div>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">{stats.total_services}</span>
+                      </div>
+                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Services</p>
+                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">Active</p>
+                    </div>
+                    {/* Total Transactions - Activity */}
                     <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('transactions')}>
                       <div className="flex items-center justify-between mb-2">
                         <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
@@ -2936,15 +2904,61 @@ const AdminDashboard = ({ user, onLogout }) => {
                       <p className="text-xs sm:text-[10px] font-medium text-gray-600">Transactions</p>
                       <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">All Time</p>
                     </div>
-                    {/* Total Services */}
-                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('services')}>
+                    {/* Average Order Value - Analytics */}
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('orders')}>
                       <div className="flex items-center justify-between mb-2">
                         <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
-                          <Package className="w-4 h-4 text-purple-600" />
+                          <BarChart3 className="w-4 h-4 text-purple-600" />
                         </div>
-                        <span className="text-base sm:text-lg font-bold text-gray-900">{stats.total_services}</span>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">₵{stats.average_order_value.toFixed(0)}</span>
+            </div>
+                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Avg Order</p>
+                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">Per Order</p>
+                    </div>
+                    {/* Cancelled Orders - Issues */}
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('orders')}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
+                          <XCircle className="w-4 h-4 text-orange-600" />
+                        </div>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">{stats.cancelled_orders}</span>
+            </div>
+                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Cancelled</p>
+                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">Orders</p>
+          </div>
+                    {/* Rejected Deposits - Issues */}
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('deposits')}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
+                          <XCircle className="w-4 h-4 text-red-600" />
+                        </div>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">{stats.rejected_deposits}</span>
                       </div>
-                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Services</p>
+                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Rejected</p>
+                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">Deposits</p>
+                    </div>
+                    {/* Refunded Orders - Issues */}
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('orders')}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
+                          <Receipt className="w-4 h-4 text-orange-600" />
+                        </div>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">{stats.refunded_orders}</span>
+                      </div>
+                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Refunded</p>
+                      <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{stats.failed_refunds} Failed</p>
+                    </div>
+                    {/* Active Payment Methods */}
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" onClick={() => setActiveSection('payment-methods')}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="w-8 h-8 bg-teal-100 rounded-lg flex items-center justify-center">
+                          <CreditCard className="w-4 h-4 text-teal-600" />
+                        </div>
+                        <span className="text-base sm:text-lg font-bold text-gray-900">
+                          <AnimatedNumber value={stats.active_payment_methods} previousValue={previousStats.active_payment_methods} />
+                        </span>
+                      </div>
+                      <p className="text-xs sm:text-[10px] font-medium text-gray-600">Payment Methods</p>
                       <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">Active</p>
                     </div>
                   </div>
