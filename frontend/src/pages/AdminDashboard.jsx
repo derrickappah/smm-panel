@@ -699,8 +699,9 @@ const AdminDashboard = ({ user, onLogout }) => {
       const totalTransactions = transactionsCountRes?.count ?? filteredTransactions.length;
       const averageOrderValue = completedOrders > 0 ? totalRevenue / completedOrders : 0;
 
-      // Calculate service type totals from completed orders
-      const completedOrdersList = currentOrders.filter(o => o.status === 'completed');
+      // Calculate service type totals from ALL completed orders (not filtered by date range)
+      // Service Statistics should show cumulative totals regardless of date filter
+      const completedOrdersList = (finalOrders || []).filter(o => o.status === 'completed');
       
       const totalLikesSent = completedOrdersList
         .filter(o => {
