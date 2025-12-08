@@ -2,10 +2,7 @@
   "name": "boostup-gh-api",
   "version": "1.0.0",
   "description": "API serverless functions for BoostUp GH",
-  "packageManager": "npm@10.9.2",
-  "scripts": {
-    "install": "npm install --legacy-peer-deps"
-  },
+  "packageManager": "yarn@1.22.22",
   "dependencies": {
     "@supabase/supabase-js": "^2.84.0"
   }
