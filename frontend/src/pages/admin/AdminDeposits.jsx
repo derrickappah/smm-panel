@@ -174,11 +174,41 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
     }
   }, [onRefresh]);
 
+  // Helper function to format payment method name
+  const formatPaymentMethod = useCallback((method) => {
+    if (!method) return 'N/A';
+    const methodMap = {
+      'paystack': 'Paystack',
+      'manual': 'Mobile Money',
+      'momo': 'Mobile Money',
+      'hubtel': 'Hubtel',
+      'korapay': 'Korapay',
+      'ref_bonus': 'Referral Bonus'
+    };
+    return methodMap[method.toLowerCase()] || method.charAt(0).toUpperCase() + method.slice(1);
+  }, []);
+
+  // Helper function to get payment method color classes
+  const getPaymentMethodColors = useCallback((method) => {
+    if (!method) return 'bg-gray-100 text-gray-700';
+    const methodLower = method.toLowerCase();
+    const colorMap = {
+      'paystack': 'bg-purple-100 text-purple-700 border-purple-200',
+      'manual': 'bg-blue-100 text-blue-700 border-blue-200',
+      'momo': 'bg-blue-100 text-blue-700 border-blue-200',
+      'hubtel': 'bg-orange-100 text-orange-700 border-orange-200',
+      'korapay': 'bg-indigo-100 text-indigo-700 border-indigo-200',
+      'ref_bonus': 'bg-pink-100 text-pink-700 border-pink-200'
+    };
+    return colorMap[methodLower] || 'bg-gray-100 text-gray-700 border-gray-200';
+  }, []);
+
   const renderDepositRow = useCallback((deposit) => {
-    const isManual = deposit.payment_method === 'manual';
-    const isPaystack = deposit.payment_method === 'paystack';
-    const isHubtel = deposit.payment_method === 'hubtel';
-    const isKorapay = deposit.payment_method === 'korapay';
+    const depositMethod = deposit.deposit_method || deposit.payment_method; // Support both for backward compatibility
+    const isManual = depositMethod === 'manual' || depositMethod === 'momo';
+    const isPaystack = depositMethod === 'paystack';
+    const isHubtel = depositMethod === 'hubtel';
+    const isKorapay = depositMethod === 'korapay';
 
     return (
       <div className="grid grid-cols-12 gap-4 p-4 items-center bg-white hover:bg-gray-50 transition-colors border-b border-gray-200">
@@ -202,9 +232,14 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
           </span>
         </div>
         <div className="col-span-2">
-          <p className="text-sm text-gray-700">{deposit.payment_method || 'N/A'}</p>
+          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${getPaymentMethodColors(depositMethod)}`}>
+            {formatPaymentMethod(depositMethod)}
+          </span>
           {deposit.paystack_reference && (
-            <p className="text-xs text-gray-500">Ref: {deposit.paystack_reference}</p>
+            <p className="text-xs text-gray-500 mt-1">Ref: {deposit.paystack_reference}</p>
+          )}
+          {deposit.korapay_reference && (
+            <p className="text-xs text-gray-500 mt-1">Ref: {deposit.korapay_reference}</p>
           )}
         </div>
         <div className="col-span-2">
@@ -238,7 +273,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
         </div>
       </div>
     );
-  }, [handleApproveManualDeposit, approvingDeposit]);
+  }, [handleApproveManualDeposit, approvingDeposit, formatPaymentMethod, getPaymentMethodColors]);
 
   if (isLoading) {
     return (
