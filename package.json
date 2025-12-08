@@ -2,7 +2,7 @@
   "name": "boostup-gh-api",
   "version": "1.0.0",
   "description": "API serverless functions for BoostUp GH",
-  "packageManager": "yarn@1.22.22",
+  "packageManager": "yarn@4.9.1",
   "dependencies": {
     "@supabase/supabase-js": "^2.84.0"
   }
