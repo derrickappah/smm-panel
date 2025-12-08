@@ -1,21 +1,33 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 import { Analytics } from "@vercel/analytics/react";
-import LandingPage from "@/pages/LandingPage";
-import AuthPage from "@/pages/AuthPage";
-import Dashboard from "@/pages/Dashboard";
-import ServicesPage from "@/pages/ServicesPage";
-import OrderHistory from "@/pages/OrderHistory";
-import AdminDashboard from "@/pages/AdminDashboard";
-import SupportPage from "@/pages/SupportPage";
-import TransactionsPage from "@/pages/TransactionsPage";
-import PaymentCallback from "@/pages/PaymentCallback";
 import SupabaseSetup from "@/components/SupabaseSetup";
 import { Toaster } from "@/components/ui/sonner";
 import { supabase, isConfigured } from "@/lib/supabase";
+import { queryClient } from "@/lib/queryClient";
+import * as serviceWorkerRegistration from "./serviceWorkerRegistration";
+
+// Lazy load all page components for code splitting
+const LandingPage = lazy(() => import("@/pages/LandingPage"));
+const AuthPage = lazy(() => import("@/pages/AuthPage"));
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const ServicesPage = lazy(() => import("@/pages/ServicesPage"));
+const OrderHistory = lazy(() => import("@/pages/OrderHistory"));
+const AdminDashboard = lazy(() => import("@/pages/AdminDashboard"));
+const SupportPage = lazy(() => import("@/pages/SupportPage"));
+const TransactionsPage = lazy(() => import("@/pages/TransactionsPage"));
+const PaymentCallback = lazy(() => import("@/pages/PaymentCallback"));
+
+// Loading fallback component
+const PageLoader = () => (
+  <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50">
+    <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-indigo-600"></div>
+  </div>
+);
 
 function App() {
   const [user, setUser] = useState(null);
@@ -68,6 +80,21 @@ function App() {
     };
   }, []);
 
+  // Register service worker
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') {
+      serviceWorkerRegistration.register({
+        onSuccess: () => {
+          console.log('Service Worker registered successfully');
+        },
+        onUpdate: (registration) => {
+          console.log('Service Worker update available');
+          // Optionally show a notification to user about update
+        },
+      });
+    }
+  }, []);
+
   const loadUserProfile = async (userId) => {
     try {
       // First, get auth user
@@ -90,7 +117,7 @@ function App() {
       try {
         const { data: profile, error } = await supabase
           .from('profiles')
-          .select('*')
+          .select('id, email, name, balance, role, phone_number')
           .eq('id', userId)
           .single();
 
@@ -229,77 +256,81 @@ function App() {
   }
 
   return (
-    <HelmetProvider>
-      <div className="App">
-        <Toaster position="top-right" />
-        <BrowserRouter>
-          <Routes>
-          <Route path="/" element={user ? <Navigate to={user?.role === 'admin' ? '/admin' : '/dashboard'} /> : <LandingPage />} />
-          <Route path="/auth" element={user ? <Navigate to={user?.role === 'admin' ? '/admin' : '/dashboard'} /> : <AuthPage />} />
-          <Route
-            path="/dashboard"
-            element={
-              user ? (
-                user?.role === 'admin' ? (
-                  <Navigate to="/admin" />
-                ) : (
-                  <Dashboard user={user} onLogout={logout} onUpdateUser={() => loadUserProfile(user.id)} />
-                )
-              ) : (
-                <Navigate to="/auth" />
-              )
-            }
-          />
-          <Route
-            path="/services"
-            element={user ? <ServicesPage user={user} onLogout={logout} /> : <Navigate to="/auth" />}
-          />
-          <Route
-            path="/orders"
-            element={user ? <OrderHistory user={user} onLogout={logout} /> : <Navigate to="/auth" />}
-          />
-          <Route
-            path="/admin"
-            element={
-              user?.role === 'admin' ? (
-                <AdminDashboard user={user} onLogout={logout} />
-              ) : (
-                <Navigate to="/dashboard" />
-              )
-            }
-          />
-          <Route
-            path="/support"
-            element={
-              user ? (
-                <SupportPage user={user} onLogout={logout} />
-              ) : (
-                <Navigate to="/auth" />
-              )
-            }
-          />
-          <Route
-            path="/transactions"
-            element={
-              user ? (
-                <TransactionsPage user={user} onLogout={logout} />
-              ) : (
-                <Navigate to="/auth" />
-              )
-            }
-          />
-          <Route
-            path="/payment/callback"
-            element={
-              <PaymentCallback onUpdateUser={() => user && loadUserProfile(user.id)} />
-            }
-          />
-          </Routes>
-        </BrowserRouter>
-        <SpeedInsights />
-        <Analytics />
-      </div>
-    </HelmetProvider>
+    <QueryClientProvider client={queryClient}>
+      <HelmetProvider>
+        <div className="App">
+          <Toaster position="top-right" />
+          <BrowserRouter>
+            <Suspense fallback={<PageLoader />}>
+              <Routes>
+              <Route path="/" element={user ? <Navigate to={user?.role === 'admin' ? '/admin' : '/dashboard'} /> : <LandingPage />} />
+              <Route path="/auth" element={user ? <Navigate to={user?.role === 'admin' ? '/admin' : '/dashboard'} /> : <AuthPage />} />
+              <Route
+                path="/dashboard"
+                element={
+                  user ? (
+                    user?.role === 'admin' ? (
+                      <Navigate to="/admin" />
+                    ) : (
+                      <Dashboard user={user} onLogout={logout} onUpdateUser={() => loadUserProfile(user.id)} />
+                    )
+                  ) : (
+                    <Navigate to="/auth" />
+                  )
+                }
+              />
+              <Route
+                path="/services"
+                element={user ? <ServicesPage user={user} onLogout={logout} /> : <Navigate to="/auth" />}
+              />
+              <Route
+                path="/orders"
+                element={user ? <OrderHistory user={user} onLogout={logout} /> : <Navigate to="/auth" />}
+              />
+              <Route
+                path="/admin"
+                element={
+                  user?.role === 'admin' ? (
+                    <AdminDashboard user={user} onLogout={logout} />
+                  ) : (
+                    <Navigate to="/dashboard" />
+                  )
+                }
+              />
+              <Route
+                path="/support"
+                element={
+                  user ? (
+                    <SupportPage user={user} onLogout={logout} />
+                  ) : (
+                    <Navigate to="/auth" />
+                  )
+                }
+              />
+              <Route
+                path="/transactions"
+                element={
+                  user ? (
+                    <TransactionsPage user={user} onLogout={logout} />
+                  ) : (
+                    <Navigate to="/auth" />
+                  )
+                }
+              />
+              <Route
+                path="/payment/callback"
+                element={
+                  <PaymentCallback onUpdateUser={() => user && loadUserProfile(user.id)} />
+                }
+              />
+              </Routes>
+            </Suspense>
+          </BrowserRouter>
+          <SpeedInsights />
+          <Analytics />
+        </div>
+      </HelmetProvider>
+    </QueryClientProvider>
   );
 }
 

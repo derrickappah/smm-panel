@@ -54,7 +54,7 @@ export const getOrderStatusHistory = async (orderId) => {
   try {
     const { data, error } = await supabase
       .from('order_status_history')
-      .select('*')
+      .select('id, order_id, status, source, smmgen_response, previous_status, created_by, created_at')
       .eq('order_id', orderId)
       .order('created_at', { ascending: false });
 

@@ -169,7 +169,7 @@ const SupportPage = ({ user, onLogout }) => {
 
       const { data, error } = await supabase
         .from('support_tickets')
-        .select('*')
+        .select('id, user_id, subject, message, status, created_at, updated_at, admin_response')
         .eq('user_id', authUser.id)
         .order('created_at', { ascending: false });
 

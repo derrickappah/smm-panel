@@ -1,37 +1,41 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
-import { placeSMMGenOrder, getSMMGenOrderStatus } from '@/lib/smmgen';
+import { placeSMMGenOrder } from '@/lib/smmgen';
 import { saveOrderStatusHistory } from '@/lib/orderStatusHistory';
 import Navbar from '@/components/Navbar';
-import { Wallet, ShoppingCart, Clock, Search, Layers } from 'lucide-react';
 import SEO from '@/components/SEO';
 import ReferralSection from '@/components/ReferralSection';
+import DashboardStats from '@/components/dashboard/DashboardStats';
+import DashboardDeposit from '@/components/dashboard/DashboardDeposit';
+import DashboardOrderForm from '@/components/dashboard/DashboardOrderForm';
+import DashboardOrders from '@/components/dashboard/DashboardOrders';
+import { useDashboardData } from '@/hooks/useDashboardData';
+import { usePaymentMethods } from '@/hooks/usePaymentMethods';
 // Paystack will be loaded via react-paystack package
 
 const Dashboard = ({ user, onLogout, onUpdateUser }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [services, setServices] = useState([]);
-  const [recentOrders, setRecentOrders] = useState([]);
+  
+  // Use custom hooks
+  const { services, recentOrders, fetchServices, fetchRecentOrders } = useDashboardData();
+  const { 
+    depositMethod, 
+    setDepositMethod, 
+    paymentMethodSettings, 
+    minDepositSettings 
+  } = usePaymentMethods();
   const [depositAmount, setDepositAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [pendingTransaction, setPendingTransaction] = useState(null);
-  const [serviceSearch, setServiceSearch] = useState('');
-  const [selectOpen, setSelectOpen] = useState(false);
   const [orderForm, setOrderForm] = useState({
     service_id: '',
     link: '',
     quantity: ''
   });
   // Manual deposit states
-  const [depositMethod, setDepositMethod] = useState(null); // 'paystack' or 'manual' - null until settings are loaded
   const [manualDepositForm, setManualDepositForm] = useState({
     amount: '',
     momo_number: '',
@@ -45,171 +49,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
   // Korapay public key - should be in environment variable
   const korapayPublicKey = process.env.REACT_APP_KORAPAY_PUBLIC_KEY || '';
 
-  const [paymentMethodSettings, setPaymentMethodSettings] = useState({
-    paystack_enabled: true,
-    manual_enabled: true,
-    hubtel_enabled: true,
-    korapay_enabled: true
-  });
-  
-  // Minimum deposit settings
-  const [minDepositSettings, setMinDepositSettings] = useState({
-    paystack_min: 10,
-    manual_min: 10,
-    hubtel_min: 1,
-    korapay_min: 1
-  });
-
-  useEffect(() => {
-    // Fetch payment method settings
-    const fetchPaymentSettings = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('app_settings')
-          .select('*')
-          .in('key', [
-            'payment_method_paystack_enabled', 
-            'payment_method_manual_enabled', 
-            'payment_method_hubtel_enabled', 
-            'payment_method_korapay_enabled',
-            'payment_method_paystack_min_deposit',
-            'payment_method_manual_min_deposit',
-            'payment_method_hubtel_min_deposit',
-            'payment_method_korapay_min_deposit'
-          ]);
-        
-        if (!error && data) {
-          const settings = {};
-          data.forEach(setting => {
-            settings[setting.key] = setting.value;
-          });
-          const newSettings = {
-            paystack_enabled: settings.payment_method_paystack_enabled !== 'false',
-            manual_enabled: settings.payment_method_manual_enabled !== 'false',
-            hubtel_enabled: settings.payment_method_hubtel_enabled !== 'false',
-            korapay_enabled: settings.payment_method_korapay_enabled !== 'false'
-          };
-          setPaymentMethodSettings(newSettings);
-          
-          // Set minimum deposit settings with fallback to defaults
-          setMinDepositSettings({
-            paystack_min: parseFloat(settings.payment_method_paystack_min_deposit) || 10,
-            manual_min: parseFloat(settings.payment_method_manual_min_deposit) || 10,
-            hubtel_min: parseFloat(settings.payment_method_hubtel_min_deposit) || 1,
-            korapay_min: parseFloat(settings.payment_method_korapay_min_deposit) || 1
-          });
-          
-          // Auto-select method based on what's enabled
-          // Note: Korapay is disabled by default due to CORS restrictions - requires server-side integration
-          if (!newSettings.paystack_enabled && newSettings.manual_enabled && !newSettings.hubtel_enabled) {
-            setDepositMethod('manual');
-          } else if (newSettings.paystack_enabled && !newSettings.manual_enabled && !newSettings.hubtel_enabled) {
-            setDepositMethod('paystack');
-          } else if (!newSettings.paystack_enabled && !newSettings.manual_enabled && newSettings.hubtel_enabled) {
-            setDepositMethod('hubtel');
-          } else if (newSettings.paystack_enabled || newSettings.manual_enabled || newSettings.hubtel_enabled) {
-            // At least one enabled, default to paystack if available, else first available
-            setDepositMethod(
-              newSettings.paystack_enabled ? 'paystack' : 
-              (newSettings.manual_enabled ? 'manual' : 'hubtel')
-            );
-          } else {
-            // All disabled
-            setDepositMethod(null);
-          }
-        }
-      } catch (error) {
-        console.warn('Error fetching payment method settings:', error);
-        // Default to both enabled if settings can't be fetched
-      }
-    };
-    
-    fetchPaymentSettings().catch((error) => {
-      console.error('Error fetching payment settings:', error);
-    });
-    fetchServices().catch((error) => {
-      console.error('Error fetching services:', error);
-    });
-    fetchRecentOrders().catch((error) => {
-      console.error('Error fetching recent orders:', error);
-    });
-    verifyPendingPayments().catch((error) => {
-      console.error('Error verifying pending payments:', error);
-    });
-    
-    // Ensure PaystackPop is loaded (react-paystack should load it, but we ensure it's available)
-    if (!window.PaystackPop && !document.querySelector('script[src*="paystack"]')) {
-      const script = document.createElement('script');
-      script.src = 'https://js.paystack.co/v1/inline.js';
-      script.async = true;
-      script.onerror = (error) => {
-        console.warn('Failed to load Paystack script:', error);
-        // Don't show error to user yet - will show when they try to pay
-      };
-      script.onload = () => {
-        console.log('Paystack script loaded successfully');
-      };
-      document.head.appendChild(script);
-    }
-    
-    // Korapay is now handled via serverless functions - no SDK needed
-  }, []);
-
-  // Global error handler for unhandled promise rejections
-  useEffect(() => {
-    const handleUnhandledRejection = (event) => {
-      console.error('Unhandled promise rejection:', event.reason);
-      // Prevent the default browser error handling
-      event.preventDefault();
-      // Log the error for debugging
-      if (event.reason) {
-        console.error('Rejection reason:', event.reason);
-        if (event.reason.message) {
-          console.error('Error message:', event.reason.message);
-        }
-        if (event.reason.stack) {
-          console.error('Error stack:', event.reason.stack);
-        }
-      }
-      // Don't show toast for CORS errors - they're expected and already handled
-      if (event.reason && typeof event.reason === 'object') {
-        const errorMsg = event.reason.message || event.reason.toString() || '';
-        if (!errorMsg.includes('CORS') && !errorMsg.includes('Failed to fetch') && !errorMsg.includes('timed out')) {
-          // Only show toast for unexpected errors
-          toast.error('An unexpected error occurred. Please try again.');
-        }
-      }
-    };
-
-    window.addEventListener('unhandledrejection', handleUnhandledRejection);
-
-    return () => {
-      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
-    };
-  }, []);
-
-  // Periodic status checking for orders and pending payments (every 2 minutes)
-  useEffect(() => {
-    if (!user) return;
-
-    const interval = setInterval(() => {
-      // Only check if user is authenticated
-      if (user) {
-        console.log('Periodic status check...');
-        fetchRecentOrders().catch((error) => {
-          console.error('Error in periodic order status check:', error);
-        });
-        verifyPendingPayments().catch((error) => {
-          console.error('Error in periodic payment verification:', error);
-        });
-      }
-    }, 120000); // Check every 2 minutes
-
-    return () => clearInterval(interval);
-  }, [user]);
-
-  // Verify pending payments that might have succeeded
-  const verifyPendingPayments = async () => {
+  // Verify pending payments that might have succeeded (complex version with balance updates)
+  const verifyPendingPayments = useCallback(async () => {
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) return;
@@ -219,7 +60,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       
       const { data: pendingTransactions, error } = await supabase
         .from('transactions')
-        .select('*')
+        .select('id, user_id, type, amount, status, payment_method, paystack_reference, korapay_reference, created_at')
         .eq('user_id', authUser.id)
         .eq('type', 'deposit')
         .eq('status', 'pending')
@@ -432,7 +273,73 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     } catch (error) {
       console.error('Error in verifyPendingPayments:', error);
     }
-  };
+  }, [onUpdateUser]);
+
+  useEffect(() => {
+    // Fetch initial data
+    fetchServices().catch((error) => {
+      console.error('Error fetching services:', error);
+    });
+    fetchRecentOrders().catch((error) => {
+      console.error('Error fetching recent orders:', error);
+    });
+    verifyPendingPayments().catch((error) => {
+      console.error('Error verifying pending payments:', error);
+    });
+  }, [fetchServices, fetchRecentOrders, verifyPendingPayments]);
+
+  // Global error handler for unhandled promise rejections
+  useEffect(() => {
+    const handleUnhandledRejection = (event) => {
+      console.error('Unhandled promise rejection:', event.reason);
+      // Prevent the default browser error handling
+      event.preventDefault();
+      // Log the error for debugging
+      if (event.reason) {
+        console.error('Rejection reason:', event.reason);
+        if (event.reason.message) {
+          console.error('Error message:', event.reason.message);
+        }
+        if (event.reason.stack) {
+          console.error('Error stack:', event.reason.stack);
+        }
+      }
+      // Don't show toast for CORS errors - they're expected and already handled
+      if (event.reason && typeof event.reason === 'object') {
+        const errorMsg = event.reason.message || event.reason.toString() || '';
+        if (!errorMsg.includes('CORS') && !errorMsg.includes('Failed to fetch') && !errorMsg.includes('timed out')) {
+          // Only show toast for unexpected errors
+          toast.error('An unexpected error occurred. Please try again.');
+        }
+      }
+    };
+
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
+    return () => {
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    };
+  }, []);
+
+  // Periodic status checking for orders and pending payments
+  useEffect(() => {
+    if (!user) return;
+
+    const interval = setInterval(() => {
+      // Only check if user is authenticated
+      if (user) {
+        console.log('Periodic status check...');
+        fetchRecentOrders().catch((error) => {
+          console.error('Error in periodic order status check:', error);
+        });
+        verifyPendingPayments().catch((error) => {
+          console.error('Error in periodic payment verification:', error);
+        });
+      }
+    }, 180000); // Check every 3 minutes (reduced frequency for better performance)
+
+    return () => clearInterval(interval);
+  }, [user, fetchRecentOrders, verifyPendingPayments]);
 
   // Pre-select service if navigated from Services page
   useEffect(() => {
@@ -464,165 +371,6 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     }
   }, [location.state?.selectedServiceId, services]);
 
-  const fetchServices = async () => {
-    try {
-      // Get current user role to filter services
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      let userRole = 'user';
-      
-      if (authUser) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', authUser.id)
-          .single();
-        
-        if (profile) {
-          userRole = profile.role || 'user';
-        }
-      }
-      
-      // Fetch services from Supabase
-      // RLS policies will automatically filter based on seller_only flag and user role
-      // Only fetch enabled services for users
-      const { data, error } = await supabase
-        .from('services')
-        .select('*')
-        .eq('enabled', true)
-        .order('created_at', { ascending: false });
-      
-      if (error) {
-        // Handle 500 errors and other database issues gracefully
-        if (error.code === 'PGRST301' || error.message?.includes('500') || error.message?.includes('Internal Server Error')) {
-          console.warn('Services table may not exist or RLS policy issue:', error.message);
-          setServices([]);
-          return;
-        }
-        throw error;
-      }
-      setServices(data || []);
-    } catch (error) {
-      console.error('Error fetching services:', error);
-      // Set empty array on error to prevent UI issues
-      setServices([]);
-      // Only show toast for non-500 errors
-      if (!error.message?.includes('500') && !error.message?.includes('Internal Server Error')) {
-      toast.error('Failed to load services');
-      }
-    }
-  };
-
-  // Map SMMGen status to our status format
-  const mapSMMGenStatus = (smmgenStatus) => {
-    if (!smmgenStatus) return null;
-    
-    const statusString = String(smmgenStatus).trim();
-    const statusLower = statusString.toLowerCase();
-    
-    // Map to exact SMMGen statuses (normalized to lowercase)
-    if (statusLower === 'pending' || statusLower.includes('pending')) {
-      return 'pending';
-    }
-    if (statusLower === 'in progress' || statusLower.includes('in progress')) {
-      return 'in progress';
-    }
-    if (statusLower === 'completed' || statusLower.includes('completed')) {
-      return 'completed';
-    }
-    if (statusLower === 'partial' || statusLower.includes('partial')) {
-      return 'partial';
-    }
-    if (statusLower === 'processing' || statusLower.includes('processing')) {
-      return 'processing';
-    }
-    if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower.includes('cancel')) {
-      return 'canceled';
-    }
-    if (statusLower === 'refunds' || statusLower.includes('refund')) {
-      return 'refunds';
-    }
-    
-    return null;
-  };
-
-  const fetchRecentOrders = async () => {
-    try {
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (!authUser) return;
-
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('user_id', authUser.id)
-        .order('created_at', { ascending: false })
-        .limit(5);
-      
-      if (error) {
-        // Handle 500 errors and other database issues gracefully
-        if (error.code === 'PGRST301' || error.message?.includes('500') || error.message?.includes('Internal Server Error')) {
-          console.warn('Orders table may not exist or RLS policy issue:', error.message);
-          setRecentOrders([]);
-          return;
-        }
-        throw error;
-      }
-      
-      // Check SMMGen status for orders with SMMGen IDs (check all statuses to catch cancellations)
-      const updatedOrders = await Promise.all(
-        (data || []).map(async (order) => {
-          // Check SMMGen status for orders that are not completed or refunded
-          // Skip refunded orders - they should not be overwritten by SMMGen status
-          if (order.smmgen_order_id && order.status !== 'completed' && order.status !== 'refunded') {
-            try {
-              const statusData = await getSMMGenOrderStatus(order.smmgen_order_id);
-              const smmgenStatus = statusData.status || statusData.Status;
-              const mappedStatus = mapSMMGenStatus(smmgenStatus);
-
-              // Update in database if status changed, but don't overwrite refunded orders
-              if (mappedStatus && mappedStatus !== order.status && order.status !== 'refunded') {
-                // Save status to history first
-                await saveOrderStatusHistory(
-                  order.id,
-                  mappedStatus,
-                  'smmgen',
-                  statusData, // Full SMMGen response
-                  order.status // Previous status
-                );
-
-                // Update order status in Supabase
-                await supabase
-                  .from('orders')
-                  .update({ 
-                    status: mappedStatus,
-                    completed_at: mappedStatus === 'completed' ? new Date().toISOString() : order.completed_at
-                  })
-                  .eq('id', order.id);
-                
-                const updatedOrder = { ...order, status: mappedStatus };
-                
-                // Automatic refunds disabled - admins must process refunds manually
-                
-                return updatedOrder;
-              }
-            } catch (error) {
-              console.warn('Failed to check SMMGen status for order:', order.id, error);
-              // Continue with original order if check fails
-            }
-          }
-          
-          // Automatic refunds disabled - admins must process refunds manually
-          
-          return order;
-        })
-      );
-
-      setRecentOrders(updatedOrders);
-    } catch (error) {
-      console.error('Error fetching orders:', error);
-      // Set empty array on error to prevent UI issues
-      setRecentOrders([]);
-    }
-  };
 
   const handlePaymentSuccess = async (reference) => {
     console.log('Payment success callback received:', { reference, pendingTransactionId: pendingTransaction?.id });
@@ -640,7 +388,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       if (reference) {
         const { data: foundByReference, error: findRefError } = await supabase
           .from('transactions')
-          .select('*')
+          .select('id, user_id, type, amount, status, payment_method, paystack_reference, korapay_reference, created_at')
           .eq('paystack_reference', reference)
           .maybeSingle();
         
@@ -654,7 +402,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       if (!transactionToUpdate && pendingTransaction) {
         const { data: foundById, error: findByIdError } = await supabase
           .from('transactions')
-          .select('*')
+          .select('id, user_id, type, amount, status, payment_method, paystack_reference, korapay_reference, created_at')
           .eq('id', pendingTransaction.id)
           .maybeSingle();
         
@@ -674,7 +422,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       if (!transactionToUpdate) {
         const { data: pendingTransactions, error: findPendingError } = await supabase
           .from('transactions')
-          .select('*')
+          .select('id, user_id, type, amount, status, payment_method, paystack_reference, korapay_reference, created_at')
           .eq('user_id', authUser.id)
           .eq('status', 'pending')
           .eq('type', 'deposit')
@@ -1652,7 +1400,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     }
   }, [pendingTransaction, user?.email, paystackPublicKey]);
 
-  const handleManualDeposit = async (e) => {
+  const handleManualDeposit = useCallback(async (e) => {
     e.preventDefault();
 
     if (!manualDepositForm.payment_proof_file) {
@@ -1736,9 +1484,9 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       setLoading(false);
       setUploadingProof(false);
     }
-  };
+  }, [manualDepositForm, onUpdateUser]);
 
-  const handleHubtelDeposit = async (e) => {
+  const handleHubtelDeposit = useCallback(async (e) => {
     e.preventDefault();
     if (!depositAmount || parseFloat(depositAmount) <= 0) {
       toast.error('Please enter a valid amount');
@@ -1830,9 +1578,9 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [depositAmount, minDepositSettings.hubtel_min, onUpdateUser]);
 
-  const handleKorapayDeposit = async (e) => {
+  const handleKorapayDeposit = useCallback(async (e) => {
     e.preventDefault();
     if (!depositAmount || parseFloat(depositAmount) <= 0) {
       toast.error('Please enter a valid amount');
@@ -1988,9 +1736,9 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           });
       }
     }
-  };
+  }, [depositAmount, minDepositSettings.korapay_min, onUpdateUser]);
 
-  const handleDeposit = async (e) => {
+  const handleDeposit = useCallback(async (e) => {
     e.preventDefault();
     if (!depositAmount || parseFloat(depositAmount) <= 0) {
       toast.error('Please enter a valid amount');
@@ -2178,9 +1926,9 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [depositAmount, minDepositSettings.paystack_min, onUpdateUser]);
 
-  const handleOrder = async (e) => {
+  const handleOrder = useCallback(async (e) => {
     e.preventDefault();
     if (!orderForm.service_id || !orderForm.link || !orderForm.quantity) {
       toast.error('Please fill all fields');
@@ -2428,52 +2176,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const selectedService = services.find(s => s.id === orderForm.service_id);
-  
-  // Calculate estimated cost - handle combo services differently
-  const estimatedCost = (() => {
-    if (!selectedService || !orderForm.quantity) return '0.00';
-    
-    const quantity = parseInt(orderForm.quantity);
-    if (isNaN(quantity) || quantity <= 0) return '0.00';
-    
-    // For combo services, calculate sum of component service costs
-    if (selectedService.is_combo && selectedService.combo_service_ids && selectedService.combo_service_ids.length > 0) {
-      const componentServices = selectedService.combo_service_ids
-        .map(serviceId => services.find(s => s.id === serviceId))
-        .filter(s => s !== undefined);
-      
-      if (componentServices.length === 0) {
-        // Fallback to combo service rate if components not found
-        return ((quantity / 1000) * selectedService.rate).toFixed(2);
-      }
-      
-      // Sum up all component service costs
-      const totalCost = componentServices.reduce((sum, componentService) => {
-        const componentCost = (quantity / 1000) * componentService.rate;
-        return sum + componentCost;
-      }, 0);
-      
-      return totalCost.toFixed(2);
-    }
-    
-    // For regular services, use the service rate
-    return ((quantity / 1000) * selectedService.rate).toFixed(2);
-  })();
-
-  // Filter services based on search query
-  const filteredServices = services.filter(service => {
-    if (!serviceSearch.trim()) return true;
-    const searchLower = serviceSearch.toLowerCase();
-    return (
-      service.name?.toLowerCase().includes(searchLower) ||
-      service.platform?.toLowerCase().includes(searchLower) ||
-      service.service_type?.toLowerCase().includes(searchLower) ||
-      service.description?.toLowerCase().includes(searchLower)
-    );
-  });
+  }, [orderForm, services, fetchRecentOrders]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -2493,591 +2196,38 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 sm:mb-8 animate-slideUp">
-          <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm hover:shadow-md transition-shadow duration-200">
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <Wallet className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
-              </div>
-            </div>
-            <p className="text-xs sm:text-sm font-medium text-gray-600 mb-1">Current Balance</p>
-            <h3 data-testid="user-balance" className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">₵{user.balance.toFixed(2)}</h3>
-          </div>
-
-          <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm hover:shadow-md transition-shadow duration-200">
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-100 rounded-lg flex items-center justify-center">
-                <ShoppingCart className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-600" />
-              </div>
-            </div>
-            <p className="text-xs sm:text-sm font-medium text-gray-600 mb-1">Total Orders</p>
-            <h3 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">{recentOrders.length}</h3>
-          </div>
-        </div>
+        <DashboardStats user={user} orderCount={recentOrders.length} />
 
         <div className="grid lg:grid-cols-2 gap-6 lg:gap-8">
           {/* Add Funds */}
-          <div className="bg-white border border-gray-200 rounded-lg p-6 sm:p-8 shadow-sm animate-slideUp">
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">Add Funds</h2>
-            
-            {/* Deposit Method Toggle - Show if multiple methods are enabled */}
-            {(() => {
-              const enabledMethods = [
-                paymentMethodSettings.paystack_enabled && 'paystack',
-                paymentMethodSettings.manual_enabled && 'manual',
-                paymentMethodSettings.hubtel_enabled && 'hubtel',
-                paymentMethodSettings.korapay_enabled && 'korapay'
-              ].filter(Boolean);
-              
-              return enabledMethods.length > 1 && depositMethod !== null ? (
-                <div className="flex gap-2 mb-6 p-1 bg-gray-100 rounded-lg">
-                  {paymentMethodSettings.paystack_enabled && (
-                    <button
-                      type="button"
-                      onClick={() => setDepositMethod('paystack')}
-                      className={`flex-1 py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                        depositMethod === 'paystack'
-                          ? 'bg-white text-indigo-600 shadow-sm'
-                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                      }`}
-                    >
-                      Paystack
-                    </button>
-                  )}
-                  {paymentMethodSettings.manual_enabled && (
-                    <button
-                      type="button"
-                      onClick={() => setDepositMethod('manual')}
-                      className={`flex-1 py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                        depositMethod === 'manual'
-                          ? 'bg-white text-indigo-600 shadow-sm'
-                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                      }`}
-                    >
-                      Mobile Money
-                    </button>
-                  )}
-                  {paymentMethodSettings.hubtel_enabled && (
-                    <button
-                      type="button"
-                      onClick={() => setDepositMethod('hubtel')}
-                      className={`flex-1 py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                        depositMethod === 'hubtel'
-                          ? 'bg-white text-indigo-600 shadow-sm'
-                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                      }`}
-                    >
-                      Hubtel
-                    </button>
-                  )}
-                  {paymentMethodSettings.korapay_enabled && (
-                    <button
-                      type="button"
-                      onClick={() => setDepositMethod('korapay')}
-                      className={`flex-1 py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                        depositMethod === 'korapay'
-                          ? 'bg-white text-indigo-600 shadow-sm'
-                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                      }`}
-                    >
-                      Korapay
-                    </button>
-                  )}
-                </div>
-              ) : null;
-            })()}
-
-            {depositMethod === null ? (
-              <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                <p className="text-sm text-gray-600 text-center">Loading payment methods...</p>
-              </div>
-            ) : (!paymentMethodSettings.paystack_enabled && !paymentMethodSettings.manual_enabled && !paymentMethodSettings.hubtel_enabled && !paymentMethodSettings.korapay_enabled) ? (
-              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <p className="text-sm text-yellow-800 text-center">
-                  All payment methods are currently disabled. Please contact support.
-                </p>
-              </div>
-            ) : (depositMethod === 'paystack' && paymentMethodSettings.paystack_enabled) ? (
-            <form onSubmit={handleDeposit} className="space-y-4">
-              <div>
-                <Label htmlFor="amount" className="text-sm font-medium text-gray-700 mb-2 block">Amount (GHS)</Label>
-                <Input
-                  id="amount"
-                  data-testid="deposit-amount-input"
-                  type="number"
-                  step="0.01"
-                  min="1"
-                  placeholder="Enter amount"
-                  value={depositAmount}
-                  onChange={(e) => setDepositAmount(e.target.value)}
-                  className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                />
-              </div>
-              <Button
-                data-testid="deposit-submit-btn"
-                type="submit"
-                disabled={loading || !depositAmount}
-                className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? 'Processing...' : 'Pay with Paystack'}
-              </Button>
-              <p className="text-xs sm:text-sm text-gray-600 text-center">
-                Secure payment via Paystack. Funds are added instantly after successful payment.
-              </p>
-              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-xs sm:text-sm text-blue-800 text-center">
-                  <span className="font-semibold">Having issues with deposits?</span>
-                  <br />
-                  <span className="mt-1 block">Text us on WhatsApp: </span>
-                  <a 
-                      href="https://wa.me/233559272762" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-                  >
-                    0559272762
-                  </a>
-                </p>
-              </div>
-              
-              {/* Deposit Tutorial Video - Collapsible */}
-              <div className="mt-6">
-                <Accordion type="single" collapsible className="w-full">
-                  <AccordionItem value="tutorial" className="border border-gray-200 rounded-lg overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 hover:no-underline focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-lg">
-                      <span className="text-sm font-semibold text-gray-900">📹 How to Deposit - Video Tutorial</span>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-4 pb-4">
-                      <div className="rounded-lg overflow-hidden bg-gray-100">
-                        <video
-                          controls
-                          className="w-full h-auto"
-                          preload="metadata"
-                          style={{ maxHeight: '500px' }}
-                        >
-                          <source
-                            src="https://spihsvdchouynfbsotwq.supabase.co/storage/v1/object/public/storage/tutorial.mp4"
-                            type="video/mp4"
-                          />
-                          Your browser does not support the video tag.
-                        </video>
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
-              </div>
-            </form>
-            ) : (depositMethod === 'manual' && paymentMethodSettings.manual_enabled) ? (
-              <form onSubmit={handleManualDeposit} className="space-y-6">
-                {/* Payment Instructions */}
-                <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
-                  <ol className="list-decimal list-inside space-y-3 text-gray-900 text-base sm:text-lg">
-                    <li>
-                      Make <span className="text-blue-600 font-semibold">PAYMENT</span> to 0559272762
-                    </li>
-                    <li className="font-semibold">MTN - APPIAH MANASSEH ATTAH</li>
-                    <li>
-                      use your <span className="text-blue-600 font-semibold">USERNAME</span> as reference
-                    </li>
-                    <li>
-                      send <span className="text-blue-600 font-semibold">SCREENSHOT</span> of <span className="text-blue-600 font-semibold">PAYMENT</span> when done
-                    </li>
-                  </ol>
-                </div>
-
-                <div>
-                  <Label htmlFor="payment-proof" className="text-sm font-medium text-gray-700 mb-2 block">
-                    Payment Proof Screenshot <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="payment-proof"
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        // Validate file size (max 5MB)
-                        if (file.size > 5 * 1024 * 1024) {
-                          toast.error('File size must be less than 5MB');
-                          return;
-                        }
-                        // Validate file type
-                        if (!file.type.startsWith('image/')) {
-                          toast.error('Please upload an image file');
-                          return;
-                        }
-                        setManualDepositForm({ ...manualDepositForm, payment_proof_file: file });
-                      }
-                    }}
-                    className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 file:mr-4 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                    required
-                  />
-                  {manualDepositForm.payment_proof_file && (
-                    <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-lg">
-                      <p className="text-xs text-green-700">
-                        ✓ Selected: {manualDepositForm.payment_proof_file.name}
-                      </p>
-                    </div>
-                  )}
-                  <p className="text-xs text-gray-500 mt-1">Upload a screenshot of your payment confirmation (Max 5MB)</p>
-                </div>
-
-                <Button
-                  type="submit"
-                  disabled={loading || !manualDepositForm.payment_proof_file || uploadingProof}
-                  className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {uploadingProof ? 'Uploading...' : loading ? 'Submitting...' : 'Submit Manual Deposit'}
-                </Button>
-                <p className="text-xs sm:text-sm text-gray-600 text-center">
-                  Your deposit will be reviewed and approved within 5 minutes.
-                </p>
-              </form>
-            ) : (depositMethod === 'hubtel' && paymentMethodSettings.hubtel_enabled) ? (
-              <form onSubmit={handleHubtelDeposit} className="space-y-4">
-                <div>
-                  <Label htmlFor="hubtel-amount" className="text-sm font-medium text-gray-700 mb-2 block">Amount (GHS)</Label>
-                  <Input
-                    id="hubtel-amount"
-                    type="number"
-                    step="0.01"
-                    min="1"
-                    placeholder="Enter the amount you sent"
-                    value={depositAmount}
-                    onChange={(e) => setDepositAmount(e.target.value)}
-                    className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    required
-                  />
-                </div>
-                <Button
-                  type="submit"
-                  disabled={loading || !depositAmount}
-                  className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? 'Processing...' : 'Pay with Hubtel'}
-                </Button>
-                <p className="text-xs sm:text-sm text-gray-600 text-center">
-                  Secure payment via Hubtel. Funds are added instantly after successful payment.
-                </p>
-                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-xs sm:text-sm text-blue-800 text-center">
-                    <span className="font-semibold">Having issues with deposits?</span>
-                    <br />
-                    <span className="mt-1 block">Text us on WhatsApp: </span>
-                    <a 
-                      href="https://wa.me/233559272762" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-                    >
-                      0559272762
-                    </a>
-                  </p>
-                </div>
-              </form>
-            ) : (depositMethod === 'korapay' && paymentMethodSettings.korapay_enabled) ? (
-              <form onSubmit={handleKorapayDeposit} className="space-y-4">
-                <div>
-                  <Label htmlFor="korapay-amount" className="text-sm font-medium text-gray-700 mb-2 block">Amount (GHS)</Label>
-                  <Input
-                    id="korapay-amount"
-                    type="number"
-                    step="0.01"
-                    min="1"
-                    placeholder="Enter the amount you sent"
-                    value={depositAmount}
-                    onChange={(e) => setDepositAmount(e.target.value)}
-                    className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    required
-                  />
-                </div>
-                <Button
-                  type="submit"
-                  disabled={loading || !depositAmount}
-                  className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? 'Processing...' : 'Pay with Korapay'}
-                </Button>
-                <p className="text-xs sm:text-sm text-gray-600 text-center">
-                  Secure payment via Korapay. Funds are added instantly after successful payment.
-                </p>
-                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-xs sm:text-sm text-blue-800 text-center">
-                    <span className="font-semibold">Having issues with deposits?</span>
-                    <br />
-                    <span className="mt-1 block">Text us on WhatsApp: </span>
-                    <a 
-                      href="https://wa.me/233559272762" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-                    >
-                      0559272762
-                    </a>
-                  </p>
-                </div>
-              </form>
-            ) : null}
-          </div>
+          <DashboardDeposit
+            depositMethod={depositMethod}
+            setDepositMethod={setDepositMethod}
+            depositAmount={depositAmount}
+            setDepositAmount={setDepositAmount}
+            paymentMethodSettings={paymentMethodSettings}
+            manualDepositForm={manualDepositForm}
+            setManualDepositForm={setManualDepositForm}
+            uploadingProof={uploadingProof}
+            handleDeposit={handleDeposit}
+            handleManualDeposit={handleManualDeposit}
+            handleHubtelDeposit={handleHubtelDeposit}
+            handleKorapayDeposit={handleKorapayDeposit}
+            loading={loading}
+          />
 
           {/* Quick Order */}
-          <div className="bg-white border border-gray-200 rounded-lg p-6 sm:p-8 shadow-sm animate-slideUp" id="order-form-section">
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">Place New Order</h2>
-            <form onSubmit={handleOrder} className="space-y-4">
-              <div className="relative">
-                <Label htmlFor="service" className="text-sm font-medium text-gray-700 mb-2 block">Service</Label>
-                {/* Search Input with Dropdown */}
-                <div className="relative service-dropdown-container">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none z-20" />
-                  <Input
-                    type="text"
-                    placeholder="Search services by name, platform, or type..."
-                    value={serviceSearch}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setServiceSearch(value);
-                      // Open dropdown immediately when typing starts
-                      if (value.length > 0 && services.length > 0) {
-                        setSelectOpen(true);
-                      } else if (value.length === 0 && services.length > 0) {
-                        // Show all services when search is cleared
-                        setSelectOpen(true);
-                      }
-                    }}
-                    onFocus={() => {
-                      // Open dropdown when search field is focused
-                      if (services.length > 0) {
-                        setSelectOpen(true);
-                      }
-                    }}
-                    onBlur={(e) => {
-                      // Small delay to allow click events on dropdown items
-                      setTimeout(() => {
-                        // Check if focus moved to dropdown or if clicking outside
-                        const activeElement = document.activeElement;
-                        if (!activeElement || !activeElement.closest('.service-dropdown-container')) {
-                          setSelectOpen(false);
-                        }
-                      }, 150);
-                    }}
-                    className="w-full h-11 rounded-lg border-gray-300 pl-10 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 z-10"
-                    autoComplete="off"
-                    id="service-search-input"
-                  />
-                  
-                  {/* Dropdown positioned below search input */}
-                  {selectOpen && (
-                    <div 
-                      className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-[300px] overflow-y-auto"
-                      onMouseDown={(e) => {
-                        // Prevent blur when clicking on dropdown
-                        e.preventDefault();
-                      }}
-                    >
-                      {filteredServices.length === 0 ? (
-                        <div className="px-4 py-6 text-center text-sm text-gray-500">
-                          No services found matching "{serviceSearch}"
-                        </div>
-                      ) : (
-                        <div className="p-1">
-                          {filteredServices.map((service) => (
-                            <div
-                              key={service.id}
-                              onClick={() => {
-                                setOrderForm({ ...orderForm, service_id: service.id });
-                                setServiceSearch('');
-                                setSelectOpen(false);
-                              }}
-                              className="px-3 py-2 rounded-md hover:bg-gray-100 cursor-pointer transition-colors focus-within:bg-gray-100"
-                              tabIndex={0}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                  e.preventDefault();
-                                  setOrderForm({ ...orderForm, service_id: service.id });
-                                  setServiceSearch('');
-                                  setSelectOpen(false);
-                                }
-                              }}
-                            >
-                              <div className="flex flex-col">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-medium text-gray-900">{service.name}</span>
-                                  {service.is_combo && (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded">
-                                      <Layers className="w-3 h-3" />
-                                      Combo
-                                    </span>
-                                  )}
-                                </div>
-                                <span className="text-xs text-gray-500">
-                                  {service.platform && `${service.platform} • `}₵{service.rate}/1000
-                                  {service.is_combo && service.combo_service_ids && (
-                                    <span className="ml-2 text-purple-600">
-                                      ({service.combo_service_ids.length} services)
-                                    </span>
-                                  )}
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-                
-                {/* Hidden Select for form submission */}
-                <Select 
-                  value={orderForm.service_id || ''}
-                  onValueChange={() => {}}
-                  style={{ display: 'none' }}
-                >
-                  <SelectTrigger style={{ display: 'none' }}>
-                    <SelectValue />
-                  </SelectTrigger>
-                </Select>
-                
-                {/* Selected service display */}
-                {orderForm.service_id && services.find(s => s.id === orderForm.service_id) && (
-                  <div className="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
-                    <p className="text-sm font-medium text-gray-900">
-                      Selected: {services.find(s => s.id === orderForm.service_id).name}
-                    </p>
-                    <p className="text-xs text-gray-600 mt-0.5">
-                      ₵{services.find(s => s.id === orderForm.service_id).rate}/1000
-                    </p>
-                  </div>
-                )}
-                
-                {serviceSearch && (
-                  <p className="text-xs text-gray-500 mt-2">
-                    {filteredServices.length} service{filteredServices.length !== 1 ? 's' : ''} found
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <Label htmlFor="link" className="text-sm font-medium text-gray-700 mb-2 block">Link</Label>
-                <Input
-                  id="link"
-                  data-testid="order-link-input"
-                  type="url"
-                  placeholder="put your link here"
-                  value={orderForm.link}
-                  onChange={(e) => setOrderForm({ ...orderForm, link: e.target.value })}
-                  className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="quantity" className="text-sm font-medium text-gray-700 mb-2 block">Quantity</Label>
-                <Input
-                  id="quantity"
-                  data-testid="order-quantity-input"
-                  type="number"
-                  placeholder="1000"
-                  value={orderForm.quantity}
-                  onChange={(e) => setOrderForm({ ...orderForm, quantity: e.target.value })}
-                  className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                />
-                {selectedService && (
-                  <div className="mt-2 space-y-1">
-                    <p className="text-xs sm:text-sm text-gray-600">
-                      Min: {selectedService.min_quantity} | Max: {selectedService.max_quantity}
-                    </p>
-                    {selectedService.is_combo && selectedService.combo_service_ids && (
-                      <div className="mt-2 p-3 bg-purple-50 border border-purple-200 rounded-lg">
-                        <p className="text-xs font-medium text-purple-900 mb-1.5 flex items-center gap-1">
-                          <Layers className="w-3 h-3" />
-                          Combo includes:
-                        </p>
-                        <ul className="text-xs text-purple-700 space-y-0.5">
-                          {selectedService.combo_service_ids.map((serviceId, idx) => {
-                            const componentService = services.find(s => s.id === serviceId);
-                            return componentService ? (
-                              <li key={serviceId} className="flex items-center gap-1.5">
-                                <span className="w-1 h-1 bg-purple-500 rounded-full"></span>
-                                {componentService.name} (₵{componentService.rate}/1000)
-                              </li>
-                            ) : null;
-                          })}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-lg">
-                <p className="text-xs sm:text-sm text-gray-600 mb-1">Estimated Cost</p>
-                <p data-testid="order-estimated-cost" className="text-xl sm:text-2xl font-bold text-indigo-600">₵{estimatedCost}</p>
-              </div>
-
-              <Button
-                data-testid="order-submit-btn"
-                type="submit"
-                disabled={loading || !orderForm.service_id}
-                className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? 'Processing...' : 'Place Order'}
-              </Button>
-            </form>
-          </div>
+          <DashboardOrderForm
+            services={services}
+            orderForm={orderForm}
+            setOrderForm={setOrderForm}
+            handleOrder={handleOrder}
+            loading={loading}
+          />
         </div>
 
         {/* Recent Orders */}
-        {recentOrders.length > 0 && (
-          <div className="mt-6 sm:mt-8 bg-white border border-gray-200 rounded-lg p-6 sm:p-8 shadow-sm animate-slideUp">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-              <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Recent Orders</h2>
-              <Button
-                data-testid="view-all-orders-btn"
-                variant="ghost"
-                onClick={() => navigate('/orders')}
-                className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-lg"
-              >
-                View All
-              </Button>
-            </div>
-            <div className="space-y-3">
-              {recentOrders.map((order) => {
-                const service = services.find(s => s.id === order.service_id);
-                const statusLower = order.status?.toLowerCase() || '';
-                const getStatusStyles = () => {
-                  if (statusLower === 'completed') {
-                    return 'bg-green-100 text-green-700 border-green-200';
-                  } else if (statusLower === 'processing' || statusLower.includes('in progress')) {
-                    return 'bg-blue-100 text-blue-700 border-blue-200';
-                  } else if (statusLower === 'partial') {
-                    return 'bg-orange-100 text-orange-700 border-orange-200';
-                  } else if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower.includes('cancel')) {
-                    return 'bg-red-100 text-red-700 border-red-200';
-                  } else if (statusLower === 'refunds' || statusLower.includes('refund')) {
-                    return 'bg-purple-100 text-purple-700 border-purple-200';
-                  } else {
-                    return 'bg-yellow-100 text-yellow-700 border-yellow-200';
-                  }
-                };
-                return (
-                  <div key={order.id} className="bg-gray-50 border border-gray-200 p-4 rounded-lg hover:border-gray-300 transition-colors">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm sm:text-base font-medium text-gray-900 truncate">{service?.name || 'Service'}</p>
-                        <p className="text-xs sm:text-sm text-gray-600 mt-0.5">Quantity: {order.quantity.toLocaleString()}</p>
-                      </div>
-                      <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-                        <p className="text-sm sm:text-base font-semibold text-gray-900">₵{order.total_cost.toFixed(2)}</p>
-                        <span className={`text-xs font-medium px-2.5 py-1 rounded border ${getStatusStyles()}`}>
-                          {order.status}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        <DashboardOrders orders={recentOrders} services={services} />
 
         {/* Referral Section */}
         <div className="mt-6 sm:mt-8 animate-slideUp">

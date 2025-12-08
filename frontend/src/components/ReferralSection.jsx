@@ -73,13 +73,29 @@ const ReferralSection = ({ user }) => {
       // Fetch referrals where this user is the referrer
       const { data: referralsData, error: referralsError } = await supabase
         .from('referrals')
-        .select('*')
+        .select('id, referrer_id, referee_id, referral_bonus, bonus_awarded, first_deposit_amount, created_at')
         .eq('referrer_id', user.id)
         .order('created_at', { ascending: false });
 
       if (referralsError) {
         console.error('Error fetching referrals:', referralsError);
+        // Show user-friendly error message
+        if (referralsError.code === 'PGRST301' || referralsError.message?.includes('permission') || referralsError.message?.includes('RLS')) {
+          console.warn('RLS policy may be blocking referral access. This is normal if you have no referrals yet.');
+          // Don't show error toast for RLS issues - just set empty array
+        } else if (referralsError.code === '42P01') {
+          console.warn('Referrals table does not exist yet.');
+          toast.error('Referrals feature not set up yet. Please contact admin.');
+        } else {
+          toast.error('Failed to fetch referrals: ' + (referralsError.message || 'Unknown error'));
+        }
         setReferrals([]);
+        setStats({
+          totalReferrals: 0,
+          totalEarnings: 0,
+          pendingBonuses: 0,
+        });
+        return;
       } else if (referralsData && referralsData.length > 0) {
         // Fetch referee profiles separately
         const refereeIds = referralsData.map(ref => ref.referee_id);

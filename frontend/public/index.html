@@ -23,6 +23,16 @@
         <link rel="alternate icon" href="%PUBLIC_URL%/favicon.ico" />
         <link rel="apple-touch-icon" href="%PUBLIC_URL%/favicon.svg" />
         <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+        
+        <!-- Resource Hints for Performance -->
+        <link rel="dns-prefetch" href="https://js.paystack.co" />
+        <link rel="dns-prefetch" href="https://spihsvdchouynfbsotwq.supabase.co" />
+        <link rel="dns-prefetch" href="https://us.i.posthog.com" />
+        <link rel="preconnect" href="https://js.paystack.co" crossorigin />
+        <link rel="preconnect" href="https://spihsvdchouynfbsotwq.supabase.co" crossorigin />
+        <link rel="preconnect" href="https://us.i.posthog.com" crossorigin />
+        <!-- Prefetch critical API endpoints -->
+        <link rel="prefetch" href="/api/smmgen/services" as="fetch" crossorigin />
         <!--
       manifest.json provides metadata used when your web app is installed on a
       user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
@@ -37,6 +47,8 @@
       Learn how to configure a non-root public URL by running `npm run build`.
     -->
         <title>BoostUp GH - Social Media Growth Platform</title>
+        <!-- Preload critical resources -->
+        <link rel="preload" href="https://js.paystack.co/v1/inline.js" as="script" crossorigin />
         <!--
         These two scripts have been added for the Visual Edits, please do not edit or remove them
         -->

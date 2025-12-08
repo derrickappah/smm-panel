@@ -131,23 +131,23 @@ const LandingPage = () => {
     const fetchStats = async () => {
       try {
         console.log('Starting to fetch stats...');
-        // Fetch ALL completed orders with pagination to get accurate totals
+        // Use efficient queries: fetch only recent sample (last 5000 orders) for stats calculation
+        // This is much faster than fetching all orders and provides accurate enough statistics
+        const SAMPLE_SIZE = 5000;
         const [ordersDataResult, ordersCountResult, usersResult] = await Promise.allSettled([
-          fetchAllRecords(
-            'orders',
-            'quantity, services(name, service_type)',
-            {
-              eq: { status: 'completed' },
-              orderBy: { field: 'created_at', ascending: false }
-            }
-          ),
           supabase
             .from('orders')
-            .select('*', { count: 'exact', head: true })
+            .select('quantity, services(name, service_type)')
+            .eq('status', 'completed')
+            .order('created_at', { ascending: false })
+            .limit(SAMPLE_SIZE),
+          supabase
+            .from('orders')
+            .select('id', { count: 'exact', head: true })
             .eq('status', 'completed'),
           supabase
             .from('profiles')
-            .select('*', { count: 'exact', head: true })
+            .select('id', { count: 'exact', head: true })
         ]);
 
         let totalLikes = 0;
@@ -157,10 +157,10 @@ const LandingPage = () => {
         let ordersCount = 0;
         let usersCount = 0;
 
-        // Process orders data - fetch ALL records
-        if (ordersDataResult.status === 'fulfilled' && ordersDataResult.value) {
-          const ordersData = ordersDataResult.value;
-          console.log(`Processing ${ordersData.length} orders...`);
+        // Process orders data - only process sample
+        if (ordersDataResult.status === 'fulfilled' && ordersDataResult.value?.data) {
+          const ordersData = ordersDataResult.value.data;
+          console.log(`Processing ${ordersData.length} recent orders for stats...`);
           
           ordersData.forEach(order => {
             const quantity = parseInt(order.quantity || 0);
@@ -183,7 +183,9 @@ const LandingPage = () => {
             }
           });
           
-          console.log('Calculated totals:', { totalLikes, totalFollowers, totalViews, totalComments });
+          // If we got a full sample, we can extrapolate for display purposes
+          // But for landing page, showing recent activity is more meaningful
+          console.log('Calculated totals from recent orders:', { totalLikes, totalFollowers, totalViews, totalComments });
         } else if (ordersDataResult.status === 'rejected') {
           console.error('Failed to fetch orders:', ordersDataResult.reason);
         }

@@ -34,12 +34,12 @@ const OrderHistory = ({ user, onLogout }) => {
       const [ordersRes, servicesRes] = await Promise.all([
         supabase
           .from('orders')
-          .select('*')
+          .select('id, user_id, service_id, link, quantity, status, smmgen_order_id, created_at, completed_at, refund_status, total_cost')
           .eq('user_id', authUser.id)
           .order('created_at', { ascending: false }),
         supabase
           .from('services')
-          .select('*')
+          .select('id, name, description, rate, platform, min_quantity, max_quantity, service_type')
       ]);
 
       if (ordersRes.error) throw ordersRes.error;
@@ -378,7 +378,7 @@ const OrderHistory = ({ user, onLogout }) => {
                               </div>
                               {/* Cost */}
                               <div className="text-center">
-                                <p className="font-semibold text-gray-900 text-sm">₵{order.total_cost.toFixed(2)}</p>
+                                <p className="font-semibold text-gray-900 text-sm">₵{(order.total_cost || 0).toFixed(2)}</p>
                               </div>
                               {/* Status */}
                               <div className="flex justify-center">
