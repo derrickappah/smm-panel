@@ -49,7 +49,7 @@ const TransactionsPage = ({ user, onLogout }) => {
 
       let transactionsQuery = supabase
         .from('transactions')
-        .select('id, user_id, type, amount, status, payment_method, paystack_reference, korapay_reference, created_at, updated_at')
+        .select('id, user_id, type, amount, status, deposit_method, paystack_reference, korapay_reference, created_at, updated_at')
         .order('created_at', { ascending: false });
 
       // For regular users, only fetch their own transactions
