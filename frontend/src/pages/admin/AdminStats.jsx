@@ -56,19 +56,13 @@ const AdminStats = memo(({
     ).length;
   }, [allTransactions, getBalanceCheckResult]);
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-indigo-600"></div>
-      </div>
-    );
-  }
-
   const statsWithPaymentMethods = {
     ...stats,
     active_payment_methods: activePaymentMethods
   };
 
+  // Don't block rendering - show cards immediately with current data
+  // Stats will update as data loads in the background
   return (
     <div className="space-y-6">
       <style>{`

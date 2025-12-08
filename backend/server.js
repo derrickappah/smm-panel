@@ -99,7 +99,7 @@ app.post('/api/smmgen/services', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('SMMGen services error:', error.response?.data || error.message);
-    const statusCode = error.response?.status || error.code === 'ECONNABORTED' ? 504 : 500;
+    const statusCode = error.response?.status || (error.code === 'ECONNABORTED' ? 504 : 500);
     res.status(statusCode).json({ 
       error: error.response?.data?.message || error.message || 'Failed to fetch services' 
     });
@@ -146,7 +146,7 @@ app.post('/api/smmgen/order', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('SMMGen order error:', error.response?.data || error.message);
-    const statusCode = error.response?.status || error.code === 'ECONNABORTED' ? 504 : 500;
+    const statusCode = error.response?.status || (error.code === 'ECONNABORTED' ? 504 : 500);
     res.status(statusCode).json({ 
       error: error.response?.data?.message || error.message || 'Failed to place order' 
     });
@@ -208,7 +208,7 @@ app.post('/api/smmgen/status', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('SMMGen status error:', error.response?.data || error.message);
-    const statusCode = error.response?.status || error.code === 'ECONNABORTED' ? 504 : 500;
+    const statusCode = error.response?.status || (error.code === 'ECONNABORTED' ? 504 : 500);
     res.status(statusCode).json({ 
       error: error.response?.data?.message || error.message || 'Failed to get order status' 
     });
@@ -255,7 +255,7 @@ app.post('/api/smmgen/balance', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('SMMGen balance error:', error.response?.data || error.message);
-    const statusCode = error.response?.status || error.code === 'ECONNABORTED' ? 504 : 500;
+    const statusCode = error.response?.status || (error.code === 'ECONNABORTED' ? 504 : 500);
     res.status(statusCode).json({ 
       error: error.response?.data?.message || error.message || 'Failed to get balance' 
     });

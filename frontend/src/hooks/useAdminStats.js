@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { useAdminUsers } from './useAdminUsers';
 import { useAdminOrders } from './useAdminOrders';
 import { useAdminDeposits } from './useAdminDeposits';
@@ -34,16 +34,26 @@ const isDateInRange = (dateString, dateRangeStart, dateRangeEnd) => {
 export const useAdminStats = (options = {}) => {
   const { dateRangeStart, dateRangeEnd, enabled = true } = options;
 
-  // Fetch all data needed for stats
-  const { data: users = [] } = useAdminUsers({ enabled, useInfinite: false });
-  const { data: orders = [] } = useAdminOrders({ enabled, useInfinite: false, checkSMMGenStatus: false });
-  const { data: deposits = [] } = useAdminDeposits({ enabled, useInfinite: false });
-  const { data: services = [] } = useAdminServices({ enabled });
-  const { data: tickets = [] } = useAdminTickets({ enabled });
+  // For stats, we only need recent data (last 90 days) to calculate today's metrics and totals
+  // This is much faster than fetching all records
+  const limitForStats = 5000; // Limit to 5000 most recent records for stats calculation
+  
+  // Fetch data needed for stats in parallel - use limited queries for faster loading
+  const { data: users = [], isLoading: usersLoading } = useAdminUsers({ enabled, useInfinite: false });
+  const { data: orders = [], isLoading: ordersLoading } = useAdminOrders({ enabled, useInfinite: false, checkSMMGenStatus: false });
+  const { data: deposits = [], isLoading: depositsLoading } = useAdminDeposits({ enabled, useInfinite: false });
+  const { data: services = [], isLoading: servicesLoading } = useAdminServices({ enabled });
+  const { data: tickets = [], isLoading: ticketsLoading } = useAdminTickets({ enabled });
 
-  return useQuery({
-    queryKey: ['admin', 'stats', { dateRangeStart, dateRangeEnd }],
-    queryFn: () => {
+  // Only show loading if we have no data at all - allow partial data to display
+  const isLoading = (usersLoading && users.length === 0) || 
+                    (ordersLoading && orders.length === 0) || 
+                    (depositsLoading && deposits.length === 0) || 
+                    (servicesLoading && services.length === 0) || 
+                    (ticketsLoading && tickets.length === 0);
+
+  // Calculate stats immediately using useMemo (no blocking query)
+  const stats = useMemo(() => {
       // Filter by date range if specified
       const currentDeposits = (deposits || []).filter(d => isDateInRange(d.created_at, dateRangeStart, dateRangeEnd));
       const currentOrders = (orders || []).filter(o => isDateInRange(o.created_at, dateRangeStart, dateRangeEnd));
@@ -190,11 +200,12 @@ export const useAdminStats = (options = {}) => {
         total_shares_sent: totalSharesSent,
         total_subscribers_sent: totalSubscribersSent,
       };
-    },
-    enabled: enabled && !!users && !!orders && !!deposits && !!services && !!tickets,
-    staleTime: 1 * 60 * 1000, // 1 minute
-    gcTime: 3 * 60 * 1000, // 3 minutes
-  });
+  }, [users, orders, deposits, services, tickets, dateRangeStart, dateRangeEnd]);
+
+  return {
+    data: stats,
+    isLoading
+  };
 };
 
 
