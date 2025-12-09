@@ -299,19 +299,35 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                 {reorderMutation.isPending ? 'Sending...' : 'Reorder'}
               </Button>
             )}
-            {(order.status === 'canceled' || order.status === 'cancelled') && (
+            {(order.status === 'canceled' || order.status === 'cancelled') && 
+             order.refund_status !== 'succeeded' && 
+             order.status !== 'refunded' && (
               <Button
                 onClick={() => handleRefundOrder(order)}
                 variant="outline"
                 size="sm"
+                disabled={order.refund_status === 'pending'}
                 className={`w-full min-h-[44px] ${
                   order.refund_status === 'failed' 
                     ? "text-orange-600 hover:text-orange-700 border-orange-300 text-xs"
+                    : order.refund_status === 'pending'
+                    ? "text-gray-400 border-gray-300 text-xs cursor-not-allowed"
                     : "text-red-600 hover:text-red-700 text-xs"
                 }`}
+                title={order.refund_status === 'pending' ? 'Refund in progress...' : undefined}
               >
-                {order.refund_status === 'failed' ? 'Manual Refund' : 'Refund'}
+                {order.refund_status === 'failed' 
+                  ? 'Manual Refund' 
+                  : order.refund_status === 'pending'
+                  ? 'Refund Pending...'
+                  : 'Refund'}
               </Button>
+            )}
+            {(order.status === 'canceled' || order.status === 'cancelled') && 
+             (order.refund_status === 'succeeded' || order.status === 'refunded') && (
+              <div className="w-full min-h-[44px] flex items-center justify-center text-xs text-gray-500 italic">
+                Already Refunded
+              </div>
             )}
           </div>
         </div>
@@ -422,19 +438,35 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               {reorderMutation.isPending ? 'Sending...' : 'Reorder to SMMGen'}
             </Button>
           )}
-          {(order.status === 'canceled' || order.status === 'cancelled') && (
+          {(order.status === 'canceled' || order.status === 'cancelled') && 
+           order.refund_status !== 'succeeded' && 
+           order.status !== 'refunded' && (
             <Button
               onClick={() => handleRefundOrder(order)}
               variant="outline"
               size="sm"
+              disabled={order.refund_status === 'pending'}
               className={`w-full min-h-[44px] ${
                 order.refund_status === 'failed' 
                   ? "text-orange-600 hover:text-orange-700 border-orange-300"
+                  : order.refund_status === 'pending'
+                  ? "text-gray-400 border-gray-300 cursor-not-allowed"
                   : "text-red-600 hover:text-red-700"
               }`}
+              title={order.refund_status === 'pending' ? 'Refund in progress...' : undefined}
             >
-              {order.refund_status === 'failed' ? 'Manual Refund' : 'Refund'}
+              {order.refund_status === 'failed' 
+                ? 'Manual Refund' 
+                : order.refund_status === 'pending'
+                ? 'Refund Pending...'
+                : 'Refund'}
             </Button>
+          )}
+          {(order.status === 'canceled' || order.status === 'cancelled') && 
+           (order.refund_status === 'succeeded' || order.status === 'refunded') && (
+            <div className="w-full min-h-[44px] flex items-center justify-center text-xs text-gray-500 italic">
+              Already Refunded
+            </div>
           )}
         </div>
       </div>

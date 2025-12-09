@@ -182,8 +182,109 @@ export const processManualRefund = async (order) => {
     console.log('Processing manual refund for order:', {
       orderId: order.id,
       userId: order.user_id,
+      status: order.status,
+      refundStatus: order.refund_status,
       totalCost: order.total_cost
     });
+
+    // Validation: Check if already refunded
+    if (order.refund_status === 'succeeded') {
+      console.log('Refund already processed for order:', order.id);
+      return { 
+        success: false, 
+        error: 'This order has already been refunded. Refund status: succeeded' 
+      };
+    }
+
+    if (order.status === 'refunded') {
+      console.log('Order status is already refunded:', order.id);
+      return { 
+        success: false, 
+        error: 'This order has already been refunded. Order status: refunded' 
+      };
+    }
+
+    // Validation: Check if refund is in progress
+    if (order.refund_status === 'pending') {
+      console.log('Refund already in progress for order:', order.id);
+      return { 
+        success: false, 
+        error: 'Refund is already in progress for this order. Please wait for it to complete.' 
+      };
+    }
+
+    // Validation: Ensure order is cancelled
+    if (order.status !== 'cancelled' && order.status !== 'canceled') {
+      console.log('Order is not cancelled, cannot process refund:', order.id, order.status);
+      return { 
+        success: false, 
+        error: `Order must be cancelled to process refund. Current status: ${order.status}` 
+      };
+    }
+
+    // Check for existing refund transaction
+    const { data: existingTransactions, error: transactionCheckError } = await supabase
+      .from('transactions')
+      .select('id, amount, created_at')
+      .eq('order_id', order.id)
+      .eq('type', 'refund')
+      .eq('status', 'approved');
+
+    if (transactionCheckError) {
+      console.warn('Error checking for existing refund transactions:', transactionCheckError);
+      // Continue anyway - this is just a check
+    } else if (existingTransactions && existingTransactions.length > 0) {
+      console.warn('Refund transaction already exists for this order:', {
+        orderId: order.id,
+        existingTransactions: existingTransactions.length,
+        transactions: existingTransactions
+      });
+      // Don't fail - we'll check again before creating, but log the warning
+    }
+
+    // Atomic update: Mark refund as pending ONLY if it's not already set
+    // This prevents race conditions where multiple admins try to refund simultaneously
+    const { data: updatedOrder, error: pendingError } = await supabase
+      .from('orders')
+      .update({
+        refund_status: 'pending'
+      })
+      .eq('id', order.id)
+      .or(`refund_status.is.null,refund_status.eq.failed`) // Only update if null or failed (allow retry of failed refunds)
+      .select()
+      .single();
+
+    // If no rows were updated, it means refund_status was already set (race condition prevented)
+    if (pendingError || !updatedOrder) {
+      // Check current refund status
+      const { data: currentOrder } = await supabase
+        .from('orders')
+        .select('refund_status, status')
+        .eq('id', order.id)
+        .single();
+      
+      if (currentOrder) {
+        if (currentOrder.refund_status === 'succeeded') {
+          console.log('Refund already processed (race condition prevented):', order.id);
+          return { 
+            success: false, 
+            error: 'Refund already processed. Another admin may have processed it.' 
+          };
+        }
+        if (currentOrder.refund_status === 'pending') {
+          console.log('Refund already in progress (race condition prevented):', order.id);
+          return { 
+            success: false, 
+            error: 'Refund already in progress. Another admin may be processing it.' 
+          };
+        }
+      }
+      
+      console.error('Error marking refund as pending:', pendingError);
+      throw pendingError || new Error('Failed to update refund status. Another refund may be in progress.');
+    }
+
+    console.log('Refund marked as pending, proceeding with refund processing');
 
     // Get user's current balance
     const { data: profile, error: profileError } = await supabase
@@ -193,15 +294,35 @@ export const processManualRefund = async (order) => {
       .single();
 
     if (profileError) {
+      // Rollback: Clear pending status on error
+      await supabase
+        .from('orders')
+        .update({ refund_status: 'failed', refund_error: `Failed to fetch profile: ${profileError.message}` })
+        .eq('id', order.id);
       throw new Error(`Failed to fetch user profile: ${profileError.message}`);
     }
 
     if (!profile) {
+      // Rollback: Clear pending status on error
+      await supabase
+        .from('orders')
+        .update({ refund_status: 'failed', refund_error: 'User profile not found' })
+        .eq('id', order.id);
       throw new Error('User profile not found');
     }
 
     const currentBalance = parseFloat(profile.balance || 0);
     const refundAmount = parseFloat(order.total_cost || 0);
+    
+    if (refundAmount <= 0) {
+      // Rollback: Clear pending status on error
+      await supabase
+        .from('orders')
+        .update({ refund_status: 'failed', refund_error: 'Invalid refund amount' })
+        .eq('id', order.id);
+      throw new Error('Invalid refund amount. Order total cost must be greater than 0.');
+    }
+
     const newBalance = currentBalance + refundAmount;
 
     console.log('Processing manual refund:', {
@@ -209,7 +330,9 @@ export const processManualRefund = async (order) => {
       userId: order.user_id,
       currentBalance,
       refundAmount,
-      newBalance
+      newBalance,
+      userName: profile.name,
+      userEmail: profile.email
     });
 
     // Refund the amount
@@ -221,40 +344,76 @@ export const processManualRefund = async (order) => {
       .single();
 
     if (balanceError) {
+      // Rollback: Clear pending status on error
+      await supabase
+        .from('orders')
+        .update({ refund_status: 'failed', refund_error: `Failed to update balance: ${balanceError.message}` })
+        .eq('id', order.id);
       throw new Error(`Failed to update balance: ${balanceError.message}`);
     }
 
     // Verify the balance was updated correctly
     if (!updatedProfile || parseFloat(updatedProfile.balance) !== newBalance) {
+      // Rollback: Clear pending status on error
+      await supabase
+        .from('orders')
+        .update({ refund_status: 'failed', refund_error: 'Balance update verification failed' })
+        .eq('id', order.id);
       throw new Error('Balance update verification failed');
     }
 
-    // Create a refund transaction record
-    const { data: refundTransaction, error: transactionError } = await supabase
-      .from('transactions')
-      .insert({
-        user_id: order.user_id,
-        amount: refundAmount,
-        type: 'refund',
-        status: 'approved',
-        order_id: order.id // Link to the order being refunded
-      })
-      .select()
-      .single();
+    console.log('Balance updated successfully:', {
+      orderId: order.id,
+      oldBalance: currentBalance,
+      newBalance: updatedProfile.balance,
+      refundAmount
+    });
 
-    if (transactionError) {
-      console.error('Failed to create refund transaction record:', transactionError);
-      // Log error but don't fail the refund - balance was already updated
-      // The transaction record is important for audit trail, so log it prominently
+    // Check again for existing refund transaction before creating
+    const { data: finalTransactionCheck } = await supabase
+      .from('transactions')
+      .select('id')
+      .eq('order_id', order.id)
+      .eq('type', 'refund')
+      .eq('status', 'approved')
+      .limit(1);
+
+    let refundTransaction = null;
+    if (finalTransactionCheck && finalTransactionCheck.length > 0) {
+      console.warn('Refund transaction already exists, skipping creation:', {
+        orderId: order.id,
+        existingTransactionId: finalTransactionCheck[0].id
+      });
     } else {
-      console.log('Refund transaction created successfully:', refundTransaction);
+      // Create a refund transaction record
+      const { data: newTransaction, error: transactionError } = await supabase
+        .from('transactions')
+        .insert({
+          user_id: order.user_id,
+          amount: refundAmount,
+          type: 'refund',
+          status: 'approved',
+          order_id: order.id // Link to the order being refunded
+        })
+        .select()
+        .single();
+
+      if (transactionError) {
+        console.error('Failed to create refund transaction record:', transactionError);
+        // Log error but don't fail the refund - balance was already updated
+        // The transaction record is important for audit trail, so log it prominently
+      } else {
+        refundTransaction = newTransaction;
+        console.log('Refund transaction created successfully:', refundTransaction);
+      }
     }
 
     // Update order status and refund status
+    // Keep the original cancelled status but mark refund as succeeded
     const { error: orderError } = await supabase
       .from('orders')
       .update({
-        status: 'refunded',
+        status: 'refunded', // Change to refunded to indicate refund was processed
         refund_status: 'succeeded',
         refund_error: null
       })
@@ -263,11 +422,27 @@ export const processManualRefund = async (order) => {
     if (orderError) {
       console.warn('Failed to update order status:', orderError);
       // Balance was updated, so refund is successful even if status update fails
+      // But try to at least mark refund as succeeded
+      await supabase
+        .from('orders')
+        .update({ refund_status: 'succeeded', refund_error: null })
+        .eq('id', order.id);
     }
+
+    console.log('Manual refund processed successfully:', {
+      orderId: order.id,
+      refundAmount,
+      newBalance: updatedProfile.balance,
+      transactionCreated: !!refundTransaction
+    });
 
     return { success: true, refundAmount, newBalance: updatedProfile.balance };
   } catch (error) {
-    console.error('Error processing manual refund:', error);
+    console.error('Error processing manual refund:', {
+      error: error.message,
+      orderId: order?.id,
+      stack: error.stack
+    });
     return { success: false, error: error.message || 'Failed to process refund' };
   }
 };
