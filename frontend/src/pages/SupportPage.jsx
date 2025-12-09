@@ -362,7 +362,7 @@ const SupportPage = ({ user, onLogout }) => {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-900">Email</p>
-                    <p className="text-xs sm:text-sm text-gray-600">support@boostupgh.com</p>
+                    <p className="text-xs sm:text-sm text-gray-600">admin@boostupgh.com</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">

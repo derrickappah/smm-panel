@@ -1,9 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, Zap, Shield, TrendingUp, Instagram, Youtube, Facebook, Twitter, Music, Users, Heart, Eye, MessageCircle } from 'lucide-react';
+import { ArrowRight, Zap, Shield, TrendingUp, Instagram, Youtube, Facebook, Twitter, Music, Users, Heart, Eye, MessageCircle, Clock, DollarSign, ArrowUp } from 'lucide-react';
 import SEO from '@/components/SEO';
 import { supabase } from '@/lib/supabase';
+import { useQuery } from '@tanstack/react-query';
+import { Skeleton } from '@/components/ui/skeleton';
+import TrustBadges from '@/components/landing/TrustBadges';
+import Testimonials from '@/components/landing/Testimonials';
+import HowItWorks from '@/components/landing/HowItWorks';
+import PricingPreview from '@/components/landing/PricingPreview';
+import FAQ from '@/components/landing/FAQ';
 
 // Animated Number Component
 const AnimatedNumber = ({ value, duration = 2000, formatter = (v) => v.toLocaleString() }) => {
@@ -43,17 +50,84 @@ const AnimatedNumber = ({ value, duration = 2000, formatter = (v) => v.toLocaleS
   return <span>{formatter(displayValue)}</span>;
 };
 
+// Stats Skeleton Component
+const StatsSkeleton = () => (
+  <div className="bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 rounded-lg p-4 sm:p-6 text-center">
+    <Skeleton className="w-12 h-12 sm:w-14 sm:h-14 rounded-lg mx-auto mb-3 sm:mb-4" />
+    <Skeleton className="h-8 sm:h-10 w-20 mx-auto mb-2" />
+    <Skeleton className="h-4 w-24 mx-auto" />
+  </div>
+);
+
+// Back to Top Button Component
+const BackToTop = () => {
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const toggleVisibility = () => {
+      if (window.pageYOffset > 300) {
+        setIsVisible(true);
+      } else {
+        setIsVisible(false);
+      }
+    };
+
+    window.addEventListener('scroll', toggleVisibility);
+    return () => window.removeEventListener('scroll', toggleVisibility);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    });
+  };
+
+  if (!isVisible) return null;
+
+  return (
+    <button
+      onClick={scrollToTop}
+      className="fixed bottom-6 right-6 z-50 bg-indigo-600 hover:bg-indigo-700 text-white p-3 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+      aria-label="Back to top"
+    >
+      <ArrowUp className="w-5 h-5" />
+    </button>
+  );
+};
+
+// Scroll Progress Indicator
+const ScrollProgress = () => {
+  const [scrollProgress, setScrollProgress] = useState(0);
+
+  useEffect(() => {
+    const updateScrollProgress = () => {
+      const windowHeight = window.innerHeight;
+      const documentHeight = document.documentElement.scrollHeight;
+      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+      const progress = (scrollTop / (documentHeight - windowHeight)) * 100;
+      setScrollProgress(progress);
+    };
+
+    window.addEventListener('scroll', updateScrollProgress);
+    updateScrollProgress();
+    return () => window.removeEventListener('scroll', updateScrollProgress);
+  }, []);
+
+  return (
+    <div className="fixed top-0 left-0 right-0 h-1 bg-gray-200 z-50">
+      <div
+        className="h-full bg-gradient-to-r from-indigo-600 to-purple-600 transition-all duration-150"
+        style={{ width: `${scrollProgress}%` }}
+      />
+    </div>
+  );
+};
+
 const LandingPage = () => {
   const navigate = useNavigate();
-  const [stats, setStats] = useState({
-    totalOrders: 0,
-    totalLikes: 0,
-    totalFollowers: 0,
-    totalViews: 0,
-    totalUsers: 0,
-    totalComments: 0
-  });
-  const [loading, setLoading] = useState(true);
+  const statsSectionRef = useRef(null);
+  const [statsVisible, setStatsVisible] = useState(false);
 
   const platforms = [
     { name: 'Instagram', icon: Instagram, color: 'text-pink-600' },
@@ -67,166 +141,143 @@ const LandingPage = () => {
     {
       icon: Zap,
       title: 'Instant Delivery',
-      description: 'Get your orders started within minutes of placing them'
+      description: 'Get your orders started within minutes of placing them. No waiting, no delays - just fast, reliable service.',
+      color: 'from-yellow-400 to-orange-500'
     },
     {
       icon: Shield,
       title: 'Secure & Safe',
-      description: 'Your data and orders are protected with enterprise-grade security'
+      description: 'Your data and orders are protected with enterprise-grade security. SSL encrypted and fully compliant.',
+      color: 'from-green-400 to-emerald-500'
     },
     {
       icon: TrendingUp,
       title: 'Real Growth',
-      description: 'High-quality engagement from real accounts'
+      description: 'High-quality engagement from real accounts. Build authentic social media presence that lasts.',
+      color: 'from-blue-400 to-indigo-500'
+    },
+    {
+      icon: Clock,
+      title: '24/7 Support',
+      description: 'Our dedicated support team is available around the clock to help you with any questions or issues.',
+      color: 'from-purple-400 to-pink-500'
+    },
+    {
+      icon: DollarSign,
+      title: 'Best Prices',
+      description: 'Competitive pricing with transparent costs. No hidden fees, just honest, affordable rates.',
+      color: 'from-teal-400 to-cyan-500'
     }
   ];
 
-  // Helper function to fetch all records using pagination
-  const fetchAllRecords = async (table, select, filters = {}, batchSize = 1000) => {
-    let allRecords = [];
-    let from = 0;
-    let hasMore = true;
+  // Fetch stats using React Query with intersection observer
+  const { data: statsData, isLoading: statsLoading } = useQuery({
+    queryKey: ['landing-stats'],
+    queryFn: async () => {
+      const SAMPLE_SIZE = 5000;
+      const [ordersDataResult, ordersCountResult, usersResult] = await Promise.allSettled([
+        supabase
+          .from('orders')
+          .select('quantity, services(name, service_type)')
+          .eq('status', 'completed')
+          .order('created_at', { ascending: false })
+          .limit(SAMPLE_SIZE),
+        supabase
+          .from('orders')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'completed'),
+        supabase
+          .from('profiles')
+          .select('id', { count: 'exact', head: true })
+      ]);
 
-    while (hasMore) {
-      const to = from + batchSize - 1;
-      // Create a fresh query for each batch to avoid mutation
-      let query = supabase.from(table).select(select);
-      
-      // Apply filters
-      if (filters.eq) {
-        Object.entries(filters.eq).forEach(([field, val]) => {
-          query = query.eq(field, val);
+      let totalLikes = 0;
+      let totalFollowers = 0;
+      let totalViews = 0;
+      let totalComments = 0;
+      let ordersCount = 0;
+      let usersCount = 0;
+
+      if (ordersDataResult.status === 'fulfilled' && ordersDataResult.value?.data) {
+        const ordersData = ordersDataResult.value.data;
+        
+        ordersData.forEach(order => {
+          const quantity = parseInt(order.quantity || 0);
+          if (isNaN(quantity) || quantity <= 0) return;
+
+          const serviceType = (order.services?.service_type || '').toLowerCase();
+          const serviceName = (order.services?.name || '').toLowerCase();
+
+          if (serviceType.includes('like') || serviceName.includes('like')) {
+            totalLikes += quantity;
+          }
+          if (serviceType.includes('follower') || serviceName.includes('follower')) {
+            totalFollowers += quantity;
+          }
+          if (serviceType.includes('view') || serviceName.includes('view')) {
+            totalViews += quantity;
+          }
+          if (serviceType.includes('comment') || serviceName.includes('comment')) {
+            totalComments += quantity;
+          }
         });
       }
-      
-      if (filters.orderBy) {
-        query = query.order(filters.orderBy.field, { ascending: filters.orderBy.ascending !== false });
-      }
-      
-      // Apply range last
-      query = query.range(from, to);
 
-      const { data, error } = await query;
-      
-      if (error) {
-        console.error(`Error fetching batch ${from}-${to}:`, error);
-        throw error;
+      if (ordersCountResult.status === 'fulfilled' && !ordersCountResult.value.error) {
+        ordersCount = ordersCountResult.value.count || 0;
       }
 
-      if (data && data.length > 0) {
-        allRecords = [...allRecords, ...data];
-        hasMore = data.length === batchSize;
-        from = to + 1;
-      } else {
-        hasMore = false;
+      if (usersResult.status === 'fulfilled' && !usersResult.value.error) {
+        usersCount = usersResult.value.count || 0;
       }
+
+      return {
+        totalOrders: ordersCount,
+        totalLikes,
+        totalFollowers,
+        totalViews,
+        totalUsers: usersCount,
+        totalComments
+      };
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes cache
+    gcTime: 10 * 60 * 1000, // 10 minutes garbage collection
+    retry: 1,
+    enabled: statsVisible // Only fetch when section is visible
+  });
+
+  // Intersection Observer for stats section
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setStatsVisible(true);
+          }
+        });
+      },
+      { threshold: 0.1 }
+    );
+
+    if (statsSectionRef.current) {
+      observer.observe(statsSectionRef.current);
     }
 
-    console.log(`Fetched ${allRecords.length} total records from ${table}`);
-    return allRecords;
-  };
-
-  // Fetch public statistics
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        console.log('Starting to fetch stats...');
-        // Use efficient queries: fetch only recent sample (last 5000 orders) for stats calculation
-        // This is much faster than fetching all orders and provides accurate enough statistics
-        const SAMPLE_SIZE = 5000;
-        const [ordersDataResult, ordersCountResult, usersResult] = await Promise.allSettled([
-          supabase
-            .from('orders')
-            .select('quantity, services(name, service_type)')
-            .eq('status', 'completed')
-            .order('created_at', { ascending: false })
-            .limit(SAMPLE_SIZE),
-          supabase
-            .from('orders')
-            .select('id', { count: 'exact', head: true })
-            .eq('status', 'completed'),
-          supabase
-            .from('profiles')
-            .select('id', { count: 'exact', head: true })
-        ]);
-
-        let totalLikes = 0;
-        let totalFollowers = 0;
-        let totalViews = 0;
-        let totalComments = 0;
-        let ordersCount = 0;
-        let usersCount = 0;
-
-        // Process orders data - only process sample
-        if (ordersDataResult.status === 'fulfilled' && ordersDataResult.value?.data) {
-          const ordersData = ordersDataResult.value.data;
-          console.log(`Processing ${ordersData.length} recent orders for stats...`);
-          
-          ordersData.forEach(order => {
-            const quantity = parseInt(order.quantity || 0);
-            if (isNaN(quantity) || quantity <= 0) return;
-
-            const serviceType = (order.services?.service_type || '').toLowerCase();
-            const serviceName = (order.services?.name || '').toLowerCase();
-
-            if (serviceType.includes('like') || serviceName.includes('like')) {
-              totalLikes += quantity;
-            }
-            if (serviceType.includes('follower') || serviceName.includes('follower')) {
-              totalFollowers += quantity;
-            }
-            if (serviceType.includes('view') || serviceName.includes('view')) {
-              totalViews += quantity;
-            }
-            if (serviceType.includes('comment') || serviceName.includes('comment')) {
-              totalComments += quantity;
-            }
-          });
-          
-          // If we got a full sample, we can extrapolate for display purposes
-          // But for landing page, showing recent activity is more meaningful
-          console.log('Calculated totals from recent orders:', { totalLikes, totalFollowers, totalViews, totalComments });
-        } else if (ordersDataResult.status === 'rejected') {
-          console.error('Failed to fetch orders:', ordersDataResult.reason);
-        }
-
-        // Process orders count
-        if (ordersCountResult.status === 'fulfilled' && !ordersCountResult.value.error) {
-          ordersCount = ordersCountResult.value.count || 0;
-        }
-
-        // Process users count
-        if (usersResult.status === 'fulfilled' && !usersResult.value.error) {
-          usersCount = usersResult.value.count || 0;
-        }
-
-        // Update stats with actual data
-        setStats({
-          totalOrders: ordersCount,
-          totalLikes: totalLikes,
-          totalFollowers: totalFollowers,
-          totalViews: totalViews,
-          totalUsers: usersCount,
-          totalComments: totalComments
-        });
-      } catch (error) {
-        console.error('Error fetching stats:', error);
-        // If error, keep current stats or set to 0
-        setStats(prev => ({
-          totalOrders: prev.totalOrders || 0,
-          totalLikes: prev.totalLikes || 0,
-          totalFollowers: prev.totalFollowers || 0,
-          totalViews: prev.totalViews || 0,
-          totalUsers: prev.totalUsers || 0,
-          totalComments: prev.totalComments || 0
-        }));
-      } finally {
-        setLoading(false);
+    return () => {
+      if (statsSectionRef.current) {
+        observer.unobserve(statsSectionRef.current);
       }
     };
-
-    fetchStats();
   }, []);
+
+  const stats = useMemo(() => statsData || {
+    totalOrders: 0,
+    totalLikes: 0,
+    totalFollowers: 0,
+    totalViews: 0,
+    totalUsers: 0,
+    totalComments: 0
+  }, [statsData]);
 
   const structuredData = {
     '@context': 'https://schema.org',
@@ -279,6 +330,7 @@ const LandingPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <ScrollProgress />
       <SEO
         title="Boost Your Social Media Presence - SMM Panel | BoostUp GH"
         description="Grow your social media presence instantly with BoostUp GH. The most reliable SMM panel for Instagram followers, TikTok views, YouTube subscribers, Facebook likes, and Twitter followers. Instant delivery, secure & safe."
@@ -288,53 +340,86 @@ const LandingPage = () => {
       />
       {/* Navigation */}
       <nav className="bg-white border-b border-gray-200 fixed top-0 left-0 right-0 z-50 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-4 flex justify-between items-center">
           <div className="flex items-center space-x-2">
-            <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center">
-              <TrendingUp className="w-6 h-6 text-white" />
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-indigo-600 rounded-lg flex items-center justify-center">
+              <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
-            <span className="text-xl sm:text-2xl font-bold text-gray-900">BoostUp GH</span>
+            <span className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">BoostUp GH</span>
           </div>
           <Button 
             data-testid="nav-get-started-btn"
             onClick={() => navigate('/auth')} 
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 sm:px-6 py-2 h-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors duration-200"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 sm:px-4 md:px-6 py-2 h-9 sm:h-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors duration-200 text-sm sm:text-base"
           >
             Get Started
-            <ArrowRight className="ml-2 w-4 h-4" />
+            <ArrowRight className="ml-1 sm:ml-2 w-3 h-3 sm:w-4 sm:h-4" />
           </Button>
         </div>
       </nav>
 
       {/* Hero Section */}
-      <section className="pt-24 sm:pt-32 pb-16 sm:pb-20 px-4 sm:px-6">
-        <div className="max-w-6xl mx-auto text-center animate-fadeIn">
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold text-gray-900 mb-4 sm:mb-6 leading-tight">
+      <section className="pt-16 sm:pt-24 md:pt-32 pb-12 sm:pb-16 md:pb-20 px-3 sm:px-4 md:px-6">
+        <div className="max-w-6xl mx-auto text-center">
+          {/* Trust Badges Above Hero */}
+          <div className="mb-6 sm:mb-8 flex flex-wrap justify-center items-center gap-3 sm:gap-4 text-xs sm:text-sm text-gray-600">
+            <div className="flex items-center space-x-1">
+              <Shield className="w-4 h-4 text-indigo-600" />
+              <span className="font-medium">Trusted by 10K+ users</span>
+            </div>
+            <span className="hidden sm:inline">•</span>
+            <div className="flex items-center space-x-1">
+              <Clock className="w-4 h-4 text-indigo-600" />
+              <span className="font-medium">99.9% Uptime</span>
+            </div>
+            <span className="hidden sm:inline">•</span>
+            <div className="flex items-center space-x-1">
+              <TrendingUp className="w-4 h-4 text-indigo-600" />
+              <span className="font-medium">Instant Delivery</span>
+            </div>
+          </div>
+
+          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-gray-900 mb-4 sm:mb-6 leading-tight px-2">
             Grow Your Social Media
             <br />
             <span className="text-indigo-600">
               Presence Instantly
             </span>
           </h1>
-          <p className="text-base sm:text-lg text-gray-600 mb-8 sm:mb-10 max-w-2xl mx-auto">
-            The most reliable SMM panel for boosting your followers, likes, views, and engagement across all major platforms
+          <p className="text-sm sm:text-base md:text-lg text-gray-600 mb-6 sm:mb-8 md:mb-10 max-w-2xl mx-auto px-2">
+            The most reliable SMM panel for boosting your followers, likes, views, and engagement across all major platforms. Join thousands of satisfied customers today.
           </p>
-          <Button 
-            data-testid="hero-get-started-btn"
-            onClick={() => navigate('/auth')} 
-            size="lg"
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 sm:px-8 py-3 sm:py-4 h-12 sm:h-14 text-base sm:text-lg rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors duration-200"
-          >
-            Start Boosting Now
-            <ArrowRight className="ml-2 w-4 h-4 sm:w-5 sm:h-5" />
-          </Button>
+          
+          {/* CTA Buttons */}
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center mb-8 sm:mb-10 md:mb-12 px-2">
+            <Button 
+              data-testid="hero-get-started-btn"
+              onClick={() => navigate('/auth')} 
+              size="lg"
+              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-6 sm:px-8 py-3 sm:py-4 h-12 sm:h-14 text-base sm:text-lg rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl w-full sm:w-auto"
+            >
+              Start Boosting Now
+              <ArrowRight className="ml-2 w-4 h-4 sm:w-5 sm:h-5" />
+            </Button>
+            <Button 
+              onClick={() => {
+                const element = document.getElementById('pricing-preview');
+                element?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              size="lg"
+              variant="outline"
+              className="border-2 border-gray-300 hover:border-indigo-600 text-gray-700 hover:text-indigo-600 px-6 sm:px-8 py-3 sm:py-4 h-12 sm:h-14 text-base sm:text-lg rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 w-full sm:w-auto"
+            >
+              View Pricing
+            </Button>
+          </div>
 
           {/* Platform Icons */}
-          <div className="flex justify-center items-center gap-6 sm:gap-8 mt-12 sm:mt-16 flex-wrap">
+          <div className="flex justify-center items-center gap-4 sm:gap-6 md:gap-8 mt-8 sm:mt-12 md:mt-16 flex-wrap px-2">
             {platforms.map((platform) => (
-              <div key={platform.name} className="flex flex-col items-center space-y-2 animate-slideUp">
-                <div className="bg-white border border-gray-200 w-14 h-14 sm:w-16 sm:h-16 rounded-lg flex items-center justify-center shadow-sm hover:shadow-md transition-shadow duration-200">
-                  <platform.icon className={`w-7 h-7 sm:w-8 sm:h-8 ${platform.color}`} />
+              <div key={platform.name} className="flex flex-col items-center space-y-2">
+                <div className="bg-white border border-gray-200 w-12 h-12 sm:w-14 sm:h-16 md:w-16 md:h-16 rounded-lg flex items-center justify-center shadow-sm hover:shadow-md transition-shadow duration-200">
+                  <platform.icon className={`w-6 h-6 sm:w-7 sm:h-8 md:w-8 md:h-8 ${platform.color}`} />
                 </div>
                 <span className="text-xs sm:text-sm font-medium text-gray-700">{platform.name}</span>
               </div>
@@ -343,120 +428,178 @@ const LandingPage = () => {
         </div>
       </section>
 
+      {/* Trust Badges Section */}
+      <TrustBadges />
+
       {/* Statistics Section */}
-      <section className="py-12 sm:py-16 lg:py-20 px-4 sm:px-6 bg-white">
+      <section ref={statsSectionRef} className="py-12 sm:py-16 lg:py-20 px-3 sm:px-4 md:px-6 bg-white">
         <div className="max-w-6xl mx-auto">
           <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-center text-gray-900 mb-8 sm:mb-12">
             Our Impact in Numbers
           </h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-5 md:gap-6">
             {/* Total Orders */}
-            <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 border border-indigo-200 rounded-lg p-4 sm:p-6 text-center shadow-sm hover:shadow-md transition-shadow duration-200">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-indigo-600 rounded-lg flex items-center justify-center mx-auto mb-3 sm:mb-4">
-                <TrendingUp className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+            <div className="group relative bg-white rounded-xl p-5 sm:p-6 border border-gray-200 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              <div className="relative">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl flex items-center justify-center mb-3 sm:mb-4 shadow-lg shadow-indigo-500/20 group-hover:scale-110 transition-transform duration-300">
+                  <TrendingUp className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+                </div>
+                <div className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-1 sm:mb-2">
+                  {statsLoading ? (
+                    <Skeleton className="h-8 sm:h-10 w-20 mx-auto bg-gray-200" />
+                  ) : (
+                    <AnimatedNumber value={stats.totalOrders} />
+                  )}
+                </div>
+                <p className="text-xs sm:text-sm text-gray-600 font-semibold uppercase tracking-wide">Orders Completed</p>
               </div>
-              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-1 sm:mb-2">
-                {loading ? '...' : <AnimatedNumber value={stats.totalOrders} />}
-              </div>
-              <p className="text-xs sm:text-sm text-gray-600 font-medium">Orders Completed</p>
             </div>
 
             {/* Total Likes */}
-            <div className="bg-gradient-to-br from-pink-50 to-pink-100 border border-pink-200 rounded-lg p-4 sm:p-6 text-center shadow-sm hover:shadow-md transition-shadow duration-200">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-pink-600 rounded-lg flex items-center justify-center mx-auto mb-3 sm:mb-4">
-                <Heart className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+            <div className="group relative bg-white rounded-xl p-5 sm:p-6 border border-gray-200 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-br from-pink-500/5 to-rose-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              <div className="relative">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-pink-500 to-rose-600 rounded-xl flex items-center justify-center mb-3 sm:mb-4 shadow-lg shadow-pink-500/20 group-hover:scale-110 transition-transform duration-300">
+                  <Heart className="w-6 h-6 sm:w-7 sm:h-7 text-white fill-white" />
+                </div>
+                <div className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-pink-600 to-rose-600 bg-clip-text text-transparent mb-1 sm:mb-2">
+                  {statsLoading ? (
+                    <Skeleton className="h-8 sm:h-10 w-20 mx-auto bg-gray-200" />
+                  ) : (
+                    <AnimatedNumber value={stats.totalLikes} formatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(1)}K` : v.toLocaleString()} />
+                  )}
+                </div>
+                <p className="text-xs sm:text-sm text-gray-600 font-semibold uppercase tracking-wide">Likes Sent</p>
               </div>
-              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-1 sm:mb-2">
-                {loading ? '...' : <AnimatedNumber value={stats.totalLikes} formatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(1)}K` : v.toLocaleString()} />}
-              </div>
-              <p className="text-xs sm:text-sm text-gray-600 font-medium">Likes Sent</p>
             </div>
 
             {/* Total Followers */}
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-lg p-4 sm:p-6 text-center shadow-sm hover:shadow-md transition-shadow duration-200">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-blue-600 rounded-lg flex items-center justify-center mx-auto mb-3 sm:mb-4">
-                <Users className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+            <div className="group relative bg-white rounded-xl p-5 sm:p-6 border border-gray-200 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-cyan-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              <div className="relative">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-xl flex items-center justify-center mb-3 sm:mb-4 shadow-lg shadow-blue-500/20 group-hover:scale-110 transition-transform duration-300">
+                  <Users className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+                </div>
+                <div className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent mb-1 sm:mb-2">
+                  {statsLoading ? (
+                    <Skeleton className="h-8 sm:h-10 w-20 mx-auto bg-gray-200" />
+                  ) : (
+                    <AnimatedNumber value={stats.totalFollowers} formatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(1)}K` : v.toLocaleString()} />
+                  )}
+                </div>
+                <p className="text-xs sm:text-sm text-gray-600 font-semibold uppercase tracking-wide">Followers Sent</p>
               </div>
-              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-1 sm:mb-2">
-                {loading ? '...' : <AnimatedNumber value={stats.totalFollowers} formatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(1)}K` : v.toLocaleString()} />}
-              </div>
-              <p className="text-xs sm:text-sm text-gray-600 font-medium">Followers Sent</p>
             </div>
 
             {/* Total Views */}
-            <div className="bg-gradient-to-br from-cyan-50 to-cyan-100 border border-cyan-200 rounded-lg p-4 sm:p-6 text-center shadow-sm hover:shadow-md transition-shadow duration-200">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-cyan-600 rounded-lg flex items-center justify-center mx-auto mb-3 sm:mb-4">
-                <Eye className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+            <div className="group relative bg-white rounded-xl p-5 sm:p-6 border border-gray-200 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-teal-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              <div className="relative">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-cyan-500 to-teal-600 rounded-xl flex items-center justify-center mb-3 sm:mb-4 shadow-lg shadow-cyan-500/20 group-hover:scale-110 transition-transform duration-300">
+                  <Eye className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+                </div>
+                <div className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent mb-1 sm:mb-2">
+                  {statsLoading ? (
+                    <Skeleton className="h-8 sm:h-10 w-20 mx-auto bg-gray-200" />
+                  ) : (
+                    <AnimatedNumber value={stats.totalViews} formatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(1)}K` : v.toLocaleString()} />
+                  )}
+                </div>
+                <p className="text-xs sm:text-sm text-gray-600 font-semibold uppercase tracking-wide">Views Sent</p>
               </div>
-              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-1 sm:mb-2">
-                {loading ? '...' : <AnimatedNumber value={stats.totalViews} formatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(1)}K` : v.toLocaleString()} />}
-              </div>
-              <p className="text-xs sm:text-sm text-gray-600 font-medium">Views Sent</p>
             </div>
 
             {/* Total Comments */}
-            <div className="bg-gradient-to-br from-green-50 to-green-100 border border-green-200 rounded-lg p-4 sm:p-6 text-center shadow-sm hover:shadow-md transition-shadow duration-200">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-green-600 rounded-lg flex items-center justify-center mx-auto mb-3 sm:mb-4">
-                <MessageCircle className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+            <div className="group relative bg-white rounded-xl p-5 sm:p-6 border border-gray-200 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-emerald-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              <div className="relative">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center mb-3 sm:mb-4 shadow-lg shadow-green-500/20 group-hover:scale-110 transition-transform duration-300">
+                  <MessageCircle className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+                </div>
+                <div className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent mb-1 sm:mb-2">
+                  {statsLoading ? (
+                    <Skeleton className="h-8 sm:h-10 w-20 mx-auto bg-gray-200" />
+                  ) : (
+                    <AnimatedNumber value={stats.totalComments} formatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(1)}K` : v.toLocaleString()} />
+                  )}
+                </div>
+                <p className="text-xs sm:text-sm text-gray-600 font-semibold uppercase tracking-wide">Comments Sent</p>
               </div>
-              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-1 sm:mb-2">
-                {loading ? '...' : <AnimatedNumber value={stats.totalComments} formatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(1)}K` : v.toLocaleString()} />}
-              </div>
-              <p className="text-xs sm:text-sm text-gray-600 font-medium">Comments Sent</p>
             </div>
 
             {/* Total Users */}
-            <div className="bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200 rounded-lg p-4 sm:p-6 text-center shadow-sm hover:shadow-md transition-shadow duration-200">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-purple-600 rounded-lg flex items-center justify-center mx-auto mb-3 sm:mb-4">
-                <Users className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+            <div className="group relative bg-white rounded-xl p-5 sm:p-6 border border-gray-200 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-violet-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              <div className="relative">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-purple-500 to-violet-600 rounded-xl flex items-center justify-center mb-3 sm:mb-4 shadow-lg shadow-purple-500/20 group-hover:scale-110 transition-transform duration-300">
+                  <Users className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+                </div>
+                <div className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-purple-600 to-violet-600 bg-clip-text text-transparent mb-1 sm:mb-2">
+                  {statsLoading ? (
+                    <Skeleton className="h-8 sm:h-10 w-20 mx-auto bg-gray-200" />
+                  ) : (
+                    <AnimatedNumber value={stats.totalUsers} formatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(1)}K` : v.toLocaleString()} />
+                  )}
+                </div>
+                <p className="text-xs sm:text-sm text-gray-600 font-semibold uppercase tracking-wide">Happy Users</p>
               </div>
-              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-1 sm:mb-2">
-                {loading ? '...' : <AnimatedNumber value={stats.totalUsers} formatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(1)}K` : v.toLocaleString()} />}
-              </div>
-              <p className="text-xs sm:text-sm text-gray-600 font-medium">Happy Users</p>
             </div>
           </div>
         </div>
       </section>
 
+      {/* Testimonials Section */}
+      <Testimonials />
+
+      {/* How It Works Section */}
+      <HowItWorks />
+
       {/* Features Section */}
-      <section className="py-12 sm:py-16 lg:py-20 px-4 sm:px-6">
+      <section className="py-12 sm:py-16 lg:py-20 px-3 sm:px-4 md:px-6 bg-gray-50">
         <div className="max-w-6xl mx-auto">
           <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-center text-gray-900 mb-8 sm:mb-12">
             Why Choose BoostUp GH?
           </h2>
-          <div className="grid md:grid-cols-3 gap-6 sm:gap-8">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
             {features.map((feature, index) => (
               <div 
                 key={index} 
-                className="bg-white border border-gray-200 rounded-lg p-6 sm:p-8 shadow-sm hover:shadow-md transition-shadow duration-200 animate-slideUp"
-                style={{ animationDelay: `${index * 0.1}s` }}
+                className="bg-white border border-gray-200 rounded-lg p-5 sm:p-6 md:p-8 shadow-sm hover:shadow-lg transition-all duration-200"
               >
-                <div className="w-12 h-12 sm:w-14 sm:h-14 bg-indigo-100 rounded-lg flex items-center justify-center mb-4 sm:mb-6">
-                  <feature.icon className="w-6 h-6 sm:w-7 sm:h-7 text-indigo-600" />
+                <div className={`w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 bg-gradient-to-br ${feature.color} rounded-lg flex items-center justify-center mb-4 sm:mb-6 shadow-md`}>
+                  <feature.icon className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 text-white" />
                 </div>
                 <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2 sm:mb-3">{feature.title}</h3>
-                <p className="text-sm sm:text-base text-gray-600">{feature.description}</p>
+                <p className="text-sm sm:text-base text-gray-600 leading-relaxed">{feature.description}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="py-12 sm:py-16 lg:py-20 px-4 sm:px-6">
-        <div className="max-w-4xl mx-auto bg-white border border-gray-200 rounded-lg p-8 sm:p-12 shadow-sm text-center">
-          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-4 sm:mb-6">
+      {/* Pricing Preview Section */}
+      <div id="pricing-preview">
+        <PricingPreview />
+      </div>
+
+      {/* FAQ Section */}
+      <FAQ />
+
+      {/* Final CTA Section */}
+      <section className="py-12 sm:py-16 lg:py-20 px-3 sm:px-4 md:px-6 bg-gradient-to-br from-indigo-600 to-purple-600">
+        <div className="max-w-4xl mx-auto bg-white border border-gray-200 rounded-lg p-6 sm:p-8 md:p-12 shadow-xl text-center">
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-3 sm:mb-4 md:mb-6">
             Ready to Boost Your Social Media?
           </h2>
-          <p className="text-base sm:text-lg text-gray-600 mb-6 sm:mb-8">
-            Join thousands of satisfied customers and start growing today
+          <p className="text-sm sm:text-base md:text-lg text-gray-600 mb-4 sm:mb-6 md:mb-8">
+            Join thousands of satisfied customers and start growing today. No credit card required to get started.
           </p>
           <Button 
             data-testid="cta-get-started-btn"
             onClick={() => navigate('/auth')} 
             size="lg"
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 sm:px-8 py-3 sm:py-4 h-12 sm:h-14 text-base sm:text-lg rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors duration-200"
+            className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-6 sm:px-8 py-3 sm:py-4 h-12 sm:h-14 text-base sm:text-lg rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl"
           >
             Get Started Free
             <ArrowRight className="ml-2 w-4 h-4 sm:w-5 sm:h-5" />
@@ -465,11 +608,14 @@ const LandingPage = () => {
       </section>
 
       {/* Footer */}
-      <footer className="py-6 sm:py-8 px-4 sm:px-6 border-t border-gray-200 bg-white">
-        <div className="max-w-6xl mx-auto text-center text-sm sm:text-base text-gray-600">
+      <footer className="py-6 sm:py-8 px-3 sm:px-4 md:px-6 border-t border-gray-200 bg-white">
+        <div className="max-w-6xl mx-auto text-center text-xs sm:text-sm md:text-base text-gray-600">
           <p>&copy; 2025 BoostUp GH. All rights reserved.</p>
         </div>
       </footer>
+
+      {/* Back to Top Button */}
+      <BackToTop />
     </div>
   );
 };
