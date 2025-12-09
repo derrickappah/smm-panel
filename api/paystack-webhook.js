@@ -475,28 +475,31 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
     let statusUpdateError = null;
     const maxRetries = 3;
 
-    // Try updating with retry logic
+    // Try updating with retry logic - start without status condition for more flexibility
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       metrics.statusUpdateAttempts = attempt;
       try {
-        // First attempt: try with pending condition (prevent race conditions)
+        // Strategy: Try without status condition first (like reject does), then verify
+        // This matches the behavior of reject which works correctly
         let updateQuery = supabase
           .from('transactions')
           .update(updateData)
           .eq('id', transaction.id);
 
-        if (attempt === 1) {
-          // First attempt: only update if still pending
+        // Only add pending condition on first attempt if we want to be extra safe
+        // But don't require it - this is why rejects work and approves don't
+        if (attempt === 1 && transaction.status === 'pending') {
+          // First attempt: try with pending condition only if we know it's pending
           updateQuery = updateQuery.eq('status', 'pending');
         }
-        // Subsequent attempts: try without pending condition (in case status changed but we still need to update)
+        // Subsequent attempts: always try without pending condition
 
         const { data: updatedData, error: updateError } = await updateQuery.select();
 
         if (updateError) {
           // Check if it's a "no rows updated" error (status already changed)
           if (updateError.code === 'PGRST116' || updateError.message?.includes('No rows')) {
-            console.log(`[WEBHOOK] Attempt ${attempt}: Transaction status already changed (likely processed by another process):`, transaction.id);
+            console.log(`[WEBHOOK] Attempt ${attempt}: No rows updated, checking current status:`, transaction.id);
             // Check current status
             const { data: currentTx } = await supabase
               .from('transactions')
@@ -505,7 +508,7 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
               .single();
             
             if (currentTx?.status === 'approved') {
-              console.log('[WEBHOOK] Transaction already approved by another process, proceeding with balance update');
+              console.log('[WEBHOOK] Transaction already approved, proceeding with balance update');
               statusUpdated = true;
               metrics.statusUpdateSuccess = true;
               break;
@@ -513,8 +516,9 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
             
             // If not approved, try next attempt without pending condition
             if (attempt < maxRetries) {
-              console.log(`[WEBHOOK] Attempt ${attempt} failed, retrying without pending condition...`);
-              metrics.errors.push(`Status update attempt ${attempt}: Status changed during update`);
+              console.log(`[WEBHOOK] Attempt ${attempt} failed (status: ${currentTx?.status}), retrying without pending condition...`);
+              metrics.errors.push(`Status update attempt ${attempt}: Status is ${currentTx?.status}, retrying without condition`);
+              await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
               continue;
             }
           } else {
@@ -528,10 +532,42 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
             }
           }
         } else if (updatedData && updatedData.length > 0) {
-          statusUpdated = true;
-          metrics.statusUpdateSuccess = true;
-          console.log(`[WEBHOOK] Transaction updated to approved (attempt ${attempt}):`, transaction.id);
-          break;
+          // Verify the status actually changed to approved
+          const updatedStatus = updatedData[0]?.status;
+          if (updatedStatus === 'approved') {
+            statusUpdated = true;
+            metrics.statusUpdateSuccess = true;
+            console.log(`[WEBHOOK] Transaction updated to approved (attempt ${attempt}):`, transaction.id);
+            break;
+          } else {
+            console.warn(`[WEBHOOK] Update returned but status is ${updatedStatus}, retrying...`);
+            metrics.errors.push(`Status update attempt ${attempt}: Update returned but status is ${updatedStatus}`);
+            if (attempt < maxRetries) {
+              await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+              continue;
+            }
+          }
+        } else {
+          // No data returned - verify current status
+          const { data: currentTx } = await supabase
+            .from('transactions')
+            .select('status')
+            .eq('id', transaction.id)
+            .single();
+
+          if (currentTx?.status === 'approved') {
+            statusUpdated = true;
+            metrics.statusUpdateSuccess = true;
+            console.log(`[WEBHOOK] Transaction verified as approved (attempt ${attempt}):`, transaction.id);
+            break;
+          } else {
+            console.warn(`[WEBHOOK] Update returned no data, current status: ${currentTx?.status}, retrying...`);
+            metrics.errors.push(`Status update attempt ${attempt}: No data returned, current status: ${currentTx?.status}`);
+            if (attempt < maxRetries) {
+              await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+              continue;
+            }
+          }
         }
       } catch (retryError) {
         console.error(`[WEBHOOK] Attempt ${attempt} exception:`, retryError);
@@ -657,19 +693,40 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
 
     // Final verification: ensure transaction status is approved
     if (!statusUpdated) {
-      // Try one more time to update status (without pending condition)
-      const { data: finalCheck } = await supabase
+      // Try one more time to update status (without pending condition - like reject does)
+      console.warn('[WEBHOOK] Status not updated after retries, attempting final update without status condition...');
+      const { data: finalUpdate, error: finalError } = await supabase
         .from('transactions')
-        .select('status')
+        .update(updateData)
         .eq('id', transaction.id)
-        .single();
+        .select('status');
 
-      if (finalCheck?.status !== 'approved') {
-        console.warn('[WEBHOOK] Status not approved after balance update, attempting final status update...');
-        await supabase
+      if (finalError) {
+        console.error('[WEBHOOK] Final status update failed:', finalError);
+      } else if (finalUpdate && finalUpdate.length > 0 && finalUpdate[0]?.status === 'approved') {
+        statusUpdated = true;
+        metrics.statusUpdateSuccess = true;
+        console.log('[WEBHOOK] Final status update succeeded');
+      } else {
+        // Final check - verify current status
+        const { data: finalCheck } = await supabase
           .from('transactions')
-          .update(updateData)
-          .eq('id', transaction.id);
+          .select('status')
+          .eq('id', transaction.id)
+          .single();
+
+        if (finalCheck?.status === 'approved') {
+          statusUpdated = true;
+          metrics.statusUpdateSuccess = true;
+          console.log('[WEBHOOK] Transaction verified as approved in final check');
+        } else {
+          console.error('[WEBHOOK] CRITICAL: Transaction status still not approved after all attempts:', {
+            transactionId: transaction.id,
+            currentStatus: finalCheck?.status,
+            expectedStatus: 'approved'
+          });
+          metrics.errors.push(`Final verification failed: status is ${finalCheck?.status}, expected approved`);
+        }
       }
     }
 

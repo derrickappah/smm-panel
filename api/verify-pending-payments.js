@@ -554,19 +554,20 @@ export default async function handler(req, res) {
                 let statusUpdateError = null;
                 const maxRetries = 3;
 
-                // Try updating status with retry logic
+                // Try updating status with retry logic - make it flexible like reject
                 for (let attempt = 1; attempt <= maxRetries; attempt++) {
                   try {
+                    // Strategy: Try without status condition first (like reject does)
                     let updateQuery = supabase
                       .from('transactions')
                       .update(updateData)
                       .eq('id', transaction.id);
 
-                    if (attempt === 1) {
-                      // First attempt: only update if still pending
+                    // Only add pending condition on first attempt if we know it's pending
+                    if (attempt === 1 && transaction.status === 'pending') {
                       updateQuery = updateQuery.eq('status', 'pending');
                     }
-                    // Subsequent attempts: try without pending condition
+                    // Subsequent attempts: always try without pending condition
 
                     const { data: updatedData, error: updateError } = await updateQuery.select();
 
@@ -580,13 +581,13 @@ export default async function handler(req, res) {
                           .single();
                         
                         if (currentTx?.status === 'approved') {
-                          console.log(`Transaction ${transaction.id} already approved, proceeding with balance check`);
+                          console.log(`[VERIFY] Transaction ${transaction.id} already approved, proceeding with balance check`);
                           statusUpdated = true;
                           break;
                         }
                         
                         if (attempt < maxRetries) {
-                          console.log(`Attempt ${attempt} failed (status changed), retrying without pending condition...`);
+                          console.log(`[VERIFY] Attempt ${attempt} failed (status: ${currentTx?.status}), retrying without pending condition...`);
                           await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
                           continue;
                         }
@@ -598,14 +599,70 @@ export default async function handler(req, res) {
                         }
                       }
                     } else if (updatedData && updatedData.length > 0) {
-                      statusUpdated = true;
-                      console.log(`Transaction ${transaction.id} updated to approved (attempt ${attempt})`);
-                      break;
+                      // Verify the status actually changed to approved
+                      const updatedStatus = updatedData[0]?.status;
+                      if (updatedStatus === 'approved') {
+                        statusUpdated = true;
+                        console.log(`[VERIFY] Transaction ${transaction.id} updated to approved (attempt ${attempt})`);
+                        break;
+                      } else {
+                        console.warn(`[VERIFY] Update returned but status is ${updatedStatus}, retrying...`);
+                        if (attempt < maxRetries) {
+                          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                          continue;
+                        }
+                      }
+                    } else {
+                      // No data returned - verify current status
+                      const { data: currentTx } = await supabase
+                        .from('transactions')
+                        .select('status')
+                        .eq('id', transaction.id)
+                        .single();
+
+                      if (currentTx?.status === 'approved') {
+                        statusUpdated = true;
+                        console.log(`[VERIFY] Transaction ${transaction.id} verified as approved (attempt ${attempt})`);
+                        break;
+                      } else {
+                        console.warn(`[VERIFY] Update returned no data, current status: ${currentTx?.status}, retrying...`);
+                        if (attempt < maxRetries) {
+                          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                          continue;
+                        }
+                      }
                     }
                   } catch (retryError) {
                     statusUpdateError = retryError;
                     if (attempt < maxRetries) {
                       await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                    }
+                  }
+                }
+
+                // Final verification if status update didn't succeed
+                if (!statusUpdated) {
+                  console.warn(`[VERIFY] Status not updated after retries for transaction ${transaction.id}, attempting final update...`);
+                  const { data: finalUpdate, error: finalError } = await supabase
+                    .from('transactions')
+                    .update(updateData)
+                    .eq('id', transaction.id)
+                    .select('status');
+
+                  if (!finalError && finalUpdate && finalUpdate.length > 0 && finalUpdate[0]?.status === 'approved') {
+                    statusUpdated = true;
+                    console.log(`[VERIFY] Final status update succeeded for transaction ${transaction.id}`);
+                  } else {
+                    // Final check
+                    const { data: finalCheck } = await supabase
+                      .from('transactions')
+                      .select('status')
+                      .eq('id', transaction.id)
+                      .single();
+
+                    if (finalCheck?.status === 'approved') {
+                      statusUpdated = true;
+                      console.log(`[VERIFY] Transaction ${transaction.id} verified as approved in final check`);
                     }
                   }
                 }

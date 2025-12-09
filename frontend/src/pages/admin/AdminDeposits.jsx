@@ -19,6 +19,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
   const [dateFilter, setDateFilter] = useState('');
   const [page, setPage] = useState(1);
   const [approvingDeposit, setApprovingDeposit] = useState(null);
+  const [verifyingDeposit, setVerifyingDeposit] = useState(null);
 
   const debouncedSearch = useDebounce(searchTerm, 300);
 
@@ -175,6 +176,40 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
     }
   }, [onRefresh]);
 
+  const handleVerifyPaystackDeposit = useCallback(async (deposit) => {
+    setVerifyingDeposit(deposit.id);
+    try {
+      const response = await fetch('/api/manual-verify-paystack-deposit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ transactionId: deposit.id })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to verify deposit');
+      }
+
+      if (data.updateResult?.newStatus === 'approved') {
+        toast.success('Deposit verified and approved successfully');
+      } else if (data.updateResult?.newStatus === 'rejected') {
+        toast.warning('Deposit verified and rejected (payment failed)');
+      } else {
+        toast.info(`Paystack status updated: ${data.paystackStatus}`);
+      }
+
+      if (onRefresh) onRefresh();
+    } catch (error) {
+      console.error('Failed to verify Paystack deposit:', error);
+      toast.error(error.message || 'Failed to verify deposit');
+    } finally {
+      setVerifyingDeposit(null);
+    }
+  }, [onRefresh]);
+
   // Helper function to format payment method name
   const formatPaymentMethod = useCallback((method) => {
     if (!method) return 'N/A';
@@ -269,7 +304,17 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
             >
               {approvingDeposit === deposit.id ? 'Approving...' : 'Approve'}
             </Button>
-          ) : deposit.status === 'pending' && (isPaystack || isHubtel || isKorapay) ? (
+          ) : deposit.status === 'pending' && isPaystack ? (
+            <Button
+              onClick={() => handleVerifyPaystackDeposit(deposit)}
+              disabled={verifyingDeposit === deposit.id}
+              variant="outline"
+              size="sm"
+              className="text-xs min-h-[44px] border-blue-500 text-blue-600 hover:bg-blue-50"
+            >
+              {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with Paystack'}
+            </Button>
+          ) : deposit.status === 'pending' && (isHubtel || isKorapay) ? (
             <span className="text-xs text-gray-500">Auto-verify</span>
           ) : deposit.status === 'approved' ? (
             <span className="text-xs text-green-600 flex items-center gap-1">
@@ -285,7 +330,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
         </div>
       </div>
     );
-  }, [handleApproveManualDeposit, approvingDeposit, formatPaymentMethod, getPaymentMethodColors]);
+  }, [handleApproveManualDeposit, handleVerifyPaystackDeposit, approvingDeposit, verifyingDeposit, formatPaymentMethod, getPaymentMethodColors]);
 
   const renderMobileCard = useCallback((deposit, index) => {
     const depositMethod = deposit.deposit_method || deposit.payment_method;
@@ -346,9 +391,22 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
             </Button>
           </div>
         )}
+        {deposit.status === 'pending' && isPaystack && (
+          <div className="pt-3 border-t border-gray-200">
+            <Button
+              onClick={() => handleVerifyPaystackDeposit(deposit)}
+              disabled={verifyingDeposit === deposit.id}
+              variant="outline"
+              size="sm"
+              className="w-full border-blue-500 text-blue-600 hover:bg-blue-50 min-h-[44px]"
+            >
+              {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with Paystack'}
+            </Button>
+          </div>
+        )}
       </div>
     );
-  }, [handleApproveManualDeposit, approvingDeposit, formatPaymentMethod, getPaymentMethodColors]);
+  }, [handleApproveManualDeposit, handleVerifyPaystackDeposit, approvingDeposit, verifyingDeposit, formatPaymentMethod, getPaymentMethodColors]);
 
   if (isLoading) {
     return (
