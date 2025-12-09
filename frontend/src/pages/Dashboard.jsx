@@ -1976,6 +1976,12 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           const smmgenServiceId = smmgenServiceIds[i] || componentService.smmgen_service_id;
           
           if (smmgenServiceId) {
+            console.log(`Attempting to place SMMGen order for ${componentService.name}:`, {
+              serviceId: smmgenServiceId,
+              link: orderForm.link,
+              quantity: quantity
+            });
+            
             try {
               const smmgenResponse = await placeSMMGenOrder(
                 smmgenServiceId,
@@ -1983,8 +1989,11 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                 quantity
               );
               
+              console.log(`SMMGen API response for ${componentService.name}:`, smmgenResponse);
+              
               if (smmgenResponse === null) {
-                // Backend not available, continue with local order
+                console.warn(`SMMGen returned null for ${componentService.name} - backend unavailable or not configured`);
+                // Mark as failure since we attempted but couldn't place the order
               } else if (smmgenResponse) {
                 // SMMGen API might return order ID in different fields
                 smmgenOrderId = smmgenResponse.order || 
@@ -1996,6 +2005,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                 console.log(`SMMGen order ID extracted:`, smmgenOrderId);
               }
             } catch (smmgenError) {
+              console.error(`SMMGen order error caught for ${componentService.name}:`, smmgenError);
               if (!smmgenError.message?.includes('Failed to fetch') && 
                   !smmgenError.message?.includes('ERR_CONNECTION_REFUSED') &&
                   !smmgenError.message?.includes('Backend proxy server not running')) {
@@ -2007,7 +2017,12 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             // If SMMGen service ID exists but order failed (smmgenOrderId is still null), set failure message
             if (smmgenOrderId === null) {
               smmgenOrderId = "order not placed at smm gen";
+              console.log(`SMMGen order failed for ${componentService.name} - setting failure message:`, smmgenOrderId);
+            } else {
+              console.log(`SMMGen order successful for ${componentService.name} - order ID:`, smmgenOrderId);
             }
+          } else {
+            console.log(`Component service ${componentService.name} does not have SMMGen service ID - skipping SMMGen order placement`);
           }
 
           // Create order record for this component
@@ -2083,6 +2098,12 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       // Place order via SMMGen API if service has SMMGen ID
       let smmgenOrderId = null;
       if (service.smmgen_service_id) {
+        console.log('Attempting to place SMMGen order:', {
+          serviceId: service.smmgen_service_id,
+          link: orderForm.link,
+          quantity: quantity
+        });
+        
         try {
           const smmgenResponse = await placeSMMGenOrder(
             service.smmgen_service_id,
@@ -2090,10 +2111,12 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             quantity
           );
           
+          console.log('SMMGen API response received:', smmgenResponse);
+          
           // If SMMGen returns null, it means backend is not available (graceful skip)
           if (smmgenResponse === null) {
-            // Silently continue - this is expected when backend/serverless functions aren't available
-            // Order will be created locally in Supabase
+            console.warn('SMMGen returned null - backend unavailable or not configured');
+            // Mark as failure since we attempted but couldn't place the order
           } else if (smmgenResponse) {
             // SMMGen API might return order ID in different fields
             // Common formats: { order: "12345" }, { id: "12345" }, { order_id: "12345" }, { orderId: "12345" }
@@ -2106,6 +2129,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             console.log('SMMGen order ID extracted:', smmgenOrderId);
           }
         } catch (smmgenError) {
+          console.error('SMMGen order error caught:', smmgenError);
           // Only log actual API errors, not connection failures (which are handled gracefully)
           if (!smmgenError.message?.includes('Failed to fetch') && 
               !smmgenError.message?.includes('ERR_CONNECTION_REFUSED') &&
@@ -2126,11 +2150,19 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         // If SMMGen service ID exists but order failed (smmgenOrderId is still null), set failure message
         if (smmgenOrderId === null) {
           smmgenOrderId = "order not placed at smm gen";
+          console.log('SMMGen order failed - setting failure message:', smmgenOrderId);
+        } else {
+          console.log('SMMGen order successful - order ID:', smmgenOrderId);
         }
+      } else {
+        console.log('Service does not have SMMGen service ID - skipping SMMGen order placement');
       }
 
       // Create order record in our database
       console.log('Creating order with SMMGen ID:', smmgenOrderId);
+      console.log('SMMGen ID type:', typeof smmgenOrderId);
+      console.log('SMMGen ID value before insert:', JSON.stringify(smmgenOrderId));
+      
       const { data: orderData, error: orderError } = await supabase.from('orders').insert({
         user_id: authUser.id,
         service_id: orderForm.service_id,

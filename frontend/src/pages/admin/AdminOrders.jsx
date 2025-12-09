@@ -209,9 +209,14 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
         </div>
         <div className="col-span-1">
           {order.smmgen_order_id ? (
-            <>
+            order.smmgen_order_id === "order not placed at smm gen" ? (
+              <div className="flex items-center gap-1">
+                <AlertCircle className="w-4 h-4 text-red-500" />
+                <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMGen</p>
+              </div>
+            ) : (
               <p className="font-medium text-gray-900 text-sm">{order.smmgen_order_id}</p>
-            </>
+            )
           ) : (
             <div className="flex items-center gap-1">
               <AlertCircle className="w-4 h-4 text-orange-500" />
@@ -325,7 +330,14 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
             </div>
             <p className="font-semibold text-gray-900 text-base">Order: {order.id?.slice(0, 12)}...</p>
             {order.smmgen_order_id ? (
-              <p className="text-sm text-gray-600 mt-1">SMMGen: {order.smmgen_order_id}</p>
+              order.smmgen_order_id === "order not placed at smm gen" ? (
+                <div className="flex items-center gap-1 mt-1">
+                  <AlertCircle className="w-4 h-4 text-red-500" />
+                  <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMGen</p>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-600 mt-1">SMMGen: {order.smmgen_order_id}</p>
+              )
             ) : (
               <div className="flex items-center gap-1 mt-1">
                 <AlertCircle className="w-4 h-4 text-orange-500" />

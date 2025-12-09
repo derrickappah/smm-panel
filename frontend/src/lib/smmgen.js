@@ -13,29 +13,87 @@ const isProduction = process.env.NODE_ENV === 'production' ||
    window.location.hostname !== '127.0.0.1' &&
    !window.location.hostname.includes('localhost'));
 
+// Cache for serverless function availability check
+let serverlessFunctionAvailable = null;
+let availabilityCheckTime = 0;
+const AVAILABILITY_CHECK_TTL = 60000; // Check every 60 seconds
+
+/**
+ * Check if serverless functions are available
+ * @returns {Promise<boolean>} True if serverless functions are available
+ */
+const checkServerlessFunctionAvailability = async () => {
+  const now = Date.now();
+  
+  // Return cached result if still valid
+  if (serverlessFunctionAvailable !== null && (now - availabilityCheckTime) < AVAILABILITY_CHECK_TTL) {
+    return serverlessFunctionAvailable;
+  }
+
+  // Only check in development
+  if (isProduction) {
+    serverlessFunctionAvailable = true;
+    availabilityCheckTime = now;
+    return true;
+  }
+
+  try {
+    // Try a simple OPTIONS request to check if serverless function exists
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second timeout
+    
+    const response = await fetch('/api/smmgen/order', {
+      method: 'OPTIONS',
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    serverlessFunctionAvailable = true;
+    availabilityCheckTime = now;
+    return true;
+  } catch (error) {
+    // Serverless function not available
+    serverlessFunctionAvailable = false;
+    availabilityCheckTime = now;
+    console.warn('Serverless functions not available, will try backend server if configured:', error.message);
+    return false;
+  }
+};
+
 // Get SMMGen config from environment variables
-const getSMMGenConfig = () => {
-  // Always use serverless functions (same domain, no CORS, no separate backend needed)
-  // Serverless functions work in both development (via Vercel CLI) and production
+const getSMMGenConfig = async () => {
   let backendUrl;
   let useServerlessFunctions = true;
+  let isConfigured = true;
   
-  // Always use serverless functions at /api/smmgen
-  // These work in:
-  // - Production (Vercel): automatically available
-  // - Development: if using Vercel CLI (vercel dev), or can work with production functions
-  backendUrl = '/api/smmgen';
-  useServerlessFunctions = true;
+  // Check if serverless functions are available
+  const serverlessAvailable = await checkServerlessFunctionAvailability();
   
-  // Serverless functions are always available (they're part of the app)
-  const isConfigured = true;
+  if (serverlessAvailable) {
+    // Use serverless functions at /api/smmgen
+    backendUrl = '/api/smmgen';
+    useServerlessFunctions = true;
+  } else {
+    // Fallback to backend server if configured
+    const customBackendUrl = process.env.REACT_APP_BACKEND_URL;
+    
+    if (customBackendUrl) {
+      backendUrl = customBackendUrl;
+      useServerlessFunctions = false;
+      console.log('Using backend server fallback:', customBackendUrl);
+    } else {
+      // No backend configured
+      isConfigured = false;
+      console.warn('Neither serverless functions nor backend server are available');
+    }
+  }
   
   return { backendUrl, isConfigured, useServerlessFunctions };
 };
 
 // Helper function to build the correct API endpoint URL
-const buildApiUrl = (endpoint) => {
-  const { backendUrl, useServerlessFunctions } = getSMMGenConfig();
+const buildApiUrl = async (endpoint) => {
+  const { backendUrl, useServerlessFunctions } = await getSMMGenConfig();
   
   // Remove any trailing slashes from backendUrl and leading slashes from endpoint
   let cleanBackendUrl = (backendUrl || '').replace(/\/+$/, '');
@@ -90,7 +148,7 @@ const buildApiUrl = (endpoint) => {
  */
 export const fetchSMMGenServices = async () => {
   try {
-    const apiUrl = buildApiUrl('services');
+    const apiUrl = await buildApiUrl('services');
 
     const response = await fetch(apiUrl, {
       method: 'POST',
@@ -155,13 +213,37 @@ export const fetchSMMGenServices = async () => {
 };
 
 /**
- * Place an order via SMMGen API
+ * Place an order via SMMGen API with retry logic and comprehensive error handling
  * @param {string} serviceId - SMMGen service ID
  * @param {string} link - Target URL/link
  * @param {number} quantity - Quantity to order
+ * @param {number} retryCount - Internal parameter for retry attempts (default: 0)
  * @returns {Promise<Object>} Order response from SMMGen
  */
-export const placeSMMGenOrder = async (serviceId, link, quantity) => {
+export const placeSMMGenOrder = async (serviceId, link, quantity, retryCount = 0) => {
+  const MAX_RETRIES = 3;
+  const INITIAL_RETRY_DELAY = 1000; // 1 second
+  const REQUEST_TIMEOUT = 30000; // 30 seconds
+
+  // Input validation
+  if (!serviceId || typeof serviceId !== 'string' || serviceId.trim() === '') {
+    const error = new Error('Invalid service ID: serviceId is required and must be a non-empty string');
+    console.error('SMMGen Order Validation Error:', error);
+    throw error;
+  }
+
+  if (!link || typeof link !== 'string' || link.trim() === '') {
+    const error = new Error('Invalid link: link is required and must be a non-empty string');
+    console.error('SMMGen Order Validation Error:', error);
+    throw error;
+  }
+
+  if (!quantity || typeof quantity !== 'number' || quantity <= 0 || !Number.isInteger(quantity)) {
+    const error = new Error(`Invalid quantity: quantity must be a positive integer, got ${quantity}`);
+    console.error('SMMGen Order Validation Error:', error);
+    throw error;
+  }
+
   try {
     const { backendUrl, isConfigured } = getSMMGenConfig();
 
@@ -171,71 +253,190 @@ export const placeSMMGenOrder = async (serviceId, link, quantity) => {
       return null; // Return null to indicate SMMGen was skipped
     }
 
-    const apiUrl = buildApiUrl('order');
+    const apiUrl = await buildApiUrl('order');
     
-    // Debug logging in development
-    if (!isProduction) {
-      console.log('SMMGen Order Request:', {
-        serviceId,
-        link,
-        quantity,
-        backendUrl,
-        apiUrl,
-        isConfigured,
-        apiUrlType: typeof apiUrl,
-        apiUrlStartsWith: apiUrl.startsWith('http') ? 'absolute' : 'relative'
-      });
-    }
-    
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        service: serviceId,
-        link: link,
-        quantity: quantity
-      })
+    // Comprehensive logging
+    console.log('SMMGen Order Request:', {
+      attempt: retryCount + 1,
+      maxRetries: MAX_RETRIES,
+      serviceId: serviceId.trim(),
+      link: link.trim(),
+      quantity: quantity,
+      backendUrl,
+      apiUrl,
+      isConfigured,
+      timestamp: new Date().toISOString()
     });
+    
+    // Create abort controller for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-      const errorMessage = errorData.error || errorData.message || `Order failed: ${response.status}`;
+    try {
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          service: serviceId.trim(),
+          link: link.trim(),
+          quantity: quantity
+        }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      // Log response status
+      console.log('SMMGen API Response Status:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        url: apiUrl
+      });
+
+      if (!response.ok) {
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (parseError) {
+          errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
+        }
+        
+        const errorMessage = errorData.error || errorData.message || `Order failed: ${response.status}`;
+        const fullError = new Error(errorMessage);
+        fullError.status = response.status;
+        fullError.responseData = errorData;
+        
+        console.error('SMMGen API Error Response:', {
+          status: response.status,
+          errorMessage,
+          errorData,
+          serviceId,
+          link,
+          quantity
+        });
+        
+        // For 4xx errors (client errors), don't retry - these are permanent failures
+        if (response.status >= 400 && response.status < 500) {
+          throw fullError;
+        }
+        
+        // For 5xx errors (server errors), retry if we haven't exceeded max retries
+        if (response.status >= 500 && retryCount < MAX_RETRIES) {
+          const delay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
+          console.warn(`SMMGen server error (${response.status}), retrying in ${delay}ms... (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return placeSMMGenOrder(serviceId, link, quantity, retryCount + 1);
+        }
+        
+        throw fullError;
+      }
+
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        console.error('SMMGen Response Parse Error:', parseError);
+        throw new Error('Invalid JSON response from SMMGen API');
+      }
+
+      // Log full response for debugging
+      console.log('SMMGen API Full Response:', JSON.stringify(data, null, 2));
+
+      // Validate response structure - check for order ID in various formats
+      const orderId = data.order || 
+                     data.order_id || 
+                     data.orderId || 
+                     data.id ||
+                     data.Order ||
+                     data.OrderID ||
+                     data.OrderId ||
+                     (data.data && (data.data.order || data.data.order_id || data.data.id)) ||
+                     null;
+
+      if (!orderId) {
+        console.warn('SMMGen response does not contain order ID in expected format:', {
+          response: data,
+          checkedFields: ['order', 'order_id', 'orderId', 'id', 'Order', 'OrderID', 'OrderId', 'data.order', 'data.order_id', 'data.id']
+        });
+        // Don't throw - return the response anyway, let the caller handle it
+      } else {
+        console.log('SMMGen Order ID extracted:', orderId);
+      }
+
+      // Validate response is an object
+      if (typeof data !== 'object' || data === null) {
+        throw new Error('SMMGen API returned invalid response format');
+      }
+
+      return data;
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
       
-      // API errors (4xx, 5xx) should be thrown so they can be handled by the caller
-      // These indicate actual problems with the request (missing API key, invalid service, etc.)
-      throw new Error(errorMessage);
+      // Handle timeout
+      if (fetchError.name === 'AbortError') {
+        const timeoutError = new Error(`Request timeout after ${REQUEST_TIMEOUT}ms`);
+        timeoutError.isTimeout = true;
+        
+        // Retry timeout errors if we haven't exceeded max retries
+        if (retryCount < MAX_RETRIES) {
+          const delay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
+          console.warn(`SMMGen request timeout, retrying in ${delay}ms... (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return placeSMMGenOrder(serviceId, link, quantity, retryCount + 1);
+        }
+        
+        throw timeoutError;
+      }
+      
+      throw fetchError;
     }
-
-    const data = await response.json();
-    return data;
   } catch (error) {
-    // Only catch network/connection errors that indicate the serverless function is unavailable
-    // These should return null to allow graceful degradation
-    if (error.name === 'TypeError' && 
-        (error.message.includes('Failed to fetch') || 
-         error.message.includes('NetworkError') ||
-         error.message.includes('ERR_CONNECTION_REFUSED') ||
-         error.message.includes('ERR_NETWORK'))) {
-      // Network error - serverless function unavailable
+    // Check if this is a network/connection error that should be retried
+    const isNetworkError = error.name === 'TypeError' && 
+      (error.message.includes('Failed to fetch') || 
+       error.message.includes('NetworkError') ||
+       error.message.includes('ERR_CONNECTION_REFUSED') ||
+       error.message.includes('ERR_NETWORK') ||
+       error.message.includes('ERR_INTERNET_DISCONNECTED'));
+
+    const isCorsError = error.message.includes('CORS');
+    
+    // Retry network errors if we haven't exceeded max retries
+    if ((isNetworkError || isCorsError) && retryCount < MAX_RETRIES) {
+      const delay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
+      console.warn(`SMMGen network error (${error.message}), retrying in ${delay}ms... (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return placeSMMGenOrder(serviceId, link, quantity, retryCount + 1);
+    }
+    
+    // Log error details
+    console.error('SMMGen Order Error:', {
+      error: error.message,
+      errorName: error.name,
+      status: error.status,
+      responseData: error.responseData,
+      isNetworkError,
+      isCorsError,
+      retryCount,
+      serviceId,
+      link,
+      quantity,
+      stack: error.stack
+    });
+    
+    // For network errors after all retries, return null to allow graceful degradation
+    if (isNetworkError || isCorsError) {
       if (!isProduction) {
-        console.debug('SMMGen backend unavailable (network error). Continuing with local order only.');
+        console.debug('SMMGen backend unavailable after retries. Continuing with local order only.');
       }
       return null; // Return null to allow graceful degradation
     }
     
-    // CORS errors are also network-level issues
-    if (error.message.includes('CORS')) {
-      if (!isProduction) {
-        console.debug('SMMGen CORS error. Continuing with local order only.');
-      }
-      return null;
-    }
-    
     // For all other errors (API errors, validation errors, etc.), throw them
     // These should be handled by the caller to show appropriate error messages
-    console.error('SMMGen Order Error:', error);
     throw error;
   }
 };
@@ -247,9 +448,9 @@ export const placeSMMGenOrder = async (serviceId, link, quantity) => {
  */
 export const getSMMGenOrderStatus = async (orderId) => {
   try {
-    const { backendUrl } = getSMMGenConfig();
+    const { backendUrl } = await getSMMGenConfig();
 
-    const apiUrl = buildApiUrl('status');
+    const apiUrl = await buildApiUrl('status');
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
@@ -278,9 +479,9 @@ export const getSMMGenOrderStatus = async (orderId) => {
  */
 export const getSMMGenBalance = async () => {
   try {
-    const { backendUrl } = getSMMGenConfig();
+    const { backendUrl } = await getSMMGenConfig();
 
-    const apiUrl = buildApiUrl('balance');
+    const apiUrl = await buildApiUrl('balance');
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {

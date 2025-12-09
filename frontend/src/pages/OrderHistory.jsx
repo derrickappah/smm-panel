@@ -134,7 +134,7 @@ const OrderHistory = ({ user, onLogout }) => {
 
   // Check and update order status from SMMGen
   const checkOrderStatus = useCallback(async (order) => {
-    if (!order.smmgen_order_id) {
+    if (!order.smmgen_order_id || order.smmgen_order_id === "order not placed at smm gen") {
       return;
     }
 
@@ -209,7 +209,12 @@ const OrderHistory = ({ user, onLogout }) => {
       const checkAllSMMGenOrders = async () => {
         // Check all non-completed and non-refunded orders (to catch cancellations)
         // Skip refunded orders - they should not be overwritten by SMMGen status
-        const ordersWithSMMGen = orders.filter(o => o.smmgen_order_id && o.status !== 'completed' && o.status !== 'refunded');
+        const ordersWithSMMGen = orders.filter(o => 
+          o.smmgen_order_id && 
+          o.smmgen_order_id !== "order not placed at smm gen" && 
+          o.status !== 'completed' && 
+          o.status !== 'refunded'
+        );
         
         // Check status for each order (with delay to avoid rate limiting)
         for (let i = 0; i < ordersWithSMMGen.length; i++) {
@@ -361,7 +366,11 @@ const OrderHistory = ({ user, onLogout }) => {
                               {/* Order No */}
                               <div className="text-center">
                                 {order.smmgen_order_id ? (
-                                  <p className="font-medium text-gray-900 text-sm">{order.smmgen_order_id}</p>
+                                  order.smmgen_order_id === "order not placed at smm gen" ? (
+                                    <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMGen</p>
+                                  ) : (
+                                    <p className="font-medium text-gray-900 text-sm">{order.smmgen_order_id}</p>
+                                  )
                                 ) : (
                                   <p className="text-xs text-gray-400 italic">N/A</p>
                                 )}
@@ -396,7 +405,7 @@ const OrderHistory = ({ user, onLogout }) => {
                               </div>
                               {/* Actions */}
                               <div className="flex justify-center">
-                                {order.smmgen_order_id && (
+                                {order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen" && (
                                   <Button
                                     size="sm"
                                     variant="outline"
