@@ -145,6 +145,8 @@ For detailed deployment instructions, see [`docs/setup/VERCEL_SETUP.md`](docs/se
 
 ## 🔐 Environment Variables
 
+
+
 ### Frontend (.env)
 ```env
 REACT_APP_SUPABASE_URL=your_supabase_project_url
