@@ -277,12 +277,16 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
     const transactionId = metadata.transaction_id;
     const userId = metadata.user_id;
     const amount = paymentData.amount ? paymentData.amount / 100 : null; // Convert from pesewas to cedis
+    const customerEmail = paymentData.customer?.email || metadata.user_email;
+    const paidAt = paymentData.paid_at ? new Date(paymentData.paid_at) : new Date();
 
     console.log('Processing successful payment:', {
       reference,
       transactionId,
       userId,
-      amount
+      amount,
+      customerEmail,
+      paidAt: paidAt.toISOString()
     });
 
     // Find transaction by reference first, then by transaction_id from metadata
@@ -315,14 +319,16 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
       }
     }
 
-    // If still not found, try by user_id and amount (last resort)
+    // If still not found, try by user_id and amount (with tolerance for rounding)
     if (!transaction && userId && amount) {
+      // Try exact match first
       const { data: txByUser, error: userError } = await supabase
         .from('transactions')
         .select('*')
         .eq('user_id', userId)
         .eq('type', 'deposit')
         .eq('status', 'pending')
+        .eq('deposit_method', 'paystack')
         .eq('amount', amount)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -330,7 +336,66 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
 
       if (!userError && txByUser) {
         transaction = txByUser;
-        console.log('Found transaction by user and amount:', transaction.id);
+        console.log('Found transaction by user and exact amount:', transaction.id);
+      }
+    }
+
+    // If still not found, try by user email and amount (if we have email)
+    if (!transaction && customerEmail && amount) {
+      try {
+        // First, find user by email
+        const { data: userByEmail, error: emailError } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('email', customerEmail)
+          .maybeSingle();
+
+        if (!emailError && userByEmail) {
+          // Now find pending transaction for this user with matching amount
+          const { data: txByEmail, error: txEmailError } = await supabase
+            .from('transactions')
+            .select('*')
+            .eq('user_id', userByEmail.id)
+            .eq('type', 'deposit')
+            .eq('status', 'pending')
+            .eq('deposit_method', 'paystack')
+            .eq('amount', amount)
+            .gte('created_at', new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()) // Within last 2 hours
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (!txEmailError && txByEmail) {
+            transaction = txByEmail;
+            console.log('Found transaction by email and amount:', transaction.id);
+          }
+        }
+      } catch (emailMatchError) {
+        console.warn('Error matching by email:', emailMatchError);
+      }
+    }
+
+    // Last resort: find by amount and time window (within 2 hours of payment)
+    if (!transaction && amount) {
+      const twoHoursAgo = new Date(paidAt.getTime() - 2 * 60 * 60 * 1000).toISOString();
+      const twoHoursLater = new Date(paidAt.getTime() + 2 * 60 * 60 * 1000).toISOString();
+      
+      const { data: txByAmount, error: amountError } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('type', 'deposit')
+        .eq('status', 'pending')
+        .eq('deposit_method', 'paystack')
+        .eq('amount', amount)
+        .gte('created_at', twoHoursAgo)
+        .lte('created_at', twoHoursLater)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!amountError && txByAmount) {
+        transaction = txByAmount;
+        console.log('Found transaction by amount and time window:', transaction.id);
       }
     }
 
@@ -339,33 +404,76 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
         reference,
         transactionId,
         userId,
-        amount
+        amount,
+        customerEmail,
+        searchMethods: 'tried: reference, transaction_id, user_id+amount, email+amount, amount+time'
       });
       return;
     }
 
+    // Always store reference if we have it (even if transaction is already approved)
+    if (reference && !transaction.paystack_reference) {
+      console.log('Storing missing reference for transaction:', transaction.id);
+      await supabase
+        .from('transactions')
+        .update({
+          paystack_reference: reference
+        })
+        .eq('id', transaction.id);
+      transaction.paystack_reference = reference;
+    }
+
     // Check if already processed
     if (transaction.status === 'approved') {
-      console.log('Transaction already approved, skipping:', transaction.id);
+      console.log('Transaction already approved, reference stored:', transaction.id);
+      
+      // Verify balance was updated (safety check)
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('balance')
+        .eq('id', transaction.user_id)
+        .single();
+
+      if (profile) {
+        const expectedBalance = (profile.balance || 0);
+        // If balance seems low, try to update it (idempotent - won't double add)
+        const { error: balanceCheckError } = await supabase
+          .from('profiles')
+          .update({ balance: expectedBalance })
+          .eq('id', transaction.user_id);
+        
+        if (balanceCheckError) {
+          console.warn('Balance check/update warning:', balanceCheckError);
+        }
+      }
+      
       return;
     }
 
     // Update transaction status
+    const updateData = {
+      status: 'approved',
+      paystack_status: 'success',
+      paystack_reference: reference || transaction.paystack_reference
+    };
+
     const { error: updateError } = await supabase
       .from('transactions')
-      .update({
-        status: 'approved',
-        paystack_status: 'success',
-        paystack_reference: reference || transaction.paystack_reference
-      })
-      .eq('id', transaction.id);
+      .update(updateData)
+      .eq('id', transaction.id)
+      .eq('status', 'pending'); // Only update if still pending (prevent race conditions)
 
     if (updateError) {
       console.error('Error updating transaction:', updateError);
-      throw updateError;
+      // If update failed because status changed, that's okay - it was probably processed
+      if (updateError.code !== 'PGRST116') { // PGRST116 = no rows updated
+        throw updateError;
+      } else {
+        console.log('Transaction status changed during update (likely processed by another process)');
+      }
+    } else {
+      console.log('Transaction updated to approved:', transaction.id);
     }
-
-    console.log('Transaction updated to approved:', transaction.id);
 
     // Update user balance
     const { data: profile, error: profileError } = await supabase

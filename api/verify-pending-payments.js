@@ -22,6 +22,170 @@
 
 import { createClient } from '@supabase/supabase-js';
 
+/**
+ * Query Paystack transactions API for successful transactions within a date range
+ * @param {string} secretKey - Paystack secret key
+ * @param {Date} startDate - Start date for query
+ * @param {Date} endDate - End date for query
+ * @param {number} maxRetries - Maximum number of retry attempts
+ * @returns {Promise<Array>} Array of successful Paystack transactions
+ */
+async function queryPaystackTransactions(secretKey, startDate, endDate, maxRetries = 3) {
+  const transactions = [];
+  let page = 1;
+  let hasMore = true;
+  
+  // Convert dates to Paystack format (YYYY-MM-DD)
+  const startDateStr = startDate.toISOString().split('T')[0];
+  const endDateStr = endDate.toISOString().split('T')[0];
+  
+  console.log(`Querying Paystack transactions from ${startDateStr} to ${endDateStr}`);
+  
+  while (hasMore && page <= 100) { // Limit to 100 pages to prevent infinite loops
+    let retries = 0;
+    let success = false;
+    let response = null;
+    
+    // Retry logic for API calls
+    while (retries < maxRetries && !success) {
+      try {
+        const url = `https://api.paystack.co/transaction?perPage=100&page=${page}&status=success&from=${startDateStr}&to=${endDateStr}`;
+        
+        response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${secretKey}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (response.ok) {
+          success = true;
+        } else if (response.status === 429) {
+          // Rate limited - wait and retry
+          const waitTime = Math.pow(2, retries) * 1000; // Exponential backoff
+          console.log(`Rate limited, waiting ${waitTime}ms before retry ${retries + 1}/${maxRetries}`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          retries++;
+        } else {
+          // Other error - don't retry
+          const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+          console.error(`Paystack API error (page ${page}):`, response.status, errorData.message);
+          throw new Error(`Paystack API error: ${errorData.message || response.statusText}`);
+        }
+      } catch (error) {
+        retries++;
+        if (retries >= maxRetries) {
+          console.error(`Failed to query Paystack transactions after ${maxRetries} retries:`, error);
+          throw error;
+        }
+        const waitTime = Math.pow(2, retries) * 1000;
+        console.log(`Error querying Paystack, retrying in ${waitTime}ms (${retries}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+    }
+    
+    if (!response || !response.ok) {
+      break;
+    }
+    
+    const data = await response.json();
+    
+    if (data.status && data.data) {
+      // Filter for successful transactions only
+      const successfulTxs = data.data.filter(tx => tx.status === 'success');
+      transactions.push(...successfulTxs);
+      
+      // Check if there are more pages
+      hasMore = data.meta && data.meta.page < data.meta.totalPages;
+      page++;
+      
+      // Add small delay to respect rate limits
+      if (hasMore) {
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+    } else {
+      hasMore = false;
+    }
+  }
+  
+  console.log(`Found ${transactions.length} successful Paystack transactions`);
+  return transactions;
+}
+
+/**
+ * Match a Paystack transaction to a pending database transaction
+ * @param {Object} paystackTx - Paystack transaction object
+ * @param {Array} pendingTransactions - Array of pending database transactions
+ * @returns {Object|null} Matched transaction or null
+ */
+function matchPaystackToPending(paystackTx, pendingTransactions) {
+  const paystackAmount = paystackTx.amount / 100; // Convert from pesewas to cedis
+  const paystackTime = new Date(paystackTx.created_at || paystackTx.paid_at);
+  const paystackEmail = paystackTx.customer?.email || paystackTx.metadata?.user_email;
+  const paystackUserId = paystackTx.metadata?.user_id;
+  
+  // Time window for matching (2 hours)
+  const timeWindow = 2 * 60 * 60 * 1000;
+  
+  // Find best match
+  let bestMatch = null;
+  let bestScore = 0;
+  
+  for (const pendingTx of pendingTransactions) {
+    // Skip if already has a reference (should be verified by reference)
+    if (pendingTx.paystack_reference) {
+      continue;
+    }
+    
+    // Skip if not a Paystack deposit
+    if (pendingTx.deposit_method !== 'paystack') {
+      continue;
+    }
+    
+    let score = 0;
+    
+    // Amount match (exact match = 100 points)
+    const amountDiff = Math.abs(pendingTx.amount - paystackAmount);
+    if (amountDiff < 0.01) { // Allow small floating point differences
+      score += 100;
+    } else {
+      continue; // Amount must match exactly
+    }
+    
+    // Time proximity match (closer = more points, max 50 points)
+    const pendingTime = new Date(pendingTx.created_at);
+    const timeDiff = Math.abs(paystackTime - pendingTime);
+    if (timeDiff <= timeWindow) {
+      score += Math.max(0, 50 - (timeDiff / timeWindow) * 50);
+    } else {
+      continue; // Must be within time window
+    }
+    
+    // User match (if available, 30 points)
+    if (paystackUserId && pendingTx.user_id === paystackUserId) {
+      score += 30;
+    } else if (paystackEmail) {
+      // Try to match by email if we have user data
+      // This would require fetching user email from profiles table
+      // For now, we'll skip this to avoid extra queries
+    }
+    
+    // Check if this is a better match
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = pendingTx;
+    }
+  }
+  
+  // Only return match if score is high enough (at least amount + time match)
+  if (bestMatch && bestScore >= 100) {
+    return bestMatch;
+  }
+  
+  return null;
+}
+
 export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -109,9 +273,110 @@ export default async function handler(req, res) {
     let verified = 0;
     let updated = 0;
     let errors = [];
+    let matchedFromPaystack = 0;
+    const unmatchedPaystackTxs = [];
 
-    // Verify each pending transaction
-    for (const transaction of pendingTransactions) {
+    // Separate transactions with and without references
+    const transactionsWithRef = pendingTransactions.filter(tx => 
+      tx.paystack_reference && tx.deposit_method === 'paystack'
+    );
+    const transactionsWithoutRef = pendingTransactions.filter(tx => 
+      !tx.paystack_reference && tx.deposit_method === 'paystack'
+    );
+
+    console.log(`Transactions with reference: ${transactionsWithRef.length}`);
+    console.log(`Transactions without reference: ${transactionsWithoutRef.length}`);
+
+    // If we have transactions without references, query Paystack to find matches
+    if (transactionsWithoutRef.length > 0) {
+      try {
+        const startDate = new Date(Date.now() - hours * 60 * 60 * 1000);
+        const endDate = new Date();
+        
+        console.log('Querying Paystack for successful transactions to match...');
+        const paystackTransactions = await queryPaystackTransactions(
+          PAYSTACK_SECRET_KEY,
+          startDate,
+          endDate
+        );
+
+        // Match Paystack transactions to pending transactions
+        for (const paystackTx of paystackTransactions) {
+          const matchedTx = matchPaystackToPending(paystackTx, transactionsWithoutRef);
+          
+          if (matchedTx) {
+            console.log(`Matched Paystack transaction ${paystackTx.reference} to pending transaction ${matchedTx.id}`);
+            
+            try {
+              // Update transaction with reference and approve
+              const { error: updateError } = await supabase
+                .from('transactions')
+                .update({
+                  status: 'approved',
+                  paystack_status: 'success',
+                  paystack_reference: paystackTx.reference
+                })
+                .eq('id', matchedTx.id)
+                .eq('status', 'pending');
+
+              if (!updateError) {
+                // Update user balance
+                const { data: profile } = await supabase
+                  .from('profiles')
+                  .select('balance')
+                  .eq('id', matchedTx.user_id)
+                  .single();
+
+                if (profile) {
+                  const newBalance = (profile.balance || 0) + matchedTx.amount;
+                  await supabase
+                    .from('profiles')
+                    .update({ balance: newBalance })
+                    .eq('id', matchedTx.user_id);
+                }
+
+                updated++;
+                matchedFromPaystack++;
+                verified++;
+                console.log(`Transaction ${matchedTx.id} matched and approved from Paystack query`);
+                
+                // Remove from transactionsWithoutRef to avoid duplicate matches
+                const index = transactionsWithoutRef.findIndex(tx => tx.id === matchedTx.id);
+                if (index > -1) {
+                  transactionsWithoutRef.splice(index, 1);
+                }
+              } else {
+                errors.push(`Failed to update matched transaction ${matchedTx.id}: ${updateError.message}`);
+              }
+            } catch (matchError) {
+              console.error(`Error processing matched transaction ${matchedTx.id}:`, matchError);
+              errors.push(`Error processing matched transaction ${matchedTx.id}: ${matchError.message}`);
+            }
+          } else {
+            // Track unmatched Paystack transactions for manual review
+            unmatchedPaystackTxs.push({
+              reference: paystackTx.reference,
+              amount: paystackTx.amount / 100,
+              created_at: paystackTx.created_at || paystackTx.paid_at,
+              customer_email: paystackTx.customer?.email
+            });
+          }
+        }
+
+        if (unmatchedPaystackTxs.length > 0) {
+          console.log(`Found ${unmatchedPaystackTxs.length} successful Paystack transactions that couldn't be matched to pending transactions`);
+        }
+      } catch (queryError) {
+        console.error('Error querying Paystack transactions:', queryError);
+        errors.push(`Error querying Paystack: ${queryError.message}`);
+        // Continue with normal verification even if query fails
+      }
+    }
+
+    // Verify each pending transaction (those with references and any remaining without)
+    const transactionsToVerify = [...transactionsWithRef, ...transactionsWithoutRef];
+    
+    for (const transaction of transactionsToVerify) {
       try {
         const transactionAge = Date.now() - new Date(transaction.created_at).getTime();
         const thirtyMinutes = 30 * 60 * 1000;
@@ -119,17 +384,47 @@ export default async function handler(req, res) {
 
         // Verify Paystack transactions
         if (transaction.paystack_reference && transaction.deposit_method === 'paystack') {
+          let verifyResponse = null;
+          let verifyData = null;
+          let verifySuccess = false;
+          const maxRetries = 3;
+          
+          // Retry logic for verification
           try {
-            const verifyResponse = await fetch(`https://api.paystack.co/transaction/verify/${transaction.paystack_reference}`, {
-              method: 'GET',
-              headers: {
-                'Authorization': `Bearer ${PAYSTACK_SECRET_KEY}`,
-                'Content-Type': 'application/json'
-              }
-            });
+            for (let retry = 0; retry < maxRetries && !verifySuccess; retry++) {
+              try {
+                verifyResponse = await fetch(`https://api.paystack.co/transaction/verify/${transaction.paystack_reference}`, {
+                  method: 'GET',
+                  headers: {
+                    'Authorization': `Bearer ${PAYSTACK_SECRET_KEY}`,
+                    'Content-Type': 'application/json'
+                  }
+                });
 
-            if (verifyResponse.ok) {
-              const verifyData = await verifyResponse.json();
+                if (verifyResponse.ok) {
+                  verifyData = await verifyResponse.json();
+                  verifySuccess = true;
+                } else if (verifyResponse.status === 429 && retry < maxRetries - 1) {
+                  // Rate limited - wait and retry
+                  const waitTime = Math.pow(2, retry) * 1000;
+                  console.log(`Rate limited for transaction ${transaction.id}, waiting ${waitTime}ms before retry ${retry + 1}/${maxRetries}`);
+                  await new Promise(resolve => setTimeout(resolve, waitTime));
+                } else {
+                  // Other error - break retry loop
+                  break;
+                }
+              } catch (fetchError) {
+                if (retry < maxRetries - 1) {
+                  const waitTime = Math.pow(2, retry) * 1000;
+                  console.log(`Error verifying transaction ${transaction.id}, retrying in ${waitTime}ms (${retry + 1}/${maxRetries}):`, fetchError.message);
+                  await new Promise(resolve => setTimeout(resolve, waitTime));
+                } else {
+                  throw fetchError;
+                }
+              }
+            }
+
+            if (verifySuccess && verifyResponse && verifyResponse.ok) {
               const paymentStatus = verifyData.data?.status;
 
               if (paymentStatus === 'success') {
@@ -234,9 +529,11 @@ export default async function handler(req, res) {
             }
             errors.push(`Error verifying transaction ${transaction.id}: ${verifyError.message}`);
           }
-        } else {
-          // No reference stored - mark as rejected if old enough
-          if (transactionAge > thirtyMinutes) {
+        } else if (transaction.deposit_method === 'paystack') {
+          // Paystack transaction without reference - we already tried to match it above
+          // Only mark as rejected if it's very old (24 hours) and still no reference
+          const oneDay = 24 * 60 * 60 * 1000;
+          if (transactionAge > oneDay) {
             await supabase
               .from('transactions')
               .update({ 
@@ -247,7 +544,9 @@ export default async function handler(req, res) {
               .eq('status', 'pending');
             
             updated++;
-            console.log(`Transaction ${transaction.id} marked as rejected (no reference)`);
+            console.log(`Transaction ${transaction.id} marked as rejected (no reference after 24 hours)`);
+          } else {
+            console.log(`Transaction ${transaction.id} still pending without reference (age: ${Math.round(transactionAge / 60000)} minutes)`);
           }
         }
       } catch (error) {
@@ -261,6 +560,8 @@ export default async function handler(req, res) {
       count: pendingTransactions.length,
       verified,
       updated,
+      matchedFromPaystack,
+      unmatchedPaystackTransactions: unmatchedPaystackTxs.length > 0 ? unmatchedPaystackTxs.slice(0, 10) : undefined, // Limit to first 10 for response size
       errors: errors.length > 0 ? errors : undefined
     });
   } catch (error) {
