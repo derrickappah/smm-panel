@@ -31,7 +31,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
   } = useAdminOrders({ 
     enabled: true, 
     useInfinite: true,
-    checkSMMGenStatus: false
+    checkSMMGenStatus: true
   });
 
   const updateOrderMutation = useUpdateOrder();

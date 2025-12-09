@@ -451,33 +451,194 @@ export const placeSMMGenOrder = async (serviceId, link, quantity, retryCount = 0
 };
 
 /**
- * Get order status from SMMGen API
+ * Get order status from SMMGen API with retry logic and comprehensive error handling
  * @param {string} orderId - SMMGen order ID
+ * @param {number} retryCount - Internal parameter for retry attempts (default: 0)
  * @returns {Promise<Object>} Order status
  */
-export const getSMMGenOrderStatus = async (orderId) => {
+export const getSMMGenOrderStatus = async (orderId, retryCount = 0) => {
+  const MAX_RETRIES = 3;
+  const INITIAL_RETRY_DELAY = 1000; // 1 second
+  const REQUEST_TIMEOUT = 20000; // 20 seconds (shorter than order placement)
+
+  // Input validation
+  if (!orderId || typeof orderId !== 'string' || orderId.trim() === '') {
+    const error = new Error('Invalid order ID: orderId is required and must be a non-empty string');
+    console.error('SMMGen Status Validation Error:', error);
+    throw error;
+  }
+
+  // Skip status check for failure messages
+  if (orderId === "order not placed at smm gen") {
+    console.warn('Skipping status check for order with failure message');
+    throw new Error('Cannot check status for order that was not placed at SMMGen');
+  }
+
   try {
-    const { backendUrl } = await getSMMGenConfig();
+    const { backendUrl, isConfigured } = await getSMMGenConfig();
 
-    const apiUrl = await buildApiUrl('status');
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        order: orderId
-      })
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-      throw new Error(errorData.error || errorData.message || `Status check failed: ${response.status}`);
+    if (!isConfigured) {
+      console.warn('SMMGen backend not configured. Cannot check order status.');
+      throw new Error('SMMGen backend not configured');
     }
 
-    return await response.json();
+    const apiUrl = await buildApiUrl('status');
+    
+    // Comprehensive logging
+    console.log('SMMGen Status Request:', {
+      attempt: retryCount + 1,
+      maxRetries: MAX_RETRIES,
+      orderId: orderId.trim(),
+      backendUrl,
+      apiUrl,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Create abort controller for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+
+    try {
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          order: orderId.trim()
+        }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      // Log response status
+      console.log('SMMGen Status API Response:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        url: apiUrl
+      });
+
+      if (!response.ok) {
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (parseError) {
+          errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
+        }
+        
+        const errorMessage = errorData.error || errorData.message || `Status check failed: ${response.status}`;
+        const fullError = new Error(errorMessage);
+        fullError.status = response.status;
+        fullError.responseData = errorData;
+        
+        console.error('SMMGen Status API Error Response:', {
+          status: response.status,
+          errorMessage,
+          errorData,
+          orderId
+        });
+        
+        // For 4xx errors (client errors), don't retry - these are permanent failures
+        if (response.status >= 400 && response.status < 500) {
+          throw fullError;
+        }
+        
+        // For 5xx errors (server errors), retry if we haven't exceeded max retries
+        if (response.status >= 500 && retryCount < MAX_RETRIES) {
+          const delay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
+          console.warn(`SMMGen status server error (${response.status}), retrying in ${delay}ms... (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return getSMMGenOrderStatus(orderId, retryCount + 1);
+        }
+        
+        throw fullError;
+      }
+
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        console.error('SMMGen Status Response Parse Error:', parseError);
+        throw new Error('Invalid JSON response from SMMGen status API');
+      }
+
+      // Log full response for debugging
+      console.log('SMMGen Status API Full Response:', JSON.stringify(data, null, 2));
+
+      // Validate response structure
+      if (typeof data !== 'object' || data === null) {
+        throw new Error('SMMGen status API returned invalid response format');
+      }
+
+      // Check for status field in various formats
+      const status = data.status || data.Status || data.STATUS || null;
+      if (!status) {
+        console.warn('SMMGen status response does not contain status field:', {
+          response: data,
+          checkedFields: ['status', 'Status', 'STATUS']
+        });
+        // Don't throw - return the response anyway, let the caller handle it
+      } else {
+        console.log('SMMGen Order Status extracted:', status);
+      }
+
+      return data;
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      
+      // Handle timeout
+      if (fetchError.name === 'AbortError') {
+        const timeoutError = new Error(`Status check timeout after ${REQUEST_TIMEOUT}ms`);
+        timeoutError.isTimeout = true;
+        
+        // Retry timeout errors if we haven't exceeded max retries
+        if (retryCount < MAX_RETRIES) {
+          const delay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
+          console.warn(`SMMGen status request timeout, retrying in ${delay}ms... (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return getSMMGenOrderStatus(orderId, retryCount + 1);
+        }
+        
+        throw timeoutError;
+      }
+      
+      throw fetchError;
+    }
   } catch (error) {
-    console.error('SMMGen Status Error:', error);
+    // Check if this is a network/connection error that should be retried
+    const isNetworkError = error.name === 'TypeError' && 
+      (error.message.includes('Failed to fetch') || 
+       error.message.includes('NetworkError') ||
+       error.message.includes('ERR_CONNECTION_REFUSED') ||
+       error.message.includes('ERR_NETWORK') ||
+       error.message.includes('ERR_INTERNET_DISCONNECTED'));
+
+    const isCorsError = error.message.includes('CORS');
+    
+    // Retry network errors if we haven't exceeded max retries
+    if ((isNetworkError || isCorsError) && retryCount < MAX_RETRIES) {
+      const delay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
+      console.warn(`SMMGen status network error (${error.message}), retrying in ${delay}ms... (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return getSMMGenOrderStatus(orderId, retryCount + 1);
+    }
+    
+    // Log error details
+    console.error('SMMGen Status Error:', {
+      error: error.message,
+      errorName: error.name,
+      status: error.status,
+      responseData: error.responseData,
+      isNetworkError,
+      isCorsError,
+      retryCount,
+      orderId,
+      stack: error.stack
+    });
+    
+    // Re-throw the error so caller can handle it
     throw error;
   }
 };

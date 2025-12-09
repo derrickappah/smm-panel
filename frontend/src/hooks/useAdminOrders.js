@@ -61,15 +61,29 @@ const fetchOrders = async ({ pageParam = 0, checkSMMGenStatus = false }) => {
 
   // Check SMMGen status if requested
   if (checkSMMGenStatus && finalOrders.length > 0) {
+    console.log(`Checking SMMGen status for ${finalOrders.length} orders`);
     finalOrders = await Promise.all(
       finalOrders.map(async (order) => {
-        if (order.smmgen_order_id && order.status !== 'completed' && order.status !== 'refunded') {
+        if (order.smmgen_order_id && 
+            order.smmgen_order_id !== "order not placed at smm gen" &&
+            order.status !== 'completed' && 
+            order.status !== 'refunded') {
           try {
+            console.log(`Checking status for order ${order.id} with SMMGen ID: ${order.smmgen_order_id}`);
             const statusData = await getSMMGenOrderStatus(order.smmgen_order_id);
             const smmgenStatus = statusData.status || statusData.Status;
             const mappedStatus = mapSMMGenStatus(smmgenStatus);
 
+            console.log(`Order ${order.id} status check result:`, {
+              smmgenStatus,
+              mappedStatus,
+              currentStatus: order.status,
+              willUpdate: mappedStatus && mappedStatus !== order.status
+            });
+
             if (mappedStatus && mappedStatus !== order.status) {
+              console.log(`Updating order ${order.id} status from ${order.status} to ${mappedStatus}`);
+              
               await saveOrderStatusHistory(
                 order.id,
                 mappedStatus,
@@ -78,24 +92,46 @@ const fetchOrders = async ({ pageParam = 0, checkSMMGenStatus = false }) => {
                 order.status
               );
 
-              await supabase
+              const { error: updateError } = await supabase
                 .from('orders')
                 .update({ 
                   status: mappedStatus,
                   completed_at: mappedStatus === 'completed' ? new Date().toISOString() : order.completed_at
                 })
                 .eq('id', order.id);
-              
+
+              if (updateError) {
+                console.error(`Failed to update order ${order.id} status:`, updateError);
+                throw updateError;
+              }
+
+              console.log(`Successfully updated order ${order.id} status to ${mappedStatus}`);
               return { ...order, status: mappedStatus };
+            } else {
+              console.log(`Order ${order.id} status unchanged (${order.status})`);
             }
           } catch (error) {
-            console.warn('Failed to check SMMGen status for order:', order.id, error);
+            console.error(`Failed to check SMMGen status for order ${order.id}:`, {
+              error: error.message,
+              orderId: order.id,
+              smmgenOrderId: order.smmgen_order_id,
+              stack: error.stack
+            });
+          }
+        } else {
+          if (order.smmgen_order_id === "order not placed at smm gen") {
+            console.log(`Skipping status check for order ${order.id} - order not placed at SMMGen`);
+          } else if (!order.smmgen_order_id) {
+            console.log(`Skipping status check for order ${order.id} - no SMMGen order ID`);
+          } else {
+            console.log(`Skipping status check for order ${order.id} - status is ${order.status}`);
           }
         }
         
         return order;
       })
     );
+    console.log(`Completed SMMGen status check for ${finalOrders.length} orders`);
   }
 
   return {
@@ -209,15 +245,29 @@ const fetchAllOrders = async (checkSMMGenStatus = false) => {
 
   // Check SMMGen status if requested
   if (checkSMMGenStatus && allRecords.length > 0) {
+    console.log(`Checking SMMGen status for ${allRecords.length} orders (fetchAllOrders)`);
     allRecords = await Promise.all(
       allRecords.map(async (order) => {
-        if (order.smmgen_order_id && order.status !== 'completed' && order.status !== 'refunded') {
+        if (order.smmgen_order_id && 
+            order.smmgen_order_id !== "order not placed at smm gen" &&
+            order.status !== 'completed' && 
+            order.status !== 'refunded') {
           try {
+            console.log(`Checking status for order ${order.id} with SMMGen ID: ${order.smmgen_order_id}`);
             const statusData = await getSMMGenOrderStatus(order.smmgen_order_id);
             const smmgenStatus = statusData.status || statusData.Status;
             const mappedStatus = mapSMMGenStatus(smmgenStatus);
 
+            console.log(`Order ${order.id} status check result:`, {
+              smmgenStatus,
+              mappedStatus,
+              currentStatus: order.status,
+              willUpdate: mappedStatus && mappedStatus !== order.status
+            });
+
             if (mappedStatus && mappedStatus !== order.status) {
+              console.log(`Updating order ${order.id} status from ${order.status} to ${mappedStatus}`);
+              
               await saveOrderStatusHistory(
                 order.id,
                 mappedStatus,
@@ -226,24 +276,46 @@ const fetchAllOrders = async (checkSMMGenStatus = false) => {
                 order.status
               );
 
-              await supabase
+              const { error: updateError } = await supabase
                 .from('orders')
                 .update({ 
                   status: mappedStatus,
                   completed_at: mappedStatus === 'completed' ? new Date().toISOString() : order.completed_at
                 })
                 .eq('id', order.id);
-              
+
+              if (updateError) {
+                console.error(`Failed to update order ${order.id} status:`, updateError);
+                throw updateError;
+              }
+
+              console.log(`Successfully updated order ${order.id} status to ${mappedStatus}`);
               return { ...order, status: mappedStatus };
+            } else {
+              console.log(`Order ${order.id} status unchanged (${order.status})`);
             }
           } catch (error) {
-            console.warn('Failed to check SMMGen status for order:', order.id, error);
+            console.error(`Failed to check SMMGen status for order ${order.id}:`, {
+              error: error.message,
+              orderId: order.id,
+              smmgenOrderId: order.smmgen_order_id,
+              stack: error.stack
+            });
+          }
+        } else {
+          if (order.smmgen_order_id === "order not placed at smm gen") {
+            console.log(`Skipping status check for order ${order.id} - order not placed at SMMGen`);
+          } else if (!order.smmgen_order_id) {
+            console.log(`Skipping status check for order ${order.id} - no SMMGen order ID`);
+          } else {
+            console.log(`Skipping status check for order ${order.id} - status is ${order.status}`);
           }
         }
         
         return order;
       })
     );
+    console.log(`Completed SMMGen status check for ${allRecords.length} orders (fetchAllOrders)`);
   }
 
   return allRecords;

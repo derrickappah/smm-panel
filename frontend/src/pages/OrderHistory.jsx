@@ -135,14 +135,17 @@ const OrderHistory = ({ user, onLogout }) => {
   // Check and update order status from SMMGen
   const checkOrderStatus = useCallback(async (order) => {
     if (!order.smmgen_order_id || order.smmgen_order_id === "order not placed at smm gen") {
+      console.log(`Skipping status check for order ${order.id} - no valid SMMGen order ID`);
       return;
     }
 
     // Don't check status for refunded orders - they should not be overwritten
     if (order.status === 'refunded') {
+      console.log(`Skipping status check for order ${order.id} - order is refunded`);
       return;
     }
 
+    console.log(`Checking status for order ${order.id} with SMMGen ID: ${order.smmgen_order_id}`);
     setCheckingStatus(prev => ({ ...prev, [order.id]: true }));
 
     try {
@@ -153,8 +156,17 @@ const OrderHistory = ({ user, onLogout }) => {
       const smmgenStatus = statusData.status || statusData.Status;
       const mappedStatus = mapSMMGenStatus(smmgenStatus);
 
+      console.log(`Order ${order.id} status check result:`, {
+        smmgenStatus,
+        mappedStatus,
+        currentStatus: order.status,
+        willUpdate: mappedStatus && mappedStatus !== order.status
+      });
+
       // Don't update if order is refunded or if mapped status would overwrite refunded status
       if (mappedStatus && mappedStatus !== order.status && order.status !== 'refunded') {
+        console.log(`Updating order ${order.id} status from ${order.status} to ${mappedStatus}`);
+        
         // Save status to history first
         await saveOrderStatusHistory(
           order.id,
@@ -174,8 +186,11 @@ const OrderHistory = ({ user, onLogout }) => {
           .eq('id', order.id);
 
         if (updateError) {
+          console.error(`Failed to update order ${order.id} status in database:`, updateError);
           throw updateError;
         }
+
+        console.log(`Successfully updated order ${order.id} status to ${mappedStatus} in database`);
 
         // Get updated order with refund_status
         const { data: updatedOrder } = await supabase
@@ -193,10 +208,23 @@ const OrderHistory = ({ user, onLogout }) => {
           )
         );
 
+        console.log(`Order ${order.id} status updated in local state to ${mappedStatus}`);
         // Automatic refunds disabled - admins must process refunds manually
+      } else {
+        if (!mappedStatus) {
+          console.log(`Order ${order.id} - no valid mapped status from SMMGen response`);
+        } else if (mappedStatus === order.status) {
+          console.log(`Order ${order.id} status unchanged (${order.status})`);
+        }
       }
     } catch (error) {
-      console.error('Error checking order status:', error);
+      console.error(`Error checking order status for order ${order.id}:`, {
+        error: error.message,
+        errorName: error.name,
+        orderId: order.id,
+        smmgenOrderId: order.smmgen_order_id,
+        stack: error.stack
+      });
     } finally {
       setCheckingStatus(prev => ({ ...prev, [order.id]: false }));
     }
