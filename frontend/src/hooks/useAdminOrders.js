@@ -1,6 +1,6 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { getSMMGenOrderStatus } from '@/lib/smmgen';
+import { getSMMGenOrderStatus, placeSMMGenOrder } from '@/lib/smmgen';
 import { saveOrderStatusHistory } from '@/lib/orderStatusHistory';
 import { toast } from 'sonner';
 
@@ -46,7 +46,7 @@ const fetchOrders = async ({ pageParam = 0, checkSMMGenStatus = false }) => {
 
   const { data, error, count } = await supabase
     .from('orders')
-    .select('*, services(name, platform, service_type), profiles(name, email, phone_number)', { count: 'exact' })
+    .select('*, services(name, platform, service_type, smmgen_service_id), profiles(name, email, phone_number)', { count: 'exact' })
     .order('created_at', { ascending: false })
     .range(from, to);
 
@@ -136,7 +136,7 @@ const fetchAllOrders = async (checkSMMGenStatus = false) => {
     try {
       const { data, error } = await supabase
         .from('orders')
-        .select('*, services(name, platform, service_type), profiles(name, email, phone_number)')
+        .select('*, services(name, platform, service_type, smmgen_service_id), profiles(name, email, phone_number)')
         .order('created_at', { ascending: false })
         .range(from, to);
 
@@ -295,6 +295,97 @@ export const useUpdateOrder = () => {
     },
     onError: (error) => {
       toast.error(error.message || 'Failed to update order');
+    },
+  });
+};
+
+export const useReorderToSMMGen = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (orderId) => {
+      // Fetch the order with its service data
+      const { data: order, error: orderError } = await supabase
+        .from('orders')
+        .select('*, services(smmgen_service_id)')
+        .eq('id', orderId)
+        .single();
+
+      if (orderError) {
+        throw new Error(`Failed to fetch order: ${orderError.message}`);
+      }
+
+      if (!order) {
+        throw new Error('Order not found');
+      }
+
+      // Check if order already has SMMGen ID
+      if (order.smmgen_order_id) {
+        throw new Error('Order already has SMMGen ID. Cannot reorder.');
+      }
+
+      // Check if service has SMMGen service ID
+      if (!order.services?.smmgen_service_id) {
+        throw new Error('Service does not have SMMGen service ID configured.');
+      }
+
+      // Check if order status allows reordering
+      if (order.status === 'completed' || order.status === 'cancelled' || order.status === 'refunded') {
+        throw new Error(`Cannot reorder order with status: ${order.status}`);
+      }
+
+      // Place order via SMMGen API
+      const smmgenResponse = await placeSMMGenOrder(
+        order.services.smmgen_service_id,
+        order.link,
+        order.quantity
+      );
+
+      if (!smmgenResponse) {
+        throw new Error('Failed to place order with SMMGen. API returned no response.');
+      }
+
+      // Extract SMMGen order ID from response
+      const smmgenOrderId = smmgenResponse.order || 
+                           smmgenResponse.order_id || 
+                           smmgenResponse.orderId || 
+                           smmgenResponse.id || 
+                           null;
+
+      if (!smmgenOrderId) {
+        throw new Error('SMMGen API did not return an order ID.');
+      }
+
+      // Update order with SMMGen order ID and status
+      const updates = {
+        smmgen_order_id: smmgenOrderId,
+      };
+
+      // Update status to processing if it was pending
+      if (order.status === 'pending') {
+        updates.status = 'processing';
+      }
+
+      const { data: updatedOrder, error: updateError } = await supabase
+        .from('orders')
+        .update(updates)
+        .eq('id', orderId)
+        .select()
+        .single();
+
+      if (updateError) {
+        throw new Error(`Failed to update order: ${updateError.message}`);
+      }
+
+      return updatedOrder;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'orders'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
+      toast.success(`Order successfully sent to SMMGen. Order ID: ${data.smmgen_order_id}`);
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to reorder to SMMGen');
     },
   });
 };

@@ -1,12 +1,12 @@
 import React, { memo, useState, useMemo, useCallback, useEffect } from 'react';
-import { useAdminOrders, useUpdateOrder } from '@/hooks/useAdminOrders';
+import { useAdminOrders, useUpdateOrder, useReorderToSMMGen } from '@/hooks/useAdminOrders';
 import { useDebounce } from '@/hooks/useDebounce';
 import VirtualizedList from '@/components/VirtualizedList';
 import ResponsiveTable from '@/components/admin/ResponsiveTable';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, RefreshCw, Filter } from 'lucide-react';
+import { Search, RefreshCw, Filter, AlertCircle, RotateCcw } from 'lucide-react';
 import { processManualRefund } from '@/lib/refunds';
 import { toast } from 'sonner';
 
@@ -35,6 +35,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
   });
 
   const updateOrderMutation = useUpdateOrder();
+  const reorderMutation = useReorderToSMMGen();
 
   const allOrders = useMemo(() => {
     if (!data?.pages) return [];
@@ -91,6 +92,13 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
         if (statusFilter === 'refunded') {
           return order.refund_status === 'succeeded';
         }
+        if (statusFilter === 'failed_to_smmgen') {
+          // Show orders without SMMGen ID that are not completed or cancelled
+          return !order.smmgen_order_id && 
+                 order.status !== 'completed' && 
+                 order.status !== 'cancelled' &&
+                 order.status !== 'refunded';
+        }
         return order.status === statusFilter;
       });
     }
@@ -142,6 +150,25 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
     }
   }, [onRefresh]);
 
+  const handleReorderToSMMGen = useCallback(async (order) => {
+    if (!order.services?.smmgen_service_id) {
+      toast.error('Service does not have SMMGen service ID configured.');
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to send this order to SMMGen?\n\nService: ${order.services?.name || 'N/A'}\nLink: ${order.link}\nQuantity: ${order.quantity}`)) {
+      return;
+    }
+
+    try {
+      await reorderMutation.mutateAsync(order.id);
+      if (onRefresh) onRefresh();
+    } catch (error) {
+      // Error is already handled by the mutation's onError
+      console.error('Failed to reorder to SMMGen:', error);
+    }
+  }, [reorderMutation, onRefresh]);
+
   const renderTableHeader = useCallback(() => (
     <div className="grid grid-cols-12 gap-4 p-4 font-semibold text-sm min-w-[1500px]">
       <div className="col-span-1.5 min-w-[120px]">Status</div>
@@ -159,7 +186,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
 
   const renderTableRow = useCallback((order, index) => {
     return (
-      <div className="grid grid-cols-12 gap-4 p-4 items-center bg-white hover:bg-gray-50 transition-colors border-b border-gray-200">
+      <div className="grid grid-cols-12 gap-4 p-4 items-start bg-white hover:bg-gray-50 transition-colors min-h-[100px]">
         <div className="col-span-1.5 flex flex-col gap-1">
           <span className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 w-fit ${
             order.status === 'completed' ? 'bg-green-100 text-green-700' :
@@ -186,7 +213,10 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               <p className="font-medium text-gray-900 text-sm">{order.smmgen_order_id}</p>
             </>
           ) : (
-            <p className="text-xs text-gray-400 italic">N/A</p>
+            <div className="flex items-center gap-1">
+              <AlertCircle className="w-4 h-4 text-orange-500" />
+              <p className="text-xs text-orange-600 italic font-medium">Not sent</p>
+            </div>
           )}
         </div>
         <div className="col-span-1">
@@ -216,7 +246,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
           </a>
         </div>
         <div className="col-span-1">
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 w-full">
             <Select 
               value={order.status || 'pending'} 
               onValueChange={(value) => handleOrderStatusUpdate(order.id, value)}
@@ -235,12 +265,29 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                 <SelectItem value="refunded">Already Refunded</SelectItem>
               </SelectContent>
             </Select>
+            {!order.smmgen_order_id && 
+             order.services?.smmgen_service_id && 
+             order.status !== 'completed' && 
+             order.status !== 'cancelled' && 
+             order.status !== 'refunded' && (
+              <Button
+                onClick={() => handleReorderToSMMGen(order)}
+                disabled={reorderMutation.isPending}
+                variant="outline"
+                size="sm"
+                className="w-full min-h-[44px] text-xs text-indigo-600 hover:text-indigo-700 border-indigo-300 hover:bg-indigo-50"
+                title="Send this order to SMMGen"
+              >
+                <RotateCcw className={`w-3 h-3 mr-1 ${reorderMutation.isPending ? 'animate-spin' : ''}`} />
+                {reorderMutation.isPending ? 'Sending...' : 'Reorder'}
+              </Button>
+            )}
             {(order.status === 'canceled' || order.status === 'cancelled') && (
               <Button
                 onClick={() => handleRefundOrder(order)}
                 variant="outline"
                 size="sm"
-                className={`min-h-[44px] ${
+                className={`w-full min-h-[44px] ${
                   order.refund_status === 'failed' 
                     ? "text-orange-600 hover:text-orange-700 border-orange-300 text-xs"
                     : "text-red-600 hover:text-red-700 text-xs"
@@ -253,7 +300,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
         </div>
       </div>
     );
-  }, [handleOrderStatusUpdate, handleRefundOrder]);
+  }, [handleOrderStatusUpdate, handleRefundOrder, handleReorderToSMMGen, reorderMutation.isPending]);
 
   const renderMobileCard = useCallback((order, index) => {
     return (
@@ -277,8 +324,13 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               )}
             </div>
             <p className="font-semibold text-gray-900 text-base">Order: {order.id?.slice(0, 12)}...</p>
-            {order.smmgen_order_id && (
+            {order.smmgen_order_id ? (
               <p className="text-sm text-gray-600 mt-1">SMMGen: {order.smmgen_order_id}</p>
+            ) : (
+              <div className="flex items-center gap-1 mt-1">
+                <AlertCircle className="w-4 h-4 text-orange-500" />
+                <p className="text-xs text-orange-600 italic font-medium">Not sent to SMMGen</p>
+              </div>
             )}
           </div>
           <div className="text-right">
@@ -329,6 +381,23 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               <SelectItem value="refunded">Already Refunded</SelectItem>
             </SelectContent>
           </Select>
+          {!order.smmgen_order_id && 
+           order.services?.smmgen_service_id && 
+           order.status !== 'completed' && 
+           order.status !== 'cancelled' && 
+           order.status !== 'refunded' && (
+            <Button
+              onClick={() => handleReorderToSMMGen(order)}
+              disabled={reorderMutation.isPending}
+              variant="outline"
+              size="sm"
+              className="w-full min-h-[44px] text-indigo-600 hover:text-indigo-700 border-indigo-300 hover:bg-indigo-50"
+              title="Send this order to SMMGen"
+            >
+              <RotateCcw className={`w-3 h-3 mr-1 ${reorderMutation.isPending ? 'animate-spin' : ''}`} />
+              {reorderMutation.isPending ? 'Sending...' : 'Reorder to SMMGen'}
+            </Button>
+          )}
           {(order.status === 'canceled' || order.status === 'cancelled') && (
             <Button
               onClick={() => handleRefundOrder(order)}
@@ -346,7 +415,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
         </div>
       </div>
     );
-  }, [handleOrderStatusUpdate, handleRefundOrder]);
+  }, [handleOrderStatusUpdate, handleRefundOrder, handleReorderToSMMGen, reorderMutation.isPending]);
 
   if (isLoading) {
     return (
@@ -417,6 +486,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="failed_to_smmgen">⚠️ Failed to SMMGen</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
                 <SelectItem value="in progress">In Progress</SelectItem>
                 <SelectItem value="processing">Processing</SelectItem>

@@ -335,17 +335,13 @@ function App() {
           <BrowserRouter>
             <Suspense fallback={<PageLoader />}>
               <Routes>
-              <Route path="/" element={user ? <Navigate to={user?.role === 'admin' ? '/admin' : '/dashboard'} /> : <LandingPage />} />
-              <Route path="/auth" element={user ? <Navigate to={user?.role === 'admin' ? '/admin' : '/dashboard'} /> : <AuthPage />} />
+              <Route path="/" element={user ? <Navigate to={user?.role === 'admin' ? '/admin/dashboard' : '/dashboard'} /> : <LandingPage />} />
+              <Route path="/auth" element={user ? <Navigate to={user?.role === 'admin' ? '/admin/dashboard' : '/dashboard'} /> : <AuthPage />} />
               <Route
                 path="/dashboard"
                 element={
                   user ? (
-                    user?.role === 'admin' ? (
-                      <Navigate to="/admin" />
-                    ) : (
-                      <Dashboard user={user} onLogout={logout} onUpdateUser={() => loadUserProfile(user.id)} />
-                    )
+                    <Dashboard user={user} onLogout={logout} onUpdateUser={() => loadUserProfile(user.id)} />
                   ) : (
                     <Navigate to="/auth" />
                   )
@@ -387,9 +383,131 @@ function App() {
                 path="/admin"
                 element={
                   user?.role === 'admin' ? (
-                    <AdminDashboard user={user} onLogout={logout} />
-                  ) : (
+                    <Navigate to="/admin/dashboard" replace />
+                  ) : user ? (
                     <Navigate to="/dashboard" />
+                  ) : (
+                    <Navigate to="/auth" />
+                  )
+                }
+              />
+              <Route
+                path="/admin/dashboard"
+                element={
+                  user?.role === 'admin' ? (
+                    <AdminDashboard user={user} onLogout={logout} />
+                  ) : user ? (
+                    <Navigate to="/dashboard" />
+                  ) : (
+                    <Navigate to="/auth" />
+                  )
+                }
+              />
+              <Route
+                path="/admin/deposits"
+                element={
+                  user?.role === 'admin' ? (
+                    <AdminDashboard user={user} onLogout={logout} />
+                  ) : user ? (
+                    <Navigate to="/dashboard" />
+                  ) : (
+                    <Navigate to="/auth" />
+                  )
+                }
+              />
+              <Route
+                path="/admin/orders"
+                element={
+                  user?.role === 'admin' ? (
+                    <AdminDashboard user={user} onLogout={logout} />
+                  ) : user ? (
+                    <Navigate to="/dashboard" />
+                  ) : (
+                    <Navigate to="/auth" />
+                  )
+                }
+              />
+              <Route
+                path="/admin/services"
+                element={
+                  user?.role === 'admin' ? (
+                    <AdminDashboard user={user} onLogout={logout} />
+                  ) : user ? (
+                    <Navigate to="/dashboard" />
+                  ) : (
+                    <Navigate to="/auth" />
+                  )
+                }
+              />
+              <Route
+                path="/admin/payment-methods"
+                element={
+                  user?.role === 'admin' ? (
+                    <AdminDashboard user={user} onLogout={logout} />
+                  ) : user ? (
+                    <Navigate to="/dashboard" />
+                  ) : (
+                    <Navigate to="/auth" />
+                  )
+                }
+              />
+              <Route
+                path="/admin/users"
+                element={
+                  user?.role === 'admin' ? (
+                    <AdminDashboard user={user} onLogout={logout} />
+                  ) : user ? (
+                    <Navigate to="/dashboard" />
+                  ) : (
+                    <Navigate to="/auth" />
+                  )
+                }
+              />
+              <Route
+                path="/admin/transactions"
+                element={
+                  user?.role === 'admin' ? (
+                    <AdminDashboard user={user} onLogout={logout} />
+                  ) : user ? (
+                    <Navigate to="/dashboard" />
+                  ) : (
+                    <Navigate to="/auth" />
+                  )
+                }
+              />
+              <Route
+                path="/admin/support"
+                element={
+                  user?.role === 'admin' ? (
+                    <AdminDashboard user={user} onLogout={logout} />
+                  ) : user ? (
+                    <Navigate to="/dashboard" />
+                  ) : (
+                    <Navigate to="/auth" />
+                  )
+                }
+              />
+              <Route
+                path="/admin/balance"
+                element={
+                  user?.role === 'admin' ? (
+                    <AdminDashboard user={user} onLogout={logout} />
+                  ) : user ? (
+                    <Navigate to="/dashboard" />
+                  ) : (
+                    <Navigate to="/auth" />
+                  )
+                }
+              />
+              <Route
+                path="/admin/referrals"
+                element={
+                  user?.role === 'admin' ? (
+                    <AdminDashboard user={user} onLogout={logout} />
+                  ) : user ? (
+                    <Navigate to="/dashboard" />
+                  ) : (
+                    <Navigate to="/auth" />
                   )
                 }
               />

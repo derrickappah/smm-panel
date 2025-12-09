@@ -49,10 +49,10 @@ const DashboardOrders = React.memo(({ orders, services }) => {
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm sm:text-base font-medium text-gray-900 truncate">{service?.name || 'Service'}</p>
-                  <p className="text-xs sm:text-sm text-gray-600 mt-0.5">Quantity: {order.quantity.toLocaleString()}</p>
+                  <p className="text-xs sm:text-sm text-gray-600 mt-0.5">Quantity: {order.quantity?.toLocaleString() || '0'}</p>
                 </div>
                 <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-                  <p className="text-sm sm:text-base font-semibold text-gray-900">₵{order.total_cost.toFixed(2)}</p>
+                  <p className="text-sm sm:text-base font-semibold text-gray-900">₵{order.total_cost?.toFixed(2) || '0.00'}</p>
                   <span className={`text-xs font-medium px-2.5 py-1 rounded border ${getStatusStyles(order.status)}`}>
                     {order.status}
                   </span>

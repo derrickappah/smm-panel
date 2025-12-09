@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect, lazy, Suspense, memo } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -6,7 +7,7 @@ import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/s
 import SEO from '@/components/SEO';
 import { 
   Users, ShoppingCart, DollarSign, Package, Wallet, Receipt, 
-  MessageSquare, UserPlus, RefreshCw, BarChart3, Menu, X
+  MessageSquare, UserPlus, RefreshCw, BarChart3, Menu, X, LayoutDashboard
 } from 'lucide-react';
 import { useAdminOrders } from '@/hooks/useAdminOrders';
 import { useAdminDeposits } from '@/hooks/useAdminDeposits';
@@ -43,15 +44,31 @@ const ComponentLoader = () => (
 
 const AdminDashboard = memo(({ user, onLogout }) => {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const location = useLocation();
   
-  // Load saved section from localStorage on mount
-  const [activeSection, setActiveSection] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('adminActiveSection');
-      return saved || 'dashboard';
+  // Get active section from URL pathname
+  const activeSection = useMemo(() => {
+    const path = location.pathname;
+    if (path.startsWith('/admin/')) {
+      const section = path.replace('/admin/', '');
+      // Map URL paths to section IDs
+      const sectionMap = {
+        'dashboard': 'dashboard',
+        'deposits': 'deposits',
+        'orders': 'orders',
+        'services': 'services',
+        'payment-methods': 'payment-methods',
+        'users': 'users',
+        'transactions': 'transactions',
+        'support': 'support',
+        'balance': 'balance',
+        'referrals': 'referrals'
+      };
+      return sectionMap[section] || 'dashboard';
     }
     return 'dashboard';
-  });
+  }, [location.pathname]);
   
   const [dateRangeStart, setDateRangeStart] = useState('');
   const [dateRangeEnd, setDateRangeEnd] = useState('');
@@ -59,13 +76,6 @@ const AdminDashboard = memo(({ user, onLogout }) => {
   const [balanceCheckResults, setBalanceCheckResults] = useState({});
   const [manuallyCrediting, setManuallyCrediting] = useState(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-
-  // Save active section to localStorage whenever it changes
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('adminActiveSection', activeSection);
-    }
-  }, [activeSection]);
 
   // Fetch payment method settings
   const { data: paymentMethodSettings = {
@@ -136,11 +146,11 @@ const AdminDashboard = memo(({ user, onLogout }) => {
   const deposits = useMemo(() => depositsData || [], [depositsData]);
   const allTransactions = useMemo(() => transactionsData || [], [transactionsData]);
 
-  // Memoized section change handler
+  // Memoized section change handler - now uses URL navigation
   const handleSectionChange = useCallback((section) => {
-    setActiveSection(section);
+    navigate(`/admin/${section}`);
     setMobileNavOpen(false); // Close mobile nav when section changes
-  }, []);
+  }, [navigate]);
 
   // Balance check result function
   const getBalanceCheckResult = useCallback((transaction) => {
@@ -356,6 +366,15 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                       <h2 className="text-xl font-bold text-gray-900">Admin Panel</h2>
                     </div>
                     <nav className="flex-1 overflow-y-auto p-4 space-y-1">
+                      <SheetClose asChild>
+                        <button
+                          onClick={() => navigate('/dashboard')}
+                          className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left transition-colors duration-200 text-gray-700 hover:bg-gray-100 mb-2"
+                        >
+                          <LayoutDashboard className="w-5 h-5" />
+                          <span className="font-medium text-sm flex-1">User Dashboard</span>
+                        </button>
+                      </SheetClose>
                       {navItems.map((item) => {
                         const Icon = item.icon;
                         return (
@@ -436,6 +455,13 @@ const AdminDashboard = memo(({ user, onLogout }) => {
               <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-4 flex flex-col sticky top-6 max-h-[calc(100vh-4.5rem)] overflow-y-auto">
                 <div className="mb-6">
                   <h2 className="text-xl font-bold text-gray-900 mb-4">Admin Panel</h2>
+                  <button
+                    onClick={() => navigate('/dashboard')}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 text-gray-700 hover:bg-gray-100 mb-2"
+                  >
+                    <LayoutDashboard className="w-5 h-5" />
+                    <span className="font-medium text-sm flex-1">User Dashboard</span>
+                  </button>
                   <nav className="space-y-1">
                     {navItems.map((item) => {
                       const Icon = item.icon;
@@ -490,10 +516,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
             <Tabs 
               value={activeSection} 
               onValueChange={(value) => {
-                setActiveSection(value);
-                if (typeof window !== 'undefined') {
-                  localStorage.setItem('adminActiveSection', value);
-                }
+                navigate(`/admin/${value}`);
               }} 
               className="w-full"
             >

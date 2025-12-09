@@ -2003,6 +2003,11 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               }
               // Continue with local order creation
             }
+            
+            // If SMMGen service ID exists but order failed (smmgenOrderId is still null), set failure message
+            if (smmgenOrderId === null) {
+              smmgenOrderId = "order not placed at smm gen";
+            }
           }
 
           // Create order record for this component
@@ -2116,6 +2121,11 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             }
           }
           // Continue with local order creation even if SMMGen fails
+        }
+        
+        // If SMMGen service ID exists but order failed (smmgenOrderId is still null), set failure message
+        if (smmgenOrderId === null) {
+          smmgenOrderId = "order not placed at smm gen";
         }
       }
 
