@@ -185,18 +185,6 @@ export const placeSMMGenOrder = async (serviceId, link, quantity) => {
         apiUrlType: typeof apiUrl,
         apiUrlStartsWith: apiUrl.startsWith('http') ? 'absolute' : 'relative'
       });
-      
-      // Validate URL is absolute
-      if (!apiUrl.startsWith('http://') && !apiUrl.startsWith('https://')) {
-        console.error('ERROR: URL is not absolute!', {
-          apiUrl,
-          backendUrl,
-          isProduction,
-          useServerlessFunctions: getSMMGenConfig().useServerlessFunctions
-        });
-        // Return null to skip SMMGen and create local order only
-        return null;
-      }
     }
     
     const response = await fetch(apiUrl, {
@@ -213,25 +201,40 @@ export const placeSMMGenOrder = async (serviceId, link, quantity) => {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-      throw new Error(errorData.error || errorData.message || `Order failed: ${response.status}`);
+      const errorMessage = errorData.error || errorData.message || `Order failed: ${response.status}`;
+      
+      // API errors (4xx, 5xx) should be thrown so they can be handled by the caller
+      // These indicate actual problems with the request (missing API key, invalid service, etc.)
+      throw new Error(errorMessage);
     }
 
     const data = await response.json();
     return data;
   } catch (error) {
-    // If it's a network error (CORS, connection failed), return null instead of throwing
-    // This allows the app to continue with local order creation
-    if (error.message.includes('Failed to fetch') || 
-        error.message.includes('CORS') || 
-        error.message.includes('ERR_CONNECTION_REFUSED') ||
-        error.message.includes('NetworkError')) {
-      // Only log in development, suppress in production
+    // Only catch network/connection errors that indicate the serverless function is unavailable
+    // These should return null to allow graceful degradation
+    if (error.name === 'TypeError' && 
+        (error.message.includes('Failed to fetch') || 
+         error.message.includes('NetworkError') ||
+         error.message.includes('ERR_CONNECTION_REFUSED') ||
+         error.message.includes('ERR_NETWORK'))) {
+      // Network error - serverless function unavailable
       if (!isProduction) {
-        console.debug('SMMGen backend unavailable (expected in dev). Continuing with local order only.');
+        console.debug('SMMGen backend unavailable (network error). Continuing with local order only.');
       }
       return null; // Return null to allow graceful degradation
     }
-    // For other errors, log and throw
+    
+    // CORS errors are also network-level issues
+    if (error.message.includes('CORS')) {
+      if (!isProduction) {
+        console.debug('SMMGen CORS error. Continuing with local order only.');
+      }
+      return null;
+    }
+    
+    // For all other errors (API errors, validation errors, etc.), throw them
+    // These should be handled by the caller to show appropriate error messages
     console.error('SMMGen Order Error:', error);
     throw error;
   }
