@@ -80,7 +80,7 @@ const fetchRecentOrders = async () => {
 
   const { data, error } = await supabase
     .from('orders')
-    .select('id, user_id, service_id, link, quantity, status, smmgen_order_id, created_at, completed_at, refund_status')
+    .select('id, user_id, service_id, link, quantity, status, smmgen_order_id, created_at, completed_at, refund_status, total_cost')
     .eq('user_id', authUser.id)
     .order('created_at', { ascending: false })
     .limit(5);
