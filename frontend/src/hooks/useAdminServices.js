@@ -21,7 +21,7 @@ const fetchServices = async () => {
 
   const { data, error } = await supabase
     .from('services')
-    .select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, created_at')
+    .select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, created_at')
     .order('created_at', { ascending: false });
 
   if (error) throw error;

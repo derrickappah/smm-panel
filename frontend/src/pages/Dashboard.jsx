@@ -2023,6 +2023,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             }
           } else {
             console.log(`Component service ${componentService.name} does not have SMMGen service ID - skipping SMMGen order placement`);
+            // Set failure message to prevent database trigger from overwriting with order ID
+            smmgenOrderId = "order not placed at smm gen";
           }
 
           // Create order record for this component
@@ -2156,6 +2158,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         }
       } else {
         console.log('Service does not have SMMGen service ID - skipping SMMGen order placement');
+        // Set failure message to prevent database trigger from overwriting with order ID
+        smmgenOrderId = "order not placed at smm gen";
       }
 
       // Create order record in our database

@@ -58,7 +58,7 @@ const fetchServices = async () => {
   // Fetch services from Supabase
   const { data, error } = await supabase
     .from('services')
-    .select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, created_at')
+    .select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, created_at')
     .eq('enabled', true)
     .order('created_at', { ascending: false });
   
