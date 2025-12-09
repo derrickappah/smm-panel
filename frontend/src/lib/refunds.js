@@ -166,6 +166,25 @@ export const processAutomaticRefund = async (order) => {
  */
 export const processManualRefund = async (order) => {
   try {
+    // Validate order object
+    if (!order) {
+      throw new Error('Order object is required');
+    }
+
+    if (!order.user_id) {
+      throw new Error('Order is missing user_id. Cannot process refund.');
+    }
+
+    if (!order.id) {
+      throw new Error('Order is missing id. Cannot process refund.');
+    }
+
+    console.log('Processing manual refund for order:', {
+      orderId: order.id,
+      userId: order.user_id,
+      totalCost: order.total_cost
+    });
+
     // Get user's current balance
     const { data: profile, error: profileError } = await supabase
       .from('profiles')

@@ -142,10 +142,22 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
     if (!confirm('Are you sure you want to refund this order?')) return;
     
     try {
-      await processManualRefund(order.id);
-      toast.success('Refund processed successfully');
-      if (onRefresh) onRefresh();
+      // Validate order has required fields
+      if (!order.user_id) {
+        console.error('Order missing user_id:', order);
+        toast.error('Order is missing user information. Cannot process refund.');
+        return;
+      }
+
+      const result = await processManualRefund(order);
+      if (result.success) {
+        toast.success('Refund processed successfully');
+        if (onRefresh) onRefresh();
+      } else {
+        toast.error(result.error || 'Failed to process refund');
+      }
     } catch (error) {
+      console.error('Refund error:', error);
       toast.error(error.message || 'Failed to process refund');
     }
   }, [onRefresh]);
