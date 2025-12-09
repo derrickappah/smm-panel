@@ -245,10 +245,19 @@ export const placeSMMGenOrder = async (serviceId, link, quantity, retryCount = 0
   }
 
   try {
-    const { backendUrl, isConfigured } = getSMMGenConfig();
+    const { backendUrl, isConfigured, useServerlessFunctions } = await getSMMGenConfig();
 
-    // If backend is not configured in production, skip SMMGen integration
-    if (!isConfigured && isProduction) {
+    // Log configuration for debugging
+    console.log('SMMGen Configuration:', {
+      backendUrl,
+      isConfigured,
+      useServerlessFunctions,
+      isProduction,
+      hasBackendUrl: !!process.env.REACT_APP_BACKEND_URL
+    });
+
+    // If backend is not configured, skip SMMGen integration
+    if (!isConfigured) {
       console.warn('SMMGen backend not configured. Skipping SMMGen order placement.');
       return null; // Return null to indicate SMMGen was skipped
     }
