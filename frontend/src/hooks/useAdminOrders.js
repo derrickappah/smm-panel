@@ -126,24 +126,85 @@ const fetchAllOrders = async (checkSMMGenStatus = false) => {
   let from = 0;
   let hasMore = true;
   const batchSize = 1000;
+  const maxIterations = 10000; // Safety limit to prevent infinite loops
+  let iterations = 0;
 
-  while (hasMore) {
+  while (hasMore && iterations < maxIterations) {
+    iterations++;
     const to = from + batchSize - 1;
-    const { data, error } = await supabase
-      .from('orders')
-      .select('*, services(name, platform, service_type), profiles(name, email, phone_number)')
-      .order('created_at', { ascending: false })
-      .range(from, to);
+    
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*, services(name, platform, service_type), profiles(name, email, phone_number)')
+        .order('created_at', { ascending: false })
+        .range(from, to);
 
-    if (error) throw error;
+      if (error) {
+        console.error(`Error fetching orders batch (from ${from} to ${to}):`, error);
+        throw error;
+      }
 
-    if (data && data.length > 0) {
-      allRecords = [...allRecords, ...data];
-      hasMore = data.length === batchSize;
-      from = to + 1;
-    } else {
-      hasMore = false;
+      if (data && data.length > 0) {
+        allRecords = [...allRecords, ...data];
+        // Continue if we got a full batch, stop if we got less
+        hasMore = data.length === batchSize;
+        from = to + 1;
+      } else {
+        // No more data
+        hasMore = false;
+      }
+    } catch (error) {
+      console.error('Error in fetchAllOrders batch:', error);
+      // If we have some records, return them rather than failing completely
+      if (allRecords.length > 0) {
+        console.warn(`Returning partial order data (${allRecords.length} records) due to error`);
+        // Still check SMMGen status for partial data if requested
+        if (checkSMMGenStatus) {
+          allRecords = await Promise.all(
+            allRecords.map(async (order) => {
+              if (order.smmgen_order_id && order.status !== 'completed' && order.status !== 'refunded') {
+                try {
+                  const statusData = await getSMMGenOrderStatus(order.smmgen_order_id);
+                  const smmgenStatus = statusData.status || statusData.Status;
+                  const mappedStatus = mapSMMGenStatus(smmgenStatus);
+
+                  if (mappedStatus && mappedStatus !== order.status) {
+                    await saveOrderStatusHistory(
+                      order.id,
+                      mappedStatus,
+                      'smmgen',
+                      statusData,
+                      order.status
+                    );
+
+                    await supabase
+                      .from('orders')
+                      .update({ 
+                        status: mappedStatus,
+                        completed_at: mappedStatus === 'completed' ? new Date().toISOString() : order.completed_at
+                      })
+                      .eq('id', order.id);
+                    
+                    return { ...order, status: mappedStatus };
+                  }
+                } catch (error) {
+                  console.warn('Failed to check SMMGen status for order:', order.id, error);
+                }
+              }
+              
+              return order;
+            })
+          );
+        }
+        return allRecords;
+      }
+      throw error;
     }
+  }
+
+  if (iterations >= maxIterations) {
+    console.warn(`fetchAllOrders reached max iterations (${maxIterations}), returning ${allRecords.length} records`);
   }
 
   // Check SMMGen status if requested

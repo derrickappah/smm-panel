@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
 import SEO from '@/components/SEO';
+import { generateFAQSchema } from '@/utils/schema';
 import { 
   Mail, 
   MessageSquare, 
@@ -225,25 +226,32 @@ const SupportPage = ({ user, onLogout }) => {
     setTicketsPage(1);
   }, [ticketStatusFilter, ticketSearch]);
 
-  const structuredData = {
-    '@context': 'https://schema.org',
-    '@type': 'FAQPage',
-    mainEntity: faqs.map(faq => ({
-      '@type': 'Question',
-      name: faq.question,
-      acceptedAnswer: {
-        '@type': 'Answer',
-        text: faq.answer
-      }
-    }))
-  };
+  const structuredData = generateFAQSchema(faqs);
+  
+  const supportKeywords = [
+    'BoostUp GH support',
+    'SMM panel support',
+    'help',
+    'FAQ',
+    'customer service',
+    'contact support',
+    'SMM panel help',
+    'support center',
+    'customer support',
+    'technical support',
+    'order help',
+    'payment help',
+    'account help',
+    '24/7 support',
+    'support Ghana'
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50">
       <SEO
         title="Support Center - Help & FAQ | BoostUp GH"
-        description="Get help with your BoostUp GH account, orders, payments, and more. Browse our FAQ or contact our support team for assistance."
-        keywords="BoostUp GH support, help, FAQ, customer service, contact support, SMM panel support"
+        description="Get help with your BoostUp GH account, orders, payments, and more. Browse our comprehensive FAQ or contact our 24/7 support team for assistance. SMM panel support, customer service, technical help."
+        keywords={supportKeywords}
         canonical="/support"
         structuredData={structuredData}
       />

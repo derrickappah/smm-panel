@@ -2,6 +2,7 @@ import React, { memo, useState, useMemo, useCallback, useEffect } from 'react';
 import { useAdminDeposits, useApproveDeposit, useRejectDeposit } from '@/hooks/useAdminDeposits';
 import { useDebounce } from '@/hooks/useDebounce';
 import VirtualizedList from '@/components/VirtualizedList';
+import ResponsiveTable from '@/components/admin/ResponsiveTable';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -203,7 +204,18 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
     return colorMap[methodLower] || 'bg-gray-100 text-gray-700 border-gray-200';
   }, []);
 
-  const renderDepositRow = useCallback((deposit) => {
+  const renderTableHeader = useCallback(() => (
+    <div className="grid grid-cols-12 gap-4 p-4 font-semibold text-sm min-w-[1200px]">
+      <div className="col-span-2 min-w-[180px]">User</div>
+      <div className="col-span-1.5 min-w-[100px]">Amount</div>
+      <div className="col-span-1.5 min-w-[100px]">Status</div>
+      <div className="col-span-2 min-w-[150px]">Payment Method</div>
+      <div className="col-span-2 min-w-[150px]">Date</div>
+      <div className="col-span-3 min-w-[200px]">Actions</div>
+    </div>
+  ), []);
+
+  const renderTableRow = useCallback((deposit, index) => {
     const depositMethod = deposit.deposit_method || deposit.payment_method; // Support both for backward compatibility
     const isManual = depositMethod === 'manual' || depositMethod === 'momo';
     const isPaystack = depositMethod === 'paystack';
@@ -211,7 +223,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
     const isKorapay = depositMethod === 'korapay';
 
     return (
-      <div className="grid grid-cols-12 gap-4 p-4 items-center bg-white hover:bg-gray-50 transition-colors border-b border-gray-200">
+      <div className="grid grid-cols-12 gap-4 p-4 items-center bg-white hover:bg-gray-50 transition-colors border-b border-gray-200 min-w-[1200px]">
         <div className="col-span-2">
           <p className="font-medium text-gray-900 break-words">{deposit.profiles?.name || 'Unknown'}</p>
           <p className="text-xs text-gray-600 break-all">{deposit.profiles?.email || deposit.user_id?.slice(0, 8)}</p>
@@ -253,7 +265,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
               disabled={approvingDeposit === deposit.id}
               variant="default"
               size="sm"
-              className="bg-green-600 hover:bg-green-700 text-white text-xs"
+              className="bg-green-600 hover:bg-green-700 text-white text-xs min-h-[44px]"
             >
               {approvingDeposit === deposit.id ? 'Approving...' : 'Approve'}
             </Button>
@@ -275,10 +287,81 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
     );
   }, [handleApproveManualDeposit, approvingDeposit, formatPaymentMethod, getPaymentMethodColors]);
 
+  const renderMobileCard = useCallback((deposit, index) => {
+    const depositMethod = deposit.deposit_method || deposit.payment_method;
+    const isManual = depositMethod === 'manual' || depositMethod === 'momo';
+    const isPaystack = depositMethod === 'paystack';
+    const isHubtel = depositMethod === 'hubtel';
+    const isKorapay = depositMethod === 'korapay';
+
+    return (
+      <div className="bg-white p-4 space-y-3">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <p className="font-semibold text-gray-900 text-base">{deposit.profiles?.name || 'Unknown'}</p>
+            <p className="text-sm text-gray-600 mt-1 break-all">{deposit.profiles?.email || deposit.user_id?.slice(0, 8)}</p>
+            {deposit.profiles?.phone_number && (
+              <p className="text-sm text-gray-500 mt-1">📱 {deposit.profiles.phone_number}</p>
+            )}
+          </div>
+          <div className="text-right">
+            <p className="font-semibold text-gray-900 text-lg">₵{deposit.amount?.toFixed(2) || '0.00'}</p>
+            <span className={`inline-block mt-1 px-2.5 py-1 rounded-full text-xs font-medium ${
+              deposit.status === 'approved' ? 'bg-green-100 text-green-700' :
+              deposit.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+              'bg-red-100 text-red-700'
+            }`}>
+              {deposit.status}
+            </span>
+          </div>
+        </div>
+        <div className="pt-2 border-t border-gray-200 space-y-2">
+          <div>
+            <p className="text-xs text-gray-500">Payment Method</p>
+            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border mt-1 ${getPaymentMethodColors(depositMethod)}`}>
+              {formatPaymentMethod(depositMethod)}
+            </span>
+            {deposit.paystack_reference && (
+              <p className="text-xs text-gray-500 mt-1">Ref: {deposit.paystack_reference}</p>
+            )}
+            {deposit.korapay_reference && (
+              <p className="text-xs text-gray-500 mt-1">Ref: {deposit.korapay_reference}</p>
+            )}
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">Date</p>
+            <p className="text-sm text-gray-700">{new Date(deposit.created_at).toLocaleDateString()} {new Date(deposit.created_at).toLocaleTimeString()}</p>
+          </div>
+        </div>
+        {deposit.status === 'pending' && isManual && (
+          <div className="pt-3 border-t border-gray-200">
+            <Button
+              onClick={() => handleApproveManualDeposit(deposit)}
+              disabled={approvingDeposit === deposit.id}
+              variant="default"
+              size="sm"
+              className="w-full bg-green-600 hover:bg-green-700 text-white min-h-[44px]"
+            >
+              {approvingDeposit === deposit.id ? 'Approving...' : 'Approve Deposit'}
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  }, [handleApproveManualDeposit, approvingDeposit, formatPaymentMethod, getPaymentMethodColors]);
+
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-indigo-600"></div>
+      <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
+        <div className="space-y-4">
+          <div className="h-8 bg-gray-200 rounded animate-pulse w-1/3"></div>
+          <div className="h-12 bg-gray-200 rounded animate-pulse"></div>
+          <div className="space-y-2">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-24 bg-gray-200 rounded animate-pulse"></div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -286,7 +369,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
   const useVirtualScroll = filteredDeposits.length > VIRTUAL_SCROLL_THRESHOLD;
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
+    <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm w-full max-w-full overflow-hidden">
       <div className="flex flex-col gap-4 mb-6">
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
           <div className="flex items-center gap-4">
@@ -299,46 +382,48 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
               disabled={refreshing}
               variant="outline"
               size="sm"
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 min-h-[44px]"
             >
               <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
           </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full sm:w-48 h-11">
-              <Filter className="w-4 h-4 mr-2" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="approved">Approved</SelectItem>
-              <SelectItem value="rejected">Rejected</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="flex flex-col gap-3">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <Input
               placeholder="Search by username, email, phone, or transaction ID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
+              className="pl-11 h-12 text-base"
             />
           </div>
-          <div>
-            <Input
-              type="date"
-              placeholder="Filter by date"
-              value={dateFilter}
-              onChange={(e) => {
-                setDateFilter(e.target.value);
-                setPage(1);
-              }}
-              className="w-full"
-            />
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex-1">
+              <Input
+                type="date"
+                placeholder="Filter by date"
+                value={dateFilter}
+                onChange={(e) => {
+                  setDateFilter(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full h-12 text-base"
+              />
+            </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-full sm:w-48 min-h-[44px]">
+                <Filter className="w-4 h-4 mr-2" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="approved">Approved</SelectItem>
+                <SelectItem value="rejected">Rejected</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </div>
@@ -347,48 +432,16 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
         <p className="text-gray-600 text-center py-8">No deposits found</p>
       ) : (
         <>
-          <div className="overflow-hidden rounded-xl border border-gray-200">
-            {useVirtualScroll ? (
-              <div className="min-w-[1200px]">
-                <div className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
-                  <div className="grid grid-cols-12 gap-4 p-4 font-semibold text-sm">
-                    <div className="col-span-2">User</div>
-                    <div className="col-span-1.5">Amount</div>
-                    <div className="col-span-1.5">Status</div>
-                    <div className="col-span-2">Payment Method</div>
-                    <div className="col-span-2">Date</div>
-                    <div className="col-span-3">Actions</div>
-                  </div>
-                </div>
-                <VirtualizedList
-                  items={paginatedDeposits}
-                  renderItem={renderDepositRow}
-                  itemHeight={100}
-                  height={600}
-                />
-              </div>
-            ) : (
-              <div className="max-h-[600px] overflow-y-auto overflow-x-auto">
-                <div className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10 min-w-[1200px]">
-                  <div className="grid grid-cols-12 gap-4 p-4 font-semibold text-sm">
-                    <div className="col-span-2">User</div>
-                    <div className="col-span-1.5">Amount</div>
-                    <div className="col-span-1.5">Status</div>
-                    <div className="col-span-2">Payment Method</div>
-                    <div className="col-span-2">Date</div>
-                    <div className="col-span-3">Actions</div>
-                  </div>
-                </div>
-                <div className="divide-y divide-gray-200/50 min-w-[1200px]">
-                  {paginatedDeposits.map((deposit) => (
-                    <div key={deposit.id}>
-                      {renderDepositRow(deposit)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          <ResponsiveTable
+            items={paginatedDeposits}
+            renderTableHeader={renderTableHeader}
+            renderTableRow={renderTableRow}
+            renderCard={renderMobileCard}
+            useVirtualScroll={useVirtualScroll}
+            emptyMessage="No deposits found"
+            minTableWidth="1200px"
+            itemHeight={100}
+          />
 
           <div className="flex items-center justify-between mt-4">
             <div className="text-sm text-gray-600">

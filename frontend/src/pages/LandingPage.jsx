@@ -11,6 +11,8 @@ import Testimonials from '@/components/landing/Testimonials';
 import HowItWorks from '@/components/landing/HowItWorks';
 import PricingPreview from '@/components/landing/PricingPreview';
 import FAQ from '@/components/landing/FAQ';
+import { generateOrganizationSchema, generateWebSiteSchema, generateFAQSchema } from '@/utils/schema';
+import { primaryKeywords, longTailKeywords, questionKeywords, locationKeywords } from '@/data/keywords';
 
 // Animated Number Component
 const AnimatedNumber = ({ value, duration = 2000, formatter = (v) => v.toLocaleString() }) => {
@@ -279,64 +281,100 @@ const LandingPage = () => {
     totalComments: 0
   }, [statsData]);
 
-  const structuredData = {
-    '@context': 'https://schema.org',
-    '@graph': [
-      {
-        '@type': 'Organization',
-        '@id': 'https://boostupgh.com/#organization',
-        name: 'BoostUp GH',
-        url: 'https://boostupgh.com',
-        logo: 'https://boostupgh.com/favicon.svg',
-        description: 'The most reliable SMM panel for boosting your followers, likes, views, and engagement across all major social media platforms',
-        sameAs: [],
-        contactPoint: {
-          '@type': 'ContactPoint',
-          contactType: 'Customer Service',
-          availableLanguage: 'English'
-        }
+  // FAQ data for schema
+  const faqData = [
+    {
+      question: 'Is this service safe for my account?',
+      answer: 'Yes, absolutely! We use only safe, organic methods that comply with platform guidelines. Your account security is our top priority, and we\'ve never had any issues with account bans or restrictions.'
+    },
+    {
+      question: 'How fast is the delivery?',
+      answer: 'Most orders start within minutes of payment confirmation. The speed depends on the service type and quantity ordered. Smaller orders (under 1,000) typically complete within 24-48 hours, while larger orders may take a few days to ensure quality delivery.'
+    },
+    {
+      question: 'What payment methods do you accept?',
+      answer: 'We accept multiple secure payment methods including Paystack (credit/debit cards), Korapay, Hubtel, and manual bank deposits. All payments are processed securely and your account balance is updated instantly upon verification.'
+    },
+    {
+      question: 'Are the followers/likes/views real?',
+      answer: 'We provide high-quality engagement from real, active accounts. While we can\'t guarantee 100% retention (as some accounts may become inactive over time), we use premium services that deliver authentic engagement from genuine users.'
+    },
+    {
+      question: 'Can I get a refund if I\'m not satisfied?',
+      answer: 'Yes! We offer a money-back guarantee. If you\'re not satisfied with our service, contact our support team within 7 days of your order, and we\'ll work with you to resolve the issue or provide a full refund.'
+    },
+    {
+      question: 'Do you offer support if I have questions?',
+      answer: 'Absolutely! We have a dedicated 24/7 support team ready to help you with any questions or concerns. You can reach us through the support section in your dashboard, and we typically respond within a few hours.'
+    },
+    {
+      question: 'Can I order services for multiple platforms?',
+      answer: 'Yes! You can order services for Instagram, TikTok, YouTube, Facebook, Twitter, and more. Simply add multiple services to your cart and checkout once. All orders are processed independently and efficiently.'
+    }
+  ];
+
+  // Generate comprehensive keywords
+  const allKeywords = [
+    ...primaryKeywords.smmPanel,
+    ...primaryKeywords.instagram,
+    ...primaryKeywords.tiktok,
+    ...primaryKeywords.youtube,
+    ...primaryKeywords.facebook,
+    ...primaryKeywords.twitter,
+    ...longTailKeywords.instagram.slice(0, 5),
+    ...longTailKeywords.tiktok.slice(0, 5),
+    ...longTailKeywords.youtube.slice(0, 5),
+    ...questionKeywords.slice(0, 5),
+    ...locationKeywords,
+    'social media growth',
+    'SMM services',
+    'boost followers',
+    'increase engagement',
+    'instant delivery',
+    'secure payment',
+    'best prices'
+  ];
+
+  // Generate structured data
+  const organizationSchema = generateOrganizationSchema();
+  const websiteSchema = generateWebSiteSchema();
+  const faqSchema = generateFAQSchema(faqData);
+
+  const structuredDataArray = [
+    organizationSchema,
+    websiteSchema,
+    {
+      '@context': 'https://schema.org',
+      '@type': 'Service',
+      '@id': 'https://boostupgh.com/#service',
+      name: 'Social Media Marketing Services',
+      description: 'Professional SMM panel services for Instagram, TikTok, YouTube, Facebook, and Twitter. Get followers, likes, views, and engagement instantly.',
+      provider: {
+        '@id': 'https://boostupgh.com/#organization'
       },
-      {
-        '@type': 'WebSite',
-        '@id': 'https://boostupgh.com/#website',
-        url: 'https://boostupgh.com',
-        name: 'BoostUp GH',
-        description: 'Grow your social media presence instantly with our reliable SMM panel',
-        publisher: {
-          '@id': 'https://boostupgh.com/#organization'
-        },
-        potentialAction: {
-          '@type': 'SearchAction',
-          target: {
-            '@type': 'EntryPoint',
-            urlTemplate: 'https://boostupgh.com/services?search={search_term_string}'
-          },
-          'query-input': 'required name=search_term_string'
-        }
+      areaServed: {
+        '@type': 'Country',
+        name: 'Ghana'
       },
-      {
-        '@type': 'Service',
-        '@id': 'https://boostupgh.com/#service',
-        name: 'Social Media Marketing Services',
-        description: 'Professional SMM panel services for Instagram, TikTok, YouTube, Facebook, and Twitter. Get followers, likes, views, and engagement instantly.',
-        provider: {
-          '@id': 'https://boostupgh.com/#organization'
-        },
-        areaServed: 'Worldwide',
-        serviceType: 'Social Media Marketing'
+      serviceType: 'Social Media Marketing',
+      offers: {
+        '@type': 'AggregateOffer',
+        priceCurrency: 'GHS',
+        availability: 'https://schema.org/InStock'
       }
-    ]
-  };
+    },
+    faqSchema
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50">
       <ScrollProgress />
       <SEO
         title="Boost Your Social Media Presence - SMM Panel | BoostUp GH"
-        description="Grow your social media presence instantly with BoostUp GH. The most reliable SMM panel for Instagram followers, TikTok views, YouTube subscribers, Facebook likes, and Twitter followers. Instant delivery, secure & safe."
-        keywords="SMM panel, social media marketing, Instagram followers, TikTok views, YouTube subscribers, Facebook likes, Twitter followers, social media growth, SMM services, boost followers, increase engagement"
+        description="Grow your social media presence instantly with BoostUp GH. The most reliable SMM panel for Instagram followers, TikTok views, YouTube subscribers, Facebook likes, and Twitter followers. Buy Instagram followers Ghana, TikTok views, YouTube subscribers. Instant delivery, secure payment, best prices, 24/7 support."
+        keywords={allKeywords}
         canonical="/"
-        structuredData={structuredData}
+        structuredDataArray={structuredDataArray}
       />
       {/* Navigation */}
       <nav className="bg-white border-b border-gray-200 fixed top-0 left-0 right-0 z-50 shadow-sm">

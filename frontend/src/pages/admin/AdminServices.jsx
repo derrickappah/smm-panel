@@ -152,8 +152,55 @@ const AdminServices = memo(() => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-indigo-600"></div>
+      <div className="space-y-6">
+        {/* Add Service Form Skeleton */}
+        <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-8 shadow-sm">
+          <div className="h-8 w-48 bg-gray-200 rounded animate-pulse mb-6"></div>
+          <div className="space-y-5">
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="h-10 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-10 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+            <div className="h-10 bg-gray-200 rounded animate-pulse"></div>
+            <div className="grid md:grid-cols-3 gap-4">
+              <div className="h-10 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-10 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-10 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+            <div className="h-10 bg-gray-200 rounded animate-pulse"></div>
+            <div className="h-10 bg-gray-200 rounded animate-pulse"></div>
+            <div className="h-12 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+        </div>
+
+        {/* Services List Skeleton */}
+        <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
+          <div className="flex flex-col sm:flex-row gap-4 mb-6">
+            <div className="flex items-center gap-4">
+              <div className="h-8 w-32 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-9 w-24 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+            <div className="flex-1 h-10 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+          <div className="space-y-4">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="p-4 rounded-xl bg-white/50 border-2 border-gray-200">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div className="flex-1 space-y-2">
+                    <div className="h-6 w-64 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="h-4 w-48 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="h-4 w-56 bg-gray-200 rounded animate-pulse"></div>
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="h-9 w-9 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="h-9 w-9 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="h-9 w-9 bg-gray-200 rounded animate-pulse"></div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }

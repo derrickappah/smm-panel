@@ -85,8 +85,42 @@ const AdminTickets = memo(() => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-indigo-600"></div>
+      <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
+        <div className="flex flex-col gap-4 mb-6">
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="h-8 w-40 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-9 w-24 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+            <div className="h-11 w-48 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="h-10 bg-gray-200 rounded animate-pulse"></div>
+            <div className="h-10 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+        </div>
+        <div className="overflow-hidden rounded-xl border border-white/20">
+          <div className="max-h-[600px] overflow-y-auto overflow-x-auto">
+            <div className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10 min-w-[1400px]">
+              <div className="grid grid-cols-12 gap-4 p-4">
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                  <div key={i} className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                ))}
+              </div>
+            </div>
+            <div className="divide-y divide-gray-200/50 min-w-[1400px]">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="bg-white/50 p-4">
+                  <div className="grid grid-cols-12 gap-4">
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((j) => (
+                      <div key={j} className="h-6 bg-gray-200 rounded animate-pulse"></div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     );
   }

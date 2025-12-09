@@ -2,6 +2,7 @@ import React, { memo, useState, useMemo, useCallback, useEffect } from 'react';
 import { useAdminOrders, useUpdateOrder } from '@/hooks/useAdminOrders';
 import { useDebounce } from '@/hooks/useDebounce';
 import VirtualizedList from '@/components/VirtualizedList';
+import ResponsiveTable from '@/components/admin/ResponsiveTable';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -141,7 +142,22 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
     }
   }, [onRefresh]);
 
-  const renderOrderRow = useCallback((order) => {
+  const renderTableHeader = useCallback(() => (
+    <div className="grid grid-cols-12 gap-4 p-4 font-semibold text-sm min-w-[1500px]">
+      <div className="col-span-1.5 min-w-[120px]">Status</div>
+      <div className="col-span-1 min-w-[100px]">Order ID</div>
+      <div className="col-span-1 min-w-[100px]">SMMGen ID</div>
+      <div className="col-span-1 min-w-[80px]">Quantity</div>
+      <div className="col-span-1.5 min-w-[130px]">Time</div>
+      <div className="col-span-2 min-w-[180px]">User</div>
+      <div className="col-span-1.5 min-w-[150px]">Service</div>
+      <div className="col-span-1 min-w-[80px]">Cost</div>
+      <div className="col-span-2 min-w-[200px]">Link</div>
+      <div className="col-span-1 min-w-[120px]">Actions</div>
+    </div>
+  ), []);
+
+  const renderTableRow = useCallback((order, index) => {
     return (
       <div className="grid grid-cols-12 gap-4 p-4 items-center bg-white hover:bg-gray-50 transition-colors border-b border-gray-200">
         <div className="col-span-1.5 flex flex-col gap-1">
@@ -205,7 +221,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               value={order.status || 'pending'} 
               onValueChange={(value) => handleOrderStatusUpdate(order.id, value)}
             >
-              <SelectTrigger className="w-full text-xs">
+              <SelectTrigger className="w-full text-xs min-h-[44px]">
                 <SelectValue placeholder="Select status" />
               </SelectTrigger>
               <SelectContent>
@@ -224,11 +240,11 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                 onClick={() => handleRefundOrder(order)}
                 variant="outline"
                 size="sm"
-                className={
+                className={`min-h-[44px] ${
                   order.refund_status === 'failed' 
                     ? "text-orange-600 hover:text-orange-700 border-orange-300 text-xs"
                     : "text-red-600 hover:text-red-700 text-xs"
-                }
+                }`}
               >
                 {order.refund_status === 'failed' ? 'Manual Refund' : 'Refund'}
               </Button>
@@ -239,10 +255,111 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
     );
   }, [handleOrderStatusUpdate, handleRefundOrder]);
 
+  const renderMobileCard = useCallback((order, index) => {
+    return (
+      <div className="bg-white p-4 space-y-3">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <span className={`px-3 py-1.5 rounded-full text-xs font-medium ${
+                order.status === 'completed' ? 'bg-green-100 text-green-700' :
+                order.status === 'processing' || order.status === 'in progress' ? 'bg-blue-100 text-blue-700' :
+                order.status === 'partial' ? 'bg-orange-100 text-orange-700' :
+                order.status === 'canceled' || order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                order.status === 'refunds' ? 'bg-purple-100 text-purple-700' :
+                order.status === 'refunded' ? 'bg-gray-100 text-gray-700' :
+                'bg-yellow-100 text-yellow-700'
+              }`}>
+                {order.status === 'refunded' ? 'already refunded' : (order.status || 'pending')}
+              </span>
+              {order.refund_status && (
+                <span className="text-xs text-gray-500">Refund: {order.refund_status}</span>
+              )}
+            </div>
+            <p className="font-semibold text-gray-900 text-base">Order: {order.id?.slice(0, 12)}...</p>
+            {order.smmgen_order_id && (
+              <p className="text-sm text-gray-600 mt-1">SMMGen: {order.smmgen_order_id}</p>
+            )}
+          </div>
+          <div className="text-right">
+            <p className="font-semibold text-gray-900 text-lg">₵{order.total_cost?.toFixed(2) || '0.00'}</p>
+            <p className="text-xs text-gray-500">{order.quantity} units</p>
+          </div>
+        </div>
+        <div className="pt-2 border-t border-gray-200 space-y-2">
+          <div>
+            <p className="text-xs text-gray-500">User</p>
+            <p className="font-medium text-gray-900 text-sm">{order.profiles?.name || 'Unknown'}</p>
+            <p className="text-xs text-gray-600">{order.profiles?.email || order.user_id?.slice(0, 8)}</p>
+            {order.profiles?.phone_number && (
+              <p className="text-xs text-gray-500">📱 {order.profiles.phone_number}</p>
+            )}
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">Service</p>
+            <p className="text-sm font-medium text-gray-900">{order.services?.name || 'N/A'}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">Link</p>
+            <a href={order.link} target="_blank" rel="noopener noreferrer" className="text-xs text-indigo-600 hover:underline break-all">
+              {order.link}
+            </a>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">Created</p>
+            <p className="text-sm text-gray-700">{new Date(order.created_at).toLocaleDateString()} {new Date(order.created_at).toLocaleTimeString()}</p>
+          </div>
+        </div>
+        <div className="pt-3 border-t border-gray-200 space-y-2">
+          <Select 
+            value={order.status || 'pending'} 
+            onValueChange={(value) => handleOrderStatusUpdate(order.id, value)}
+          >
+            <SelectTrigger className="w-full min-h-[44px]">
+              <SelectValue placeholder="Select status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="in progress">In Progress</SelectItem>
+              <SelectItem value="processing">Processing</SelectItem>
+              <SelectItem value="partial">Partial</SelectItem>
+              <SelectItem value="completed">Completed</SelectItem>
+              <SelectItem value="canceled">Canceled</SelectItem>
+              <SelectItem value="refunds">Refunds</SelectItem>
+              <SelectItem value="refunded">Already Refunded</SelectItem>
+            </SelectContent>
+          </Select>
+          {(order.status === 'canceled' || order.status === 'cancelled') && (
+            <Button
+              onClick={() => handleRefundOrder(order)}
+              variant="outline"
+              size="sm"
+              className={`w-full min-h-[44px] ${
+                order.refund_status === 'failed' 
+                  ? "text-orange-600 hover:text-orange-700 border-orange-300"
+                  : "text-red-600 hover:text-red-700"
+              }`}
+            >
+              {order.refund_status === 'failed' ? 'Manual Refund' : 'Refund'}
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  }, [handleOrderStatusUpdate, handleRefundOrder]);
+
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-indigo-600"></div>
+      <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
+        <div className="space-y-4">
+          <div className="h-8 bg-gray-200 rounded animate-pulse w-1/3"></div>
+          <div className="h-12 bg-gray-200 rounded animate-pulse"></div>
+          <div className="space-y-2">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-24 bg-gray-200 rounded animate-pulse"></div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -250,7 +367,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
   const useVirtualScroll = filteredOrders.length > VIRTUAL_SCROLL_THRESHOLD;
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
+    <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm w-full max-w-full overflow-hidden">
       <div className="flex flex-col gap-4 mb-6">
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
           <div className="flex items-center gap-4">
@@ -263,51 +380,53 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               disabled={refreshing}
               variant="outline"
               size="sm"
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 min-h-[44px]"
             >
               <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
           </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full sm:w-40 h-11">
-              <Filter className="w-4 h-4 mr-2" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="in progress">In Progress</SelectItem>
-              <SelectItem value="processing">Processing</SelectItem>
-              <SelectItem value="partial">Partial</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="canceled">Canceled</SelectItem>
-              <SelectItem value="refunds">Refunds</SelectItem>
-              <SelectItem value="refunded">Already Refunded</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="flex flex-col gap-3">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <Input
               placeholder="Search by order ID, username, email, phone, or service..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
+              className="pl-11 h-12 text-base"
             />
           </div>
-          <div>
-            <Input
-              type="date"
-              placeholder="Filter by date"
-              value={dateFilter}
-              onChange={(e) => {
-                setDateFilter(e.target.value);
-                setPage(1);
-              }}
-              className="w-full"
-            />
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex-1">
+              <Input
+                type="date"
+                placeholder="Filter by date"
+                value={dateFilter}
+                onChange={(e) => {
+                  setDateFilter(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full h-12 text-base"
+              />
+            </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-full sm:w-48 min-h-[44px]">
+                <Filter className="w-4 h-4 mr-2" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="in progress">In Progress</SelectItem>
+                <SelectItem value="processing">Processing</SelectItem>
+                <SelectItem value="partial">Partial</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="canceled">Canceled</SelectItem>
+                <SelectItem value="refunds">Refunds</SelectItem>
+                <SelectItem value="refunded">Already Refunded</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </div>
@@ -316,56 +435,16 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
         <p className="text-gray-600 text-center py-8">No orders found</p>
       ) : (
         <>
-          <div className="overflow-hidden rounded-xl border border-gray-200">
-            {useVirtualScroll ? (
-              <div className="min-w-[1500px]">
-                <div className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
-                  <div className="grid grid-cols-12 gap-4 p-4 font-semibold text-sm">
-                    <div className="col-span-1.5">Status</div>
-                    <div className="col-span-1">Order ID</div>
-                    <div className="col-span-1">SMMGen ID</div>
-                    <div className="col-span-1">Quantity</div>
-                    <div className="col-span-1.5">Time</div>
-                    <div className="col-span-2">User</div>
-                    <div className="col-span-1.5">Service</div>
-                    <div className="col-span-1">Cost</div>
-                    <div className="col-span-2">Link</div>
-                    <div className="col-span-1">Actions</div>
-                  </div>
-                </div>
-                <VirtualizedList
-                  items={paginatedOrders}
-                  renderItem={renderOrderRow}
-                  itemHeight={100}
-                  height={600}
-                />
-              </div>
-            ) : (
-              <div className="max-h-[600px] overflow-y-auto overflow-x-auto">
-                <div className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10 min-w-[1500px]">
-                  <div className="grid grid-cols-12 gap-4 p-4 font-semibold text-sm">
-                    <div className="col-span-1.5">Status</div>
-                    <div className="col-span-1">Order ID</div>
-                    <div className="col-span-1">SMMGen ID</div>
-                    <div className="col-span-1">Quantity</div>
-                    <div className="col-span-1.5">Time</div>
-                    <div className="col-span-2">User</div>
-                    <div className="col-span-1.5">Service</div>
-                    <div className="col-span-1">Cost</div>
-                    <div className="col-span-2">Link</div>
-                    <div className="col-span-1">Actions</div>
-                  </div>
-                </div>
-                <div className="divide-y divide-gray-200/50 min-w-[1500px]">
-                  {paginatedOrders.map((order) => (
-                    <div key={order.id}>
-                      {renderOrderRow(order)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          <ResponsiveTable
+            items={paginatedOrders}
+            renderTableHeader={renderTableHeader}
+            renderTableRow={renderTableRow}
+            renderCard={renderMobileCard}
+            useVirtualScroll={useVirtualScroll}
+            emptyMessage="No orders found"
+            minTableWidth="1500px"
+            itemHeight={100}
+          />
 
           <div className="flex items-center justify-between mt-4">
             <div className="text-sm text-gray-600">

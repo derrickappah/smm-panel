@@ -21,11 +21,33 @@ const AdminDashboard = lazy(() => import("@/pages/AdminDashboard"));
 const SupportPage = lazy(() => import("@/pages/SupportPage"));
 const TransactionsPage = lazy(() => import("@/pages/TransactionsPage"));
 const PaymentCallback = lazy(() => import("@/pages/PaymentCallback"));
+const ServiceLandingPage = lazy(() => import("@/pages/ServiceLandingPage"));
+const PlatformLandingPage = lazy(() => import("@/pages/PlatformLandingPage"));
+const BlogListPage = lazy(() => import("@/pages/blog/BlogListPage"));
+const BlogPostPage = lazy(() => import("@/pages/blog/BlogPostPage"));
+const GuidePage = lazy(() => import("@/pages/guides/GuidePage"));
+const AboutPage = lazy(() => import("@/pages/AboutPage"));
+const PricingPage = lazy(() => import("@/pages/PricingPage"));
 
-// Loading fallback component
+// Loading fallback component - Skeleton loader
 const PageLoader = () => (
-  <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50">
-    <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-indigo-600"></div>
+  <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      <div className="space-y-6">
+        <div className="h-8 bg-gray-200 rounded animate-pulse w-1/3"></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="h-32 bg-gray-200 rounded-lg animate-pulse"></div>
+          ))}
+        </div>
+        <div className="h-12 bg-gray-200 rounded animate-pulse"></div>
+        <div className="space-y-3">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="h-20 bg-gray-200 rounded animate-pulse"></div>
+          ))}
+        </div>
+      </div>
+    </div>
   </div>
 );
 
@@ -240,8 +262,58 @@ function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50">
-        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-indigo-600"></div>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50">
+        {/* Mobile Header Skeleton */}
+        <div className="sticky top-0 z-40 lg:hidden bg-white border-b border-gray-200 shadow-sm">
+          <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-3">
+              <div className="h-11 w-11 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-6 w-32 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+            <div className="h-11 w-11 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+        </div>
+
+        <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+          <div className="flex flex-col lg:flex-row gap-6">
+            {/* Desktop Sidebar Skeleton */}
+            <div className="hidden lg:flex lg:flex-col lg:w-64 lg:flex-shrink-0">
+              <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-4">
+                <div className="h-6 w-32 bg-gray-200 rounded animate-pulse mb-4"></div>
+                <div className="space-y-2">
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => (
+                    <div key={i} className="h-10 bg-gray-200 rounded animate-pulse"></div>
+                  ))}
+                </div>
+                <div className="mt-auto pt-4 border-t border-gray-200 space-y-2">
+                  <div className="h-4 w-24 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="h-9 w-full bg-gray-200 rounded animate-pulse"></div>
+                </div>
+              </div>
+            </div>
+
+            {/* Content Area Skeleton */}
+            <div className="flex-1 min-w-0">
+              <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
+                <div className="space-y-4">
+                  <div className="h-8 bg-gray-200 rounded animate-pulse w-1/3"></div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                    {[1, 2, 3, 4, 5, 6].map((i) => (
+                      <div key={i} className="h-24 bg-gray-200 rounded animate-pulse"></div>
+                    ))}
+                  </div>
+                  <div className="h-12 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="space-y-2">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <div key={i} className="h-20 bg-gray-200 rounded animate-pulse"></div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -284,6 +356,30 @@ function App() {
                 element={user ? <ServicesPage user={user} onLogout={logout} /> : <Navigate to="/auth" />}
               />
               <Route
+                path="/services/:platform/:serviceType"
+                element={<ServiceLandingPage user={user} onLogout={logout} />}
+              />
+              <Route
+                path="/instagram-services"
+                element={<PlatformLandingPage user={user} onLogout={logout} />}
+              />
+              <Route
+                path="/tiktok-services"
+                element={<PlatformLandingPage user={user} onLogout={logout} />}
+              />
+              <Route
+                path="/youtube-services"
+                element={<PlatformLandingPage user={user} onLogout={logout} />}
+              />
+              <Route
+                path="/facebook-services"
+                element={<PlatformLandingPage user={user} onLogout={logout} />}
+              />
+              <Route
+                path="/twitter-services"
+                element={<PlatformLandingPage user={user} onLogout={logout} />}
+              />
+              <Route
                 path="/orders"
                 element={user ? <OrderHistory user={user} onLogout={logout} /> : <Navigate to="/auth" />}
               />
@@ -299,13 +395,7 @@ function App() {
               />
               <Route
                 path="/support"
-                element={
-                  user ? (
-                    <SupportPage user={user} onLogout={logout} />
-                  ) : (
-                    <Navigate to="/auth" />
-                  )
-                }
+                element={<SupportPage user={user} onLogout={logout} />}
               />
               <Route
                 path="/transactions"
@@ -322,6 +412,26 @@ function App() {
                 element={
                   <PaymentCallback onUpdateUser={() => user && loadUserProfile(user.id)} />
                 }
+              />
+              <Route
+                path="/blog"
+                element={<BlogListPage user={user} onLogout={logout} />}
+              />
+              <Route
+                path="/blog/:slug"
+                element={<BlogPostPage user={user} onLogout={logout} />}
+              />
+              <Route
+                path="/guides/:slug"
+                element={<GuidePage user={user} onLogout={logout} />}
+              />
+              <Route
+                path="/about"
+                element={<AboutPage user={user} onLogout={logout} />}
+              />
+              <Route
+                path="/pricing"
+                element={<PricingPage user={user} onLogout={logout} />}
               />
               </Routes>
             </Suspense>

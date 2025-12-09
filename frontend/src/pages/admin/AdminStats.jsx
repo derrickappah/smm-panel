@@ -76,34 +76,34 @@ const AdminStats = memo(({
       `}</style>
 
       {/* Enhanced Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2 sm:gap-3 md:gap-4">
         {/* Users Today */}
         <div 
-          className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer animate-pulse-on-update" 
+          className="bg-white border border-gray-200 rounded-lg p-2 sm:p-3 md:p-4 shadow-sm hover:shadow-md active:scale-95 transition-all duration-200 cursor-pointer touch-manipulation min-h-[80px] sm:min-h-[100px]" 
           onClick={() => handleSectionClick('users')}
         >
-          <div className="flex items-center justify-between mb-2">
-            <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
-              <Users className="w-4 h-4 text-indigo-600" />
+          <div className="flex items-center justify-between mb-1 sm:mb-2">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
+              <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-600" />
             </div>
-            <span className="text-base sm:text-lg font-bold text-gray-900">
+            <span className="text-sm sm:text-base md:text-lg font-bold text-gray-900">
               <AnimatedNumber value={statsWithPaymentMethods.users_today || 0} previousValue={previousStats?.users_today} />
             </span>
           </div>
-          <p className="text-xs sm:text-[10px] font-medium text-gray-600">Users Today</p>
-          <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{statsWithPaymentMethods.total_users || 0} Total</p>
+          <p className="text-[10px] sm:text-xs font-medium text-gray-600">Users Today</p>
+          <p className="text-[9px] sm:text-[10px] text-gray-500 mt-0.5">{statsWithPaymentMethods.total_users || 0} Total</p>
         </div>
 
         {/* Deposits Today */}
         <div 
-          className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer animate-pulse-on-update" 
+          className="bg-white border border-gray-200 rounded-lg p-2 sm:p-3 md:p-4 shadow-sm hover:shadow-md active:scale-95 transition-all duration-200 cursor-pointer touch-manipulation min-h-[80px] sm:min-h-[100px]" 
           onClick={() => handleSectionClick('deposits')}
         >
-          <div className="flex items-center justify-between mb-2">
-            <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
-              <DollarSign className="w-4 h-4 text-emerald-600" />
+          <div className="flex items-center justify-between mb-1 sm:mb-2">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
+              <DollarSign className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600" />
             </div>
-            <span className="text-base sm:text-lg font-bold text-gray-900">
+            <span className="text-sm sm:text-base md:text-lg font-bold text-gray-900">
               ₵<AnimatedNumber 
                 value={statsWithPaymentMethods.deposits_amount_today || 0} 
                 previousValue={previousStats?.deposits_amount_today} 
@@ -111,19 +111,19 @@ const AdminStats = memo(({
               />
             </span>
           </div>
-          <p className="text-xs sm:text-[10px] font-medium text-gray-600">Deposits Today</p>
+          <p className="text-[10px] sm:text-xs font-medium text-gray-600">Deposits Today</p>
         </div>
 
         {/* Total Deposits */}
         <div 
-          className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" 
+          className="bg-white border border-gray-200 rounded-lg p-2 sm:p-3 md:p-4 shadow-sm hover:shadow-md active:scale-95 transition-all duration-200 cursor-pointer touch-manipulation min-h-[80px] sm:min-h-[100px]" 
           onClick={() => handleSectionClick('deposits')}
         >
-          <div className="flex items-center justify-between mb-2">
-            <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
-              <Receipt className="w-4 h-4 text-emerald-600" />
+          <div className="flex items-center justify-between mb-1 sm:mb-2">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
+              <Receipt className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600" />
             </div>
-            <span className="text-base sm:text-lg font-bold text-gray-900">
+            <span className="text-sm sm:text-base md:text-lg font-bold text-gray-900">
               ₵<AnimatedNumber 
                 value={statsWithPaymentMethods.total_deposits_amount || 0} 
                 previousValue={previousStats?.total_deposits_amount} 
@@ -131,20 +131,20 @@ const AdminStats = memo(({
               />
             </span>
           </div>
-          <p className="text-xs sm:text-[10px] font-medium text-gray-600">Total Deposits</p>
-          <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{statsWithPaymentMethods.confirmed_deposits || 0} Confirmed</p>
+          <p className="text-[10px] sm:text-xs font-medium text-gray-600">Total Deposits</p>
+          <p className="text-[9px] sm:text-[10px] text-gray-500 mt-0.5">{statsWithPaymentMethods.confirmed_deposits || 0} Confirmed</p>
         </div>
 
         {/* Orders Today */}
         <div 
-          className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer animate-pulse-on-update" 
+          className="bg-white border border-gray-200 rounded-lg p-2 sm:p-3 md:p-4 shadow-sm hover:shadow-md active:scale-95 transition-all duration-200 cursor-pointer touch-manipulation min-h-[80px] sm:min-h-[100px]" 
           onClick={() => handleSectionClick('orders')}
         >
-          <div className="flex items-center justify-between mb-2">
-            <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-              <ShoppingCart className="w-4 h-4 text-blue-600" />
+          <div className="flex items-center justify-between mb-1 sm:mb-2">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+              <ShoppingCart className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600" />
             </div>
-            <span className="text-base sm:text-lg font-bold text-gray-900">
+            <span className="text-sm sm:text-base md:text-lg font-bold text-gray-900">
               <AnimatedNumber value={statsWithPaymentMethods.orders_today || 0} previousValue={previousStats?.orders_today} />
             </span>
           </div>

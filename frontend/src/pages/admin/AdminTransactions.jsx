@@ -2,6 +2,7 @@ import React, { memo, useState, useMemo, useCallback, useEffect } from 'react';
 import { useAdminTransactions } from '@/hooks/useAdminTransactions';
 import { useDebounce } from '@/hooks/useDebounce';
 import VirtualizedList from '@/components/VirtualizedList';
+import ResponsiveTable from '@/components/admin/ResponsiveTable';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -125,11 +126,24 @@ const AdminTransactions = memo(({ onRefresh, refreshing = false, getBalanceCheck
     }
   }, [onManualCredit, onRefresh]);
 
-  const renderTransactionRow = useCallback((transaction) => {
+  const renderTableHeader = useCallback(() => (
+    <div className="grid grid-cols-[1.5fr_1.5fr_1.5fr_1.5fr_2fr_2fr_1fr_1fr] gap-4 p-4 font-semibold text-sm min-w-[1200px]">
+      <div className="text-center min-w-[100px]">Type</div>
+      <div className="text-center min-w-[100px]">Status</div>
+      <div className="text-center min-w-[100px]">Amount</div>
+      <div className="text-center min-w-[120px]">Date</div>
+      <div className="text-center min-w-[150px]">User</div>
+      <div className="text-center min-w-[200px]">Transaction ID</div>
+      <div className="text-center min-w-[100px]">Balance</div>
+      <div className="text-center min-w-[120px]">Actions</div>
+    </div>
+  ), []);
+
+  const renderTableRow = useCallback((transaction, index) => {
     const balanceCheck = getBalanceCheckResult ? getBalanceCheckResult(transaction) : null;
 
     return (
-      <div className="grid grid-cols-[1.5fr_1.5fr_1.5fr_1.5fr_2fr_2fr_1fr_1fr] gap-4 p-4 items-center bg-white hover:bg-gray-50 transition-colors border-b border-gray-200">
+      <div className="grid grid-cols-[1.5fr_1.5fr_1.5fr_1.5fr_2fr_2fr_1fr_1fr] gap-4 p-4 items-center bg-white hover:bg-gray-50 transition-colors border-b border-gray-200 min-w-[1200px]">
         <div className="flex justify-center">
           <span className={`px-3 py-1.5 rounded-full text-xs font-medium ${
             transaction.type === 'deposit' 
@@ -216,7 +230,7 @@ const AdminTransactions = memo(({ onRefresh, refreshing = false, getBalanceCheck
               disabled={manuallyCrediting === transaction.id}
               variant="outline"
               size="sm"
-              className="text-xs whitespace-nowrap text-green-600 hover:text-green-700 border-green-300"
+              className="text-xs whitespace-nowrap text-green-600 hover:text-green-700 border-green-300 min-h-[44px]"
             >
               {manuallyCrediting === transaction.id ? 'Crediting...' : 'Credit'}
             </Button>
@@ -226,10 +240,128 @@ const AdminTransactions = memo(({ onRefresh, refreshing = false, getBalanceCheck
     );
   }, [getBalanceCheckResult, handleManualCredit, manuallyCrediting]);
 
+  const renderMobileCard = useCallback((transaction, index) => {
+    const balanceCheck = getBalanceCheckResult ? getBalanceCheckResult(transaction) : null;
+
+    return (
+      <div className="bg-white p-4 space-y-3">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <span className={`px-3 py-1.5 rounded-full text-xs font-medium ${
+                transaction.type === 'deposit' 
+                  ? 'bg-green-100 text-green-700' 
+                  : transaction.type === 'refund'
+                  ? 'bg-green-100 text-green-700'
+                  : transaction.type === 'order'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'bg-gray-100 text-gray-700'
+              }`}>
+                {transaction.type === 'deposit' ? 'Deposit' : 
+                 transaction.type === 'refund' ? 'Refund' :
+                 transaction.type === 'order' ? 'Order' : 
+                 transaction.type}
+              </span>
+              <span className={`px-3 py-1.5 rounded-full text-xs font-medium ${
+                transaction.status === 'approved' 
+                  ? 'bg-green-100 text-green-700'
+                  : transaction.status === 'pending'
+                  ? 'bg-yellow-100 text-yellow-700'
+                  : 'bg-red-100 text-red-700'
+              }`}>
+                {transaction.status}
+              </span>
+            </div>
+            <p className="font-medium text-gray-900 text-sm">{transaction.profiles?.name || 'Unknown'}</p>
+            <p className="text-xs text-gray-600 break-all">{transaction.profiles?.email || transaction.user_id?.slice(0, 8)}</p>
+          </div>
+          <div className="text-right">
+            <p className={`font-semibold text-lg ${
+              transaction.type === 'deposit' || transaction.type === 'refund' ? 'text-green-600' : 'text-red-600'
+            }`}>
+              {transaction.type === 'deposit' || transaction.type === 'refund' ? '+' : '-'}₵{transaction.amount?.toFixed(2) || '0.00'}
+            </p>
+          </div>
+        </div>
+        <div className="pt-2 border-t border-gray-200 space-y-2">
+          <div>
+            <p className="text-xs text-gray-500">Transaction ID</p>
+            <p className="text-xs text-gray-700 break-all">{transaction.id}</p>
+            {transaction.paystack_reference && (
+              <p className="text-xs text-gray-500 mt-1">Ref: {transaction.paystack_reference}</p>
+            )}
+            {transaction.order_id && (
+              <p className="text-xs text-gray-500 mt-1">Order: {transaction.order_id.slice(0, 12)}...</p>
+            )}
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">Date</p>
+            <p className="text-sm text-gray-700">{new Date(transaction.created_at).toLocaleDateString()} {new Date(transaction.created_at).toLocaleTimeString()}</p>
+          </div>
+          {transaction.type === 'deposit' && transaction.paystack_status && (
+            <div>
+              <p className="text-xs text-gray-500">Paystack Status</p>
+              <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                transaction.paystack_status === 'success' ? 'bg-green-100 text-green-700' :
+                transaction.paystack_status === 'failed' ? 'bg-red-100 text-red-700' :
+                transaction.paystack_status === 'abandoned' ? 'bg-orange-100 text-orange-700' :
+                'bg-gray-100 text-gray-700'
+              }`}>
+                {transaction.paystack_status}
+              </span>
+            </div>
+          )}
+          <div>
+            <p className="text-xs text-gray-500">Balance Status</p>
+            {balanceCheck === 'not_updated' ? (
+              <span className="inline-block mt-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                not-updated
+              </span>
+            ) : balanceCheck === 'updated' ? (
+              <span className="inline-flex items-center gap-1 mt-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                <CheckCircle className="w-3 h-3" />
+                Updated
+              </span>
+            ) : balanceCheck === 'checking' ? (
+              <span className="inline-block mt-1 px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">
+                Checking...
+              </span>
+            ) : (
+              <span className="inline-block mt-1 px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                Unknown
+              </span>
+            )}
+          </div>
+        </div>
+        {balanceCheck === 'not_updated' && (
+          <div className="pt-3 border-t border-gray-200">
+            <Button
+              onClick={() => handleManualCredit(transaction)}
+              disabled={manuallyCrediting === transaction.id}
+              variant="outline"
+              size="sm"
+              className="w-full text-green-600 hover:text-green-700 border-green-300 min-h-[44px]"
+            >
+              {manuallyCrediting === transaction.id ? 'Crediting...' : 'Credit Balance'}
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  }, [getBalanceCheckResult, handleManualCredit, manuallyCrediting]);
+
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-indigo-600"></div>
+      <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
+        <div className="space-y-4">
+          <div className="h-8 bg-gray-200 rounded animate-pulse w-1/3"></div>
+          <div className="h-12 bg-gray-200 rounded animate-pulse"></div>
+          <div className="space-y-2">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-24 bg-gray-200 rounded animate-pulse"></div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -237,7 +369,7 @@ const AdminTransactions = memo(({ onRefresh, refreshing = false, getBalanceCheck
   const useVirtualScroll = filteredTransactions.length > VIRTUAL_SCROLL_THRESHOLD;
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
+    <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm w-full max-w-full overflow-hidden">
       <div className="flex flex-col gap-4 mb-6">
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
           <div className="flex items-center gap-4">
@@ -250,15 +382,38 @@ const AdminTransactions = memo(({ onRefresh, refreshing = false, getBalanceCheck
               disabled={refreshing}
               variant="outline"
               size="sm"
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 min-h-[44px]"
             >
               <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
           </div>
-          <div className="flex gap-2">
+        </div>
+        <div className="flex flex-col gap-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <Input
+              placeholder="Search by transaction ID, username, or email..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-11 h-12 text-base"
+            />
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex-1">
+              <Input
+                type="date"
+                placeholder="Filter by date"
+                value={dateFilter}
+                onChange={(e) => {
+                  setDateFilter(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full h-12 text-base"
+              />
+            </div>
             <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-full sm:w-40 h-11">
+              <SelectTrigger className="w-full sm:w-40 min-h-[44px]">
                 <Filter className="w-4 h-4 mr-2" />
                 <SelectValue placeholder="Type" />
               </SelectTrigger>
@@ -270,7 +425,7 @@ const AdminTransactions = memo(({ onRefresh, refreshing = false, getBalanceCheck
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full sm:w-40 h-11">
+              <SelectTrigger className="w-full sm:w-40 min-h-[44px]">
                 <Filter className="w-4 h-4 mr-2" />
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
@@ -283,81 +438,22 @@ const AdminTransactions = memo(({ onRefresh, refreshing = false, getBalanceCheck
             </Select>
           </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <Input
-              placeholder="Search by transaction ID, username, or email..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-          <div>
-            <Input
-              type="date"
-              placeholder="Filter by date"
-              value={dateFilter}
-              onChange={(e) => {
-                setDateFilter(e.target.value);
-                setPage(1);
-              }}
-              className="w-full"
-            />
-          </div>
-        </div>
       </div>
 
       {filteredTransactions.length === 0 ? (
         <p className="text-gray-600 text-center py-8">No transactions found</p>
       ) : (
         <>
-          <div className="overflow-hidden rounded-xl border border-gray-200">
-            {useVirtualScroll ? (
-              <div className="min-w-[1200px]">
-                <div className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
-                  <div className="grid grid-cols-[1.5fr_1.5fr_1.5fr_1.5fr_2fr_2fr_1fr_1fr] gap-4 p-4 font-semibold text-sm">
-                    <div className="text-center">Type</div>
-                    <div className="text-center">Status</div>
-                    <div className="text-center">Amount</div>
-                    <div className="text-center">Time</div>
-                    <div className="text-center">User</div>
-                    <div className="text-center">Transaction ID</div>
-                    <div className="text-center">Balance Status</div>
-                    <div className="text-center">Actions</div>
-                  </div>
-                </div>
-                <VirtualizedList
-                  items={paginatedTransactions}
-                  renderItem={renderTransactionRow}
-                  itemHeight={100}
-                  height={600}
-                />
-              </div>
-            ) : (
-              <div className="max-h-[600px] overflow-y-auto overflow-x-auto">
-                <div className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10 min-w-[1200px]">
-                  <div className="grid grid-cols-[1.5fr_1.5fr_1.5fr_1.5fr_2fr_2fr_1fr_1fr] gap-4 p-4 font-semibold text-sm">
-                    <div className="text-center">Type</div>
-                    <div className="text-center">Status</div>
-                    <div className="text-center">Amount</div>
-                    <div className="text-center">Time</div>
-                    <div className="text-center">User</div>
-                    <div className="text-center">Transaction ID</div>
-                    <div className="text-center">Balance Status</div>
-                    <div className="text-center">Actions</div>
-                  </div>
-                </div>
-                <div className="divide-y divide-gray-200/50 min-w-[1200px]">
-                  {paginatedTransactions.map((transaction) => (
-                    <div key={transaction.id}>
-                      {renderTransactionRow(transaction)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          <ResponsiveTable
+            items={paginatedTransactions}
+            renderTableHeader={renderTableHeader}
+            renderTableRow={renderTableRow}
+            renderCard={renderMobileCard}
+            useVirtualScroll={useVirtualScroll}
+            emptyMessage="No transactions found"
+            minTableWidth="1200px"
+            itemHeight={100}
+          />
 
           <div className="flex items-center justify-between mt-4">
             <div className="text-sm text-gray-600">

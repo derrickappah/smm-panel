@@ -66,29 +66,56 @@ const fetchAllTickets = async () => {
   let from = 0;
   let hasMore = true;
   const batchSize = 1000;
+  const maxIterations = 10000; // Safety limit to prevent infinite loops
+  let iterations = 0;
 
-  while (hasMore) {
+  while (hasMore && iterations < maxIterations) {
+    iterations++;
     const to = from + batchSize - 1;
-    const { data, error } = await supabase
-      .from('support_tickets')
-      .select('*, profiles(name, email)')
-      .order('created_at', { ascending: false })
-      .range(from, to);
+    
+    try {
+      const { data, error } = await supabase
+        .from('support_tickets')
+        .select('*, profiles(name, email)')
+        .order('created_at', { ascending: false })
+        .range(from, to);
 
-    if (error) {
+      if (error) {
+        // Handle case where table doesn't exist
+        if (error.code === '42P01') {
+          console.warn('Support tickets table may not exist. Run CREATE_SUPPORT_TICKETS.sql migration.');
+          return [];
+        }
+        console.error(`Error fetching tickets batch (from ${from} to ${to}):`, error);
+        throw error;
+      }
+
+      if (data && data.length > 0) {
+        allRecords = [...allRecords, ...data];
+        // Continue if we got a full batch, stop if we got less
+        hasMore = data.length === batchSize;
+        from = to + 1;
+      } else {
+        // No more data
+        hasMore = false;
+      }
+    } catch (error) {
+      console.error('Error in fetchAllTickets batch:', error);
+      // If we have some records, return them rather than failing completely
+      if (allRecords.length > 0) {
+        console.warn(`Returning partial ticket data (${allRecords.length} records) due to error`);
+        return allRecords;
+      }
+      // Re-throw if it's the table doesn't exist error (already handled above)
       if (error.code === '42P01') {
         return [];
       }
       throw error;
     }
+  }
 
-    if (data && data.length > 0) {
-      allRecords = [...allRecords, ...data];
-      hasMore = data.length === batchSize;
-      from = to + 1;
-    } else {
-      hasMore = false;
-    }
+  if (iterations >= maxIterations) {
+    console.warn(`fetchAllTickets reached max iterations (${maxIterations}), returning ${allRecords.length} records`);
   }
 
   return allRecords;

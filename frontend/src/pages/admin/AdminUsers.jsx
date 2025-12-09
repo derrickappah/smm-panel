@@ -2,6 +2,7 @@ import React, { memo, useState, useMemo, useCallback, useEffect } from 'react';
 import { useAdminUsers, useUpdateUser } from '@/hooks/useAdminUsers';
 import { useDebounce } from '@/hooks/useDebounce';
 import VirtualizedList from '@/components/VirtualizedList';
+import ResponsiveTable from '@/components/admin/ResponsiveTable';
 import UserEditForm from '@/components/admin/UserEditForm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -156,7 +157,19 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
     toast.success('Users exported successfully');
   }, [filteredUsers, exportFormat]);
 
-  const renderUserRow = useCallback((user, index) => {
+  const renderTableHeader = useCallback(() => (
+    <div className="grid grid-cols-12 gap-4 p-4 font-semibold text-sm min-w-[1200px]">
+      <div className="col-span-2 min-w-[150px]">Name</div>
+      <div className="col-span-3 min-w-[200px]">Email</div>
+      <div className="col-span-2 min-w-[120px]">Phone</div>
+      <div className="col-span-1 min-w-[80px]">Role</div>
+      <div className="col-span-1 min-w-[100px]">Balance</div>
+      <div className="col-span-2 min-w-[150px]">Joined Date</div>
+      <div className="col-span-1 min-w-[100px]">Actions</div>
+    </div>
+  ), []);
+
+  const renderTableRow = useCallback((user, index) => {
     if (editingUser?.id === user.id) {
       return (
         <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
@@ -170,39 +183,93 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
     }
 
     return (
-      <div className="grid grid-cols-12 gap-4 p-4 items-center bg-white hover:bg-gray-50 transition-colors border-b border-gray-200">
-        <div className="col-span-2">
+      <div className="grid grid-cols-12 gap-4 p-4 items-center bg-white hover:bg-gray-50 transition-colors border-b border-gray-200 min-w-[1200px]">
+        <div className="col-span-2 min-w-[150px]">
           <p className="font-medium text-gray-900 break-words">{user.name}</p>
         </div>
-        <div className="col-span-3">
+        <div className="col-span-3 min-w-[200px]">
           <p className="text-sm text-gray-700 break-all">{user.email}</p>
         </div>
-        <div className="col-span-2">
+        <div className="col-span-2 min-w-[120px]">
           <p className="text-sm text-gray-700 break-words">{user.phone_number || 'N/A'}</p>
         </div>
-        <div className="col-span-1">
+        <div className="col-span-1 min-w-[80px]">
           <span className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ${
             user.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'
           }`}>
             {user.role}
           </span>
         </div>
-        <div className="col-span-1">
+        <div className="col-span-1 min-w-[100px]">
           <p className="font-semibold text-gray-900 whitespace-nowrap">₵{user.balance?.toFixed(2) || '0.00'}</p>
         </div>
-        <div className="col-span-2">
+        <div className="col-span-2 min-w-[150px]">
           <p className="text-sm text-gray-700 whitespace-nowrap">{new Date(user.created_at).toLocaleDateString()}</p>
           <p className="text-xs text-gray-500 whitespace-nowrap">{new Date(user.created_at).toLocaleTimeString()}</p>
         </div>
-        <div className="col-span-1">
+        <div className="col-span-1 min-w-[100px]">
           <Button
             onClick={() => setEditingUser(user)}
             variant="outline"
             size="sm"
-            className="text-xs whitespace-nowrap"
+            className="text-xs whitespace-nowrap min-h-[44px]"
           >
-            <Edit className="w-3 h-3 mr-1" />
+            <Edit className="w-4 h-4 mr-1" />
             Edit
+          </Button>
+        </div>
+      </div>
+    );
+  }, [editingUser, handleUpdateUser]);
+
+  const renderMobileCard = useCallback((user, index) => {
+    if (editingUser?.id === user.id) {
+      return (
+        <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg m-4">
+          <UserEditForm 
+            user={user} 
+            onSave={(updates) => handleUpdateUser(user.id, updates)}
+            onCancel={() => setEditingUser(null)}
+          />
+        </div>
+      );
+    }
+
+    return (
+      <div className="bg-white p-4 space-y-3">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <p className="font-semibold text-gray-900 text-base">{user.name}</p>
+            <p className="text-sm text-gray-600 mt-1 break-all">{user.email}</p>
+            {user.phone_number && (
+              <p className="text-sm text-gray-600 mt-1">📱 {user.phone_number}</p>
+            )}
+          </div>
+          <span className={`text-xs px-2 py-1 rounded-full h-fit ${
+            user.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'
+          }`}>
+            {user.role}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-3 pt-2 border-t border-gray-200">
+          <div>
+            <p className="text-xs text-gray-500">Balance</p>
+            <p className="font-semibold text-gray-900 text-sm">₵{user.balance?.toFixed(2) || '0.00'}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">Joined</p>
+            <p className="text-sm text-gray-700">{new Date(user.created_at).toLocaleDateString()}</p>
+          </div>
+        </div>
+        <div className="pt-2 border-t border-gray-200">
+          <Button
+            onClick={() => setEditingUser(user)}
+            variant="outline"
+            size="sm"
+            className="w-full min-h-[44px]"
+          >
+            <Edit className="w-4 h-4 mr-2" />
+            Edit User
           </Button>
         </div>
       </div>
@@ -211,8 +278,16 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-indigo-600"></div>
+      <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
+        <div className="space-y-4">
+          <div className="h-8 bg-gray-200 rounded animate-pulse w-1/3"></div>
+          <div className="h-12 bg-gray-200 rounded animate-pulse"></div>
+          <div className="space-y-2">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-20 bg-gray-200 rounded animate-pulse"></div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -220,7 +295,7 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
   const useVirtualScroll = filteredUsers.length > VIRTUAL_SCROLL_THRESHOLD;
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
+    <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm w-full max-w-full overflow-hidden">
       <div className="flex flex-col gap-4 mb-6">
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
           <div className="flex items-center gap-4 flex-wrap">
@@ -233,14 +308,14 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
               disabled={refreshing}
               variant="outline"
               size="sm"
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 min-h-[44px]"
             >
               <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
             <div className="flex items-center gap-2">
               <Select value={exportFormat} onValueChange={setExportFormat}>
-                <SelectTrigger className="w-[180px] h-9">
+                <SelectTrigger className="w-full sm:w-[180px] min-h-[44px]">
                   <SelectValue placeholder="Export format" />
                 </SelectTrigger>
                 <SelectContent>
@@ -252,24 +327,25 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
                 onClick={handleExportCSV}
                 variant="outline"
                 size="sm"
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 min-h-[44px]"
                 disabled={filteredUsers.length === 0}
               >
                 <Download className="w-4 h-4" />
-                Export CSV
+                <span className="hidden sm:inline">Export CSV</span>
+                <span className="sm:hidden">Export</span>
               </Button>
             </div>
           </div>
         </div>
         {/* Search and Date Filter */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="flex flex-col gap-3">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <Input
               placeholder="Search by username, email, or phone..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
+              className="pl-11 h-12 text-base"
             />
           </div>
           <div>
@@ -281,7 +357,7 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
                 setDateFilter(e.target.value);
                 setPage(1);
               }}
-              className="w-full"
+              className="w-full h-12 text-base"
             />
           </div>
         </div>
@@ -291,50 +367,15 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
         <p className="text-gray-600 text-center py-8">No users found</p>
       ) : (
         <>
-          <div className="overflow-hidden rounded-xl border border-gray-200">
-            {useVirtualScroll ? (
-              <div className="min-w-[1200px]">
-                <div className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
-                  <div className="grid grid-cols-12 gap-4 p-4 font-semibold text-sm">
-                    <div className="col-span-2">Name</div>
-                    <div className="col-span-3">Email</div>
-                    <div className="col-span-2">Phone</div>
-                    <div className="col-span-1">Role</div>
-                    <div className="col-span-1">Balance</div>
-                    <div className="col-span-2">Joined Date</div>
-                    <div className="col-span-1">Actions</div>
-                  </div>
-                </div>
-                <VirtualizedList
-                  items={paginatedUsers}
-                  renderItem={renderUserRow}
-                  itemHeight={80}
-                  height={600}
-                />
-              </div>
-            ) : (
-              <div className="max-h-[600px] overflow-y-auto overflow-x-auto">
-                <div className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10 min-w-[1200px]">
-                  <div className="grid grid-cols-12 gap-4 p-4 font-semibold text-sm">
-                    <div className="col-span-2">Name</div>
-                    <div className="col-span-3">Email</div>
-                    <div className="col-span-2">Phone</div>
-                    <div className="col-span-1">Role</div>
-                    <div className="col-span-1">Balance</div>
-                    <div className="col-span-2">Joined Date</div>
-                    <div className="col-span-1">Actions</div>
-                  </div>
-                </div>
-                <div className="divide-y divide-gray-200/50 min-w-[1200px]">
-                  {paginatedUsers.map((user) => (
-                    <div key={user.id}>
-                      {renderUserRow(user)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          <ResponsiveTable
+            items={paginatedUsers}
+            renderTableHeader={renderTableHeader}
+            renderTableRow={renderTableRow}
+            renderCard={renderMobileCard}
+            useVirtualScroll={useVirtualScroll}
+            emptyMessage="No users found"
+            minTableWidth="1200px"
+          />
 
           {/* Pagination Controls */}
           <div className="flex items-center justify-between mt-4">

@@ -21,35 +21,43 @@ const UserEditForm = ({ user, onSave, onCancel }) => {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <Label>Name</Label>
+        <Label className="text-sm font-medium">Name</Label>
         <Input
           value={formData.name}
           onChange={(e) => setFormData({ ...formData, name: e.target.value })}
           required
+          className="h-12 text-base"
+          autoComplete="name"
         />
       </div>
       <div>
-        <Label>Email</Label>
+        <Label className="text-sm font-medium">Email</Label>
         <Input
           type="email"
           value={formData.email}
           onChange={(e) => setFormData({ ...formData, email: e.target.value })}
           required
+          className="h-12 text-base"
+          autoComplete="email"
+          inputMode="email"
         />
       </div>
       <div>
-        <Label>Phone Number</Label>
+        <Label className="text-sm font-medium">Phone Number</Label>
         <Input
           type="tel"
           placeholder="+233 XX XXX XXXX"
           value={formData.phone_number}
           onChange={(e) => setFormData({ ...formData, phone_number: e.target.value })}
+          className="h-12 text-base"
+          autoComplete="tel"
+          inputMode="tel"
         />
       </div>
       <div>
-        <Label>Role</Label>
+        <Label className="text-sm font-medium">Role</Label>
         <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value })}>
-          <SelectTrigger>
+          <SelectTrigger className="min-h-[44px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -60,18 +68,20 @@ const UserEditForm = ({ user, onSave, onCancel }) => {
         </Select>
       </div>
       <div>
-        <Label>Balance (₵)</Label>
+        <Label className="text-sm font-medium">Balance (₵)</Label>
         <Input
           type="number"
           step="0.01"
           value={formData.balance}
           onChange={(e) => setFormData({ ...formData, balance: parseFloat(e.target.value) })}
           required
+          className="h-12 text-base"
+          inputMode="decimal"
         />
       </div>
-      <div className="flex gap-2">
-        <Button type="submit" size="sm">Save</Button>
-        <Button type="button" variant="outline" size="sm" onClick={onCancel}>Cancel</Button>
+      <div className="flex flex-col sm:flex-row gap-3 pt-2">
+        <Button type="submit" className="flex-1 min-h-[44px] text-base">Save</Button>
+        <Button type="button" variant="outline" onClick={onCancel} className="min-h-[44px] text-base">Cancel</Button>
       </div>
     </form>
   );

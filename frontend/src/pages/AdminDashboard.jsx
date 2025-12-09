@@ -1,11 +1,12 @@
-import React, { useState, useMemo, useCallback, lazy, Suspense, memo } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, lazy, Suspense, memo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/sheet';
 import SEO from '@/components/SEO';
 import { 
   Users, ShoppingCart, DollarSign, Package, Wallet, Receipt, 
-  MessageSquare, UserPlus, RefreshCw, BarChart3
+  MessageSquare, UserPlus, RefreshCw, BarChart3, Menu, X
 } from 'lucide-react';
 import { useAdminOrders } from '@/hooks/useAdminOrders';
 import { useAdminDeposits } from '@/hooks/useAdminDeposits';
@@ -28,19 +29,43 @@ const AdminBalanceCheck = lazy(() => import('@/pages/admin/AdminBalanceCheck'));
 
 // Loading fallback component
 const ComponentLoader = () => (
-  <div className="flex items-center justify-center p-8">
-    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-indigo-600"></div>
+  <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
+    <div className="space-y-4">
+      <div className="h-8 bg-gray-200 rounded animate-pulse w-1/3"></div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+        {[1, 2, 3, 4, 5, 6].map((i) => (
+          <div key={i} className="h-24 bg-gray-200 rounded animate-pulse"></div>
+        ))}
+      </div>
+    </div>
   </div>
 );
 
 const AdminDashboard = memo(({ user, onLogout }) => {
   const queryClient = useQueryClient();
-  const [activeSection, setActiveSection] = useState('dashboard');
+  
+  // Load saved section from localStorage on mount
+  const [activeSection, setActiveSection] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('adminActiveSection');
+      return saved || 'dashboard';
+    }
+    return 'dashboard';
+  });
+  
   const [dateRangeStart, setDateRangeStart] = useState('');
   const [dateRangeEnd, setDateRangeEnd] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [balanceCheckResults, setBalanceCheckResults] = useState({});
   const [manuallyCrediting, setManuallyCrediting] = useState(null);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  // Save active section to localStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('adminActiveSection', activeSection);
+    }
+  }, [activeSection]);
 
   // Fetch payment method settings
   const { data: paymentMethodSettings = {
@@ -48,7 +73,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     manual_enabled: true,
     hubtel_enabled: true,
     korapay_enabled: true
-  } } = useQuery({
+  }, isLoading: isLoadingSettings } = useQuery({
     queryKey: ['admin', 'payment-settings'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -114,6 +139,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
   // Memoized section change handler
   const handleSectionChange = useCallback((section) => {
     setActiveSection(section);
+    setMobileNavOpen(false); // Close mobile nav when section changes
   }, []);
 
   // Balance check result function
@@ -181,25 +207,131 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     }
   }, [queryClient]);
 
-  // Get stats for open tickets badge
-  const { data: stats = {} } = useQuery({
+  // Get stats for open tickets badge and pending deposits
+  const { data: stats = {}, isLoading: isLoadingStats } = useQuery({
     queryKey: ['admin', 'stats', 'tickets'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('support_tickets')
-        .select('status')
-        .eq('status', 'open');
+      const [ticketsResult, depositsResult] = await Promise.all([
+        supabase
+          .from('support_tickets')
+          .select('status')
+          .eq('status', 'open'),
+        supabase
+          .from('transactions')
+          .select('status')
+          .eq('type', 'deposit')
+          .eq('status', 'pending')
+      ]);
 
-      if (error && error.code !== '42P01') {
-        console.error('Error fetching ticket stats:', error);
-        return { open_tickets: 0 };
-      }
+      const openTickets = ticketsResult.error && ticketsResult.error.code !== '42P01' 
+        ? 0 
+        : (ticketsResult.data?.length || 0);
+      
+      const pendingDeposits = depositsResult.error && depositsResult.error.code !== '42P01'
+        ? 0
+        : (depositsResult.data?.length || 0);
 
-      return { open_tickets: data?.length || 0 };
+      return { open_tickets: openTickets, pending_deposits: pendingDeposits };
     },
     staleTime: 1 * 60 * 1000,
     gcTime: 5 * 60 * 1000,
   });
+
+  // Section titles mapping
+  const sectionTitles = {
+    dashboard: 'Dashboard',
+    deposits: 'Deposits',
+    orders: 'Orders',
+    services: 'Services',
+    'payment-methods': 'Payment Methods',
+    users: 'Users',
+    transactions: 'Transactions',
+    support: 'Support',
+    balance: 'Balance Check',
+    referrals: 'Referrals'
+  };
+
+  // Navigation items configuration
+  const navItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
+    { id: 'deposits', label: 'Deposits', icon: DollarSign, badge: stats.pending_deposits },
+    { id: 'orders', label: 'Orders', icon: ShoppingCart },
+    { id: 'services', label: 'Services', icon: Package },
+    { id: 'payment-methods', label: 'Payment Methods', icon: Wallet },
+    { id: 'users', label: 'Users', icon: Users },
+    { id: 'transactions', label: 'Transactions', icon: Receipt },
+    { id: 'support', label: 'Support', icon: MessageSquare, badge: stats.open_tickets },
+    { id: 'balance', label: 'Balance', icon: Wallet },
+    { id: 'referrals', label: 'Referrals', icon: UserPlus },
+  ];
+
+  // Show skeleton loader while initial data is loading
+  if (isLoadingSettings || isLoadingStats) {
+    return (
+      <>
+        <SEO 
+          title="Admin Dashboard" 
+          description="Manage users, orders, services, and platform settings"
+        />
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50">
+          {/* Mobile Header Skeleton */}
+          <div className="sticky top-0 z-40 lg:hidden bg-white border-b border-gray-200 shadow-sm">
+            <div className="flex items-center justify-between px-4 py-3">
+              <div className="flex items-center gap-3">
+                <div className="h-11 w-11 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-6 w-32 bg-gray-200 rounded animate-pulse"></div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="h-6 w-16 bg-gray-200 rounded-full animate-pulse"></div>
+                <div className="h-11 w-11 bg-gray-200 rounded animate-pulse"></div>
+              </div>
+            </div>
+          </div>
+
+          <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+            <div className="flex flex-col lg:flex-row gap-6">
+              {/* Desktop Sidebar Skeleton */}
+              <div className="hidden lg:flex lg:flex-col lg:w-64 lg:flex-shrink-0">
+                <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-4">
+                  <div className="h-6 w-32 bg-gray-200 rounded animate-pulse mb-4"></div>
+                  <div className="space-y-2">
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => (
+                      <div key={i} className="h-10 bg-gray-200 rounded animate-pulse"></div>
+                    ))}
+                  </div>
+                  <div className="mt-auto pt-4 border-t border-gray-200 space-y-2">
+                    <div className="h-4 w-24 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="h-9 w-full bg-gray-200 rounded animate-pulse"></div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Content Area Skeleton */}
+              <div className="flex-1 min-w-0">
+                <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
+                  <div className="space-y-4">
+                    <div className="h-8 bg-gray-200 rounded animate-pulse w-1/3"></div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                      {[1, 2, 3, 4, 5, 6].map((i) => (
+                        <div key={i} className="h-24 bg-gray-200 rounded animate-pulse"></div>
+                      ))}
+                    </div>
+                    <div className="h-12 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="space-y-2">
+                      {[1, 2, 3, 4, 5].map((i) => (
+                        <div key={i} className="h-20 bg-gray-200 rounded animate-pulse"></div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -207,130 +339,126 @@ const AdminDashboard = memo(({ user, onLogout }) => {
         title="Admin Dashboard" 
         description="Manage users, orders, services, and platform settings"
       />
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50">
-        <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-          <div className="flex flex-col lg:flex-row gap-6">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 overflow-x-hidden">
+        {/* Sticky Header - Mobile */}
+        <div className="sticky top-0 z-40 lg:hidden bg-white border-b border-gray-200 shadow-sm">
+          <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-3">
+              <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-11 w-11">
+                    <Menu className="h-6 w-6" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="left" className="w-80 p-0">
+                  <div className="flex flex-col h-full">
+                    <div className="p-4 border-b border-gray-200">
+                      <h2 className="text-xl font-bold text-gray-900">Admin Panel</h2>
+                    </div>
+                    <nav className="flex-1 overflow-y-auto p-4 space-y-1">
+                      {navItems.map((item) => {
+                        const Icon = item.icon;
+                        return (
+                          <SheetClose key={item.id} asChild>
+                            <button
+                              onClick={() => handleSectionChange(item.id)}
+                              className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left transition-colors duration-200 ${
+                                activeSection === item.id
+                                  ? 'bg-indigo-600 text-white'
+                                  : 'text-gray-700 hover:bg-gray-100'
+                              }`}
+                            >
+                              <Icon className="w-5 h-5" />
+                              <span className="font-medium text-sm flex-1">{item.label}</span>
+                              {item.badge > 0 && (
+                                <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
+                                  {item.badge}
+                                </span>
+                              )}
+                            </button>
+                          </SheetClose>
+                        );
+                      })}
+                    </nav>
+                    <div className="p-4 border-t border-gray-200 space-y-2">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900 truncate">{user?.name || 'Admin'}</p>
+                        <p className="text-xs text-gray-600 truncate">{user?.email || ''}</p>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-gray-500">Balance:</span>
+                        <span className="text-sm font-semibold text-indigo-600">₵{user?.balance?.toFixed(2) || '0.00'}</span>
+                      </div>
+                      <SheetClose asChild>
+                        <Button
+                          onClick={onLogout}
+                          variant="outline"
+                          size="sm"
+                          className="w-full h-11 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                        >
+                          Logout
+                        </Button>
+                      </SheetClose>
+                    </div>
+                  </div>
+                </SheetContent>
+              </Sheet>
+              <h1 className="text-lg font-bold text-gray-900">{sectionTitles[activeSection] || 'Admin'}</h1>
+            </div>
+            <div className="flex items-center gap-2">
+              {stats.pending_deposits > 0 && (
+                <span className="bg-yellow-500 text-white text-xs px-2 py-1 rounded-full">
+                  {stats.pending_deposits} Pending
+                </span>
+              )}
+              {stats.open_tickets > 0 && (
+                <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full">
+                  {stats.open_tickets} Tickets
+                </span>
+              )}
+              <Button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                variant="outline"
+                size="icon"
+                className="h-11 w-11"
+              >
+                <RefreshCw className={`h-5 w-5 ${refreshing ? 'animate-spin' : ''}`} />
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 overflow-x-hidden">
+          <div className="flex flex-col lg:flex-row gap-6 w-full">
             {/* Sidebar Navigation - Desktop */}
             <div className="hidden lg:flex lg:flex-col lg:w-64 lg:flex-shrink-0">
               <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-4 flex flex-col sticky top-6 max-h-[calc(100vh-4.5rem)] overflow-y-auto">
                 <div className="mb-6">
                   <h2 className="text-xl font-bold text-gray-900 mb-4">Admin Panel</h2>
                   <nav className="space-y-1">
-                    <button
-                      onClick={() => handleSectionChange('dashboard')}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                        activeSection === 'dashboard'
-                          ? 'bg-indigo-600 text-white hover:bg-indigo-700'
-                          : 'text-gray-700 hover:bg-gray-100'
-                      }`}
-                    >
-                      <BarChart3 className="w-5 h-5" />
-                      <span className="font-medium text-sm">Dashboard</span>
-                    </button>
-                    <button
-                      onClick={() => handleSectionChange('deposits')}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                        activeSection === 'deposits'
-                          ? 'bg-indigo-600 text-white hover:bg-indigo-700'
-                          : 'text-gray-700 hover:bg-gray-100'
-                      }`}
-                    >
-                      <DollarSign className="w-5 h-5" />
-                      <span className="font-medium text-sm">Deposits</span>
-                    </button>
-                    <button
-                      onClick={() => handleSectionChange('orders')}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                        activeSection === 'orders'
-                          ? 'bg-indigo-600 text-white hover:bg-indigo-700'
-                          : 'text-gray-700 hover:bg-gray-100'
-                      }`}
-                    >
-                      <ShoppingCart className="w-5 h-5" />
-                      <span className="font-medium text-sm">Orders</span>
-                    </button>
-                    <button
-                      onClick={() => handleSectionChange('services')}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                        activeSection === 'services'
-                          ? 'bg-indigo-600 text-white hover:bg-indigo-700'
-                          : 'text-gray-700 hover:bg-gray-100'
-                      }`}
-                    >
-                      <Package className="w-5 h-5" />
-                      <span className="font-medium text-sm">Services</span>
-                    </button>
-                    <button
-                      onClick={() => handleSectionChange('payment-methods')}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                        activeSection === 'payment-methods'
-                          ? 'bg-indigo-600 text-white hover:bg-indigo-700'
-                          : 'text-gray-700 hover:bg-gray-100'
-                      }`}
-                    >
-                      <Wallet className="w-5 h-5" />
-                      <span className="font-medium text-sm">Payment Methods</span>
-                    </button>
-                    <button
-                      onClick={() => handleSectionChange('users')}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                        activeSection === 'users'
-                          ? 'bg-indigo-600 text-white hover:bg-indigo-700'
-                          : 'text-gray-700 hover:bg-gray-100'
-                      }`}
-                    >
-                      <Users className="w-5 h-5" />
-                      <span className="font-medium text-sm">Users</span>
-                    </button>
-                    <button
-                      onClick={() => handleSectionChange('transactions')}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                        activeSection === 'transactions'
-                          ? 'bg-indigo-600 text-white hover:bg-indigo-700'
-                          : 'text-gray-700 hover:bg-gray-100'
-                      }`}
-                    >
-                      <Receipt className="w-5 h-5" />
-                      <span className="font-medium text-sm">Transactions</span>
-                    </button>
-                    <button
-                      onClick={() => handleSectionChange('support')}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                        activeSection === 'support'
-                          ? 'bg-indigo-600 text-white hover:bg-indigo-700'
-                          : 'text-gray-700 hover:bg-gray-100'
-                      }`}
-                    >
-                      <MessageSquare className="w-5 h-5" />
-                      <span className="font-medium text-sm">Support</span>
-                      {stats.open_tickets > 0 && (
-                        <span className="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
-                          {stats.open_tickets}
-                        </span>
-                      )}
-                    </button>
-                    <button
-                      onClick={() => handleSectionChange('balance')}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                        activeSection === 'balance'
-                          ? 'bg-indigo-600 text-white hover:bg-indigo-700'
-                          : 'text-gray-700 hover:bg-gray-100'
-                      }`}
-                    >
-                      <Wallet className="w-5 h-5" />
-                      <span className="font-medium text-sm">Balance</span>
-                    </button>
-                    <button
-                      onClick={() => handleSectionChange('referrals')}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                        activeSection === 'referrals'
-                          ? 'bg-indigo-600 text-white hover:bg-indigo-700'
-                          : 'text-gray-700 hover:bg-gray-100'
-                      }`}
-                    >
-                      <UserPlus className="w-5 h-5" />
-                      <span className="font-medium text-sm">Referrals</span>
-                    </button>
+                    {navItems.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => handleSectionChange(item.id)}
+                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+                            activeSection === item.id
+                              ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                              : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                        >
+                          <Icon className="w-5 h-5" />
+                          <span className="font-medium text-sm flex-1">{item.label}</span>
+                          {item.badge > 0 && (
+                            <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
+                              {item.badge}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
                   </nav>
                 </div>
                 
@@ -358,24 +486,17 @@ const AdminDashboard = memo(({ user, onLogout }) => {
               </div>
             </div>
 
-            {/* Tabs Navigation - Mobile */}
-            <Tabs value={activeSection} onValueChange={setActiveSection} className="w-full">
-              <TabsList className="bg-white border border-gray-200 mb-6 flex-wrap w-full lg:hidden shadow-sm">
-                <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-                <TabsTrigger value="deposits">Deposits</TabsTrigger>
-                <TabsTrigger value="orders">Orders</TabsTrigger>
-                <TabsTrigger value="services">Services</TabsTrigger>
-                <TabsTrigger value="payment-methods">Payment Methods</TabsTrigger>
-                <TabsTrigger value="users">Users</TabsTrigger>
-                <TabsTrigger value="transactions">Transactions</TabsTrigger>
-                <TabsTrigger value="support">
-                  Support {stats.open_tickets > 0 && <span className="ml-1 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">{stats.open_tickets}</span>}
-                </TabsTrigger>
-                <TabsTrigger value="balance">Balance</TabsTrigger>
-                <TabsTrigger value="referrals">Referrals</TabsTrigger>
-              </TabsList>
-
-              {/* Content Area */}
+            {/* Content Area */}
+            <Tabs 
+              value={activeSection} 
+              onValueChange={(value) => {
+                setActiveSection(value);
+                if (typeof window !== 'undefined') {
+                  localStorage.setItem('adminActiveSection', value);
+                }
+              }} 
+              className="w-full"
+            >
               <div className="flex-1 min-w-0">
                 {/* Dashboard Section */}
                 <TabsContent value="dashboard" className="lg:mt-0">
@@ -395,14 +516,14 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                 </TabsContent>
 
                 {/* Deposits Section */}
-                <TabsContent value="deposits" className="lg:mt-0">
+                <TabsContent value="deposits" className="lg:mt-0 w-full max-w-full">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminDeposits onRefresh={handleRefresh} refreshing={refreshing} />
                   </Suspense>
                 </TabsContent>
 
                 {/* Orders Section */}
-                <TabsContent value="orders" className="lg:mt-0">
+                <TabsContent value="orders" className="lg:mt-0 w-full max-w-full">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminOrders onRefresh={handleRefresh} refreshing={refreshing} />
                   </Suspense>
@@ -423,14 +544,14 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                 </TabsContent>
 
                 {/* Users Section */}
-                <TabsContent value="users" className="lg:mt-0">
+                <TabsContent value="users" className="lg:mt-0 w-full max-w-full">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminUsers onRefresh={handleRefresh} refreshing={refreshing} />
                   </Suspense>
                 </TabsContent>
 
                 {/* Transactions Section */}
-                <TabsContent value="transactions" className="lg:mt-0">
+                <TabsContent value="transactions" className="lg:mt-0 w-full max-w-full">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminTransactions
                       onRefresh={handleRefresh}
@@ -442,14 +563,14 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                 </TabsContent>
 
                 {/* Support Section */}
-                <TabsContent value="support" className="lg:mt-0">
+                <TabsContent value="support" className="lg:mt-0 w-full max-w-full">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminTickets />
                   </Suspense>
                 </TabsContent>
 
                 {/* Balance Section */}
-                <TabsContent value="balance" className="lg:mt-0">
+                <TabsContent value="balance" className="lg:mt-0 w-full max-w-full">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminBalanceCheck />
                   </Suspense>

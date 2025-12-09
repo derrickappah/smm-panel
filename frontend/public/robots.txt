@@ -4,13 +4,22 @@ User-agent: *
 Allow: /
 Allow: /services
 Allow: /support
+Allow: /blog
+Allow: /guides
+Allow: /instagram-services
+Allow: /tiktok-services
+Allow: /youtube-services
+Allow: /facebook-services
+Allow: /twitter-services
 Disallow: /admin
 Disallow: /auth
 Disallow: /dashboard
 Disallow: /orders
 Disallow: /transactions
 Disallow: /payment
+Disallow: /api/
 
 # Sitemap location
 Sitemap: https://boostupgh.com/sitemap.xml
+Sitemap: https://boostupgh.com/api/generate-sitemap
 

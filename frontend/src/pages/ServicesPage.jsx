@@ -1,17 +1,30 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
 // SMMGen import removed - only using Supabase services
 import Navbar from '@/components/Navbar';
 import { Instagram, Youtube, Facebook, Twitter, ArrowRight } from 'lucide-react';
 import SEO from '@/components/SEO';
+import { generateServiceListSchema } from '@/utils/schema';
+import { generatePlatformMetaTags } from '@/utils/metaTags';
+import { getServiceKeywords, primaryKeywords, longTailKeywords } from '@/data/keywords';
 
 const ServicesPage = ({ user, onLogout }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [services, setServices] = useState([]);
   const [selectedPlatform, setSelectedPlatform] = useState('all');
   const [loading, setLoading] = useState(true);
+  
+  // Get platform from URL query if present
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const platformParam = params.get('platform');
+    if (platformParam && ['instagram', 'tiktok', 'youtube', 'facebook', 'twitter'].includes(platformParam.toLowerCase())) {
+      setSelectedPlatform(platformParam.toLowerCase());
+    }
+  }, [location.search]);
 
   const platforms = [
     { id: 'all', name: 'All Services', icon: null },
@@ -58,36 +71,59 @@ const ServicesPage = ({ user, onLogout }) => {
     navigate('/dashboard', { state: { selectedServiceId: service.id } });
   };
 
-  const structuredData = services.length > 0 ? {
-    '@context': 'https://schema.org',
-    '@type': 'ItemList',
-    name: 'Social Media Marketing Services',
-    description: 'Browse our comprehensive list of SMM services for Instagram, TikTok, YouTube, Facebook, and Twitter',
-    itemListElement: services.slice(0, 10).map((service, index) => ({
-      '@type': 'Service',
-      position: index + 1,
-      name: service.name,
-      description: service.description,
-      provider: {
-        '@type': 'Organization',
-        name: 'BoostUp GH'
-      },
-      offers: {
-        '@type': 'Offer',
-        price: service.rate,
-        priceCurrency: 'GHS',
-        availability: service.enabled ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock'
-      }
-    }))
-  } : null;
+  // Generate dynamic SEO based on selected platform
+  const seoData = useMemo(() => {
+    if (selectedPlatform === 'all') {
+      // All services page
+      const allKeywords = [
+        ...primaryKeywords.smmPanel,
+        ...primaryKeywords.instagram.slice(0, 5),
+        ...primaryKeywords.tiktok.slice(0, 5),
+        ...primaryKeywords.youtube.slice(0, 5),
+        ...primaryKeywords.facebook.slice(0, 5),
+        ...primaryKeywords.twitter.slice(0, 5),
+        'SMM services',
+        'social media services',
+        'buy followers',
+        'buy likes',
+        'buy views'
+      ];
+      
+      return {
+        title: 'SMM Services - Instagram, TikTok, YouTube, Facebook, Twitter',
+        description: 'Browse our comprehensive SMM services for Instagram followers, TikTok views, YouTube subscribers, Facebook likes, and Twitter followers. Buy Instagram followers Ghana, TikTok views, YouTube subscribers. Competitive rates, instant delivery, secure payment.',
+        keywords: allKeywords,
+        canonical: '/services'
+      };
+    } else {
+      // Platform-specific page
+      const platformName = selectedPlatform.charAt(0).toUpperCase() + selectedPlatform.slice(1);
+      const platformKeywords = getServiceKeywords(platformName, '');
+      const metaTags = generatePlatformMetaTags(selectedPlatform);
+      
+      return {
+        title: metaTags.title,
+        description: metaTags.description,
+        keywords: metaTags.keywords,
+        canonical: `/services?platform=${selectedPlatform}`
+      };
+    }
+  }, [selectedPlatform]);
+
+  const structuredData = useMemo(() => {
+    if (services.length === 0) return null;
+    
+    const serviceListSchema = generateServiceListSchema(services);
+    return serviceListSchema;
+  }, [services]);
 
   return (
     <div className="min-h-screen bg-gray-50">
       <SEO
-        title="SMM Services - Instagram, TikTok, YouTube, Facebook, Twitter | BoostUp GH"
-        description="Browse our comprehensive SMM services for Instagram followers, TikTok views, YouTube subscribers, Facebook likes, and Twitter followers. Competitive rates, instant delivery."
-        keywords="SMM services, Instagram followers, TikTok views, YouTube subscribers, Facebook likes, Twitter followers, social media services, SMM panel services"
-        canonical="/services"
+        title={seoData.title}
+        description={seoData.description}
+        keywords={seoData.keywords}
+        canonical={seoData.canonical}
         structuredData={structuredData}
       />
       <Navbar user={user} onLogout={onLogout} />
