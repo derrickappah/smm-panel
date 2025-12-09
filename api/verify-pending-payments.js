@@ -239,7 +239,19 @@ export default async function handler(req, res) {
       }
     });
 
-    console.log(`Verifying pending payments from last ${hours} hours...`);
+    const startTime = Date.now();
+    const sessionMetrics = {
+      startTime: new Date().toISOString(),
+      hours: hours,
+      totalTransactions: 0,
+      verified: 0,
+      updated: 0,
+      matchedFromPaystack: 0,
+      errors: [],
+      transactionMetrics: []
+    };
+
+    console.log(`[VERIFY] Verifying pending payments from last ${hours} hours...`);
 
     // Find all pending deposit transactions within the time window
     const { data: pendingTransactions, error: fetchError } = await supabase
@@ -252,7 +264,7 @@ export default async function handler(req, res) {
       .limit(100); // Limit to prevent timeout
 
     if (fetchError) {
-      console.error('Error fetching pending transactions:', fetchError);
+      console.error('[VERIFY] Error fetching pending transactions:', fetchError);
       return res.status(500).json({ 
         error: 'Failed to fetch pending transactions',
         details: fetchError.message 
@@ -264,11 +276,13 @@ export default async function handler(req, res) {
         message: 'No pending transactions found',
         count: 0,
         verified: 0,
-        updated: 0
+        updated: 0,
+        metrics: sessionMetrics
       });
     }
 
-    console.log(`Found ${pendingTransactions.length} pending transactions to verify`);
+    sessionMetrics.totalTransactions = pendingTransactions.length;
+    console.log(`[VERIFY] Found ${pendingTransactions.length} pending transactions to verify`);
 
     let verified = 0;
     let updated = 0;
@@ -308,33 +322,129 @@ export default async function handler(req, res) {
             console.log(`Matched Paystack transaction ${paystackTx.reference} to pending transaction ${matchedTx.id}`);
             
             try {
-              // Update transaction with reference and approve
-              const { error: updateError } = await supabase
-                .from('transactions')
-                .update({
-                  status: 'approved',
-                  paystack_status: 'success',
-                  paystack_reference: paystackTx.reference
-                })
-                .eq('id', matchedTx.id)
-                .eq('status', 'pending');
+              // Update transaction with reference and approve (with retry logic)
+              const updateData = {
+                status: 'approved',
+                paystack_status: 'success',
+                paystack_reference: paystackTx.reference
+              };
 
-              if (!updateError) {
-                // Update user balance
-                const { data: profile } = await supabase
-                  .from('profiles')
-                  .select('balance')
-                  .eq('id', matchedTx.user_id)
-                  .single();
+              let statusUpdated = false;
+              let statusUpdateError = null;
+              const maxRetries = 3;
 
-                if (profile) {
-                  const newBalance = (profile.balance || 0) + matchedTx.amount;
-                  await supabase
+              for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                try {
+                  let updateQuery = supabase
+                    .from('transactions')
+                    .update(updateData)
+                    .eq('id', matchedTx.id);
+
+                  if (attempt === 1) {
+                    updateQuery = updateQuery.eq('status', 'pending');
+                  }
+
+                  const { data: updatedData, error: updateError } = await updateQuery.select();
+
+                  if (updateError) {
+                    if (updateError.code === 'PGRST116' || updateError.message?.includes('No rows')) {
+                      const { data: currentTx } = await supabase
+                        .from('transactions')
+                        .select('status')
+                        .eq('id', matchedTx.id)
+                        .single();
+                      
+                      if (currentTx?.status === 'approved') {
+                        statusUpdated = true;
+                        break;
+                      }
+                      
+                      if (attempt < maxRetries) {
+                        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                        continue;
+                      }
+                    } else {
+                      statusUpdateError = updateError;
+                      if (attempt < maxRetries) {
+                        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                        continue;
+                      }
+                    }
+                  } else if (updatedData && updatedData.length > 0) {
+                    statusUpdated = true;
+                    break;
+                  }
+                } catch (retryError) {
+                  statusUpdateError = retryError;
+                  if (attempt < maxRetries) {
+                    await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                  }
+                }
+              }
+
+              // Update user balance (independent of status update)
+              let balanceUpdated = false;
+              let balanceUpdateError = null;
+
+              for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                try {
+                  const { data: profile, error: profileError } = await supabase
+                    .from('profiles')
+                    .select('balance')
+                    .eq('id', matchedTx.user_id)
+                    .single();
+
+                  if (profileError) {
+                    balanceUpdateError = profileError;
+                    if (attempt < maxRetries) {
+                      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                      continue;
+                    }
+                    break;
+                  }
+
+                  const currentBalance = parseFloat(profile.balance || 0);
+                  const newBalance = currentBalance + parseFloat(matchedTx.amount);
+
+                  const { error: balanceError } = await supabase
                     .from('profiles')
                     .update({ balance: newBalance })
                     .eq('id', matchedTx.user_id);
-                }
 
+                  if (balanceError) {
+                    balanceUpdateError = balanceError;
+                    if (attempt < maxRetries) {
+                      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                      continue;
+                    }
+                    break;
+                  }
+
+                  // Verify balance
+                  const { data: verifyProfile } = await supabase
+                    .from('profiles')
+                    .select('balance')
+                    .eq('id', matchedTx.user_id)
+                    .single();
+
+                  if (verifyProfile && parseFloat(verifyProfile.balance) === newBalance) {
+                    balanceUpdated = true;
+                    break;
+                  } else {
+                    if (attempt < maxRetries) {
+                      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                      continue;
+                    }
+                  }
+                } catch (balanceRetryError) {
+                  balanceUpdateError = balanceRetryError;
+                  if (attempt < maxRetries) {
+                    await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                  }
+                }
+              }
+
+              if (statusUpdated && balanceUpdated) {
                 updated++;
                 matchedFromPaystack++;
                 verified++;
@@ -346,7 +456,12 @@ export default async function handler(req, res) {
                   transactionsWithoutRef.splice(index, 1);
                 }
               } else {
-                errors.push(`Failed to update matched transaction ${matchedTx.id}: ${updateError.message}`);
+                const errorMsg = `Matched transaction ${matchedTx.id}: status=${statusUpdated ? 'OK' : 'FAILED'}, balance=${balanceUpdated ? 'OK' : 'FAILED'}`;
+                errors.push(errorMsg);
+                console.error('CRITICAL:', errorMsg, {
+                  statusError: statusUpdateError,
+                  balanceError: balanceUpdateError
+                });
               }
             } catch (matchError) {
               console.error(`Error processing matched transaction ${matchedTx.id}:`, matchError);
@@ -428,37 +543,164 @@ export default async function handler(req, res) {
               const paymentStatus = verifyData.data?.status;
 
               if (paymentStatus === 'success') {
-                // Payment was successful, update transaction
-                const { error: updateError } = await supabase
-                  .from('transactions')
-                  .update({ 
-                    status: 'approved',
-                    paystack_status: 'success',
-                    paystack_reference: transaction.paystack_reference
-                  })
-                  .eq('id', transaction.id)
-                  .eq('status', 'pending');
+                // Payment was successful, update transaction with retry logic
+                const updateData = {
+                  status: 'approved',
+                  paystack_status: 'success',
+                  paystack_reference: transaction.paystack_reference
+                };
 
-                if (!updateError) {
-                  // Update user balance
-                  const { data: profile } = await supabase
-                    .from('profiles')
-                    .select('balance')
-                    .eq('id', transaction.user_id)
-                    .single();
+                let statusUpdated = false;
+                let statusUpdateError = null;
+                const maxRetries = 3;
 
-                  if (profile) {
-                    const newBalance = (profile.balance || 0) + transaction.amount;
-                    await supabase
+                // Try updating status with retry logic
+                for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                  try {
+                    let updateQuery = supabase
+                      .from('transactions')
+                      .update(updateData)
+                      .eq('id', transaction.id);
+
+                    if (attempt === 1) {
+                      // First attempt: only update if still pending
+                      updateQuery = updateQuery.eq('status', 'pending');
+                    }
+                    // Subsequent attempts: try without pending condition
+
+                    const { data: updatedData, error: updateError } = await updateQuery.select();
+
+                    if (updateError) {
+                      if (updateError.code === 'PGRST116' || updateError.message?.includes('No rows')) {
+                        // Check if already approved
+                        const { data: currentTx } = await supabase
+                          .from('transactions')
+                          .select('status')
+                          .eq('id', transaction.id)
+                          .single();
+                        
+                        if (currentTx?.status === 'approved') {
+                          console.log(`Transaction ${transaction.id} already approved, proceeding with balance check`);
+                          statusUpdated = true;
+                          break;
+                        }
+                        
+                        if (attempt < maxRetries) {
+                          console.log(`Attempt ${attempt} failed (status changed), retrying without pending condition...`);
+                          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                          continue;
+                        }
+                      } else {
+                        statusUpdateError = updateError;
+                        if (attempt < maxRetries) {
+                          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                          continue;
+                        }
+                      }
+                    } else if (updatedData && updatedData.length > 0) {
+                      statusUpdated = true;
+                      console.log(`Transaction ${transaction.id} updated to approved (attempt ${attempt})`);
+                      break;
+                    }
+                  } catch (retryError) {
+                    statusUpdateError = retryError;
+                    if (attempt < maxRetries) {
+                      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                    }
+                  }
+                }
+
+                // Update user balance (independent of status update success)
+                let balanceUpdated = false;
+                let balanceUpdateError = null;
+
+                for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                  try {
+                    const { data: profile, error: profileError } = await supabase
+                      .from('profiles')
+                      .select('balance')
+                      .eq('id', transaction.user_id)
+                      .single();
+
+                    if (profileError) {
+                      balanceUpdateError = profileError;
+                      if (attempt < maxRetries) {
+                        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                        continue;
+                      }
+                      break;
+                    }
+
+                    const currentBalance = parseFloat(profile.balance || 0);
+                    const newBalance = currentBalance + parseFloat(transaction.amount);
+
+                    const { error: balanceError } = await supabase
                       .from('profiles')
                       .update({ balance: newBalance })
                       .eq('id', transaction.user_id);
-                  }
 
+                    if (balanceError) {
+                      balanceUpdateError = balanceError;
+                      if (attempt < maxRetries) {
+                        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                        continue;
+                      }
+                      break;
+                    }
+
+                    // Verify balance was updated
+                    const { data: verifyProfile } = await supabase
+                      .from('profiles')
+                      .select('balance')
+                      .eq('id', transaction.user_id)
+                      .single();
+
+                    if (verifyProfile && parseFloat(verifyProfile.balance) === newBalance) {
+                      balanceUpdated = true;
+                      console.log(`Balance updated for transaction ${transaction.id} (attempt ${attempt})`);
+                      break;
+                    } else {
+                      if (attempt < maxRetries) {
+                        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                        continue;
+                      }
+                    }
+                  } catch (balanceRetryError) {
+                    balanceUpdateError = balanceRetryError;
+                    if (attempt < maxRetries) {
+                      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                    }
+                  }
+                }
+
+                // Log results with metrics
+                const txMetrics = {
+                  transactionId: transaction.id,
+                  statusUpdateAttempts: maxRetries,
+                  statusUpdateSuccess: statusUpdated,
+                  balanceUpdateAttempts: maxRetries,
+                  balanceUpdateSuccess: balanceUpdated,
+                  statusError: statusUpdateError?.message,
+                  balanceError: balanceUpdateError?.message
+                };
+                sessionMetrics.transactionMetrics.push(txMetrics);
+
+                if (statusUpdated && balanceUpdated) {
                   updated++;
-                  console.log(`Transaction ${transaction.id} updated to approved`);
+                  console.log(`[VERIFY] Transaction ${transaction.id} successfully updated to approved with balance`);
                 } else {
-                  errors.push(`Failed to update transaction ${transaction.id}: ${updateError.message}`);
+                  const errorMsg = `Transaction ${transaction.id}: status=${statusUpdated ? 'OK' : 'FAILED'}, balance=${balanceUpdated ? 'OK' : 'FAILED'}`;
+                  errors.push(errorMsg);
+                  console.error('[VERIFY] CRITICAL:', errorMsg, {
+                    statusError: statusUpdateError,
+                    balanceError: balanceUpdateError,
+                    metrics: txMetrics
+                  });
+                  
+                  // Still count as updated if at least status was updated
+                  if (statusUpdated) {
+                    updated++;
+                  }
                 }
               } else if (paymentStatus === 'failed' || paymentStatus === 'abandoned') {
                 // Payment failed, mark as rejected
@@ -555,6 +797,23 @@ export default async function handler(req, res) {
       }
     }
 
+    const totalTime = Date.now() - startTime;
+    sessionMetrics.verified = verified;
+    sessionMetrics.updated = updated;
+    sessionMetrics.matchedFromPaystack = matchedFromPaystack;
+    sessionMetrics.errors = errors;
+    sessionMetrics.endTime = new Date().toISOString();
+    sessionMetrics.totalTime = totalTime;
+
+    console.log('[VERIFY] Verification completed:', {
+      totalTransactions: pendingTransactions.length,
+      verified,
+      updated,
+      matchedFromPaystack,
+      errors: errors.length,
+      totalTime: `${totalTime}ms`
+    });
+
     return res.status(200).json({
       message: 'Verification completed',
       count: pendingTransactions.length,
@@ -562,7 +821,12 @@ export default async function handler(req, res) {
       updated,
       matchedFromPaystack,
       unmatchedPaystackTransactions: unmatchedPaystackTxs.length > 0 ? unmatchedPaystackTxs.slice(0, 10) : undefined, // Limit to first 10 for response size
-      errors: errors.length > 0 ? errors : undefined
+      errors: errors.length > 0 ? errors : undefined,
+      metrics: {
+        totalTime: `${totalTime}ms`,
+        transactionsProcessed: sessionMetrics.transactionMetrics.length,
+        successRate: pendingTransactions.length > 0 ? ((updated / pendingTransactions.length) * 100).toFixed(2) + '%' : '0%'
+      }
     });
   } catch (error) {
     console.error('Error in verify-pending-payments:', error);

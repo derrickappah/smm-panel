@@ -264,6 +264,18 @@ export default async function handler(req, res) {
  * Handle successful payment
  */
 async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseServiceKey) {
+  const startTime = Date.now();
+  const metrics = {
+    transactionId: null,
+    reference: paymentData.reference,
+    statusUpdateAttempts: 0,
+    statusUpdateSuccess: false,
+    balanceUpdateAttempts: 0,
+    balanceUpdateSuccess: false,
+    totalTime: 0,
+    errors: []
+  };
+
   try {
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       auth: {
@@ -280,13 +292,14 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
     const customerEmail = paymentData.customer?.email || metadata.user_email;
     const paidAt = paymentData.paid_at ? new Date(paymentData.paid_at) : new Date();
 
-    console.log('Processing successful payment:', {
+    console.log('[WEBHOOK] Processing successful payment:', {
       reference,
       transactionId,
       userId,
       amount,
       customerEmail,
-      paidAt: paidAt.toISOString()
+      paidAt: paidAt.toISOString(),
+      timestamp: new Date().toISOString()
     });
 
     // Find transaction by reference first, then by transaction_id from metadata
@@ -425,7 +438,7 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
 
     // Check if already processed
     if (transaction.status === 'approved') {
-      console.log('Transaction already approved, reference stored:', transaction.id);
+      console.log('Transaction already approved, verifying balance:', transaction.id);
       
       // Verify balance was updated (safety check)
       const { data: profile } = await supabase
@@ -435,78 +448,248 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
         .single();
 
       if (profile) {
-        const expectedBalance = (profile.balance || 0);
-        // If balance seems low, try to update it (idempotent - won't double add)
-        const { error: balanceCheckError } = await supabase
-          .from('profiles')
-          .update({ balance: expectedBalance })
-          .eq('id', transaction.user_id);
+        // Check if balance needs to be updated (idempotent check)
+        const currentBalance = parseFloat(profile.balance || 0);
+        const expectedBalance = currentBalance; // Balance should already include this transaction
         
-        if (balanceCheckError) {
-          console.warn('Balance check/update warning:', balanceCheckError);
-        }
+        // If balance seems incorrect, log it but don't update (to avoid double crediting)
+        console.log('Balance verification for already-approved transaction:', {
+          transactionId: transaction.id,
+          transactionAmount: transaction.amount,
+          currentBalance,
+          note: 'Balance should already include this transaction amount'
+        });
       }
       
       return;
     }
 
-    // Update transaction status
+    // Update transaction status with retry logic
     const updateData = {
       status: 'approved',
       paystack_status: 'success',
       paystack_reference: reference || transaction.paystack_reference
     };
 
-    const { error: updateError } = await supabase
-      .from('transactions')
-      .update(updateData)
-      .eq('id', transaction.id)
-      .eq('status', 'pending'); // Only update if still pending (prevent race conditions)
+    let statusUpdated = false;
+    let statusUpdateError = null;
+    const maxRetries = 3;
 
-    if (updateError) {
-      console.error('Error updating transaction:', updateError);
-      // If update failed because status changed, that's okay - it was probably processed
-      if (updateError.code !== 'PGRST116') { // PGRST116 = no rows updated
-        throw updateError;
-      } else {
-        console.log('Transaction status changed during update (likely processed by another process)');
+    // Try updating with retry logic
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      metrics.statusUpdateAttempts = attempt;
+      try {
+        // First attempt: try with pending condition (prevent race conditions)
+        let updateQuery = supabase
+          .from('transactions')
+          .update(updateData)
+          .eq('id', transaction.id);
+
+        if (attempt === 1) {
+          // First attempt: only update if still pending
+          updateQuery = updateQuery.eq('status', 'pending');
+        }
+        // Subsequent attempts: try without pending condition (in case status changed but we still need to update)
+
+        const { data: updatedData, error: updateError } = await updateQuery.select();
+
+        if (updateError) {
+          // Check if it's a "no rows updated" error (status already changed)
+          if (updateError.code === 'PGRST116' || updateError.message?.includes('No rows')) {
+            console.log(`[WEBHOOK] Attempt ${attempt}: Transaction status already changed (likely processed by another process):`, transaction.id);
+            // Check current status
+            const { data: currentTx } = await supabase
+              .from('transactions')
+              .select('status')
+              .eq('id', transaction.id)
+              .single();
+            
+            if (currentTx?.status === 'approved') {
+              console.log('[WEBHOOK] Transaction already approved by another process, proceeding with balance update');
+              statusUpdated = true;
+              metrics.statusUpdateSuccess = true;
+              break;
+            }
+            
+            // If not approved, try next attempt without pending condition
+            if (attempt < maxRetries) {
+              console.log(`[WEBHOOK] Attempt ${attempt} failed, retrying without pending condition...`);
+              metrics.errors.push(`Status update attempt ${attempt}: Status changed during update`);
+              continue;
+            }
+          } else {
+            // Other error - log and retry
+            console.error(`[WEBHOOK] Attempt ${attempt} error updating transaction:`, updateError);
+            metrics.errors.push(`Status update attempt ${attempt}: ${updateError.message || updateError.code}`);
+            statusUpdateError = updateError;
+            if (attempt < maxRetries) {
+              await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Exponential backoff
+              continue;
+            }
+          }
+        } else if (updatedData && updatedData.length > 0) {
+          statusUpdated = true;
+          metrics.statusUpdateSuccess = true;
+          console.log(`[WEBHOOK] Transaction updated to approved (attempt ${attempt}):`, transaction.id);
+          break;
+        }
+      } catch (retryError) {
+        console.error(`[WEBHOOK] Attempt ${attempt} exception:`, retryError);
+        metrics.errors.push(`Status update attempt ${attempt} exception: ${retryError.message}`);
+        statusUpdateError = retryError;
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        }
       }
-    } else {
-      console.log('Transaction updated to approved:', transaction.id);
     }
 
-    // Update user balance
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('balance')
-      .eq('id', transaction.user_id)
-      .single();
-
-    if (profileError) {
-      console.error('Error fetching profile:', profileError);
-      throw profileError;
+    // Log status update result
+    if (!statusUpdated) {
+      console.error('[WEBHOOK] Failed to update transaction status after all retries:', {
+        transactionId: transaction.id,
+        error: statusUpdateError,
+        attempts: maxRetries,
+        metrics
+      });
+      metrics.errors.push(`Status update failed after ${maxRetries} attempts: ${statusUpdateError?.message || 'Unknown error'}`);
+      // Continue anyway - we'll still try to update balance
     }
 
-    const newBalance = (profile.balance || 0) + transaction.amount;
+    // Update user balance (independent of status update success)
+    // This ensures balance is updated even if status update had issues
+    let balanceUpdated = false;
+    let balanceUpdateError = null;
 
-    const { error: balanceError } = await supabase
-      .from('profiles')
-      .update({ balance: newBalance })
-      .eq('id', transaction.user_id);
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      metrics.balanceUpdateAttempts = attempt;
+      try {
+        // Get current balance
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('balance')
+          .eq('id', transaction.user_id)
+          .single();
 
-    if (balanceError) {
-      console.error('Error updating balance:', balanceError);
-      throw balanceError;
+        if (profileError) {
+          console.error(`[WEBHOOK] Attempt ${attempt} error fetching profile:`, profileError);
+          metrics.errors.push(`Balance update attempt ${attempt}: Profile fetch error - ${profileError.message}`);
+          balanceUpdateError = profileError;
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+            continue;
+          }
+          break;
+        }
+
+        // Calculate new balance
+        const currentBalance = parseFloat(profile.balance || 0);
+        const newBalance = currentBalance + parseFloat(transaction.amount);
+
+        // Update balance
+        const { error: balanceError } = await supabase
+          .from('profiles')
+          .update({ balance: newBalance })
+          .eq('id', transaction.user_id);
+
+        if (balanceError) {
+          console.error(`[WEBHOOK] Attempt ${attempt} error updating balance:`, balanceError);
+          metrics.errors.push(`Balance update attempt ${attempt}: Update error - ${balanceError.message}`);
+          balanceUpdateError = balanceError;
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+            continue;
+          }
+          break;
+        }
+
+        // Verify balance was updated
+        const { data: verifyProfile } = await supabase
+          .from('profiles')
+          .select('balance')
+          .eq('id', transaction.user_id)
+          .single();
+
+        if (verifyProfile && parseFloat(verifyProfile.balance) === newBalance) {
+          balanceUpdated = true;
+          metrics.balanceUpdateSuccess = true;
+          console.log('[WEBHOOK] User balance updated successfully:', {
+            userId: transaction.user_id,
+            oldBalance: currentBalance,
+            newBalance,
+            amount: transaction.amount,
+            attempt
+          });
+          break;
+        } else {
+          console.warn(`[WEBHOOK] Attempt ${attempt}: Balance update verification failed, retrying...`);
+          metrics.errors.push(`Balance update attempt ${attempt}: Verification failed - expected ${newBalance}, got ${verifyProfile?.balance}`);
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+            continue;
+          }
+        }
+      } catch (balanceRetryError) {
+        console.error(`[WEBHOOK] Attempt ${attempt} balance update exception:`, balanceRetryError);
+        metrics.errors.push(`Balance update attempt ${attempt} exception: ${balanceRetryError.message}`);
+        balanceUpdateError = balanceRetryError;
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        }
+      }
     }
 
-    console.log('User balance updated:', {
-      userId: transaction.user_id,
-      oldBalance: profile.balance,
-      newBalance,
-      amount: transaction.amount
+    // Log final results
+    metrics.totalTime = Date.now() - startTime;
+    metrics.transactionId = transaction.id;
+
+    if (!balanceUpdated) {
+      console.error('[WEBHOOK] CRITICAL: Failed to update user balance after all retries:', {
+        transactionId: transaction.id,
+        userId: transaction.user_id,
+        amount: transaction.amount,
+        error: balanceUpdateError,
+        attempts: maxRetries,
+        metrics
+      });
+      // Throw error so it can be handled upstream
+      throw new Error(`Failed to update balance: ${balanceUpdateError?.message || 'Unknown error'}`);
+    }
+
+    // Final verification: ensure transaction status is approved
+    if (!statusUpdated) {
+      // Try one more time to update status (without pending condition)
+      const { data: finalCheck } = await supabase
+        .from('transactions')
+        .select('status')
+        .eq('id', transaction.id)
+        .single();
+
+      if (finalCheck?.status !== 'approved') {
+        console.warn('[WEBHOOK] Status not approved after balance update, attempting final status update...');
+        await supabase
+          .from('transactions')
+          .update(updateData)
+          .eq('id', transaction.id);
+      }
+    }
+
+    // Log success metrics
+    console.log('[WEBHOOK] Payment processing completed successfully:', {
+      transactionId: transaction.id,
+      reference,
+      statusUpdateSuccess: metrics.statusUpdateSuccess,
+      balanceUpdateSuccess: metrics.balanceUpdateSuccess,
+      totalTime: metrics.totalTime,
+      statusUpdateAttempts: metrics.statusUpdateAttempts,
+      balanceUpdateAttempts: metrics.balanceUpdateAttempts
     });
   } catch (error) {
-    console.error('Error handling successful payment:', error);
+    metrics.totalTime = Date.now() - startTime;
+    console.error('[WEBHOOK] Error handling successful payment:', {
+      error: error.message,
+      stack: error.stack,
+      metrics
+    });
     throw error;
   }
 }
@@ -567,24 +750,63 @@ async function handleFailedPayment(paymentData, supabaseUrl, supabaseServiceKey)
       return;
     }
 
-    // Only update if still pending
-    if (transaction.status === 'pending') {
-      const { error: updateError } = await supabase
-        .from('transactions')
-        .update({
-          status: 'rejected',
-          paystack_status: 'failed',
-          paystack_reference: reference || transaction.paystack_reference
-        })
-        .eq('id', transaction.id)
-        .eq('status', 'pending');
+    // Update failed transaction with retry logic
+    const updateData = {
+      status: 'rejected',
+      paystack_status: 'failed',
+      paystack_reference: reference || transaction.paystack_reference
+    };
 
-      if (updateError) {
-        console.error('Error updating failed transaction:', updateError);
-        throw updateError;
+    let statusUpdated = false;
+    const maxRetries = 3;
+
+    // Only update if still pending (don't overwrite approved transactions)
+    if (transaction.status === 'pending') {
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          const { data: updatedData, error: updateError } = await supabase
+            .from('transactions')
+            .update(updateData)
+            .eq('id', transaction.id)
+            .eq('status', 'pending')
+            .select();
+
+          if (updateError) {
+            if (updateError.code === 'PGRST116' || updateError.message?.includes('No rows')) {
+              // Status already changed, check current status
+              const { data: currentTx } = await supabase
+                .from('transactions')
+                .select('status')
+                .eq('id', transaction.id)
+                .single();
+              
+              if (currentTx?.status !== 'pending') {
+                console.log('Transaction status already changed, skipping update:', transaction.id);
+                break;
+              }
+            }
+            
+            console.error(`Attempt ${attempt} error updating failed transaction:`, updateError);
+            if (attempt < maxRetries) {
+              await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+              continue;
+            }
+          } else if (updatedData && updatedData.length > 0) {
+            statusUpdated = true;
+            console.log(`Transaction marked as rejected (attempt ${attempt}):`, transaction.id);
+            break;
+          }
+        } catch (retryError) {
+          console.error(`Attempt ${attempt} exception updating failed transaction:`, retryError);
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+          }
+        }
       }
 
-      console.log('Transaction marked as rejected:', transaction.id);
+      if (!statusUpdated) {
+        console.error('Failed to update failed transaction status after all retries:', transaction.id);
+      }
     } else {
       console.log('Transaction already processed, skipping:', transaction.id);
     }

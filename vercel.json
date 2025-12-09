@@ -34,6 +34,12 @@
         }
       ]
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/verify-pending-payments",
+      "schedule": "*/10 * * * *"
+    }
   ]
 }
 

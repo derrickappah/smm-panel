@@ -242,8 +242,48 @@ export const processManualRefund = async (order) => {
       // Don't fail - we'll check again before creating, but log the warning
     }
 
+    // Pre-check: Fetch current refund_status before attempting atomic update
+    // This allows early return if refund is already in progress or completed
+    const { data: currentOrderCheck, error: checkError } = await supabase
+      .from('orders')
+      .select('refund_status, status')
+      .eq('id', order.id)
+      .maybeSingle();
+
+    if (checkError) {
+      console.error('Error checking current refund status:', checkError);
+      throw new Error(`Failed to check refund status: ${checkError.message}`);
+    }
+
+    if (currentOrderCheck) {
+      // Early return if refund is already in progress or completed
+      if (currentOrderCheck.refund_status === 'succeeded') {
+        console.log('Refund already processed:', order.id);
+        return { 
+          success: false, 
+          error: 'Refund already processed. This order has already been refunded.' 
+        };
+      }
+      if (currentOrderCheck.refund_status === 'pending') {
+        console.log('Refund already in progress:', order.id);
+        return { 
+          success: false, 
+          error: 'Refund already in progress. Please wait for it to complete or check with another admin.' 
+        };
+      }
+      // Only proceed if refund_status is NULL or 'failed' (allow retry of failed refunds)
+      if (currentOrderCheck.refund_status !== null && currentOrderCheck.refund_status !== 'failed') {
+        console.log('Unexpected refund status:', order.id, currentOrderCheck.refund_status);
+        return { 
+          success: false, 
+          error: `Cannot process refund. Unexpected refund status: ${currentOrderCheck.refund_status}` 
+        };
+      }
+    }
+
     // Atomic update: Mark refund as pending ONLY if it's not already set
     // This prevents race conditions where multiple admins try to refund simultaneously
+    // Use maybeSingle() to handle 0 rows gracefully (when condition doesn't match)
     const { data: updatedOrder, error: pendingError } = await supabase
       .from('orders')
       .update({
@@ -252,27 +292,34 @@ export const processManualRefund = async (order) => {
       .eq('id', order.id)
       .or(`refund_status.is.null,refund_status.eq.failed`) // Only update if null or failed (allow retry of failed refunds)
       .select()
-      .single();
+      .maybeSingle();
 
-    // If no rows were updated, it means refund_status was already set (race condition prevented)
-    if (pendingError || !updatedOrder) {
-      // Check current refund status
-      const { data: currentOrder } = await supabase
+    // Handle update result
+    if (pendingError) {
+      // Actual database error occurred
+      console.error('Error marking refund as pending:', pendingError);
+      throw new Error(`Failed to update refund status: ${pendingError.message}`);
+    }
+
+    if (!updatedOrder) {
+      // No rows were updated - condition didn't match (race condition or status changed)
+      // Re-check current status to provide accurate error message
+      const { data: currentOrderRecheck } = await supabase
         .from('orders')
         .select('refund_status, status')
         .eq('id', order.id)
-        .single();
+        .maybeSingle();
       
-      if (currentOrder) {
-        if (currentOrder.refund_status === 'succeeded') {
-          console.log('Refund already processed (race condition prevented):', order.id);
+      if (currentOrderRecheck) {
+        if (currentOrderRecheck.refund_status === 'succeeded') {
+          console.log('Refund already processed (race condition detected):', order.id);
           return { 
             success: false, 
-            error: 'Refund already processed. Another admin may have processed it.' 
+            error: 'Refund already processed. Another admin may have processed it while you were attempting the refund.' 
           };
         }
-        if (currentOrder.refund_status === 'pending') {
-          console.log('Refund already in progress (race condition prevented):', order.id);
+        if (currentOrderRecheck.refund_status === 'pending') {
+          console.log('Refund already in progress (race condition detected):', order.id);
           return { 
             success: false, 
             error: 'Refund already in progress. Another admin may be processing it.' 
@@ -280,8 +327,9 @@ export const processManualRefund = async (order) => {
         }
       }
       
-      console.error('Error marking refund as pending:', pendingError);
-      throw pendingError || new Error('Failed to update refund status. Another refund may be in progress.');
+      // Unknown reason for no update
+      console.error('Failed to update refund status: No rows updated and status check returned:', currentOrderRecheck);
+      throw new Error('Failed to update refund status. The order may have been modified by another process.');
     }
 
     console.log('Refund marked as pending, proceeding with refund processing');
