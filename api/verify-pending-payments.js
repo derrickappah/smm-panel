@@ -497,6 +497,73 @@ export default async function handler(req, res) {
         const thirtyMinutes = 30 * 60 * 1000;
         const oneHour = 60 * 60 * 1000;
 
+        // CRITICAL: If transaction is missing reference, try to retrieve it from Paystack
+        if (!transaction.paystack_reference && transaction.deposit_method === 'paystack') {
+          console.log(`[VERIFY] Transaction ${transaction.id} missing reference, attempting to retrieve from Paystack...`);
+          
+          try {
+            // Query Paystack transactions API to find matching transaction
+            const startDate = new Date(new Date(transaction.created_at).getTime() - 2 * 60 * 60 * 1000); // 2 hours before
+            const endDate = new Date(new Date(transaction.created_at).getTime() + 2 * 60 * 60 * 1000); // 2 hours after
+            const startDateStr = startDate.toISOString().split('T')[0];
+            const endDateStr = endDate.toISOString().split('T')[0];
+            
+            const paystackAmount = Math.round(transaction.amount * 100); // Convert to pesewas
+            
+            // Query Paystack for transactions in this time window with matching amount
+            const paystackQueryUrl = `https://api.paystack.co/transaction?perPage=50&page=1&from=${startDateStr}&to=${endDateStr}`;
+            const paystackResponse = await fetch(paystackQueryUrl, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${PAYSTACK_SECRET_KEY}`,
+                'Content-Type': 'application/json'
+              }
+            });
+
+            if (paystackResponse.ok) {
+              const paystackData = await paystackResponse.json();
+              
+              if (paystackData.status && paystackData.data) {
+                // Find matching transaction by amount and user email
+                const { data: userProfile } = await supabase
+                  .from('profiles')
+                  .select('email')
+                  .eq('id', transaction.user_id)
+                  .single();
+
+                const matchingTx = paystackData.data.find(tx => {
+                  const txAmount = tx.amount; // Already in pesewas
+                  const amountMatch = Math.abs(txAmount - paystackAmount) < 10; // Allow small difference
+                  
+                  // Try to match by email if available
+                  if (userProfile?.email && tx.customer?.email) {
+                    return amountMatch && tx.customer.email.toLowerCase() === userProfile.email.toLowerCase();
+                  }
+                  
+                  return amountMatch;
+                });
+
+                if (matchingTx && matchingTx.reference) {
+                  console.log(`[VERIFY] Found matching Paystack transaction, storing reference: ${matchingTx.reference}`);
+                  
+                  // Store the reference
+                  await supabase
+                    .from('transactions')
+                    .update({ paystack_reference: matchingTx.reference })
+                    .eq('id', transaction.id);
+                  
+                  transaction.paystack_reference = matchingTx.reference;
+                } else {
+                  console.log(`[VERIFY] No matching Paystack transaction found for transaction ${transaction.id}`);
+                }
+              }
+            }
+          } catch (refRetrievalError) {
+            console.error(`[VERIFY] Error retrieving reference for transaction ${transaction.id}:`, refRetrievalError);
+            // Continue with verification even if reference retrieval fails
+          }
+        }
+
         // Verify Paystack transactions
         if (transaction.paystack_reference && transaction.deposit_method === 'paystack') {
           let verifyResponse = null;
@@ -547,8 +614,13 @@ export default async function handler(req, res) {
                 const updateData = {
                   status: 'approved',
                   paystack_status: 'success',
-                  paystack_reference: transaction.paystack_reference
+                  paystack_reference: transaction.paystack_reference || undefined
                 };
+                
+                // Ensure reference is included if we have it
+                if (transaction.paystack_reference) {
+                  updateData.paystack_reference = transaction.paystack_reference;
+                }
 
                 let statusUpdated = false;
                 let statusUpdateError = null;

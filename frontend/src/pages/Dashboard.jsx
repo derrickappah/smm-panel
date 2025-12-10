@@ -1018,6 +1018,71 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     }
   };
 
+  // Helper function to store Paystack reference with retry logic
+  const storePaystackReference = useCallback(async (transactionId, reference, maxRetries = 3) => {
+    if (!transactionId || !reference) {
+      console.warn('[REFERENCE] Cannot store reference - missing transaction ID or reference:', {
+        hasTransactionId: !!transactionId,
+        hasReference: !!reference
+      });
+      return false;
+    }
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const { data: refData, error: refError } = await supabase
+          .from('transactions')
+          .update({ paystack_reference: reference })
+          .eq('id', transactionId)
+          .select('paystack_reference')
+          .single();
+
+        if (refError) {
+          console.error(`[REFERENCE] Attempt ${attempt} error storing reference:`, refError);
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+            continue;
+          }
+          return false;
+        }
+
+        if (refData?.paystack_reference === reference) {
+          console.log(`[REFERENCE] ✅ Reference stored successfully (attempt ${attempt}):`, reference);
+          return true;
+        } else {
+          console.warn(`[REFERENCE] Attempt ${attempt} - Reference update returned but value mismatch:`, {
+            expected: reference,
+            received: refData?.paystack_reference
+          });
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+            continue;
+          }
+        }
+      } catch (error) {
+        console.error(`[REFERENCE] Attempt ${attempt} exception storing reference:`, error);
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        }
+      }
+    }
+
+    // Final verification
+    const { data: finalCheck } = await supabase
+      .from('transactions')
+      .select('paystack_reference')
+      .eq('id', transactionId)
+      .single();
+
+    if (finalCheck?.paystack_reference === reference) {
+      console.log('[REFERENCE] ✅ Reference verified in final check');
+      return true;
+    }
+
+    console.error('[REFERENCE] ❌ Failed to store reference after all attempts');
+    return false;
+  }, []);
+
   const handlePaymentCancellation = async () => {
     if (!pendingTransaction) {
       console.log('No pending transaction to cancel');
@@ -1213,10 +1278,27 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               // Paystack callback must be synchronous, handle async operation inside
               console.log('Paystack callback triggered:', response);
               
+              // CRITICAL: Store reference for ALL payment states (success, failed, abandoned)
+              // This ensures every Paystack deposit has a reference regardless of outcome
+              if (pendingTransaction?.id && response?.reference) {
+                console.log('[CALLBACK] Storing Paystack reference for all payment states:', response.reference);
+                storePaystackReference(pendingTransaction.id, response.reference).catch((refError) => {
+                  console.error('[CALLBACK] Error storing reference in callback:', refError);
+                  // Continue processing even if reference storage fails - we'll retry later
+                });
+              } else {
+                console.warn('[CALLBACK] Cannot store reference - missing transaction ID or reference:', {
+                  hasTransactionId: !!pendingTransaction?.id,
+                  hasReference: !!response?.reference,
+                  response: response
+                });
+              }
+              
               // Check if response indicates failure
               if (!response || response.status === 'error' || response.status === 'failed') {
-                console.error('Payment failed:', response);
+                console.error('[CALLBACK] Payment failed:', response);
                 toast.error('Payment failed. Please try again.');
+                // Reference already stored above, now handle cancellation
                 handlePaymentCancellation().catch((error) => {
                   console.error('Error handling payment failure:', error);
                 });
@@ -1225,7 +1307,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               
               // Verify response has reference
               if (!response.reference) {
-                console.error('Invalid Paystack response (no reference):', response);
+                console.error('[CALLBACK] Invalid Paystack response (no reference):', response);
                 toast.error('Payment response invalid. Please contact support.');
                 handlePaymentCancellation().catch((error) => {
                   console.error('Error handling invalid payment response:', error);
@@ -1233,42 +1315,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                 return;
               }
 
-              console.log('Paystack reference:', response.reference);
-              console.log('Pending transaction:', pendingTransaction);
-
-              // Store the reference immediately (even before processing) so we can verify later if needed
-              // This is critical - we must store the reference as soon as we get it
-              if (pendingTransaction?.id && response.reference) {
-                supabase
-                  .from('transactions')
-                  .update({ paystack_reference: response.reference })
-                  .eq('id', pendingTransaction.id)
-                  .select('paystack_reference')
-                  .single()
-                  .then(({ data: refData, error: refError }) => {
-                    if (refError) {
-                      console.error('Error storing Paystack reference:', refError);
-                      // Don't fail the payment process if reference storage fails
-                      // We'll try again in handlePaymentSuccess
-                    } else if (refData?.paystack_reference === response.reference) {
-                      console.log('✅ Paystack reference stored successfully in callback:', response.reference);
-                    } else {
-                      console.warn('⚠️ Reference update returned but value mismatch:', {
-                        expected: response.reference,
-                        received: refData?.paystack_reference
-                      });
-                    }
-                  })
-                  .catch((refError) => {
-                    console.error('Error storing Paystack reference (catch):', refError);
-                    // Don't fail the payment process - we'll try again in handlePaymentSuccess
-                  });
-              } else {
-                console.warn('⚠️ Cannot store reference - missing transaction ID or reference:', {
-                  hasTransactionId: !!pendingTransaction?.id,
-                  hasReference: !!response.reference
-                });
-              }
+              console.log('[CALLBACK] Paystack reference:', response.reference);
+              console.log('[CALLBACK] Pending transaction:', pendingTransaction);
 
               // Call the async handler (this will also ensure reference is stored)
               handlePaymentSuccess(response.reference).catch((error) => {
@@ -1277,9 +1325,11 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               });
             },
             onClose: () => {
-              console.log('Payment window closed by user before confirmation');
-              // Update transaction status to rejected when payment window is closed
-              // The toast will be shown in handlePaymentCancellation after successful update
+              console.log('[CALLBACK] Payment window closed by user before confirmation');
+              // Note: If user closes window, we may not have a reference yet
+              // But if we do have one from Paystack initialization, try to store it
+              // The reference might be available in the pendingTransaction if Paystack provided it
+              // We'll also try to retrieve it in handlePaymentCancellation
               handlePaymentCancellation().catch((error) => {
                 console.error('Error handling payment cancellation:', error);
                 toast.error('Failed to update payment status. Please contact support.');

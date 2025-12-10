@@ -122,13 +122,78 @@ export default async function handler(req, res) {
       });
     }
 
-    // Get Paystack reference
-    const paystackReference = transaction.paystack_reference || reference;
+    // Get Paystack reference - try to retrieve if missing
+    let paystackReference = transaction.paystack_reference || reference;
+    
+    // If reference is missing, try to retrieve it from Paystack
+    if (!paystackReference) {
+      console.log(`[MANUAL-VERIFY] No reference found, attempting to retrieve from Paystack for transaction ${transaction.id}`);
+      
+      try {
+        // Query Paystack transactions API to find matching transaction
+        const startDate = new Date(new Date(transaction.created_at).getTime() - 2 * 60 * 60 * 1000); // 2 hours before
+        const endDate = new Date(new Date(transaction.created_at).getTime() + 2 * 60 * 60 * 1000); // 2 hours after
+        const startDateStr = startDate.toISOString().split('T')[0];
+        const endDateStr = endDate.toISOString().split('T')[0];
+        
+        const paystackAmount = Math.round(transaction.amount * 100); // Convert to pesewas
+        
+        // Get user email for matching
+        const { data: userProfile } = await supabase
+          .from('profiles')
+          .select('email')
+          .eq('id', transaction.user_id)
+          .single();
+
+        // Query Paystack for transactions in this time window
+        const paystackQueryUrl = `https://api.paystack.co/transaction?perPage=50&page=1&from=${startDateStr}&to=${endDateStr}`;
+        const paystackResponse = await fetch(paystackQueryUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${PAYSTACK_SECRET_KEY}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (paystackResponse.ok) {
+          const paystackData = await paystackResponse.json();
+          
+          if (paystackData.status && paystackData.data) {
+            // Find matching transaction by amount and user email
+            const matchingTx = paystackData.data.find(tx => {
+              const txAmount = tx.amount; // Already in pesewas
+              const amountMatch = Math.abs(txAmount - paystackAmount) < 10; // Allow small difference
+              
+              // Try to match by email if available
+              if (userProfile?.email && tx.customer?.email) {
+                return amountMatch && tx.customer.email.toLowerCase() === userProfile.email.toLowerCase();
+              }
+              
+              return amountMatch;
+            });
+
+            if (matchingTx && matchingTx.reference) {
+              paystackReference = matchingTx.reference;
+              console.log(`[MANUAL-VERIFY] Found matching Paystack transaction, retrieved reference: ${paystackReference}`);
+              
+              // Store the reference
+              await supabase
+                .from('transactions')
+                .update({ paystack_reference: paystackReference })
+                .eq('id', transaction.id);
+            }
+          }
+        }
+      } catch (refRetrievalError) {
+        console.error(`[MANUAL-VERIFY] Error retrieving reference:`, refRetrievalError);
+      }
+    }
     
     if (!paystackReference) {
       return res.status(400).json({ 
-        error: 'No Paystack reference found for this transaction',
-        transactionId: transaction.id
+        error: 'No Paystack reference found for this transaction and could not retrieve it from Paystack',
+        transactionId: transaction.id,
+        suggestion: 'The payment may not have been initiated with Paystack, or it may be too old to retrieve'
       });
     }
 

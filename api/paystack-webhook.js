@@ -244,8 +244,15 @@ export default async function handler(req, res) {
       await handleSuccessfulPayment(event.data, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     } else if (event.event === 'charge.failed') {
       await handleFailedPayment(event.data, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    } else if (event.event === 'charge.abandoned') {
+      // Handle abandoned payments (user closed payment window)
+      await handleFailedPayment(event.data, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     } else {
-      console.log('Unhandled webhook event:', event.event);
+      console.log('[WEBHOOK] Unhandled webhook event:', event.event);
+      // Even for unhandled events, try to store reference if available
+      if (event.data?.reference) {
+        await storeReferenceForEvent(event.data, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+      }
     }
 
     // Always return 200 to acknowledge receipt
@@ -752,6 +759,64 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
 }
 
 /**
+ * Store reference for any webhook event (helper function)
+ */
+async function storeReferenceForEvent(paymentData, supabaseUrl, supabaseServiceKey) {
+  try {
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    });
+
+    const reference = paymentData.reference;
+    const metadata = paymentData.metadata || {};
+    const transactionId = metadata.transaction_id;
+
+    if (!reference) return;
+
+    // Try to find transaction and store reference
+    let transaction = null;
+
+    if (reference) {
+      const { data: txByRef } = await supabase
+        .from('transactions')
+        .select('id, paystack_reference')
+        .eq('paystack_reference', reference)
+        .maybeSingle();
+
+      if (txByRef) {
+        transaction = txByRef;
+      }
+    }
+
+    if (!transaction && transactionId) {
+      const { data: txById } = await supabase
+        .from('transactions')
+        .select('id, paystack_reference')
+        .eq('id', transactionId)
+        .maybeSingle();
+
+      if (txById) {
+        transaction = txById;
+      }
+    }
+
+    // Store reference if transaction found and doesn't have it
+    if (transaction && !transaction.paystack_reference) {
+      await supabase
+        .from('transactions')
+        .update({ paystack_reference: reference })
+        .eq('id', transaction.id);
+      console.log('[WEBHOOK] Stored reference for transaction:', transaction.id);
+    }
+  } catch (error) {
+    console.error('[WEBHOOK] Error storing reference for event:', error);
+  }
+}
+
+/**
  * Handle failed payment
  */
 async function handleFailedPayment(paymentData, supabaseUrl, supabaseServiceKey) {
@@ -800,11 +865,34 @@ async function handleFailedPayment(paymentData, supabaseUrl, supabaseServiceKey)
     }
 
     if (!transaction) {
-      console.error('Transaction not found for failed payment:', {
+      console.error('[WEBHOOK] Transaction not found for failed payment:', {
         reference,
         transactionId
       });
       return;
+    }
+
+    // CRITICAL: Always store reference if we have it (even if transaction already has one)
+    // This ensures every Paystack deposit has a reference
+    if (reference && !transaction.paystack_reference) {
+      console.log('[WEBHOOK] Storing missing reference for failed transaction:', transaction.id);
+      await supabase
+        .from('transactions')
+        .update({
+          paystack_reference: reference
+        })
+        .eq('id', transaction.id);
+      transaction.paystack_reference = reference;
+    } else if (reference && transaction.paystack_reference !== reference) {
+      // Update reference if it's different (shouldn't happen, but ensure consistency)
+      console.log('[WEBHOOK] Updating reference for failed transaction:', transaction.id);
+      await supabase
+        .from('transactions')
+        .update({
+          paystack_reference: reference
+        })
+        .eq('id', transaction.id);
+      transaction.paystack_reference = reference;
     }
 
     // Update failed transaction with retry logic
