@@ -1,18 +1,12 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { checkUserRole } from './useUserRole';
+import { useUserRole } from './useUserRole';
 import { toast } from 'sonner';
 
 const PAGE_SIZE = 50;
 
 // Fetch users with pagination
 const fetchUsers = async ({ pageParam = 0 }) => {
-  const userRole = await checkUserRole();
-  
-  if (!userRole.isAdmin) {
-    throw new Error('Access denied. Admin role required.');
-  }
-
   const from = pageParam * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
 
@@ -36,32 +30,57 @@ const fetchUsers = async ({ pageParam = 0 }) => {
   };
 };
 
-// Fetch all users (for stats calculation) - Optimized with limit
-// Only fetch what's needed for stats, not all records
+// Fetch all users (for stats calculation) - Fetches ALL records efficiently using optimized pagination
 const fetchAllUsers = async () => {
-  const userRole = await checkUserRole();
+  const BATCH_SIZE = 1000; // Fetch in batches for optimal performance
+  let allUsers = [];
+  let from = 0;
+  let hasMore = true;
   
-  if (!userRole.isAdmin) {
-    throw new Error('Access denied. Admin role required.');
-  }
-
-  // For stats, we typically only need recent users or aggregated data
-  // Limit to last 5000 users instead of fetching everything
-  const { data, error } = await supabase
+  // First, get total count to optimize fetching
+  const { count, error: countError } = await supabase
     .from('profiles')
-    .select('id, email, name, balance, role, phone_number, created_at')
-    .order('created_at', { ascending: false })
-    .limit(5000);
+    .select('*', { count: 'exact', head: true });
+  
+  if (countError) {
+    throw countError;
+  }
+  
+  // Fetch all batches - optimized sequential fetching for large datasets
+  while (hasMore) {
+    const to = from + BATCH_SIZE - 1;
+    
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, email, name, balance, role, phone_number, created_at')
+      .order('created_at', { ascending: false })
+      .range(from, to);
 
-  if (error) {
-    throw error;
+    if (error) {
+      throw error;
+    }
+
+    if (data && data.length > 0) {
+      allUsers = allUsers.concat(data);
+      hasMore = data.length === BATCH_SIZE && allUsers.length < (count || Infinity);
+      from += BATCH_SIZE;
+    } else {
+      hasMore = false;
+    }
   }
 
-  return data || [];
+  return allUsers;
 };
 
 export const useAdminUsers = (options = {}) => {
   const { enabled = true, useInfinite = false } = options;
+  
+  // Check role at hook level (cached)
+  const { data: userRole, isLoading: roleLoading } = useUserRole();
+  const isAdmin = userRole?.isAdmin ?? false;
+  
+  // Only enable queries if user is admin
+  const queryEnabled = enabled && !roleLoading && isAdmin;
 
   if (useInfinite) {
     return useInfiniteQuery({
@@ -69,7 +88,7 @@ export const useAdminUsers = (options = {}) => {
       queryFn: fetchUsers,
       getNextPageParam: (lastPage) => lastPage.nextPage,
       initialPageParam: 0,
-      enabled,
+      enabled: queryEnabled,
       staleTime: 2 * 60 * 1000, // 2 minutes
       gcTime: 5 * 60 * 1000, // 5 minutes
     });
@@ -78,7 +97,7 @@ export const useAdminUsers = (options = {}) => {
   return useQuery({
     queryKey: ['admin', 'users', 'all'],
     queryFn: fetchAllUsers,
-    enabled,
+    enabled: queryEnabled,
     staleTime: 3 * 60 * 1000, // 3 minutes - increased for better caching
     gcTime: 10 * 60 * 1000, // 10 minutes - keep in cache longer
   });

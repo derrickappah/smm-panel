@@ -1,24 +1,18 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { checkUserRole } from './useUserRole';
+import { useUserRole } from './useUserRole';
 import { toast } from 'sonner';
 
 const PAGE_SIZE = 50;
 
 // Fetch deposits with pagination
 const fetchDeposits = async ({ pageParam = 0 }) => {
-  const userRole = await checkUserRole();
-  
-  if (!userRole.isAdmin) {
-    throw new Error('Access denied. Admin role required.');
-  }
-
   const from = pageParam * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
 
   const { data, error, count } = await supabase
     .from('transactions')
-    .select('*, profiles(email, name, phone_number)', { count: 'exact' })
+    .select('id, user_id, amount, type, status, created_at, paystack_status, reference, payment_method, payment_provider, profiles(email, name, phone_number)', { count: 'exact' })
     .eq('type', 'deposit')
     .order('created_at', { ascending: false })
     .range(from, to);
@@ -37,33 +31,59 @@ const fetchDeposits = async ({ pageParam = 0 }) => {
   };
 };
 
-// Fetch all deposits (for stats calculation) - Optimized with limit
-// Only fetch what's needed for stats, not all records
+// Fetch all deposits (for stats calculation) - Fetches ALL records efficiently using optimized pagination
 const fetchAllDeposits = async () => {
-  const userRole = await checkUserRole();
+  const BATCH_SIZE = 1000; // Fetch in batches for optimal performance
+  let allDeposits = [];
+  let from = 0;
+  let hasMore = true;
   
-  if (!userRole.isAdmin) {
-    throw new Error('Access denied. Admin role required.');
-  }
-
-  // For stats, we typically only need recent deposits or aggregated data
-  // Limit to last 5000 deposits instead of fetching everything
-  const { data, error } = await supabase
+  // First, get total count to optimize fetching
+  const { count, error: countError } = await supabase
     .from('transactions')
-    .select('*, profiles(email, name, phone_number)')
-    .eq('type', 'deposit')
-    .order('created_at', { ascending: false })
-    .limit(5000);
-
-  if (error) {
-    throw error;
+    .select('*', { count: 'exact', head: true })
+    .eq('type', 'deposit');
+  
+  if (countError) {
+    throw countError;
   }
 
-  return data || [];
+  // Fetch all batches - optimized sequential fetching for large datasets
+  while (hasMore) {
+    const to = from + BATCH_SIZE - 1;
+    
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('id, user_id, amount, type, status, created_at, paystack_status, reference, payment_method, payment_provider, profiles(email, name, phone_number)')
+      .eq('type', 'deposit')
+      .order('created_at', { ascending: false })
+      .range(from, to);
+
+    if (error) {
+      throw error;
+    }
+
+    if (data && data.length > 0) {
+      allDeposits = allDeposits.concat(data);
+      hasMore = data.length === BATCH_SIZE && allDeposits.length < (count || Infinity);
+      from += BATCH_SIZE;
+    } else {
+      hasMore = false;
+    }
+  }
+
+  return allDeposits;
 };
 
 export const useAdminDeposits = (options = {}) => {
   const { enabled = true, useInfinite = false } = options;
+  
+  // Check role at hook level (cached)
+  const { data: userRole, isLoading: roleLoading } = useUserRole();
+  const isAdmin = userRole?.isAdmin ?? false;
+  
+  // Only enable queries if user is admin
+  const queryEnabled = enabled && !roleLoading && isAdmin;
 
   if (useInfinite) {
     return useInfiniteQuery({
@@ -71,7 +91,7 @@ export const useAdminDeposits = (options = {}) => {
       queryFn: fetchDeposits,
       getNextPageParam: (lastPage) => lastPage.nextPage,
       initialPageParam: 0,
-      enabled,
+      enabled: queryEnabled,
       staleTime: 2 * 60 * 1000, // 2 minutes
       gcTime: 5 * 60 * 1000, // 5 minutes
     });
@@ -80,7 +100,7 @@ export const useAdminDeposits = (options = {}) => {
   return useQuery({
     queryKey: ['admin', 'deposits', 'all'],
     queryFn: fetchAllDeposits,
-    enabled,
+    enabled: queryEnabled,
     staleTime: 3 * 60 * 1000, // 3 minutes - increased for better caching
     gcTime: 10 * 60 * 1000, // 10 minutes - keep in cache longer
   });

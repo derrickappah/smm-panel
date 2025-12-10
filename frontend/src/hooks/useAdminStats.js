@@ -33,12 +33,9 @@ const isDateInRange = (dateString, dateRangeStart, dateRangeEnd) => {
 
 export const useAdminStats = (options = {}) => {
   const { dateRangeStart, dateRangeEnd, enabled = true } = options;
-
-  // For stats, we only need recent data (last 90 days) to calculate today's metrics and totals
-  // This is much faster than fetching all records
-  const limitForStats = 5000; // Limit to 5000 most recent records for stats calculation
   
-  // Fetch data needed for stats in parallel - use limited queries for faster loading
+  // Fetch ALL data needed for stats in parallel - no limits, optimized pagination
+  // All data is fetched efficiently using batched pagination for maximum performance
   const { data: users = [], isLoading: usersLoading } = useAdminUsers({ enabled, useInfinite: false });
   const { data: orders = [], isLoading: ordersLoading } = useAdminOrders({ enabled, useInfinite: false, checkSMMGenStatus: false });
   const { data: deposits = [], isLoading: depositsLoading } = useAdminDeposits({ enabled, useInfinite: false });
@@ -52,119 +49,153 @@ export const useAdminStats = (options = {}) => {
                     (servicesLoading && services.length === 0) || 
                     (ticketsLoading && tickets.length === 0);
 
-  // Calculate stats immediately using useMemo (no blocking query)
+  // Calculate stats immediately using useMemo (optimized single-pass calculation)
   const stats = useMemo(() => {
-      // Filter by date range if specified
-      const currentDeposits = (deposits || []).filter(d => isDateInRange(d.created_at, dateRangeStart, dateRangeEnd));
-      const currentOrders = (orders || []).filter(o => isDateInRange(o.created_at, dateRangeStart, dateRangeEnd));
-      const currentTickets = (tickets || []).filter(t => isDateInRange(t.created_at, dateRangeStart, dateRangeEnd));
-      const currentUsers = (users || []).filter(u => isDateInRange(u.created_at, dateRangeStart, dateRangeEnd));
-      
-      const pendingDeposits = currentDeposits.filter(d => d.status === 'pending').length;
-      const confirmedDeposits = currentDeposits.filter(d => d.status === 'approved').length;
-      const completedOrders = currentOrders.filter(o => o.status === 'completed').length;
-      const openTickets = currentTickets.filter(t => t.status === 'open').length;
-      const totalRevenue = currentOrders
-        .filter(o => o.status === 'completed')
-        .reduce((sum, o) => sum + parseFloat(o.total_cost || 0), 0);
-      const totalDeposits = currentDeposits
-        .filter(d => d.status === 'approved')
-        .reduce((sum, d) => sum + parseFloat(d.amount || 0), 0);
-
-      // Calculate today's metrics
+      // Pre-calculate date boundaries once
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const todayEnd = new Date(today);
       todayEnd.setHours(23, 59, 59, 999);
+      
+      // Pre-parse date range boundaries once
+      let rangeStart = null;
+      let rangeEnd = null;
+      if (dateRangeStart) {
+        rangeStart = new Date(dateRangeStart);
+        rangeStart.setHours(0, 0, 0, 0);
+      }
+      if (dateRangeEnd) {
+        rangeEnd = new Date(dateRangeEnd);
+        rangeEnd.setHours(23, 59, 59, 999);
+      }
 
-      const usersToday = currentUsers.filter(u => {
-        const userDate = new Date(u.created_at);
-        return userDate >= today && userDate <= todayEnd;
-      }).length;
-
-      const ordersToday = currentOrders.filter(o => {
-        const orderDate = new Date(o.created_at);
-        return orderDate >= today && orderDate <= todayEnd;
-      }).length;
-
-      const depositsToday = currentDeposits.filter(d => {
+      // Single-pass calculation for deposits (optimized)
+      let pendingDeposits = 0;
+      let confirmedDeposits = 0;
+      let rejectedDeposits = 0;
+      let totalDeposits = 0;
+      let depositsToday = 0;
+      let depositsAmountToday = 0;
+      const currentDeposits = [];
+      
+      (deposits || []).forEach(d => {
+        if (!isDateInRange(d.created_at, dateRangeStart, dateRangeEnd)) return;
+        currentDeposits.push(d);
+        
         const depositDate = new Date(d.created_at);
-        return depositDate >= today && depositDate <= todayEnd;
-      }).length;
+        const isToday = depositDate >= today && depositDate <= todayEnd;
+        
+        if (d.status === 'pending') pendingDeposits++;
+        else if (d.status === 'approved') {
+          confirmedDeposits++;
+          const amount = parseFloat(d.amount || 0);
+          totalDeposits += amount;
+          if (isToday) depositsAmountToday += amount;
+        }
+        else if (d.status === 'rejected') rejectedDeposits++;
+        
+        if (isToday) depositsToday++;
+      });
 
-      const depositsAmountToday = currentDeposits
-        .filter(d => {
-          const depositDate = new Date(d.created_at);
-          return depositDate >= today && depositDate <= todayEnd && d.status === 'approved';
-        })
-        .reduce((sum, d) => sum + parseFloat(d.amount || 0), 0);
+      // Single-pass calculation for orders (optimized)
+      let completedOrders = 0;
+      let processingOrders = 0;
+      let cancelledOrders = 0;
+      let refundedOrders = 0;
+      let failedRefunds = 0;
+      let totalRevenue = 0;
+      let ordersToday = 0;
+      let revenueToday = 0;
+      const currentOrders = [];
+      
+      (orders || []).forEach(o => {
+        const inRange = isDateInRange(o.created_at, dateRangeStart, dateRangeEnd);
+        const orderDate = new Date(o.created_at);
+        const isToday = orderDate >= today && orderDate <= todayEnd;
+        
+        if (inRange) {
+          currentOrders.push(o);
+          if (isToday) ordersToday++;
+        }
+        
+        if (o.status === 'completed') {
+          const cost = parseFloat(o.total_cost || 0);
+          if (inRange) {
+            completedOrders++;
+            totalRevenue += cost;
+            if (isToday) revenueToday += cost;
+          }
+        } else if (o.status === 'processing' || o.status === 'in progress') {
+          if (inRange) processingOrders++;
+        } else if (o.status === 'canceled' || o.status === 'cancelled') {
+          if (inRange) cancelledOrders++;
+        }
+        
+        if (o.refund_status === 'succeeded' && inRange) refundedOrders++;
+        else if (o.refund_status === 'failed' && inRange) failedRefunds++;
+      });
 
-      const revenueToday = currentOrders
-        .filter(o => {
-          const orderDate = new Date(o.created_at);
-          return orderDate >= today && orderDate <= todayEnd && o.status === 'completed';
-        })
-        .reduce((sum, o) => sum + parseFloat(o.total_cost || 0), 0);
+      // Single-pass calculation for tickets (optimized)
+      let openTickets = 0;
+      let inProgressTickets = 0;
+      let resolvedTickets = 0;
+      const currentTickets = [];
+      
+      (tickets || []).forEach(t => {
+        if (!isDateInRange(t.created_at, dateRangeStart, dateRangeEnd)) return;
+        currentTickets.push(t);
+        
+        if (t.status === 'open') openTickets++;
+        else if (t.status === 'in_progress') inProgressTickets++;
+        else if (t.status === 'resolved' || t.status === 'closed') resolvedTickets++;
+      });
 
-      const processingOrders = currentOrders.filter(o => o.status === 'processing' || o.status === 'in progress').length;
-      const cancelledOrders = currentOrders.filter(o => o.status === 'canceled' || o.status === 'cancelled').length;
-      const refundedOrders = currentOrders.filter(o => o.refund_status === 'succeeded').length;
-      const failedRefunds = currentOrders.filter(o => o.refund_status === 'failed').length;
-      const rejectedDeposits = currentDeposits.filter(d => d.status === 'rejected').length;
-      const inProgressTickets = currentTickets.filter(t => t.status === 'in_progress').length;
-      const resolvedTickets = currentTickets.filter(t => t.status === 'resolved' || t.status === 'closed').length;
+      // Single-pass calculation for users (optimized)
+      let usersToday = 0;
+      const currentUsers = [];
+      
+      (users || []).forEach(u => {
+        if (!isDateInRange(u.created_at, dateRangeStart, dateRangeEnd)) return;
+        currentUsers.push(u);
+        
+        const userDate = new Date(u.created_at);
+        if (userDate >= today && userDate <= todayEnd) usersToday++;
+      });
+
       const averageOrderValue = completedOrders > 0 ? totalRevenue / completedOrders : 0;
 
-      // Calculate service type totals from ALL completed orders (not filtered by date range)
-      const completedOrdersList = (orders || []).filter(o => o.status === 'completed');
+      // Optimized service type calculation - single pass with pre-computed checks
+      const serviceTypeChecks = {
+        like: (type, name) => type.includes('like') || name.includes('like'),
+        follower: (type, name) => type.includes('follower') || name.includes('follower'),
+        view: (type, name) => type.includes('view') || name.includes('view'),
+        comment: (type, name) => type.includes('comment') || name.includes('comment'),
+        share: (type, name) => type.includes('share') || name.includes('share'),
+        subscriber: (type, name) => type.includes('subscriber') || name.includes('subscriber'),
+      };
       
-      const totalLikesSent = completedOrdersList
-        .filter(o => {
-          const serviceType = (o.services?.service_type || '').toLowerCase();
-          const serviceName = (o.services?.name || '').toLowerCase();
-          return serviceType.includes('like') || serviceName.includes('like');
-        })
-        .reduce((sum, o) => sum + parseInt(o.quantity || 0), 0);
-
-      const totalFollowersSent = completedOrdersList
-        .filter(o => {
-          const serviceType = (o.services?.service_type || '').toLowerCase();
-          const serviceName = (o.services?.name || '').toLowerCase();
-          return serviceType.includes('follower') || serviceName.includes('follower');
-        })
-        .reduce((sum, o) => sum + parseInt(o.quantity || 0), 0);
-
-      const totalViewsSent = completedOrdersList
-        .filter(o => {
-          const serviceType = (o.services?.service_type || '').toLowerCase();
-          const serviceName = (o.services?.name || '').toLowerCase();
-          return serviceType.includes('view') || serviceName.includes('view');
-        })
-        .reduce((sum, o) => sum + parseInt(o.quantity || 0), 0);
-
-      const totalCommentsSent = completedOrdersList
-        .filter(o => {
-          const serviceType = (o.services?.service_type || '').toLowerCase();
-          const serviceName = (o.services?.name || '').toLowerCase();
-          return serviceType.includes('comment') || serviceName.includes('comment');
-        })
-        .reduce((sum, o) => sum + parseInt(o.quantity || 0), 0);
-
-      const totalSharesSent = completedOrdersList
-        .filter(o => {
-          const serviceType = (o.services?.service_type || '').toLowerCase();
-          const serviceName = (o.services?.name || '').toLowerCase();
-          return serviceType.includes('share') || serviceName.includes('share');
-        })
-        .reduce((sum, o) => sum + parseInt(o.quantity || 0), 0);
-
-      const totalSubscribersSent = completedOrdersList
-        .filter(o => {
-          const serviceType = (o.services?.service_type || '').toLowerCase();
-          const serviceName = (o.services?.name || '').toLowerCase();
-          return serviceType.includes('subscriber') || serviceName.includes('subscriber');
-        })
-        .reduce((sum, o) => sum + parseInt(o.quantity || 0), 0);
+      let totalLikesSent = 0;
+      let totalFollowersSent = 0;
+      let totalViewsSent = 0;
+      let totalCommentsSent = 0;
+      let totalSharesSent = 0;
+      let totalSubscribersSent = 0;
+      
+      // Single pass for service type calculations
+      (orders || []).forEach(o => {
+        if (o.status !== 'completed') return;
+        
+        const serviceType = (o.services?.service_type || '').toLowerCase();
+        const serviceName = (o.services?.name || '').toLowerCase();
+        const quantity = parseInt(o.quantity || 0);
+        
+        if (serviceTypeChecks.like(serviceType, serviceName)) totalLikesSent += quantity;
+        if (serviceTypeChecks.follower(serviceType, serviceName)) totalFollowersSent += quantity;
+        if (serviceTypeChecks.view(serviceType, serviceName)) totalViewsSent += quantity;
+        if (serviceTypeChecks.comment(serviceType, serviceName)) totalCommentsSent += quantity;
+        if (serviceTypeChecks.share(serviceType, serviceName)) totalSharesSent += quantity;
+        if (serviceTypeChecks.subscriber(serviceType, serviceName)) totalSubscribersSent += quantity;
+      });
 
       return {
         total_users: currentUsers.length,

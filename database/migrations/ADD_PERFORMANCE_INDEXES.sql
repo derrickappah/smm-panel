@@ -68,6 +68,47 @@ CREATE INDEX IF NOT EXISTS idx_verified_transactions_transaction_status
 ON verified_transactions(transaction_id, verified_status);
 
 -- ============================================
+-- SUPPORT TICKETS TABLE INDEXES
+-- ============================================
+
+-- Composite index for status-filtered ticket queries (admin pattern)
+-- Used when filtering tickets by status ordered by date
+CREATE INDEX IF NOT EXISTS idx_support_tickets_status_created 
+ON support_tickets(status, created_at DESC);
+
+-- Composite index for user and status combined queries
+-- Used when filtering tickets by user and status
+CREATE INDEX IF NOT EXISTS idx_support_tickets_user_status_created 
+ON support_tickets(user_id, status, created_at DESC);
+
+-- ============================================
+-- REFERRALS TABLE INDEXES
+-- ============================================
+
+-- Index for ordering referrals by creation date (admin queries)
+CREATE INDEX IF NOT EXISTS idx_referrals_created 
+ON referrals(created_at DESC);
+
+-- Composite index for referrer and bonus status queries
+-- Used when filtering referrals by referrer and bonus status
+CREATE INDEX IF NOT EXISTS idx_referrals_referrer_bonus_created 
+ON referrals(referrer_id, bonus_awarded, created_at DESC);
+
+-- ============================================
+-- ORDERS TABLE ADDITIONAL INDEXES
+-- ============================================
+
+-- Composite index for service-based order queries
+-- Used when filtering orders by service ordered by date
+CREATE INDEX IF NOT EXISTS idx_orders_service_created 
+ON orders(service_id, created_at DESC);
+
+-- Composite index for SMMGen order ID lookups (for status checks)
+CREATE INDEX IF NOT EXISTS idx_orders_smmgen_status_created 
+ON orders(smmgen_order_id, status, created_at DESC) 
+WHERE smmgen_order_id IS NOT NULL;
+
+-- ============================================
 -- COMMENTS
 -- ============================================
 
@@ -76,4 +117,7 @@ COMMENT ON INDEX idx_transactions_type_status_created IS 'Optimizes admin filter
 COMMENT ON INDEX idx_orders_user_created IS 'Optimizes user-specific order queries ordered by date';
 COMMENT ON INDEX idx_orders_status_created IS 'Optimizes status-filtered order queries';
 COMMENT ON INDEX idx_profiles_role IS 'Optimizes role-based queries for admin checks';
+COMMENT ON INDEX idx_support_tickets_status_created IS 'Optimizes status-filtered ticket queries ordered by date';
+COMMENT ON INDEX idx_referrals_created IS 'Optimizes referral queries ordered by creation date';
+COMMENT ON INDEX idx_orders_service_created IS 'Optimizes service-based order queries ordered by date';
 

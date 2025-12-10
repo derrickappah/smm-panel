@@ -1,24 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { useUserRole } from './useUserRole';
 import { toast } from 'sonner';
 
 // Fetch all services
 const fetchServices = async () => {
-  const { data: currentUser } = await supabase.auth.getUser();
-  if (!currentUser?.user) {
-    throw new Error('Not authenticated');
-  }
-
-  const { data: userProfile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', currentUser.user.id)
-    .single();
-
-  if (userProfile?.role !== 'admin') {
-    throw new Error('Access denied. Admin role required.');
-  }
-
   const { data, error } = await supabase
     .from('services')
     .select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, created_at')
@@ -30,11 +16,18 @@ const fetchServices = async () => {
 
 export const useAdminServices = (options = {}) => {
   const { enabled = true } = options;
+  
+  // Check role at hook level (cached)
+  const { data: userRole, isLoading: roleLoading } = useUserRole();
+  const isAdmin = userRole?.isAdmin ?? false;
+  
+  // Only enable queries if user is admin
+  const queryEnabled = enabled && !roleLoading && isAdmin;
 
   return useQuery({
     queryKey: ['admin', 'services'],
     queryFn: fetchServices,
-    enabled,
+    enabled: queryEnabled,
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
   });

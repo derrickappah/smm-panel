@@ -1,24 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { useUserRole } from './useUserRole';
 import { toast } from 'sonner';
 
 // Fetch all referrals with profiles
 const fetchReferrals = async () => {
-  const { data: currentUser } = await supabase.auth.getUser();
-  if (!currentUser?.user) {
-    throw new Error('Not authenticated');
-  }
-
-  const { data: userProfile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', currentUser.user.id)
-    .single();
-
-  if (userProfile?.role !== 'admin') {
-    throw new Error('Access denied. Admin role required.');
-  }
-
   const { data: referralsData, error: referralsError } = await supabase
     .from('referrals')
     .select('id, referrer_id, referee_id, referral_bonus, bonus_awarded, bonus_awarded_at, first_deposit_amount, created_at')
@@ -65,11 +51,18 @@ const fetchReferrals = async () => {
 
 export const useAdminReferrals = (options = {}) => {
   const { enabled = true } = options;
+  
+  // Check role at hook level (cached)
+  const { data: userRole, isLoading: roleLoading } = useUserRole();
+  const isAdmin = userRole?.isAdmin ?? false;
+  
+  // Only enable queries if user is admin
+  const queryEnabled = enabled && !roleLoading && isAdmin;
 
   return useQuery({
     queryKey: ['admin', 'referrals'],
     queryFn: fetchReferrals,
-    enabled,
+    enabled: queryEnabled,
     staleTime: 2 * 60 * 1000, // 2 minutes
     gcTime: 5 * 60 * 1000, // 5 minutes
   });
