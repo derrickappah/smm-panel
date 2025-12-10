@@ -360,13 +360,85 @@ export const useUpdateOrder = () => {
       if (error) throw error;
       return data;
     },
+    onMutate: async ({ orderId, updates }) => {
+      // Cancel any outgoing refetches to avoid overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: ['admin', 'orders'] });
+
+      // Snapshot the previous value for rollback
+      const previousQueries = queryClient.getQueriesData({ queryKey: ['admin', 'orders'] });
+      const previousData = new Map(previousQueries);
+
+      // Optimistically update all order queries
+      queryClient.setQueriesData({ queryKey: ['admin', 'orders'] }, (oldData) => {
+        if (!oldData) return oldData;
+
+        // Handle infinite query structure (has pages)
+        if (oldData.pages) {
+          return {
+            ...oldData,
+            pages: oldData.pages.map((page) => {
+              if (!page || !page.data) return page;
+              
+              const updatedData = page.data.map((order) => {
+                if (order.id === orderId) {
+                  return { ...order, ...updates };
+                }
+                return order;
+              });
+
+              return {
+                ...page,
+                data: updatedData,
+              };
+            }),
+          };
+        }
+
+        // Handle regular query structure (array of orders)
+        if (Array.isArray(oldData)) {
+          return oldData.map((order) => {
+            if (order.id === orderId) {
+              return { ...order, ...updates };
+            }
+            return order;
+          });
+        }
+
+        // Handle query with data property
+        if (oldData.data) {
+          if (Array.isArray(oldData.data)) {
+            return {
+              ...oldData,
+              data: oldData.data.map((order) => {
+                if (order.id === orderId) {
+                  return { ...order, ...updates };
+                }
+                return order;
+              }),
+            };
+          }
+        }
+
+        return oldData;
+      });
+
+      // Return context with previous data for rollback
+      return { previousData };
+    },
+    onError: (error, variables, context) => {
+      // Rollback optimistic update on error
+      if (context?.previousData) {
+        context.previousData.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
+      toast.error(error.message || 'Failed to update order');
+    },
     onSuccess: () => {
+      // Invalidate queries to ensure data consistency (refetch in background)
       queryClient.invalidateQueries({ queryKey: ['admin', 'orders'] });
       queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
       toast.success('Order updated successfully');
-    },
-    onError: (error) => {
-      toast.error(error.message || 'Failed to update order');
     },
   });
 };
