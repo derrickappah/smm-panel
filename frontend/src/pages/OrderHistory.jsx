@@ -395,7 +395,7 @@ const OrderHistory = ({ user, onLogout }) => {
                               <div className="text-center">
                                 {order.smmgen_order_id ? (
                                   order.smmgen_order_id === "order not placed at smm gen" ? (
-                                    <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMGen</p>
+                                    <p className="text-xs text-red-600 italic font-medium">Order not placed</p>
                                   ) : (
                                     <p className="font-medium text-gray-900 text-sm">{order.smmgen_order_id}</p>
                                   )
