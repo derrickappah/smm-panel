@@ -283,24 +283,53 @@ export const processManualRefund = async (order) => {
 
     // Atomic update: Mark refund as pending ONLY if it's not already set
     // This prevents race conditions where multiple admins try to refund simultaneously
-    // Use maybeSingle() to handle 0 rows gracefully (when condition doesn't match)
-    const { data: updatedOrder, error: pendingError } = await supabase
+    // Use two-step approach: first try NULL, then try 'failed' (more reliable than .or() filter)
+    let updatedOrder = null;
+    let pendingError = null;
+
+    // First attempt: Update if refund_status is NULL
+    const { data: updatedOrderNull, error: errorNull } = await supabase
       .from('orders')
       .update({
         refund_status: 'pending'
       })
       .eq('id', order.id)
-      .or(`refund_status.is.null,refund_status.eq.failed`) // Only update if null or failed (allow retry of failed refunds)
+      .is('refund_status', null) // Only update if refund_status is null
       .select()
       .maybeSingle();
 
-    // Handle update result
-    if (pendingError) {
+    if (errorNull) {
       // Actual database error occurred
-      console.error('Error marking refund as pending:', pendingError);
-      throw new Error(`Failed to update refund status: ${pendingError.message}`);
+      console.error('Error marking refund as pending (NULL check):', errorNull);
+      throw new Error(`Failed to update refund status: ${errorNull.message}`);
     }
 
+    if (updatedOrderNull) {
+      updatedOrder = updatedOrderNull;
+    } else {
+      // Second attempt: Update if refund_status is 'failed' (allow retry of failed refunds)
+      const { data: updatedOrderFailed, error: errorFailed } = await supabase
+        .from('orders')
+        .update({
+          refund_status: 'pending'
+        })
+        .eq('id', order.id)
+        .eq('refund_status', 'failed') // Only update if refund_status is 'failed'
+        .select()
+        .maybeSingle();
+
+      if (errorFailed) {
+        // Actual database error occurred
+        console.error('Error marking refund as pending (failed check):', errorFailed);
+        throw new Error(`Failed to update refund status: ${errorFailed.message}`);
+      }
+
+      if (updatedOrderFailed) {
+        updatedOrder = updatedOrderFailed;
+      }
+    }
+
+    // Handle case where no rows were updated
     if (!updatedOrder) {
       // No rows were updated - condition didn't match (race condition or status changed)
       // Re-check current status to provide accurate error message
@@ -325,11 +354,20 @@ export const processManualRefund = async (order) => {
             error: 'Refund already in progress. Another admin may be processing it.' 
           };
         }
+        // Log the actual state for debugging
+        console.error('Failed to update refund status: No rows updated. Current state:', {
+          orderId: order.id,
+          refund_status: currentOrderRecheck.refund_status,
+          status: currentOrderRecheck.status,
+          expectedRefundStatus: ['null', 'failed'],
+          actualRefundStatus: currentOrderRecheck.refund_status === null ? 'null' : currentOrderRecheck.refund_status
+        });
+      } else {
+        console.error('Failed to update refund status: Order not found after update attempt:', order.id);
       }
       
-      // Unknown reason for no update
-      console.error('Failed to update refund status: No rows updated and status check returned:', currentOrderRecheck);
-      throw new Error('Failed to update refund status. The order may have been modified by another process.');
+      // Provide more specific error message
+      throw new Error('Failed to update refund status. The order may have been modified by another process, or the refund status is not in an updatable state.');
     }
 
     console.log('Refund marked as pending, proceeding with refund processing');
