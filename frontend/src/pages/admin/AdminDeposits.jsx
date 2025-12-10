@@ -227,10 +227,34 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
         setManualReference('');
       }
 
-      // Invalidate and refetch deposits to update UI immediately
+      // Optimistically update the transaction in cache for immediate UI update
+      queryClient.setQueryData(['admin', 'deposits'], (oldData) => {
+        if (!oldData?.pages) return oldData;
+        
+        return {
+          ...oldData,
+          pages: oldData.pages.map(page => ({
+            ...page,
+            data: page.data?.map(tx => 
+              tx.id === deposit.id 
+                ? { 
+                    ...tx, 
+                    status: data.updateResult?.newStatus || tx.status,
+                    paystack_reference: data.reference || tx.paystack_reference,
+                    paystack_status: data.paystackStatus || tx.paystack_status
+                  }
+                : tx
+            ) || []
+          }))
+        };
+      });
+
+      // Invalidate and refetch to ensure data is in sync with server
       queryClient.invalidateQueries({ queryKey: ['admin', 'deposits'] });
       queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
-      await refetch();
+      
+      // Refetch in background to sync with server
+      refetch();
 
       if (onRefresh) onRefresh();
     } catch (error) {
