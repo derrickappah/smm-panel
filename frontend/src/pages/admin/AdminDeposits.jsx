@@ -6,7 +6,8 @@ import ResponsiveTable from '@/components/admin/ResponsiveTable';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, RefreshCw, Filter, CheckCircle, XCircle } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Search, RefreshCw, Filter, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
@@ -20,6 +21,8 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
   const [page, setPage] = useState(1);
   const [approvingDeposit, setApprovingDeposit] = useState(null);
   const [verifyingDeposit, setVerifyingDeposit] = useState(null);
+  const [manualRefDialog, setManualRefDialog] = useState({ open: false, deposit: null, error: null });
+  const [manualReference, setManualReference] = useState('');
 
   const debouncedSearch = useDebounce(searchTerm, 300);
 
@@ -176,7 +179,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
     }
   }, [onRefresh]);
 
-  const handleVerifyPaystackDeposit = useCallback(async (deposit) => {
+  const handleVerifyPaystackDeposit = useCallback(async (deposit, manualRef = null) => {
     setVerifyingDeposit(deposit.id);
     try {
       const response = await fetch('/api/manual-verify-paystack-deposit', {
@@ -184,12 +187,27 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ transactionId: deposit.id })
+        body: JSON.stringify({ 
+          transactionId: deposit.id,
+          ...(manualRef && { reference: manualRef })
+        })
       });
 
       const data = await response.json();
 
       if (!response.ok) {
+        // If error suggests manual reference and we don't have one, show dialog
+        if (data.error && data.error.includes('No Paystack reference') && !manualRef) {
+          setManualRefDialog({ 
+            open: true, 
+            deposit, 
+            error: data.error,
+            suggestions: data.suggestions || [],
+            help: data.help
+          });
+          setVerifyingDeposit(null);
+          return;
+        }
         throw new Error(data.error || 'Failed to verify deposit');
       }
 
@@ -201,6 +219,12 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
         toast.info(`Paystack status updated: ${data.paystackStatus}`);
       }
 
+      // Close dialog if open
+      if (manualRefDialog.open) {
+        setManualRefDialog({ open: false, deposit: null, error: null });
+        setManualReference('');
+      }
+
       if (onRefresh) onRefresh();
     } catch (error) {
       console.error('Failed to verify Paystack deposit:', error);
@@ -208,7 +232,16 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
     } finally {
       setVerifyingDeposit(null);
     }
-  }, [onRefresh]);
+  }, [onRefresh, manualRefDialog.open]);
+
+  const handleManualReferenceSubmit = useCallback(async () => {
+    if (!manualRefDialog.deposit || !manualReference.trim()) {
+      toast.error('Please enter a Paystack reference');
+      return;
+    }
+
+    await handleVerifyPaystackDeposit(manualRefDialog.deposit, manualReference.trim());
+  }, [manualRefDialog.deposit, manualReference, handleVerifyPaystackDeposit]);
 
   // Helper function to format payment method name
   const formatPaymentMethod = useCallback((method) => {
@@ -554,6 +587,90 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
           </div>
         </>
       )}
+
+      {/* Manual Reference Input Dialog */}
+      <Dialog open={manualRefDialog.open} onOpenChange={(open) => {
+        if (!open) {
+          setManualRefDialog({ open: false, deposit: null, error: null });
+          setManualReference('');
+        }
+      }}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-yellow-600" />
+              Manual Paystack Reference Required
+            </DialogTitle>
+            <DialogDescription>
+              The system couldn't automatically find the Paystack reference for this transaction.
+              Please enter the Paystack reference manually to verify the deposit.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {manualRefDialog.deposit && (
+            <div className="space-y-4 py-4">
+              <div className="bg-gray-50 p-3 rounded-md space-y-1 text-sm">
+                <p><span className="font-medium">Transaction ID:</span> {manualRefDialog.deposit.id}</p>
+                <p><span className="font-medium">Amount:</span> ₵{manualRefDialog.deposit.amount?.toFixed(2) || '0.00'}</p>
+                <p><span className="font-medium">Date:</span> {new Date(manualRefDialog.deposit.created_at).toLocaleString()}</p>
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="manual-ref" className="text-sm font-medium">
+                  Paystack Reference
+                </label>
+                <Input
+                  id="manual-ref"
+                  placeholder="e.g., ref_abc123xyz"
+                  value={manualReference}
+                  onChange={(e) => setManualReference(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && manualReference.trim()) {
+                      handleManualReferenceSubmit();
+                    }
+                  }}
+                  className="h-12 text-base"
+                  autoFocus
+                />
+                <p className="text-xs text-gray-500">
+                  Enter the Paystack transaction reference from your Paystack dashboard
+                </p>
+              </div>
+
+              {manualRefDialog.suggestions && manualRefDialog.suggestions.length > 0 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                  <p className="text-sm font-medium text-blue-900 mb-2">Suggestions:</p>
+                  <ul className="text-xs text-blue-800 space-y-1 list-disc list-inside">
+                    {manualRefDialog.suggestions.map((suggestion, idx) => (
+                      <li key={idx}>{suggestion}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setManualRefDialog({ open: false, deposit: null, error: null });
+                setManualReference('');
+              }}
+              disabled={verifyingDeposit === manualRefDialog.deposit?.id}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleManualReferenceSubmit}
+              disabled={!manualReference.trim() || verifyingDeposit === manualRefDialog.deposit?.id}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {verifyingDeposit === manualRefDialog.deposit?.id ? 'Verifying...' : 'Verify with Reference'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 });

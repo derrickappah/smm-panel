@@ -125,18 +125,82 @@ export default async function handler(req, res) {
     // Get Paystack reference - try to retrieve if missing
     let paystackReference = transaction.paystack_reference || reference;
     
-    // If reference is missing, try to retrieve it from Paystack
+    // If reference is provided manually, validate it first
+    if (reference && !transaction.paystack_reference) {
+      console.log(`[MANUAL-VERIFY] Manual reference provided, validating with Paystack: ${reference}`);
+      try {
+        const verifyResponse = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${PAYSTACK_SECRET_KEY}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (verifyResponse.ok) {
+          const verifyData = await verifyResponse.json();
+          if (verifyData.status && verifyData.data) {
+            // Validate amount matches (within tolerance)
+            const paystackAmount = verifyData.data.amount || 0;
+            const transactionAmount = Math.round(transaction.amount * 100);
+            const amountDiff = Math.abs(paystackAmount - transactionAmount);
+            
+            if (amountDiff < 10) {
+              paystackReference = reference;
+              console.log(`[MANUAL-VERIFY] Manual reference validated successfully`);
+              
+              // Store the reference
+              await supabase
+                .from('transactions')
+                .update({ paystack_reference: paystackReference })
+                .eq('id', transaction.id);
+            } else {
+              console.warn(`[MANUAL-VERIFY] Amount mismatch: transaction=${transactionAmount}, paystack=${paystackAmount}`);
+              return res.status(400).json({
+                error: 'Reference amount does not match transaction amount',
+                transactionAmount: transaction.amount,
+                paystackAmount: paystackAmount / 100,
+                reference: reference
+              });
+            }
+          } else {
+            return res.status(400).json({
+              error: 'Invalid reference or transaction not found in Paystack',
+              reference: reference
+            });
+          }
+        } else {
+          const errorData = await verifyResponse.json().catch(() => ({ message: 'Unknown error' }));
+          return res.status(verifyResponse.status).json({
+            error: 'Failed to validate reference with Paystack',
+            details: errorData.message || verifyResponse.statusText,
+            reference: reference
+          });
+        }
+      } catch (validationError) {
+        console.error(`[MANUAL-VERIFY] Error validating manual reference:`, validationError);
+        return res.status(500).json({
+          error: 'Failed to validate reference',
+          details: validationError.message
+        });
+      }
+    }
+    
+    // If reference is still missing, try to retrieve it from Paystack
     if (!paystackReference) {
       console.log(`[MANUAL-VERIFY] No reference found, attempting to retrieve from Paystack for transaction ${transaction.id}`);
       
       try {
-        // Query Paystack transactions API to find matching transaction
-        const startDate = new Date(new Date(transaction.created_at).getTime() - 2 * 60 * 60 * 1000); // 2 hours before
-        const endDate = new Date(new Date(transaction.created_at).getTime() + 2 * 60 * 60 * 1000); // 2 hours after
+        // Expand time window to 48 hours before/after (configurable via query param)
+        const hoursWindow = parseInt(req.query.hours || '48', 10);
+        const startDate = new Date(new Date(transaction.created_at).getTime() - hoursWindow * 60 * 60 * 1000);
+        const endDate = new Date(new Date(transaction.created_at).getTime() + hoursWindow * 60 * 60 * 1000);
         const startDateStr = startDate.toISOString().split('T')[0];
         const endDateStr = endDate.toISOString().split('T')[0];
         
         const paystackAmount = Math.round(transaction.amount * 100); // Convert to pesewas
+        const transactionTime = new Date(transaction.created_at);
+        const timeWindow = 2 * 60 * 60 * 1000; // 2 hours tolerance for matching
         
         // Get user email for matching
         const { data: userProfile } = await supabase
@@ -145,44 +209,106 @@ export default async function handler(req, res) {
           .eq('id', transaction.user_id)
           .single();
 
-        // Query Paystack for transactions in this time window
-        const paystackQueryUrl = `https://api.paystack.co/transaction?perPage=50&page=1&from=${startDateStr}&to=${endDateStr}`;
-        const paystackResponse = await fetch(paystackQueryUrl, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${PAYSTACK_SECRET_KEY}`,
-            'Content-Type': 'application/json'
-          }
-        });
+        // Query Paystack with pagination to find matching transaction
+        let allPaystackTxs = [];
+        let page = 1;
+        let hasMore = true;
+        const maxPages = 10; // Limit to prevent excessive API calls
+        const perPage = 100; // Maximum per page
 
-        if (paystackResponse.ok) {
-          const paystackData = await paystackResponse.json();
-          
-          if (paystackData.status && paystackData.data) {
-            // Find matching transaction by amount and user email
-            const matchingTx = paystackData.data.find(tx => {
-              const txAmount = tx.amount; // Already in pesewas
-              const amountMatch = Math.abs(txAmount - paystackAmount) < 10; // Allow small difference
-              
-              // Try to match by email if available
-              if (userProfile?.email && tx.customer?.email) {
-                return amountMatch && tx.customer.email.toLowerCase() === userProfile.email.toLowerCase();
+        console.log(`[MANUAL-VERIFY] Querying Paystack transactions from ${startDateStr} to ${endDateStr} (${hoursWindow}h window)...`);
+
+        while (hasMore && page <= maxPages) {
+          try {
+            const paystackQueryUrl = `https://api.paystack.co/transaction?perPage=${perPage}&page=${page}&from=${startDateStr}&to=${endDateStr}`;
+            const paystackResponse = await fetch(paystackQueryUrl, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${PAYSTACK_SECRET_KEY}`,
+                'Content-Type': 'application/json'
               }
-              
-              return amountMatch;
             });
 
-            if (matchingTx && matchingTx.reference) {
-              paystackReference = matchingTx.reference;
-              console.log(`[MANUAL-VERIFY] Found matching Paystack transaction, retrieved reference: ${paystackReference}`);
+            if (paystackResponse.ok) {
+              const paystackData = await paystackResponse.json();
               
-              // Store the reference
-              await supabase
-                .from('transactions')
-                .update({ paystack_reference: paystackReference })
-                .eq('id', transaction.id);
+              if (paystackData.status && paystackData.data) {
+                allPaystackTxs.push(...paystackData.data);
+                
+                // Check if there are more pages
+                hasMore = paystackData.meta && paystackData.meta.page < paystackData.meta.totalPages;
+                page++;
+                
+                // Add delay to respect rate limits
+                if (hasMore) {
+                  await new Promise(resolve => setTimeout(resolve, 200));
+                }
+              } else {
+                hasMore = false;
+              }
+            } else if (paystackResponse.status === 429 && page <= maxPages) {
+              // Rate limited - wait and retry
+              const waitTime = Math.pow(2, page) * 1000;
+              console.log(`[MANUAL-VERIFY] Rate limited, waiting ${waitTime}ms before retry...`);
+              await new Promise(resolve => setTimeout(resolve, waitTime));
+              // Don't increment page, retry same page
+            } else {
+              console.error(`[MANUAL-VERIFY] Paystack API error (page ${page}):`, paystackResponse.status);
+              hasMore = false;
+            }
+          } catch (pageError) {
+            console.error(`[MANUAL-VERIFY] Error querying Paystack (page ${page}):`, pageError);
+            if (page < maxPages) {
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              page++;
+            } else {
+              hasMore = false;
             }
           }
+        }
+
+        console.log(`[MANUAL-VERIFY] Retrieved ${allPaystackTxs.length} Paystack transactions from ${page - 1} page(s)`);
+
+        // Find matching transaction with improved algorithm
+        const matchingTxs = allPaystackTxs.filter(tx => {
+          const txAmount = tx.amount; // Already in pesewas
+          const amountMatch = Math.abs(txAmount - paystackAmount) < 10; // Allow small difference
+          
+          if (!amountMatch) return false;
+
+          // Match by time (within 2 hours)
+          const txTime = new Date(tx.created_at || tx.paid_at);
+          const timeDiff = Math.abs(txTime - transactionTime);
+          if (timeDiff > timeWindow) return false;
+
+          // Match by email if available (preferred match)
+          if (userProfile?.email && tx.customer?.email) {
+            return tx.customer.email.toLowerCase() === userProfile.email.toLowerCase();
+          }
+
+          // If no email match, still match by amount and time
+          return true;
+        });
+
+        if (matchingTxs.length > 0) {
+          // If multiple matches, prefer one with email match
+          let matchingTx = matchingTxs.find(tx => 
+            userProfile?.email && tx.customer?.email && 
+            tx.customer.email.toLowerCase() === userProfile.email.toLowerCase()
+          ) || matchingTxs[0];
+
+          if (matchingTx && matchingTx.reference) {
+            paystackReference = matchingTx.reference;
+            console.log(`[MANUAL-VERIFY] Found matching Paystack transaction (${matchingTxs.length} candidate(s)), retrieved reference: ${paystackReference}`);
+            
+            // Store the reference
+            await supabase
+              .from('transactions')
+              .update({ paystack_reference: paystackReference })
+              .eq('id', transaction.id);
+          }
+        } else {
+          console.log(`[MANUAL-VERIFY] No matching Paystack transaction found after searching ${allPaystackTxs.length} transactions`);
         }
       } catch (refRetrievalError) {
         console.error(`[MANUAL-VERIFY] Error retrieving reference:`, refRetrievalError);
@@ -193,7 +319,16 @@ export default async function handler(req, res) {
       return res.status(400).json({ 
         error: 'No Paystack reference found for this transaction and could not retrieve it from Paystack',
         transactionId: transaction.id,
-        suggestion: 'The payment may not have been initiated with Paystack, or it may be too old to retrieve'
+        transactionAmount: transaction.amount,
+        transactionDate: transaction.created_at,
+        depositMethod: transaction.deposit_method,
+        suggestions: [
+          'The payment may not have been initiated with Paystack',
+          'The transaction may be too old to retrieve (try increasing the hours parameter)',
+          'You can manually provide a Paystack reference by including it in the request body: { transactionId: "...", reference: "paystack_ref_here" }',
+          'Check if the transaction was created with a different payment method'
+        ],
+        help: 'To manually verify with a reference, send: POST /api/manual-verify-paystack-deposit with body: { transactionId: "' + transaction.id + '", reference: "your_paystack_reference" }'
       });
     }
 
