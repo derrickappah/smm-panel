@@ -33,8 +33,10 @@
         <link rel="preconnect" href="https://js.paystack.co" crossorigin />
         <link rel="preconnect" href="https://spihsvdchouynfbsotwq.supabase.co" crossorigin />
         <link rel="preconnect" href="https://us.i.posthog.com" crossorigin />
-        <!-- Prefetch critical API endpoints -->
-        <link rel="prefetch" href="/api/smmgen/services" as="fetch" crossorigin />
+        <!--
+        Note: /api/smmgen/services endpoint requires POST method, so prefetch won't work
+        The endpoint will be called via POST when needed by the application
+        -->
         <!--
       manifest.json provides metadata used when your web app is installed on a
       user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
@@ -49,8 +51,8 @@
       Learn how to configure a non-root public URL by running `npm run build`.
     -->
         <title>BoostUp GH - Social Media Growth Platform | Buy Instagram Followers, TikTok Views, YouTube Subscribers</title>
-        <!-- Preload critical resources -->
-        <link rel="preload" href="https://js.paystack.co/v1/inline.js" as="script" crossorigin />
+        <!-- Prefetch Paystack script (loaded dynamically when payment is initiated) -->
+        <link rel="prefetch" href="https://js.paystack.co/v1/inline.js" as="script" crossorigin />
         <!--
         These two scripts have been added for the Visual Edits, please do not edit or remove them
         -->
