@@ -187,6 +187,7 @@ export default async function handler(req, res) {
     }
     
     // If reference is still missing, try to retrieve it from Paystack
+    let scoredMatches = []; // Track matches for error reporting
     if (!paystackReference) {
       console.log(`[MANUAL-VERIFY] No reference found, attempting to retrieve from Paystack for transaction ${transaction.id}`);
       
@@ -269,37 +270,98 @@ export default async function handler(req, res) {
 
         console.log(`[MANUAL-VERIFY] Retrieved ${allPaystackTxs.length} Paystack transactions from ${page - 1} page(s)`);
 
-        // Find matching transaction with improved algorithm
-        const matchingTxs = allPaystackTxs.filter(tx => {
+        // Score and find the best matching transaction
+        // Scoring system:
+        // - 100: Exact match via metadata.transaction_id
+        // - 80: Email + Amount + Time match (all three)
+        // - 60: Email + Amount match
+        // - 40: Amount + Time match
+        // - 20: Amount only match
+        
+        scoredMatches = allPaystackTxs.map(tx => {
           const txAmount = tx.amount; // Already in pesewas
           const amountMatch = Math.abs(txAmount - paystackAmount) < 10; // Allow small difference
           
-          if (!amountMatch) return false;
+          if (!amountMatch) return null;
 
-          // Match by time (within 2 hours)
-          const txTime = new Date(tx.created_at || tx.paid_at);
-          const timeDiff = Math.abs(txTime - transactionTime);
-          if (timeDiff > timeWindow) return false;
+          let score = 0;
+          const reasons = [];
 
-          // Match by email if available (preferred match)
-          if (userProfile?.email && tx.customer?.email) {
-            return tx.customer.email.toLowerCase() === userProfile.email.toLowerCase();
+          // Check for exact match via metadata.transaction_id (highest priority)
+          const txMetadata = tx.metadata || {};
+          const txTransactionId = txMetadata.transaction_id;
+          if (txTransactionId === transaction.id) {
+            score = 100;
+            reasons.push('exact metadata match');
+            return { tx, score, reasons, timeDiff: 0 };
           }
 
-          // If no email match, still match by amount and time
-          return true;
+          // Calculate time difference
+          const txTime = new Date(tx.created_at || tx.paid_at);
+          const timeDiff = Math.abs(txTime - transactionTime);
+          const timeMatch = timeDiff <= timeWindow;
+
+          // Check email match
+          const emailMatch = userProfile?.email && tx.customer?.email && 
+            tx.customer.email.toLowerCase() === userProfile.email.toLowerCase();
+
+          // Score based on matching criteria
+          if (emailMatch && timeMatch) {
+            score = 80;
+            reasons.push('email + amount + time match');
+          } else if (emailMatch) {
+            score = 60;
+            reasons.push('email + amount match');
+          } else if (timeMatch) {
+            score = 40;
+            reasons.push('amount + time match');
+          } else {
+            score = 20;
+            reasons.push('amount only match');
+          }
+
+          return { tx, score, reasons, timeDiff };
+        }).filter(match => match !== null);
+
+        // Sort by score (highest first), then by time difference (closest first)
+        scoredMatches.sort((a, b) => {
+          if (b.score !== a.score) {
+            return b.score - a.score;
+          }
+          return a.timeDiff - b.timeDiff;
         });
 
-        if (matchingTxs.length > 0) {
-          // If multiple matches, prefer one with email match
-          let matchingTx = matchingTxs.find(tx => 
-            userProfile?.email && tx.customer?.email && 
-            tx.customer.email.toLowerCase() === userProfile.email.toLowerCase()
-          ) || matchingTxs[0];
-
+        // Only proceed if we have a high-confidence match (score >= 80)
+        // This ensures we don't match wrong transactions when multiple exist with same amount
+        const bestMatch = scoredMatches[0];
+        
+        if (bestMatch && bestMatch.score >= 80) {
+          const matchingTx = bestMatch.tx;
+          
           if (matchingTx && matchingTx.reference) {
             paystackReference = matchingTx.reference;
-            console.log(`[MANUAL-VERIFY] Found matching Paystack transaction (${matchingTxs.length} candidate(s)), retrieved reference: ${paystackReference}`);
+            console.log(`[MANUAL-VERIFY] Found high-confidence matching Paystack transaction:`, {
+              reference: paystackReference,
+              score: bestMatch.score,
+              reasons: bestMatch.reasons.join(', '),
+              transactionId: transaction.id,
+              paystackMetadataId: matchingTx.metadata?.transaction_id,
+              totalCandidates: scoredMatches.length,
+              candidatesWithSameScore: scoredMatches.filter(m => m.score === bestMatch.score).length
+            });
+
+            // Warn if multiple high-scoring matches exist
+            const highScoreMatches = scoredMatches.filter(m => m.score >= 80);
+            if (highScoreMatches.length > 1) {
+              console.warn(`[MANUAL-VERIFY] WARNING: Multiple high-confidence matches found (${highScoreMatches.length}). Using best match.`, {
+                allMatches: highScoreMatches.map(m => ({
+                  reference: m.tx.reference,
+                  score: m.score,
+                  reasons: m.reasons,
+                  metadataId: m.tx.metadata?.transaction_id
+                }))
+              });
+            }
             
             // Store the reference
             await supabase
@@ -307,8 +369,27 @@ export default async function handler(req, res) {
               .update({ paystack_reference: paystackReference })
               .eq('id', transaction.id);
           }
+        } else if (bestMatch && bestMatch.score >= 40) {
+          // Medium confidence match - log but don't use automatically
+          console.warn(`[MANUAL-VERIFY] Found medium-confidence match (score: ${bestMatch.score}), but requires manual verification:`, {
+            reference: bestMatch.tx.reference,
+            reasons: bestMatch.reasons.join(', '),
+            transactionId: transaction.id,
+            totalCandidates: scoredMatches.length
+          });
         } else {
-          console.log(`[MANUAL-VERIFY] No matching Paystack transaction found after searching ${allPaystackTxs.length} transactions`);
+          // No good match found
+          const candidateCount = scoredMatches.length;
+          const lowScoreCount = scoredMatches.filter(m => m.score < 40).length;
+          
+          console.log(`[MANUAL-VERIFY] No high-confidence matching Paystack transaction found:`, {
+            transactionId: transaction.id,
+            totalPaystackTxs: allPaystackTxs.length,
+            candidatesWithAmountMatch: candidateCount,
+            lowConfidenceCandidates: lowScoreCount,
+            bestMatchScore: bestMatch?.score || 0,
+            bestMatchReasons: bestMatch?.reasons?.join(', ') || 'none'
+          });
         }
       } catch (refRetrievalError) {
         console.error(`[MANUAL-VERIFY] Error retrieving reference:`, refRetrievalError);
@@ -316,15 +397,22 @@ export default async function handler(req, res) {
     }
     
     if (!paystackReference) {
+      // Check if we found candidates but they were low confidence
+      const foundLowConfidenceMatches = scoredMatches && scoredMatches.length > 0 && scoredMatches[0].score < 80;
+      
       return res.status(400).json({ 
         error: 'No Paystack reference found for this transaction and could not retrieve it from Paystack',
         transactionId: transaction.id,
         transactionAmount: transaction.amount,
         transactionDate: transaction.created_at,
         depositMethod: transaction.deposit_method,
+        reason: foundLowConfidenceMatches 
+          ? 'Found potential matches but confidence was too low to automatically verify. Multiple transactions with same amount may exist.'
+          : 'No matching Paystack transaction found in the search window.',
         suggestions: [
           'The payment may not have been initiated with Paystack',
           'The transaction may be too old to retrieve (try increasing the hours parameter)',
+          'Multiple transactions with the same amount may exist - use manual reference input for exact matching',
           'You can manually provide a Paystack reference by including it in the request body: { transactionId: "...", reference: "paystack_ref_here" }',
           'Check if the transaction was created with a different payment method'
         ],
