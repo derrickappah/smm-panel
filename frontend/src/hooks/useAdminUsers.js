@@ -1,23 +1,15 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { checkUserRole } from './useUserRole';
 import { toast } from 'sonner';
 
 const PAGE_SIZE = 50;
 
 // Fetch users with pagination
 const fetchUsers = async ({ pageParam = 0 }) => {
-  const { data: currentUser } = await supabase.auth.getUser();
-  if (!currentUser?.user) {
-    throw new Error('Not authenticated');
-  }
-
-  const { data: userProfile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', currentUser.user.id)
-    .single();
-
-  if (userProfile?.role !== 'admin') {
+  const userRole = await checkUserRole();
+  
+  if (!userRole.isAdmin) {
     throw new Error('Access denied. Admin role required.');
   }
 
@@ -44,71 +36,28 @@ const fetchUsers = async ({ pageParam = 0 }) => {
   };
 };
 
-// Fetch all users (for stats calculation)
+// Fetch all users (for stats calculation) - Optimized with limit
+// Only fetch what's needed for stats, not all records
 const fetchAllUsers = async () => {
-  const { data: currentUser } = await supabase.auth.getUser();
-  if (!currentUser?.user) {
-    throw new Error('Not authenticated');
-  }
-
-  const { data: userProfile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', currentUser.user.id)
-    .single();
-
-  if (userProfile?.role !== 'admin') {
+  const userRole = await checkUserRole();
+  
+  if (!userRole.isAdmin) {
     throw new Error('Access denied. Admin role required.');
   }
 
-  let allRecords = [];
-  let from = 0;
-  let hasMore = true;
-  const batchSize = 1000;
-  const maxIterations = 10000; // Safety limit to prevent infinite loops
-  let iterations = 0;
+  // For stats, we typically only need recent users or aggregated data
+  // Limit to last 5000 users instead of fetching everything
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, email, name, balance, role, phone_number, created_at')
+    .order('created_at', { ascending: false })
+    .limit(5000);
 
-  while (hasMore && iterations < maxIterations) {
-    iterations++;
-    const to = from + batchSize - 1;
-    
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, email, name, balance, role, phone_number, created_at')
-        .order('created_at', { ascending: false })
-        .range(from, to);
-
-      if (error) {
-        console.error(`Error fetching users batch (from ${from} to ${to}):`, error);
-        throw error;
-      }
-
-      if (data && data.length > 0) {
-        allRecords = [...allRecords, ...data];
-        // Continue if we got a full batch, stop if we got less
-        hasMore = data.length === batchSize;
-        from = to + 1;
-      } else {
-        // No more data
-        hasMore = false;
-      }
-    } catch (error) {
-      console.error('Error in fetchAllUsers batch:', error);
-      // If we have some records, return them rather than failing completely
-      if (allRecords.length > 0) {
-        console.warn(`Returning partial user data (${allRecords.length} records) due to error`);
-        return allRecords;
-      }
-      throw error;
-    }
+  if (error) {
+    throw error;
   }
 
-  if (iterations >= maxIterations) {
-    console.warn(`fetchAllUsers reached max iterations (${maxIterations}), returning ${allRecords.length} records`);
-  }
-
-  return allRecords;
+  return data || [];
 };
 
 export const useAdminUsers = (options = {}) => {
@@ -130,8 +79,8 @@ export const useAdminUsers = (options = {}) => {
     queryKey: ['admin', 'users', 'all'],
     queryFn: fetchAllUsers,
     enabled,
-    staleTime: 2 * 60 * 1000,
-    gcTime: 5 * 60 * 1000,
+    staleTime: 3 * 60 * 1000, // 3 minutes - increased for better caching
+    gcTime: 10 * 60 * 1000, // 10 minutes - keep in cache longer
   });
 };
 

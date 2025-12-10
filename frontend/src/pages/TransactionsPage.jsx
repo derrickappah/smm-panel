@@ -47,51 +47,56 @@ const TransactionsPage = ({ user, onLogout }) => {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) return;
 
-      let transactionsQuery = supabase
-        .from('transactions')
-        .select('id, user_id, type, amount, status, deposit_method, paystack_reference, korapay_reference, created_at, updated_at')
-        .order('created_at', { ascending: false });
-
       // For regular users, only fetch their own transactions
       if (!isAdmin) {
-        transactionsQuery = transactionsQuery.eq('user_id', authUser.id);
-      } else {
-        // For admins, fetch all transactions with user profiles
-        transactionsQuery = transactionsQuery.select('*, profiles(email, name, balance)');
-        
-        // Also fetch orders to check refund status
-        const { data: ordersData } = await supabase
-          .from('orders')
-          .select('id, refund_status, user_id');
-        if (ordersData) {
-          setOrders(ordersData);
+        const { data: transactionsData, error } = await supabase
+          .from('transactions')
+          .select('id, user_id, type, amount, status, deposit_method, paystack_reference, korapay_reference, created_at, updated_at')
+          .eq('user_id', authUser.id)
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error('Error fetching transactions:', error);
+          toast.error('Failed to load transactions');
+          return;
         }
-      }
 
-      const { data: transactionsData, error } = await transactionsQuery;
+        setTransactions(transactionsData || []);
+      } else {
+        // For admins: fetch all transactions with user profiles in one query (using join)
+        const { data: transactionsData, error: transactionsError } = await supabase
+          .from('transactions')
+          .select('*, profiles(email, name, balance)')
+          .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error('Error fetching transactions:', error);
-        toast.error('Failed to load transactions');
-        return;
-      }
+        if (transactionsError) {
+          console.error('Error fetching transactions:', transactionsError);
+          toast.error('Failed to load transactions');
+          return;
+        }
 
-      setTransactions(transactionsData || []);
+        setTransactions(transactionsData || []);
 
-      // For admin: fetch user profiles to check balances
-      if (isAdmin && transactionsData) {
-        const userIds = [...new Set(transactionsData.map(t => t.user_id))];
-        const { data: profilesData } = await supabase
-          .from('profiles')
-          .select('id, email, name, balance')
-          .in('id', userIds);
-
-        if (profilesData) {
+        // Build user profiles map from the joined data
+        if (transactionsData) {
           const profilesMap = {};
-          profilesData.forEach(profile => {
-            profilesMap[profile.id] = profile;
+          transactionsData.forEach(transaction => {
+            if (transaction.profiles && transaction.user_id) {
+              profilesMap[transaction.user_id] = transaction.profiles;
+            }
           });
           setUserProfiles(profilesMap);
+
+          // Fetch orders in parallel (only refund_status needed for balance checks)
+          const userIds = [...new Set(transactionsData.map(t => t.user_id))];
+          const { data: ordersData } = await supabase
+            .from('orders')
+            .select('id, refund_status, user_id')
+            .in('user_id', userIds);
+          
+          if (ordersData) {
+            setOrders(ordersData);
+          }
         }
       }
     } catch (error) {
@@ -206,158 +211,99 @@ const TransactionsPage = ({ user, onLogout }) => {
     }
   }, [balanceCheckResults, isAdmin]);
 
-  // For admin: Check if balance was updated after successful deposit (IMPROVED TRIPLE CHECK)
-  const performTripleCheck = async (transaction) => {
-    if (!isAdmin || transaction.type !== 'deposit' || transaction.status !== 'approved') {
-      return null; // Not applicable
+  // For admin: Efficient balance check per user (not per transaction)
+  // This function checks all transactions for a user at once, much faster than per-transaction checks
+  const checkUserBalance = async (userId) => {
+    if (!isAdmin || !userId) {
+      return {};
     }
 
-    const userProfile = userProfiles[transaction.user_id];
+    const userProfile = userProfiles[userId];
     if (!userProfile) {
-      return 'unknown'; // Can't check
+      return {}; // Can't check without profile
     }
 
-    const transactionAmount = parseFloat(transaction.amount || 0);
-    if (transactionAmount <= 0) {
-      return 'unknown'; // Invalid amount
-    }
-    
-    // IMPROVED TRIPLE CHECK SYSTEM - More reliable and less prone to false negatives
-    
-    // STEP 1: Fetch fresh balance from database (TRIPLE FETCH to avoid stale data)
+    // Fetch fresh balance once (no triple fetch, no delays)
     let freshBalance = parseFloat(userProfile.balance || 0);
-    const freshBalances = [];
-    
     try {
-      // Fetch 3 times with delays to ensure we get the latest data
-      for (let i = 0; i < 3; i++) {
-        await new Promise(resolve => setTimeout(resolve, 150)); // Delay between fetches
-        const { data: freshProfile, error: freshError } = await supabase
-          .from('profiles')
-          .select('balance')
-          .eq('id', transaction.user_id)
-          .single();
+      const { data: freshProfile, error: freshError } = await supabase
+        .from('profiles')
+        .select('balance')
+        .eq('id', userId)
+        .single();
 
-        if (!freshError && freshProfile) {
-          const balance = parseFloat(freshProfile.balance || 0);
-          freshBalances.push(balance);
+      if (!freshError && freshProfile) {
+        freshBalance = parseFloat(freshProfile.balance || 0);
+        // Update cached profile
+        if (userProfiles[userId]) {
+          userProfiles[userId].balance = freshBalance;
         }
-      }
-
-      if (freshBalances.length > 0) {
-        // Use the highest balance from the 3 fetches (most recent/accurate)
-        freshBalance = Math.max(...freshBalances);
-        // Also update userProfile for consistency
-        userProfile.balance = freshBalance;
       }
     } catch (error) {
       console.warn('Fresh balance fetch failed:', error);
       // Continue with current balance
     }
 
-    // Get all orders for this user to check refund status
-    const userOrders = orders.filter(o => o.user_id === transaction.user_id);
-    const refundedOrderIds = new Set(
-      userOrders
-        .filter(o => o.refund_status === 'succeeded')
-        .map(o => o.id)
+    // Get all transactions for this user
+    const userTransactions = transactions.filter(t => t.user_id === userId);
+    
+    // Calculate expected balance from transactions
+    const allApprovedDeposits = userTransactions
+      .filter(t => t.type === 'deposit' && t.status === 'approved')
+      .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+
+    const allApprovedRefunds = userTransactions
+      .filter(t => t.type === 'refund' && t.status === 'approved')
+      .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+
+    const allCompletedOrders = userTransactions
+      .filter(t => t.type === 'order' && t.status === 'approved')
+      .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+
+    const expectedBalance = allApprovedDeposits + allApprovedRefunds - allCompletedOrders;
+    const tolerance = Math.max(0.10, expectedBalance * 0.01);
+    const balanceMatches = Math.abs(freshBalance - expectedBalance) <= tolerance;
+
+    // Check each deposit transaction for this user
+    const results = {};
+    const depositTransactions = userTransactions.filter(
+      t => t.type === 'deposit' && t.status === 'approved'
     );
 
-    // Calculate all approved deposits
-    const allApprovedDeposits = transactions
-      .filter(t => 
-        t.user_id === transaction.user_id &&
-        t.type === 'deposit' &&
-        t.status === 'approved'
-      )
-      .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+    depositTransactions.forEach(transaction => {
+      const transactionAmount = parseFloat(transaction.amount || 0);
+      if (transactionAmount <= 0) {
+        results[transaction.id] = 'unknown';
+        return;
+      }
 
-    // Calculate all approved refunds (money returned to user)
-    const allApprovedRefunds = transactions
-      .filter(t =>
-        t.user_id === transaction.user_id &&
-        t.type === 'refund' &&
-        t.status === 'approved'
-      )
-      .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+      // Calculate expected balance without this specific transaction
+      const balanceWithoutThis = expectedBalance - transactionAmount;
+      const minExpectedWithThis = balanceWithoutThis + transactionAmount;
 
-    // Calculate orders (money spent)
-    const allCompletedOrders = transactions
-      .filter(t => 
-        t.user_id === transaction.user_id &&
-        t.type === 'order' &&
-        t.status === 'approved'
-      )
-      .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+      // Check if balance includes this transaction
+      const includesThisTransaction = freshBalance >= (minExpectedWithThis - tolerance);
+      const overallBalanceMatches = balanceMatches || freshBalance >= (expectedBalance - tolerance);
 
-    // Balance = deposits + refunds - orders
-    const expectedBalanceFromTransactions = allApprovedDeposits + allApprovedRefunds - allCompletedOrders;
-    
-    // Calculate balance without this specific transaction
-    const balanceWithoutThisTransaction = allApprovedDeposits + allApprovedRefunds - transactionAmount - allCompletedOrders;
-    const minExpectedBalanceWithTransaction = balanceWithoutThisTransaction + transactionAmount;
-
-    // CHECK 1: Current balance is at least equal to expected (allowing for small differences)
-    // More lenient: allow up to 1% difference or 0.10 cedis tolerance
-    const tolerance = Math.max(0.10, expectedBalanceFromTransactions * 0.01);
-    const check1Pass = freshBalance >= (expectedBalanceFromTransactions - tolerance);
-
-    // CHECK 2: Balance includes this transaction amount
-    // Balance should be at least (balance without this transaction + this transaction amount)
-    const check2Pass = freshBalance >= (minExpectedBalanceWithTransaction - tolerance);
-
-    // CHECK 3: Balance is reasonable (not negative, not suspiciously low)
-    // If balance is significantly lower than expected, it's likely not updated
-    const significantDifference = expectedBalanceFromTransactions - freshBalance;
-    const check3Pass = significantDifference <= tolerance || significantDifference <= transactionAmount * 0.5;
-
-    // TRIPLE CHECK RESULT: Use conservative approach (err on side of "updated")
-    const passCount = [check1Pass, check2Pass, check3Pass].filter(Boolean).length;
-    
-    console.log('Improved triple check result for transaction:', {
-      transactionId: transaction.id.slice(0, 8),
-      check1Pass,
-      check2Pass,
-      check3Pass,
-      passCount,
-      currentBalance: freshBalance,
-      expectedBalance: expectedBalanceFromTransactions,
-      minExpectedWithTransaction: minExpectedBalanceWithTransaction,
-      transactionAmount,
-      tolerance,
-      difference: Math.abs(freshBalance - expectedBalanceFromTransactions)
+      // If overall balance matches or includes this transaction, mark as updated
+      if (overallBalanceMatches || includesThisTransaction) {
+        results[transaction.id] = 'updated';
+      } else {
+        // Only mark as not_updated if balance is significantly lower
+        const significantGap = expectedBalance - freshBalance;
+        if (significantGap > transactionAmount * 0.9) {
+          results[transaction.id] = 'not_updated';
+        } else {
+          results[transaction.id] = 'updated'; // Conservative default
+        }
+      }
     });
-    
-    // Conservative approach: Only mark as "not_updated" if we're very confident
-    // If balance is close to expected (within tolerance), consider it updated
-    if (passCount >= 2) {
-      // At least 2 checks passed - balance was likely updated
-      return 'updated';
-    } else if (passCount === 1) {
-      // Only 1 check passed - be conservative
-      // If balance is within reasonable range, consider it updated
-      if (freshBalance >= balanceWithoutThisTransaction - tolerance) {
-        return 'updated'; // Probably updated (conservative)
-      }
-      // Only mark as not_updated if balance is significantly lower
-      if (freshBalance < balanceWithoutThisTransaction - transactionAmount * 0.8) {
-        return 'not_updated'; // Definitely not updated
-      }
-      return 'updated'; // Default to updated (conservative)
-    } else {
-      // All checks failed - but be conservative
-      // Only mark as not_updated if balance is significantly lower than expected
-      const significantGap = expectedBalanceFromTransactions - freshBalance;
-      if (significantGap > transactionAmount * 0.9) {
-        // Balance is missing at least 90% of this transaction amount
-        return 'not_updated';
-      }
-      // Otherwise, be conservative and assume it's updated
-      return 'updated';
-    }
+
+    return results;
   };
   
   // Perform balance checks when transactions or userProfiles change
+  // Optimized: Check by user (batch all transactions for a user at once)
   useEffect(() => {
     if (!isAdmin || transactions.length === 0 || Object.keys(userProfiles).length === 0) {
       return;
@@ -387,32 +333,49 @@ const TransactionsPage = ({ user, onLogout }) => {
       // Start with previously verified results
       const results = { ...previouslyVerified };
       
-      // Check all approved deposit transactions
+      // Get unique user IDs that have approved deposit transactions
       const depositTransactions = transactions.filter(
         t => t.type === 'deposit' && t.status === 'approved'
       );
-
-      for (const transaction of depositTransactions) {
-        if (!isMounted) break; // Stop if component unmounted
-        
-        // Skip if this transaction was already verified as "updated"
-        if (previouslyVerified[transaction.id] === 'updated') {
-          // Keep the previous result, don't re-check
-          continue;
-        }
-        
-        // Only check transactions that haven't been verified or were marked as "not_updated" or "unknown"
-        const result = await performTripleCheck(transaction);
-        if (isMounted) {
-          results[transaction.id] = result;
-          // Save to database immediately after checking
-          if (result && result !== 'checking') {
-            await saveVerifiedTransaction(transaction.id, result);
-          }
-        }
-      }
       
+      const userIdsWithDeposits = [...new Set(depositTransactions.map(t => t.user_id))];
+      
+      // Check balance for each user (batched - much faster than per-transaction)
+      // Use Promise.all to check multiple users in parallel
+      const userCheckPromises = userIdsWithDeposits.map(async (userId) => {
+        if (!isMounted) return {};
+        
+        // Skip users that have all transactions already verified as "updated"
+        const userDeposits = depositTransactions.filter(t => t.user_id === userId);
+        const allVerified = userDeposits.every(t => previouslyVerified[t.id] === 'updated');
+        if (allVerified) {
+          return {}; // All transactions for this user already verified
+        }
+        
+        return await checkUserBalance(userId);
+      });
+      
+      // Wait for all user checks to complete (parallel execution)
+      const userCheckResults = await Promise.all(userCheckPromises);
+      
+      // Merge all results
+      userCheckResults.forEach(userResults => {
+        Object.assign(results, userResults);
+      });
+      
+      // Save verified transactions to database (batch save)
       if (isMounted) {
+        const transactionsToSave = Object.entries(results)
+          .filter(([id, status]) => status && status !== 'checking' && status !== previouslyVerified[id])
+          .map(([transactionId, status]) => ({ transactionId, status }));
+        
+        // Save in parallel (batch)
+        await Promise.all(
+          transactionsToSave.map(({ transactionId, status }) =>
+            saveVerifiedTransaction(transactionId, status)
+          )
+        );
+        
         setBalanceCheckResults(results);
         setCheckingBalances(false);
       }

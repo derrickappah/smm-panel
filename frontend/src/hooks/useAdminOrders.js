@@ -2,6 +2,7 @@ import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tansta
 import { supabase } from '@/lib/supabase';
 import { getSMMGenOrderStatus, placeSMMGenOrder } from '@/lib/smmgen';
 import { saveOrderStatusHistory } from '@/lib/orderStatusHistory';
+import { checkUserRole } from './useUserRole';
 import { toast } from 'sonner';
 
 const PAGE_SIZE = 50;
@@ -26,18 +27,9 @@ const mapSMMGenStatus = (smmgenStatus) => {
 
 // Fetch orders with pagination
 const fetchOrders = async ({ pageParam = 0, checkSMMGenStatus = false }) => {
-  const { data: currentUser } = await supabase.auth.getUser();
-  if (!currentUser?.user) {
-    throw new Error('Not authenticated');
-  }
-
-  const { data: userProfile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', currentUser.user.id)
-    .single();
-
-  if (userProfile?.role !== 'admin') {
+  const userRole = await checkUserRole();
+  
+  if (!userRole.isAdmin) {
     throw new Error('Access denied. Admin role required.');
   }
 
@@ -59,79 +51,64 @@ const fetchOrders = async ({ pageParam = 0, checkSMMGenStatus = false }) => {
 
   let finalOrders = data || [];
 
-  // Check SMMGen status if requested
+  // Check SMMGen status if requested (optimized with batching)
   if (checkSMMGenStatus && finalOrders.length > 0) {
-    console.log(`Checking SMMGen status for ${finalOrders.length} orders`);
-    finalOrders = await Promise.all(
-      finalOrders.map(async (order) => {
-        if (order.smmgen_order_id && 
-            order.smmgen_order_id !== "order not placed at smm gen" &&
-            order.status !== 'completed' && 
-            order.status !== 'refunded') {
-          try {
-            console.log(`Checking status for order ${order.id} with SMMGen ID: ${order.smmgen_order_id}`);
-            const statusData = await getSMMGenOrderStatus(order.smmgen_order_id);
-            const smmgenStatus = statusData.status || statusData.Status;
-            const mappedStatus = mapSMMGenStatus(smmgenStatus);
-
-            console.log(`Order ${order.id} status check result:`, {
-              smmgenStatus,
-              mappedStatus,
-              currentStatus: order.status,
-              willUpdate: mappedStatus && mappedStatus !== order.status
-            });
-
-            if (mappedStatus && mappedStatus !== order.status) {
-              console.log(`Updating order ${order.id} status from ${order.status} to ${mappedStatus}`);
-              
-              await saveOrderStatusHistory(
-                order.id,
-                mappedStatus,
-                'smmgen',
-                statusData,
-                order.status
-              );
-
-              const { error: updateError } = await supabase
-                .from('orders')
-                .update({ 
-                  status: mappedStatus,
-                  completed_at: mappedStatus === 'completed' ? new Date().toISOString() : order.completed_at
-                })
-                .eq('id', order.id);
-
-              if (updateError) {
-                console.error(`Failed to update order ${order.id} status:`, updateError);
-                throw updateError;
-              }
-
-              console.log(`Successfully updated order ${order.id} status to ${mappedStatus}`);
-              return { ...order, status: mappedStatus };
-            } else {
-              console.log(`Order ${order.id} status unchanged (${order.status})`);
-            }
-          } catch (error) {
-            console.error(`Failed to check SMMGen status for order ${order.id}:`, {
-              error: error.message,
-              orderId: order.id,
-              smmgenOrderId: order.smmgen_order_id,
-              stack: error.stack
-            });
-          }
-        } else {
-          if (order.smmgen_order_id === "order not placed at smm gen") {
-            console.log(`Skipping status check for order ${order.id} - order not placed at SMMGen`);
-          } else if (!order.smmgen_order_id) {
-            console.log(`Skipping status check for order ${order.id} - no SMMGen order ID`);
-          } else {
-            console.log(`Skipping status check for order ${order.id} - status is ${order.status}`);
-          }
-        }
-        
-        return order;
-      })
+    // Filter to only orders that need status checking
+    const ordersToCheck = finalOrders.filter(order => 
+      order.smmgen_order_id && 
+      order.smmgen_order_id !== "order not placed at smm gen" &&
+      order.status !== 'completed' && 
+      order.status !== 'refunded' &&
+      (order.status === 'pending' || order.status === 'processing' || order.status === 'in progress')
     );
-    console.log(`Completed SMMGen status check for ${finalOrders.length} orders`);
+
+    if (ordersToCheck.length > 0) {
+      console.log(`Checking SMMGen status for ${ordersToCheck.length} orders (batched)`);
+      
+      // Process in batches to avoid overwhelming the API
+      const BATCH_SIZE = 10;
+      for (let i = 0; i < ordersToCheck.length; i += BATCH_SIZE) {
+        const batch = ordersToCheck.slice(i, i + BATCH_SIZE);
+        
+        await Promise.all(
+          batch.map(async (order) => {
+            try {
+              const statusData = await getSMMGenOrderStatus(order.smmgen_order_id);
+              const smmgenStatus = statusData.status || statusData.Status;
+              const mappedStatus = mapSMMGenStatus(smmgenStatus);
+
+              if (mappedStatus && mappedStatus !== order.status) {
+                await saveOrderStatusHistory(
+                  order.id,
+                  mappedStatus,
+                  'smmgen',
+                  statusData,
+                  order.status
+                );
+
+                await supabase
+                  .from('orders')
+                  .update({ 
+                    status: mappedStatus,
+                    completed_at: mappedStatus === 'completed' ? new Date().toISOString() : order.completed_at
+                  })
+                  .eq('id', order.id);
+                
+                // Update in finalOrders array
+                const index = finalOrders.findIndex(o => o.id === order.id);
+                if (index !== -1) {
+                  finalOrders[index] = { ...finalOrders[index], status: mappedStatus };
+                }
+              }
+            } catch (error) {
+              console.warn(`Failed to check SMMGen status for order ${order.id}:`, error.message);
+            }
+          })
+        );
+      }
+      
+      console.log(`Completed SMMGen status check for ${ordersToCheck.length} orders`);
+    }
   }
 
   return {
@@ -141,133 +118,54 @@ const fetchOrders = async ({ pageParam = 0, checkSMMGenStatus = false }) => {
   };
 };
 
-// Fetch all orders (for stats calculation)
+// Fetch all orders (for stats calculation) - Optimized with limit
+// Only fetch what's needed for stats, not all records
+// SMMGen status checks are disabled by default for performance
 const fetchAllOrders = async (checkSMMGenStatus = false) => {
-  const { data: currentUser } = await supabase.auth.getUser();
-  if (!currentUser?.user) {
-    throw new Error('Not authenticated');
-  }
-
-  const { data: userProfile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', currentUser.user.id)
-    .single();
-
-  if (userProfile?.role !== 'admin') {
+  const userRole = await checkUserRole();
+  
+  if (!userRole.isAdmin) {
     throw new Error('Access denied. Admin role required.');
   }
 
-  let allRecords = [];
-  let from = 0;
-  let hasMore = true;
-  const batchSize = 1000;
-  const maxIterations = 10000; // Safety limit to prevent infinite loops
-  let iterations = 0;
+  // For stats, we typically only need recent orders or aggregated data
+  // Limit to last 5000 orders instead of fetching everything
+  const { data, error } = await supabase
+    .from('orders')
+    .select('*, services(name, platform, service_type, smmgen_service_id), profiles(name, email, phone_number)')
+    .order('created_at', { ascending: false })
+    .limit(5000);
 
-  while (hasMore && iterations < maxIterations) {
-    iterations++;
-    const to = from + batchSize - 1;
-    
-    try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*, services(name, platform, service_type, smmgen_service_id), profiles(name, email, phone_number)')
-        .order('created_at', { ascending: false })
-        .range(from, to);
-
-      if (error) {
-        console.error(`Error fetching orders batch (from ${from} to ${to}):`, error);
-        throw error;
-      }
-
-      if (data && data.length > 0) {
-        allRecords = [...allRecords, ...data];
-        // Continue if we got a full batch, stop if we got less
-        hasMore = data.length === batchSize;
-        from = to + 1;
-      } else {
-        // No more data
-        hasMore = false;
-      }
-    } catch (error) {
-      console.error('Error in fetchAllOrders batch:', error);
-      // If we have some records, return them rather than failing completely
-      if (allRecords.length > 0) {
-        console.warn(`Returning partial order data (${allRecords.length} records) due to error`);
-        // Still check SMMGen status for partial data if requested
-        if (checkSMMGenStatus) {
-          allRecords = await Promise.all(
-            allRecords.map(async (order) => {
-              if (order.smmgen_order_id && order.status !== 'completed' && order.status !== 'refunded') {
-                try {
-                  const statusData = await getSMMGenOrderStatus(order.smmgen_order_id);
-                  const smmgenStatus = statusData.status || statusData.Status;
-                  const mappedStatus = mapSMMGenStatus(smmgenStatus);
-
-                  if (mappedStatus && mappedStatus !== order.status) {
-                    await saveOrderStatusHistory(
-                      order.id,
-                      mappedStatus,
-                      'smmgen',
-                      statusData,
-                      order.status
-                    );
-
-                    await supabase
-                      .from('orders')
-                      .update({ 
-                        status: mappedStatus,
-                        completed_at: mappedStatus === 'completed' ? new Date().toISOString() : order.completed_at
-                      })
-                      .eq('id', order.id);
-                    
-                    return { ...order, status: mappedStatus };
-                  }
-                } catch (error) {
-                  console.warn('Failed to check SMMGen status for order:', order.id, error);
-                }
-              }
-              
-              return order;
-            })
-          );
-        }
-        return allRecords;
-      }
-      throw error;
-    }
+  if (error) {
+    throw error;
   }
 
-  if (iterations >= maxIterations) {
-    console.warn(`fetchAllOrders reached max iterations (${maxIterations}), returning ${allRecords.length} records`);
-  }
+  let allRecords = data || [];
 
-  // Check SMMGen status if requested
+  // Only check SMMGen status if explicitly requested and limit to pending/processing orders
   if (checkSMMGenStatus && allRecords.length > 0) {
-    console.log(`Checking SMMGen status for ${allRecords.length} orders (fetchAllOrders)`);
-    allRecords = await Promise.all(
-      allRecords.map(async (order) => {
-        if (order.smmgen_order_id && 
-            order.smmgen_order_id !== "order not placed at smm gen" &&
-            order.status !== 'completed' && 
-            order.status !== 'refunded') {
+    // Filter to only orders that need status checking
+    const ordersToCheck = allRecords.filter(order => 
+      order.smmgen_order_id && 
+      order.smmgen_order_id !== "order not placed at smm gen" &&
+      order.status !== 'completed' && 
+      order.status !== 'refunded' &&
+      (order.status === 'pending' || order.status === 'processing' || order.status === 'in progress')
+    );
+
+    // Limit concurrent SMMGen API calls to avoid overwhelming the API
+    const BATCH_SIZE = 10;
+    for (let i = 0; i < ordersToCheck.length; i += BATCH_SIZE) {
+      const batch = ordersToCheck.slice(i, i + BATCH_SIZE);
+      
+      await Promise.all(
+        batch.map(async (order) => {
           try {
-            console.log(`Checking status for order ${order.id} with SMMGen ID: ${order.smmgen_order_id}`);
             const statusData = await getSMMGenOrderStatus(order.smmgen_order_id);
             const smmgenStatus = statusData.status || statusData.Status;
             const mappedStatus = mapSMMGenStatus(smmgenStatus);
 
-            console.log(`Order ${order.id} status check result:`, {
-              smmgenStatus,
-              mappedStatus,
-              currentStatus: order.status,
-              willUpdate: mappedStatus && mappedStatus !== order.status
-            });
-
             if (mappedStatus && mappedStatus !== order.status) {
-              console.log(`Updating order ${order.id} status from ${order.status} to ${mappedStatus}`);
-              
               await saveOrderStatusHistory(
                 order.id,
                 mappedStatus,
@@ -276,46 +174,26 @@ const fetchAllOrders = async (checkSMMGenStatus = false) => {
                 order.status
               );
 
-              const { error: updateError } = await supabase
+              await supabase
                 .from('orders')
                 .update({ 
                   status: mappedStatus,
                   completed_at: mappedStatus === 'completed' ? new Date().toISOString() : order.completed_at
                 })
                 .eq('id', order.id);
-
-              if (updateError) {
-                console.error(`Failed to update order ${order.id} status:`, updateError);
-                throw updateError;
+              
+              // Update in allRecords array
+              const index = allRecords.findIndex(o => o.id === order.id);
+              if (index !== -1) {
+                allRecords[index] = { ...allRecords[index], status: mappedStatus };
               }
-
-              console.log(`Successfully updated order ${order.id} status to ${mappedStatus}`);
-              return { ...order, status: mappedStatus };
-            } else {
-              console.log(`Order ${order.id} status unchanged (${order.status})`);
             }
           } catch (error) {
-            console.error(`Failed to check SMMGen status for order ${order.id}:`, {
-              error: error.message,
-              orderId: order.id,
-              smmgenOrderId: order.smmgen_order_id,
-              stack: error.stack
-            });
+            console.warn(`Failed to check SMMGen status for order ${order.id}:`, error);
           }
-        } else {
-          if (order.smmgen_order_id === "order not placed at smm gen") {
-            console.log(`Skipping status check for order ${order.id} - order not placed at SMMGen`);
-          } else if (!order.smmgen_order_id) {
-            console.log(`Skipping status check for order ${order.id} - no SMMGen order ID`);
-          } else {
-            console.log(`Skipping status check for order ${order.id} - status is ${order.status}`);
-          }
-        }
-        
-        return order;
-      })
-    );
-    console.log(`Completed SMMGen status check for ${allRecords.length} orders (fetchAllOrders)`);
+        })
+      );
+    }
   }
 
   return allRecords;
@@ -340,8 +218,8 @@ export const useAdminOrders = (options = {}) => {
     queryKey: ['admin', 'orders', 'all', { checkSMMGenStatus }],
     queryFn: () => fetchAllOrders(checkSMMGenStatus),
     enabled,
-    staleTime: 1 * 60 * 1000,
-    gcTime: 3 * 60 * 1000,
+    staleTime: 2 * 60 * 1000, // 2 minutes - increased for better caching
+    gcTime: 5 * 60 * 1000, // 5 minutes - keep in cache longer
   });
 };
 
