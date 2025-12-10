@@ -1,4 +1,5 @@
 import React, { memo, useState, useMemo, useCallback, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAdminDeposits, useApproveDeposit, useRejectDeposit } from '@/hooks/useAdminDeposits';
 import { useDebounce } from '@/hooks/useDebounce';
 import VirtualizedList from '@/components/VirtualizedList';
@@ -15,6 +16,7 @@ const ITEMS_PER_PAGE = 50;
 const VIRTUAL_SCROLL_THRESHOLD = 100;
 
 const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('');
@@ -225,6 +227,11 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
         setManualReference('');
       }
 
+      // Invalidate and refetch deposits to update UI immediately
+      queryClient.invalidateQueries({ queryKey: ['admin', 'deposits'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
+      await refetch();
+
       if (onRefresh) onRefresh();
     } catch (error) {
       console.error('Failed to verify Paystack deposit:', error);
@@ -232,7 +239,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
     } finally {
       setVerifyingDeposit(null);
     }
-  }, [onRefresh, manualRefDialog.open]);
+  }, [onRefresh, manualRefDialog.open, queryClient, refetch]);
 
   const handleManualReferenceSubmit = useCallback(async () => {
     if (!manualRefDialog.deposit || !manualReference.trim()) {

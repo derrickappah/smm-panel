@@ -222,18 +222,18 @@ export default async function handler(req, res) {
         while (hasMore && page <= maxPages) {
           try {
             const paystackQueryUrl = `https://api.paystack.co/transaction?perPage=${perPage}&page=${page}&from=${startDateStr}&to=${endDateStr}`;
-            const paystackResponse = await fetch(paystackQueryUrl, {
-              method: 'GET',
-              headers: {
-                'Authorization': `Bearer ${PAYSTACK_SECRET_KEY}`,
-                'Content-Type': 'application/json'
-              }
-            });
+        const paystackResponse = await fetch(paystackQueryUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${PAYSTACK_SECRET_KEY}`,
+            'Content-Type': 'application/json'
+          }
+        });
 
-            if (paystackResponse.ok) {
-              const paystackData = await paystackResponse.json();
-              
-              if (paystackData.status && paystackData.data) {
+        if (paystackResponse.ok) {
+          const paystackData = await paystackResponse.json();
+          
+          if (paystackData.status && paystackData.data) {
                 allPaystackTxs.push(...paystackData.data);
                 
                 // Check if there are more pages
@@ -279,9 +279,9 @@ export default async function handler(req, res) {
         // - 20: Amount only match
         
         scoredMatches = allPaystackTxs.map(tx => {
-          const txAmount = tx.amount; // Already in pesewas
-          const amountMatch = Math.abs(txAmount - paystackAmount) < 10; // Allow small difference
-          
+              const txAmount = tx.amount; // Already in pesewas
+              const amountMatch = Math.abs(txAmount - paystackAmount) < 10; // Allow small difference
+              
           if (!amountMatch) return null;
 
           let score = 0;
@@ -329,7 +329,7 @@ export default async function handler(req, res) {
             return b.score - a.score;
           }
           return a.timeDiff - b.timeDiff;
-        });
+            });
 
         // Only proceed if we have a high-confidence match (score >= 80)
         // This ensures we don't match wrong transactions when multiple exist with same amount
@@ -337,9 +337,9 @@ export default async function handler(req, res) {
         
         if (bestMatch && bestMatch.score >= 80) {
           const matchingTx = bestMatch.tx;
-          
-          if (matchingTx && matchingTx.reference) {
-            paystackReference = matchingTx.reference;
+
+            if (matchingTx && matchingTx.reference) {
+              paystackReference = matchingTx.reference;
             console.log(`[MANUAL-VERIFY] Found high-confidence matching Paystack transaction:`, {
               reference: paystackReference,
               score: bestMatch.score,
@@ -362,13 +362,13 @@ export default async function handler(req, res) {
                 }))
               });
             }
-            
-            // Store the reference
-            await supabase
-              .from('transactions')
-              .update({ paystack_reference: paystackReference })
-              .eq('id', transaction.id);
-          }
+              
+              // Store the reference
+              await supabase
+                .from('transactions')
+                .update({ paystack_reference: paystackReference })
+                .eq('id', transaction.id);
+            }
         } else if (bestMatch && bestMatch.score >= 40) {
           // Medium confidence match - log but don't use automatically
           console.warn(`[MANUAL-VERIFY] Found medium-confidence match (score: ${bestMatch.score}), but requires manual verification:`, {
