@@ -54,7 +54,7 @@ const fetchAllDeposits = async () => {
     
     const { data, error } = await supabase
       .from('transactions')
-      .select('id, user_id, amount, type, status, created_at, paystack_status, reference, payment_method, payment_provider, profiles(email, name, phone_number)')
+      .select('id, user_id, amount, type, status, created_at, paystack_status, paystack_reference, manual_reference, korapay_reference, order_id, profiles(email, name, phone_number)')
       .eq('type', 'deposit')
       .order('created_at', { ascending: false })
       .range(from, to);
