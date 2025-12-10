@@ -1,4 +1,5 @@
 import React, { memo, useState, useMemo, useCallback, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAdminOrders, useUpdateOrder, useReorderToSMMGen } from '@/hooks/useAdminOrders';
 import { useDebounce } from '@/hooks/useDebounce';
 import VirtualizedList from '@/components/VirtualizedList';
@@ -20,6 +21,8 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
   const [page, setPage] = useState(1);
 
   const debouncedSearch = useDebounce(searchTerm, 300);
+
+  const queryClient = useQueryClient();
 
   const { 
     data, 
@@ -152,6 +155,9 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
       const result = await processManualRefund(order);
       if (result.success) {
         toast.success('Refund processed successfully');
+        // Invalidate and refetch orders to update UI immediately
+        queryClient.invalidateQueries({ queryKey: ['admin', 'orders'] });
+        await refetch();
         if (onRefresh) onRefresh();
       } else {
         toast.error(result.error || 'Failed to process refund');
@@ -160,7 +166,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
       console.error('Refund error:', error);
       toast.error(error.message || 'Failed to process refund');
     }
-  }, [onRefresh]);
+  }, [onRefresh, queryClient, refetch]);
 
   const handleReorderToSMMGen = useCallback(async (order) => {
     if (!order.services?.smmgen_service_id) {
