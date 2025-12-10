@@ -144,25 +144,110 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
   const handleRefundOrder = useCallback(async (order) => {
     if (!confirm('Are you sure you want to refund this order?')) return;
     
-    try {
-      // Validate order has required fields
-      if (!order.user_id) {
-        console.error('Order missing user_id:', order);
-        toast.error('Order is missing user information. Cannot process refund.');
-        return;
+    // Validate order has required fields
+    if (!order.user_id) {
+      console.error('Order missing user_id:', order);
+      toast.error('Order is missing user information. Cannot process refund.');
+      return;
+    }
+
+    // Cancel any outgoing refetches to avoid overwriting optimistic update
+    await queryClient.cancelQueries({ queryKey: ['admin', 'orders'] });
+
+    // Snapshot the previous value for rollback
+    const previousQueries = queryClient.getQueriesData({ queryKey: ['admin', 'orders'] });
+    const previousData = new Map(previousQueries);
+
+    // Optimistically update the order in cache immediately
+    queryClient.setQueriesData({ queryKey: ['admin', 'orders'] }, (oldData) => {
+      if (!oldData) return oldData;
+
+      // Handle infinite query structure (has pages)
+      if (oldData.pages) {
+        return {
+          ...oldData,
+          pages: oldData.pages.map((page) => {
+            if (!page || !page.data) return page;
+            
+            const updatedData = page.data.map((o) => {
+              if (o.id === order.id) {
+                return { 
+                  ...o, 
+                  status: 'refunded',
+                  refund_status: 'succeeded'
+                };
+              }
+              return o;
+            });
+
+            return {
+              ...page,
+              data: updatedData,
+            };
+          }),
+        };
       }
 
+      // Handle regular query structure (array of orders)
+      if (Array.isArray(oldData)) {
+        return oldData.map((o) => {
+          if (o.id === order.id) {
+            return { 
+              ...o, 
+              status: 'refunded',
+              refund_status: 'succeeded'
+            };
+          }
+          return o;
+        });
+      }
+
+      // Handle query with data property
+      if (oldData.data) {
+        if (Array.isArray(oldData.data)) {
+          return {
+            ...oldData,
+            data: oldData.data.map((o) => {
+              if (o.id === order.id) {
+                return { 
+                  ...o, 
+                  status: 'refunded',
+                  refund_status: 'succeeded'
+                };
+              }
+              return o;
+            }),
+          };
+        }
+      }
+
+      return oldData;
+    });
+
+    try {
+      // Process the refund
       const result = await processManualRefund(order);
+      
       if (result.success) {
         toast.success('Refund processed successfully');
-        // Invalidate and refetch orders to update UI immediately
+        // Invalidate queries to ensure data consistency (refetch in background)
         queryClient.invalidateQueries({ queryKey: ['admin', 'orders'] });
+        queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
+        // Refetch to ensure UI is updated with latest data
         await refetch();
         if (onRefresh) onRefresh();
       } else {
+        // Rollback optimistic update on error
+        previousData.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
         toast.error(result.error || 'Failed to process refund');
       }
     } catch (error) {
+      // Rollback optimistic update on error
+      previousData.forEach(([queryKey, data]) => {
+        queryClient.setQueryData(queryKey, data);
+      });
       console.error('Refund error:', error);
       toast.error(error.message || 'Failed to process refund');
     }
