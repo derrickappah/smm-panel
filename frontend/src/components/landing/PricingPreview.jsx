@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Instagram, Youtube, Facebook, Twitter, Music, ArrowRight, TrendingUp, Tag, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,16 @@ const PricingPreview = () => {
   const [popularServices, setPopularServices] = useState([]);
   const [minPrice, setMinPrice] = useState(null);
   const { data: promotionPackages = [] } = usePromotionPackages();
+  const scrollContainerRef = useRef(null);
+  const isScrollingRef = useRef(false);
+  
+  const displayPackages = promotionPackages.slice(0, 3);
+  // Duplicate items for infinite scroll
+  const infinitePackages = useMemo(() => {
+    const packages = promotionPackages.slice(0, 3);
+    if (packages.length === 0) return [];
+    return [...packages, ...packages, ...packages];
+  }, [promotionPackages]);
 
   const formatQuantity = (quantity) => {
     if (quantity >= 1000000) {
@@ -28,6 +38,60 @@ const PricingPreview = () => {
     }
     return quantity.toString();
   };
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container || displayPackages.length === 0) return;
+
+    const handleScroll = () => {
+      if (isScrollingRef.current) return;
+      
+      const scrollLeft = container.scrollLeft;
+      const containerWidth = container.clientWidth;
+      const cardWidth = 280 + 16; // min-w-[280px] + gap-4
+      const singleSetWidth = displayPackages.length * cardWidth;
+      const centerOffset = (containerWidth - 280) / 2 - 16; // 16px is px-4 padding
+
+      // If scrolled past the end of second set (entering third set), reset to middle (second set)
+      if (scrollLeft >= singleSetWidth * 2 - centerOffset) {
+        isScrollingRef.current = true;
+        const offset = scrollLeft - singleSetWidth * 2;
+        container.scrollLeft = singleSetWidth + centerOffset + offset;
+        setTimeout(() => {
+          isScrollingRef.current = false;
+        }, 50);
+      }
+      // If scrolled before the start of second set (in first set), reset to middle (second set)
+      else if (scrollLeft <= singleSetWidth - centerOffset) {
+        isScrollingRef.current = true;
+        const offset = scrollLeft - (singleSetWidth - centerOffset);
+        container.scrollLeft = singleSetWidth + centerOffset + offset;
+        setTimeout(() => {
+          isScrollingRef.current = false;
+        }, 50);
+      }
+    };
+
+    // Initialize scroll position to center first card of middle set
+    const initializeScroll = () => {
+      const cardWidth = 280 + 16;
+      const singleSetWidth = displayPackages.length * cardWidth;
+      const containerWidth = container.clientWidth;
+      if (containerWidth > 0) {
+        // Center the first card of the middle set
+        const centerOffset = (containerWidth - 280) / 2 - 16; // 16px is px-4 padding
+        container.scrollLeft = singleSetWidth + centerOffset;
+      }
+    };
+
+    // Wait for container to be ready
+    requestAnimationFrame(() => {
+      initializeScroll();
+    });
+
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [displayPackages.length]);
 
   // Fetch all enabled services using React Query for caching
   const { data: services, isLoading } = useQuery({
@@ -159,18 +223,25 @@ const PricingPreview = () => {
         {/* Promotion Packages Section */}
         {promotionPackages.length > 0 && (
           <div className="mb-8 sm:mb-12">
-            <div className="flex items-center justify-center gap-2 mb-6">
-              <Sparkles className="w-5 h-5 text-purple-600" />
-              <h3 className="text-xl sm:text-2xl font-bold text-gray-900">Special Promotion Packages</h3>
+            <div className="text-center mb-6">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <Sparkles className="w-5 h-5 text-purple-600" />
+                <h3 className="text-xl sm:text-2xl font-bold text-gray-900">Special Promotions</h3>
+              </div>
+              <p className="text-sm text-gray-600">Limited-time fixed-price packages</p>
             </div>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6">
-              {promotionPackages.slice(0, 3).map((pkg) => {
+            <div 
+              ref={scrollContainerRef}
+              className="flex overflow-x-auto snap-x snap-mandatory gap-4 sm:gap-6 pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:snap-none mb-6 scrollbar-hide"
+              style={{ scrollSnapType: 'x mandatory' }}
+            >
+              {infinitePackages.map((pkg, index) => {
                 const platform = (pkg.platform || '').toLowerCase();
                 const Icon = platformIcons[platform] || TrendingUp;
                 return (
                   <div
-                    key={pkg.id}
-                    className="bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-purple-300 rounded-lg p-5 sm:p-6 text-center hover:shadow-lg transition-all duration-200"
+                    key={`${pkg.id}-${index}`}
+                    className="bg-white border-2 border-purple-300 rounded-lg p-5 sm:p-6 text-center hover:shadow-lg transition-all duration-200 min-w-[280px] snap-center flex-shrink-0 sm:min-w-0 sm:snap-none"
                   >
                     <div className="flex items-center justify-center gap-2 mb-3">
                       <Tag className="w-4 h-4 text-purple-600" />

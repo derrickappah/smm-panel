@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
@@ -71,6 +71,69 @@ const ServicesPage = ({ user, onLogout }) => {
   const filteredPackages = selectedPlatform === 'all'
     ? promotionPackages
     : promotionPackages.filter(p => p.platform === selectedPlatform);
+  
+  const scrollContainerRef = useRef(null);
+  const isScrollingRef = useRef(false);
+  
+  // Duplicate items for infinite scroll
+  const infinitePackages = useMemo(() => {
+    if (filteredPackages.length === 0) return [];
+    return [...filteredPackages, ...filteredPackages, ...filteredPackages];
+  }, [filteredPackages]);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container || filteredPackages.length === 0) return;
+
+    const handleScroll = () => {
+      if (isScrollingRef.current) return;
+      
+      const scrollLeft = container.scrollLeft;
+      const containerWidth = container.clientWidth;
+      const cardWidth = 280 + 16; // min-w-[280px] + gap-4
+      const singleSetWidth = filteredPackages.length * cardWidth;
+      const centerOffset = (containerWidth - 280) / 2 - 16; // 16px is px-4 padding
+
+      // If scrolled past the end of second set (entering third set), reset to middle (second set)
+      if (scrollLeft >= singleSetWidth * 2 - centerOffset) {
+        isScrollingRef.current = true;
+        const offset = scrollLeft - singleSetWidth * 2;
+        container.scrollLeft = singleSetWidth + centerOffset + offset;
+        setTimeout(() => {
+          isScrollingRef.current = false;
+        }, 50);
+      }
+      // If scrolled before the start of second set (in first set), reset to middle (second set)
+      else if (scrollLeft <= singleSetWidth - centerOffset) {
+        isScrollingRef.current = true;
+        const offset = scrollLeft - (singleSetWidth - centerOffset);
+        container.scrollLeft = singleSetWidth + centerOffset + offset;
+        setTimeout(() => {
+          isScrollingRef.current = false;
+        }, 50);
+      }
+    };
+
+    // Initialize scroll position to center first card of middle set
+    const initializeScroll = () => {
+      const cardWidth = 280 + 16;
+      const singleSetWidth = filteredPackages.length * cardWidth;
+      const containerWidth = container.clientWidth;
+      if (containerWidth > 0) {
+        // Center the first card of the middle set
+        const centerOffset = (containerWidth - 280) / 2 - 16; // 16px is px-4 padding
+        container.scrollLeft = singleSetWidth + centerOffset;
+      }
+    };
+
+    // Wait for container to be ready
+    requestAnimationFrame(() => {
+      initializeScroll();
+    });
+
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [filteredPackages.length]);
 
   const formatQuantity = (quantity) => {
     if (quantity >= 1000000) {
@@ -195,10 +258,14 @@ const ServicesPage = ({ user, onLogout }) => {
               <Tag className="w-5 h-5 text-purple-600" />
               <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Special Promotion Packages</h2>
             </div>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 animate-slideUp mb-8">
-              {filteredPackages.map((pkg, index) => (
+            <div 
+              ref={scrollContainerRef}
+              className="flex overflow-x-auto snap-x snap-mandatory gap-4 sm:gap-6 pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:snap-none animate-slideUp mb-8 scrollbar-hide"
+              style={{ scrollSnapType: 'x mandatory' }}
+            >
+              {infinitePackages.map((pkg, index) => (
                 <div
-                  key={`pkg-${pkg.id}`}
+                  key={`pkg-${pkg.id}-${index}`}
                   onClick={() => handlePackageClick(pkg)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
@@ -207,8 +274,8 @@ const ServicesPage = ({ user, onLogout }) => {
                     }
                   }}
                   tabIndex={0}
-                  className="bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-purple-300 rounded-lg p-5 sm:p-6 shadow-sm hover:shadow-md hover:border-purple-400 cursor-pointer transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
-                  style={{ animationDelay: `${index * 0.05}s` }}
+                  className="bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-purple-300 rounded-lg p-5 sm:p-6 shadow-sm hover:shadow-md hover:border-purple-400 cursor-pointer transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 min-w-[280px] snap-center flex-shrink-0 sm:min-w-0 sm:snap-none"
+                  style={{ animationDelay: `${(index % filteredPackages.length) * 0.05}s` }}
                 >
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-2">

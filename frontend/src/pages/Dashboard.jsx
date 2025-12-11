@@ -376,6 +376,38 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     }
   }, [location.state?.selectedServiceId, services]);
 
+  // Pre-select promotion package if navigated from Services page
+  useEffect(() => {
+    const selectedPackageId = location.state?.selectedPackageId;
+    if (selectedPackageId && promotionPackages.length > 0) {
+      // Verify the package exists in the promotionPackages array
+      const packageExists = promotionPackages.find(p => p.id === selectedPackageId);
+      if (packageExists) {
+        setOrderForm(prev => {
+          // Only update if not already set to avoid unnecessary re-renders
+          if (prev.package_id !== selectedPackageId) {
+            return {
+              ...prev,
+              package_id: selectedPackageId,
+              service_id: '', // Clear service_id when package is selected
+              quantity: packageExists.quantity.toString() // Set quantity from package
+            };
+          }
+          return prev;
+        });
+        // Scroll to the order form section after a short delay
+        setTimeout(() => {
+          const orderSection = document.getElementById('order-form-section');
+          if (orderSection) {
+            orderSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }, 300);
+        // Clear the state to avoid re-selecting on re-render
+        window.history.replaceState({}, document.title);
+      }
+    }
+  }, [location.state?.selectedPackageId, promotionPackages]);
+
 
   const handlePaymentSuccess = async (reference) => {
     console.log('Payment success callback received:', { reference, pendingTransactionId: pendingTransaction?.id });
