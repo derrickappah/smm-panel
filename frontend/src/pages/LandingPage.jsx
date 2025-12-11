@@ -455,47 +455,47 @@ const LandingPage = () => {
       </nav>
 
       {/* Hero Section */}
-      <section className="pt-16 sm:pt-24 md:pt-32 pb-12 sm:pb-16 md:pb-20 px-3 sm:px-4 md:px-6">
-        <div className="max-w-6xl mx-auto text-center">
+      <section className="pt-28 sm:pt-36 md:pt-44 pb-12 sm:pb-16 md:pb-20 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-5xl mx-auto text-center">
           {/* Trust Badges Above Hero */}
-          <div className="mb-6 sm:mb-8 flex flex-wrap justify-center items-center gap-3 sm:gap-4 text-xs sm:text-sm text-gray-600">
-            <div className="flex items-center space-x-1">
-              <Shield className="w-4 h-4 text-indigo-600" />
-              <span className="font-medium">Trusted by 10K+ users</span>
+          <div className="mb-8 sm:mb-10 md:mb-12 flex flex-wrap justify-center items-center gap-x-4 gap-y-2 sm:gap-x-6 text-xs sm:text-sm text-gray-600">
+            <div className="flex items-center space-x-1.5">
+              <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 flex-shrink-0" />
+              <span className="font-medium whitespace-nowrap">Trusted by 10K+ users</span>
             </div>
-            <span className="hidden sm:inline">•</span>
-            <div className="flex items-center space-x-1">
-              <Clock className="w-4 h-4 text-indigo-600" />
-              <span className="font-medium">99.9% Uptime</span>
+            <span className="hidden sm:inline text-gray-400">•</span>
+            <div className="flex items-center space-x-1.5">
+              <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 flex-shrink-0" />
+              <span className="font-medium whitespace-nowrap">99.9% Uptime</span>
             </div>
-            <span className="hidden sm:inline">•</span>
-            <div className="flex items-center space-x-1">
-              <TrendingUp className="w-4 h-4 text-indigo-600" />
-              <span className="font-medium">Instant Delivery</span>
+            <span className="hidden sm:inline text-gray-400">•</span>
+            <div className="flex items-center space-x-1.5">
+              <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 flex-shrink-0" />
+              <span className="font-medium whitespace-nowrap">Instant Delivery</span>
             </div>
           </div>
 
-          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-gray-900 mb-4 sm:mb-6 leading-tight px-2">
+          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-gray-900 mb-6 sm:mb-8 leading-tight">
             Grow Your Social Media
             <br />
             <span className="text-indigo-600">
               Presence Instantly
             </span>
           </h1>
-          <p className="text-sm sm:text-base md:text-lg text-gray-600 mb-6 sm:mb-8 md:mb-10 max-w-2xl mx-auto px-2">
+          <p className="text-base sm:text-lg md:text-xl text-gray-600 mb-8 sm:mb-10 md:mb-12 max-w-2xl mx-auto leading-relaxed">
             The most reliable SMM panel for boosting your followers, likes, views, and engagement across all major platforms. Join thousands of satisfied customers today.
           </p>
           
           {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center mb-8 sm:mb-10 md:mb-12 px-2">
+          <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 justify-center items-stretch sm:items-center mb-10 sm:mb-12 md:mb-16">
             <Button 
               data-testid="hero-get-started-btn"
               onClick={() => navigate('/auth')} 
               size="lg"
-              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-6 sm:px-8 py-3 sm:py-4 h-12 sm:h-14 text-base sm:text-lg rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl w-full sm:w-auto"
+              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-8 sm:px-10 py-3.5 sm:py-4 h-auto text-base sm:text-lg font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl w-full sm:w-auto min-w-[200px]"
             >
               Start Boosting Now
-              <ArrowRight className="ml-2 w-4 h-4 sm:w-5 sm:h-5" />
+              <ArrowRight className="ml-2 w-5 h-5" />
             </Button>
             <Button 
               onClick={() => {
@@ -504,20 +504,20 @@ const LandingPage = () => {
               }}
               size="lg"
               variant="outline"
-              className="border-2 border-gray-300 hover:border-indigo-600 text-gray-700 hover:text-indigo-600 px-6 sm:px-8 py-3 sm:py-4 h-12 sm:h-14 text-base sm:text-lg rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 w-full sm:w-auto"
+              className="border-2 border-gray-300 hover:border-indigo-600 text-gray-700 hover:text-indigo-600 px-8 sm:px-10 py-3.5 sm:py-4 h-auto text-base sm:text-lg font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 w-full sm:w-auto min-w-[200px] bg-white"
             >
               View Pricing
             </Button>
           </div>
 
           {/* Platform Icons */}
-          <div className="flex justify-center items-center gap-4 sm:gap-6 md:gap-8 mt-8 sm:mt-12 md:mt-16 flex-wrap px-2">
+          <div className="flex justify-center items-center gap-6 sm:gap-8 md:gap-10 mt-12 sm:mt-16 md:mt-20 flex-wrap">
             {platforms.map((platform) => (
-              <div key={platform.name} className="flex flex-col items-center space-y-2">
-                <div className="bg-white border border-gray-200 w-12 h-12 sm:w-14 sm:h-16 md:w-16 md:h-16 rounded-lg flex items-center justify-center shadow-sm hover:shadow-md transition-shadow duration-200">
-                  <platform.icon className={`w-6 h-6 sm:w-7 sm:h-8 md:w-8 md:h-8 ${platform.color}`} />
+              <div key={platform.name} className="flex flex-col items-center space-y-2.5 group">
+                <div className="bg-white border border-gray-200 w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-lg flex items-center justify-center shadow-sm hover:shadow-lg hover:border-indigo-300 transition-all duration-200 group-hover:scale-105">
+                  <platform.icon className={`w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 ${platform.color}`} />
                 </div>
-                <span className="text-xs sm:text-sm font-medium text-gray-700">{platform.name}</span>
+                <span className="text-xs sm:text-sm font-medium text-gray-700 group-hover:text-indigo-600 transition-colors duration-200">{platform.name}</span>
               </div>
             ))}
           </div>
