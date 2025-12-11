@@ -34,7 +34,7 @@ const fetchOrders = async ({ pageParam = 0, checkSMMGenStatus = false }) => {
 
   const { data, error, count } = await supabase
     .from('orders')
-    .select('id, user_id, service_id, link, quantity, total_cost, status, smmgen_order_id, created_at, completed_at, refund_status, last_status_check, services(name, platform, service_type, smmgen_service_id), profiles(name, email, phone_number)', { count: 'exact' })
+    .select('id, user_id, service_id, promotion_package_id, link, quantity, total_cost, status, smmgen_order_id, created_at, completed_at, refund_status, last_status_check, services(name, platform, service_type, smmgen_service_id), promotion_packages(name, platform, service_type, smmgen_service_id), profiles(name, email, phone_number)', { count: 'exact' })
     .order('created_at', { ascending: false })
     .range(from, to);
 
@@ -92,7 +92,7 @@ const fetchAllOrders = async (checkSMMGenStatus = false) => {
     
     const { data, error } = await supabase
       .from('orders')
-      .select('id, user_id, service_id, link, quantity, total_cost, status, smmgen_order_id, created_at, completed_at, refund_status, last_status_check, services(name, platform, service_type, smmgen_service_id), profiles(name, email, phone_number)')
+      .select('id, user_id, service_id, promotion_package_id, link, quantity, total_cost, status, smmgen_order_id, created_at, completed_at, refund_status, last_status_check, services(name, platform, service_type, smmgen_service_id), promotion_packages(name, platform, service_type, smmgen_service_id), profiles(name, email, phone_number)')
       .order('created_at', { ascending: false })
       .range(from, to);
 
@@ -260,10 +260,10 @@ export const useReorderToSMMGen = () => {
 
   return useMutation({
     mutationFn: async (orderId) => {
-      // Fetch the order with its service data
+      // Fetch the order with its service or package data
       const { data: order, error: orderError } = await supabase
         .from('orders')
-        .select('*, services(smmgen_service_id)')
+        .select('*, services(smmgen_service_id), promotion_packages(smmgen_service_id)')
         .eq('id', orderId)
         .single();
 
@@ -280,9 +280,15 @@ export const useReorderToSMMGen = () => {
         throw new Error('Order already has SMMGen ID. Cannot reorder.');
       }
 
-      // Check if service has SMMGen service ID
-      if (!order.services?.smmgen_service_id) {
-        throw new Error('Service does not have SMMGen service ID configured.');
+      // Check if service or package has SMMGen service ID
+      const smmgenServiceId = order.promotion_package_id 
+        ? order.promotion_packages?.smmgen_service_id 
+        : order.services?.smmgen_service_id;
+      
+      if (!smmgenServiceId) {
+        throw new Error(order.promotion_package_id 
+          ? 'Promotion package does not have SMMGen service ID configured.'
+          : 'Service does not have SMMGen service ID configured.');
       }
 
       // Check if order status allows reordering
@@ -292,7 +298,7 @@ export const useReorderToSMMGen = () => {
 
       // Place order via SMMGen API
       const smmgenResponse = await placeSMMGenOrder(
-        order.services.smmgen_service_id,
+        smmgenServiceId,
         order.link,
         order.quantity
       );

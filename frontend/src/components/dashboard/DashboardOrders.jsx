@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Tag } from 'lucide-react';
 
 const DashboardOrders = React.memo(({ orders, services }) => {
   const navigate = useNavigate();
@@ -44,11 +45,24 @@ const DashboardOrders = React.memo(({ orders, services }) => {
       <div className="space-y-3">
         {orders.map((order) => {
           const service = services.find(s => s.id === order.service_id);
+          const isPackageOrder = !!order.promotion_package_id;
+          const serviceName = isPackageOrder 
+            ? order.promotion_packages?.name || 'Package'
+            : service?.name || 'Service';
+          
           return (
-            <div key={order.id} className="bg-gray-50 border border-gray-200 p-4 rounded-lg hover:border-gray-300 transition-colors">
+            <div key={order.id} className={`bg-gray-50 border ${isPackageOrder ? 'border-purple-200' : 'border-gray-200'} p-4 rounded-lg hover:border-gray-300 transition-colors`}>
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm sm:text-base font-medium text-gray-900 truncate">{service?.name || 'Service'}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm sm:text-base font-medium text-gray-900 truncate">{serviceName}</p>
+                    {isPackageOrder && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded">
+                        <Tag className="w-3 h-3" />
+                        Package
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs sm:text-sm text-gray-600 mt-0.5">Quantity: {order.quantity?.toLocaleString() || '0'}</p>
                 </div>
                 <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">

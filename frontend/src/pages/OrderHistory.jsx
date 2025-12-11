@@ -7,7 +7,7 @@ import Navbar from '@/components/Navbar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Clock, CheckCircle, XCircle, Loader, RefreshCw, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, Loader, RefreshCw, Search, Filter, ChevronLeft, ChevronRight, Tag } from 'lucide-react';
 import SEO from '@/components/SEO';
 
 const OrderHistory = ({ user, onLogout }) => {
@@ -35,7 +35,7 @@ const OrderHistory = ({ user, onLogout }) => {
       const [ordersRes, servicesRes] = await Promise.all([
         supabase
           .from('orders')
-          .select('id, user_id, service_id, link, quantity, status, smmgen_order_id, created_at, completed_at, refund_status, total_cost, last_status_check')
+          .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, created_at, completed_at, refund_status, total_cost, last_status_check, promotion_packages(name, platform, service_type)')
           .eq('user_id', authUser.id)
           .order('created_at', { ascending: false }),
         supabase
@@ -71,6 +71,7 @@ const OrderHistory = ({ user, onLogout }) => {
         return <Loader className="w-5 h-5 text-blue-600 animate-spin" />;
       case 'partial':
         return <Loader className="w-5 h-5 text-orange-600 animate-spin" />;
+      case 'refunded':
       case 'refunds':
         return <XCircle className="w-5 h-5 text-purple-600" />;
       case 'pending':
@@ -92,6 +93,7 @@ const OrderHistory = ({ user, onLogout }) => {
         return 'bg-blue-100 text-blue-700 border-blue-200';
       case 'partial':
         return 'bg-orange-100 text-orange-700 border-orange-200';
+      case 'refunded':
       case 'refunds':
         return 'bg-purple-100 text-purple-700 border-purple-200';
       case 'pending':
@@ -228,7 +230,7 @@ const OrderHistory = ({ user, onLogout }) => {
 
           const { data: currentOrders } = await supabase
             .from('orders')
-            .select('id, user_id, service_id, link, quantity, status, smmgen_order_id, created_at, completed_at, refund_status, total_cost, last_status_check')
+            .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, created_at, completed_at, refund_status, total_cost, last_status_check, promotion_packages(name, platform, service_type)')
             .eq('user_id', authUser.id)
             .order('created_at', { ascending: false });
 
@@ -364,6 +366,11 @@ const OrderHistory = ({ user, onLogout }) => {
                     <div className="divide-y divide-gray-200">
                       {paginatedOrders.map((order) => {
                         const service = services.find(s => s.id === order.service_id);
+                        const isPackageOrder = !!order.promotion_package_id;
+                        const serviceName = isPackageOrder 
+                          ? order.promotion_packages?.name || 'Package'
+                          : service?.name || 'Unknown Service';
+                        
                         return (
                           <div
                             key={order.id}
@@ -373,7 +380,14 @@ const OrderHistory = ({ user, onLogout }) => {
                             <div className="grid grid-cols-[2fr_1fr_1.5fr_1fr_1fr_1.5fr_1.5fr_1fr] gap-4 p-4 items-center">
                               {/* Service */}
                               <div className="text-center">
-                                <p className="font-medium text-gray-900 text-sm">{service?.name || 'Unknown Service'}</p>
+                                <div className="flex items-center justify-center gap-2">
+                                  <p className="font-medium text-gray-900 text-sm">{serviceName}</p>
+                                  {isPackageOrder && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded">
+                                      <Tag className="w-3 h-3" />
+                                    </span>
+                                  )}
+                                </div>
                                 <p className="text-xs text-gray-500 mt-0.5">ID: {order.id.slice(0, 8)}...</p>
                               </div>
                               {/* Order No */}

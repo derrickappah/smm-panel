@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { 
   Users, ShoppingCart, DollarSign, Package, CheckCircle, Clock, AlertCircle,
   MessageSquare, UserPlus, Receipt, BarChart3, XCircle, CreditCard, Heart,
-  Eye, MessageCircle, Share2, UserCheck, Activity, Bell
+  Eye, MessageCircle, Share2, UserCheck, Activity, Bell, Tag
 } from 'lucide-react';
 
 const AdminStats = memo(({ 
@@ -605,7 +605,18 @@ const AdminStats = memo(({
             {recentOrders.map((order) => (
               <div key={order.id} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{order.services?.name || 'Unknown Service'}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {order.promotion_package_id 
+                        ? order.promotion_packages?.name || 'Package'
+                        : order.services?.name || 'Unknown Service'}
+                    </p>
+                    {order.promotion_package_id && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded flex-shrink-0">
+                        <Tag className="w-3 h-3" />
+                      </span>
+                    )}
+                  </div>
                   <div className="flex flex-col gap-1 mt-1">
                     <div className="flex items-center gap-2">
                       <span className={`text-xs px-2.5 py-1 rounded border ${

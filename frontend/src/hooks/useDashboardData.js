@@ -46,7 +46,7 @@ const fetchRecentOrders = async () => {
 
   const { data, error } = await supabase
     .from('orders')
-    .select('id, user_id, service_id, link, quantity, status, smmgen_order_id, created_at, completed_at, refund_status, total_cost, last_status_check')
+    .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, created_at, completed_at, refund_status, total_cost, last_status_check, promotion_packages(name, platform, service_type)')
     .eq('user_id', authUser.id)
     .order('created_at', { ascending: false })
     .limit(5);
@@ -71,7 +71,7 @@ const fetchRecentOrders = async () => {
     // Fetch updated orders to return latest status
     const { data: updatedData } = await supabase
       .from('orders')
-      .select('id, user_id, service_id, link, quantity, status, smmgen_order_id, created_at, completed_at, refund_status, total_cost, last_status_check')
+      .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, created_at, completed_at, refund_status, total_cost, last_status_check, promotion_packages(name, platform, service_type)')
       .eq('user_id', authUser.id)
       .in('id', orders.map(o => o.id))
       .order('created_at', { ascending: false });

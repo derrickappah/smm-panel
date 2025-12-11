@@ -7,7 +7,7 @@ import ResponsiveTable from '@/components/admin/ResponsiveTable';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, RefreshCw, Filter, AlertCircle, RotateCcw } from 'lucide-react';
+import { Search, RefreshCw, Filter, AlertCircle, RotateCcw, Tag } from 'lucide-react';
 import { processManualRefund } from '@/lib/refunds';
 import { toast } from 'sonner';
 
@@ -81,7 +81,9 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
         const userName = (order.profiles?.name || '').toLowerCase();
         const userEmail = (order.profiles?.email || '').toLowerCase();
         const userPhone = (order.profiles?.phone_number || '').toLowerCase();
-        const serviceName = (order.services?.name || '').toLowerCase();
+        const serviceName = (order.promotion_package_id 
+          ? order.promotion_packages?.name || ''
+          : order.services?.name || '').toLowerCase();
         return orderId.includes(searchLower) || 
                userName.includes(searchLower) || 
                userEmail.includes(searchLower) ||
@@ -259,7 +261,10 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
       return;
     }
 
-    if (!confirm(`Are you sure you want to send this order to SMMGen?\n\nService: ${order.services?.name || 'N/A'}\nLink: ${order.link}\nQuantity: ${order.quantity}`)) {
+    const serviceName = order.promotion_package_id 
+      ? order.promotion_packages?.name || 'Package'
+      : order.services?.name || 'N/A';
+    if (!confirm(`Are you sure you want to send this order to SMMGen?\n\nService: ${serviceName}\nLink: ${order.link}\nQuantity: ${order.quantity}`)) {
       return;
     }
 
@@ -343,7 +348,18 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
           )}
         </div>
         <div className="col-span-1.5">
-          <p className="text-sm font-medium text-gray-900">{order.services?.name || 'N/A'}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-medium text-gray-900">
+              {order.promotion_package_id 
+                ? order.promotion_packages?.name || 'Package'
+                : order.services?.name || 'N/A'}
+            </p>
+            {order.promotion_package_id && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded">
+                <Tag className="w-3 h-3" />
+              </span>
+            )}
+          </div>
         </div>
         <div className="col-span-1">
           <p className="text-sm font-semibold text-gray-900">₵{order.total_cost?.toFixed(2) || '0.00'}</p>
@@ -480,7 +496,18 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
           </div>
           <div>
             <p className="text-xs text-gray-500">Service</p>
-            <p className="text-sm font-medium text-gray-900">{order.services?.name || 'N/A'}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-medium text-gray-900">
+                {order.promotion_package_id 
+                  ? order.promotion_packages?.name || 'Package'
+                  : order.services?.name || 'N/A'}
+              </p>
+              {order.promotion_package_id && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded">
+                  <Tag className="w-3 h-3" />
+                </span>
+              )}
+            </div>
           </div>
           <div>
             <p className="text-xs text-gray-500">Link</p>
