@@ -14,6 +14,7 @@ import * as serviceWorkerRegistration from "./serviceWorkerRegistration";
 // Lazy load all page components for code splitting
 const LandingPage = lazy(() => import("@/pages/LandingPage"));
 const AuthPage = lazy(() => import("@/pages/AuthPage"));
+const ResetPasswordPage = lazy(() => import("@/pages/ResetPasswordPage"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const ServicesPage = lazy(() => import("@/pages/ServicesPage"));
 const OrderHistory = lazy(() => import("@/pages/OrderHistory"));
@@ -76,6 +77,17 @@ function App() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth state changed:', event, session?.user?.id);
+      
+      // Handle password recovery event
+      if (event === 'PASSWORD_RECOVERY') {
+        // Supabase has already extracted tokens from URL hash
+        // Ensure user is on reset password page
+        if (window.location.pathname !== '/reset-password') {
+          window.location.href = '/reset-password';
+        }
+        setLoading(false);
+        return;
+      }
       
       // Only clear user on explicit sign out events
       if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
@@ -337,6 +349,7 @@ function App() {
               <Routes>
               <Route path="/" element={user ? <Navigate to={user?.role === 'admin' ? '/admin/dashboard' : '/dashboard'} /> : <LandingPage />} />
               <Route path="/auth" element={user ? <Navigate to={user?.role === 'admin' ? '/admin/dashboard' : '/dashboard'} /> : <AuthPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route
                 path="/dashboard"
                 element={

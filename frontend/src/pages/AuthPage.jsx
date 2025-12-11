@@ -5,7 +5,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { supabase, isConfigured } from '@/lib/supabase';
-import { TrendingUp } from 'lucide-react';
 import SEO from '@/components/SEO';
 
 // Email validation function with TLD validation
@@ -360,11 +359,12 @@ const AuthPage = () => {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-6 sm:mb-8 animate-fadeIn">
-          <div className="inline-flex items-center space-x-2 mb-3 sm:mb-4">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-600 rounded-lg flex items-center justify-center">
-              <TrendingUp className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
-            </div>
-            <span className="text-2xl sm:text-3xl font-bold text-gray-900">BoostUp GH</span>
+          <div className="inline-flex items-center justify-center mb-3 sm:mb-4">
+            <img 
+              src="/download.png" 
+              alt="BoostUp GH Logo" 
+              className="h-8 sm:h-10 max-w-full"
+            />
           </div>
           <p className="text-sm sm:text-base text-gray-600">Grow your social media presence</p>
         </div>
@@ -498,9 +498,20 @@ const AuthPage = () => {
             </div>
 
             <div>
-              <Label htmlFor="password" className="text-sm font-medium text-gray-700 mb-2 block">
-                Password
-              </Label>
+              <div className="flex items-center justify-between mb-2">
+                <Label htmlFor="password" className="text-sm font-medium text-gray-700 block">
+                  Password
+                </Label>
+                {isLogin && (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/reset-password')}
+                    className="text-sm text-indigo-600 hover:text-indigo-700 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 rounded-lg px-2 py-1 transition-colors duration-200"
+                  >
+                    Forgot Password?
+                  </button>
+                )}
+              </div>
               <Input
                 id="password"
                 type="password"
