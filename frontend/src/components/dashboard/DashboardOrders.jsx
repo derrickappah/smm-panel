@@ -31,13 +31,13 @@ const DashboardOrders = React.memo(({ orders, services }) => {
 
   return (
     <div className="mt-6 sm:mt-8 bg-white border border-gray-200 rounded-lg p-6 sm:p-8 shadow-sm animate-slideUp">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+      <div className="flex items-center justify-between mb-6 gap-4">
         <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Recent Orders</h2>
         <Button
           data-testid="view-all-orders-btn"
           variant="ghost"
           onClick={() => navigate('/orders')}
-          className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-lg"
+          className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-lg whitespace-nowrap"
         >
           View All
         </Button>
@@ -53,11 +53,11 @@ const DashboardOrders = React.memo(({ orders, services }) => {
           return (
             <div key={order.id} className={`bg-gray-50 border ${isPackageOrder ? 'border-purple-200' : 'border-gray-200'} p-4 rounded-lg hover:border-gray-300 transition-colors`}>
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm sm:text-base font-medium text-gray-900 truncate">{serviceName}</p>
+                <div className="flex-1 min-w-0 max-w-full">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <p className="text-sm sm:text-base font-medium text-gray-900 truncate max-w-full">{serviceName}</p>
                     {isPackageOrder && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded flex-shrink-0">
                         <Tag className="w-3 h-3" />
                         Package
                       </span>
