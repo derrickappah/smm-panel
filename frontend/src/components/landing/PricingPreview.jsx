@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Instagram, Youtube, Facebook, Twitter, Music, ArrowRight, TrendingUp } from 'lucide-react';
+import { Instagram, Youtube, Facebook, Twitter, Music, ArrowRight, TrendingUp, Tag, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
 import { useQuery } from '@tanstack/react-query';
+import { usePromotionPackages } from '@/hooks/useAdminPromotionPackages';
 
 const platformIcons = {
   instagram: Instagram,
@@ -17,6 +18,16 @@ const PricingPreview = () => {
   const navigate = useNavigate();
   const [popularServices, setPopularServices] = useState([]);
   const [minPrice, setMinPrice] = useState(null);
+  const { data: promotionPackages = [] } = usePromotionPackages();
+
+  const formatQuantity = (quantity) => {
+    if (quantity >= 1000000) {
+      return `${(quantity / 1000000).toFixed(1)}M`;
+    } else if (quantity >= 1000) {
+      return `${(quantity / 1000).toFixed(1)}K`;
+    }
+    return quantity.toString();
+  };
 
   // Fetch all enabled services using React Query for caching
   const { data: services, isLoading } = useQuery({
@@ -144,6 +155,61 @@ const PricingPreview = () => {
             Transparent pricing with no hidden fees
           </p>
         </div>
+        
+        {/* Promotion Packages Section */}
+        {promotionPackages.length > 0 && (
+          <div className="mb-8 sm:mb-12">
+            <div className="flex items-center justify-center gap-2 mb-6">
+              <Sparkles className="w-5 h-5 text-purple-600" />
+              <h3 className="text-xl sm:text-2xl font-bold text-gray-900">Special Promotion Packages</h3>
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6">
+              {promotionPackages.slice(0, 3).map((pkg) => {
+                const platform = (pkg.platform || '').toLowerCase();
+                const Icon = platformIcons[platform] || TrendingUp;
+                return (
+                  <div
+                    key={pkg.id}
+                    className="bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-purple-300 rounded-lg p-5 sm:p-6 text-center hover:shadow-lg transition-all duration-200"
+                  >
+                    <div className="flex items-center justify-center gap-2 mb-3">
+                      <Tag className="w-4 h-4 text-purple-600" />
+                      <span className="text-xs font-medium px-2 py-1 bg-purple-100 text-purple-700 rounded">
+                        Special Offer
+                      </span>
+                    </div>
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                      <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600" />
+                    </div>
+                    <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-1">
+                      {pkg.name}
+                    </h3>
+                    <p className="text-xs sm:text-sm text-gray-600 mb-3">{pkg.platform}</p>
+                    <div className="text-xl sm:text-2xl font-bold text-purple-600 mb-1">
+                      {pkg.price} GHS
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      {formatQuantity(pkg.quantity)} {pkg.service_type}
+                    </p>
+                    <p className="text-xs text-purple-600 font-medium mt-2">Fixed Price Package</p>
+                  </div>
+                );
+              })}
+            </div>
+            {promotionPackages.length > 3 && (
+              <div className="text-center">
+                <Button
+                  onClick={() => navigate('/services')}
+                  variant="outline"
+                  className="border-purple-300 text-purple-700 hover:bg-purple-50"
+                >
+                  View All Packages
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 sm:gap-6 mb-8 sm:mb-12">
           {popularServices.length > 0 ? (
             popularServices.map((service) => {

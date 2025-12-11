@@ -11,8 +11,10 @@ import DashboardStats from '@/components/dashboard/DashboardStats';
 import DashboardDeposit from '@/components/dashboard/DashboardDeposit';
 import DashboardOrderForm from '@/components/dashboard/DashboardOrderForm';
 import DashboardOrders from '@/components/dashboard/DashboardOrders';
+import DashboardPromotionPackages from '@/components/dashboard/DashboardPromotionPackages';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { usePaymentMethods } from '@/hooks/usePaymentMethods';
+import { usePromotionPackages } from '@/hooks/useAdminPromotionPackages';
 // Paystack will be loaded via react-paystack package
 
 const Dashboard = ({ user, onLogout, onUpdateUser }) => {
@@ -21,6 +23,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
   
   // Use custom hooks
   const { services, recentOrders, fetchServices, fetchRecentOrders } = useDashboardData();
+  const { data: promotionPackages = [] } = usePromotionPackages();
   const { 
     depositMethod, 
     setDepositMethod, 
@@ -32,6 +35,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
   const [pendingTransaction, setPendingTransaction] = useState(null);
   const [orderForm, setOrderForm] = useState({
     service_id: '',
+    package_id: '',
     link: '',
     quantity: ''
   });
@@ -1981,7 +1985,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
   const handleOrder = useCallback(async (e) => {
     e.preventDefault();
-    if (!orderForm.service_id || !orderForm.link || !orderForm.quantity) {
+    if ((!orderForm.service_id && !orderForm.package_id) || !orderForm.link) {
       toast.error('Please fill all fields');
       return;
     }
@@ -1990,6 +1994,127 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) throw new Error('Not authenticated');
+
+      // Check if this is a promotion package order
+      if (orderForm.package_id) {
+        const pkg = promotionPackages.find(p => p.id === orderForm.package_id);
+        if (!pkg) throw new Error('Promotion package not found');
+
+        // Use fixed quantity and price from package
+        const quantity = pkg.quantity;
+        const totalCost = pkg.price;
+
+        // Check balance
+        if (user.balance < totalCost) {
+          throw new Error('Insufficient balance');
+        }
+
+        // Place order via SMMGen API if package has SMMGen ID
+        let smmgenOrderId = null;
+        if (pkg.smmgen_service_id) {
+          console.log('Attempting to place SMMGen order for package:', {
+            serviceId: pkg.smmgen_service_id,
+            link: orderForm.link,
+            quantity: quantity
+          });
+          
+          try {
+            const smmgenResponse = await placeSMMGenOrder(
+              pkg.smmgen_service_id,
+              orderForm.link,
+              quantity
+            );
+            
+            console.log('SMMGen API response for package:', smmgenResponse);
+            
+            if (smmgenResponse === null) {
+              console.warn('SMMGen returned null - backend unavailable or not configured');
+            } else if (smmgenResponse) {
+              smmgenOrderId = smmgenResponse.order || 
+                             smmgenResponse.order_id || 
+                             smmgenResponse.orderId || 
+                             smmgenResponse.id || 
+                             null;
+              console.log('SMMGen order response for package:', smmgenResponse);
+              console.log('SMMGen order ID extracted:', smmgenOrderId);
+            }
+          } catch (smmgenError) {
+            console.error('SMMGen order error caught for package:', smmgenError);
+            if (!smmgenError.message?.includes('Failed to fetch') && 
+                !smmgenError.message?.includes('ERR_CONNECTION_REFUSED') &&
+                !smmgenError.message?.includes('Backend proxy server not running')) {
+              console.error('SMMGen order failed for package:', smmgenError);
+            }
+          }
+          
+          if (smmgenOrderId === null) {
+            smmgenOrderId = "order not placed at smm gen";
+            console.log('SMMGen order failed for package - setting failure message:', smmgenOrderId);
+          } else {
+            console.log('SMMGen order successful for package - order ID:', smmgenOrderId);
+          }
+        } else {
+          console.log('Package does not have SMMGen service ID - skipping SMMGen order placement');
+          smmgenOrderId = "order not placed at smm gen";
+        }
+
+        // Create order record
+        const { data: orderData, error: orderError } = await supabase.from('orders').insert({
+          user_id: authUser.id,
+          service_id: null, // No service_id for package orders
+          promotion_package_id: pkg.id,
+          link: orderForm.link,
+          quantity: quantity,
+          total_cost: totalCost,
+          status: 'pending',
+          smmgen_order_id: smmgenOrderId
+        }).select('*').single();
+
+        if (orderError) {
+          console.error('Error creating order:', orderError);
+          throw orderError;
+        }
+        
+        console.log('Package order created successfully:', orderData);
+
+        // Deduct balance
+        const { error: balanceError } = await supabase
+          .from('profiles')
+          .update({ balance: user.balance - totalCost })
+          .eq('id', authUser.id);
+
+        if (balanceError) throw balanceError;
+
+        // Record transaction
+        const { error: transactionError } = await supabase
+          .from('transactions')
+          .insert({
+            user_id: authUser.id,
+            amount: totalCost,
+            type: 'order',
+            status: 'approved',
+            order_id: orderData.id
+          });
+
+        if (transactionError) {
+          console.warn('Failed to create transaction record for package order:', transactionError);
+        }
+
+        toast.success('Package order placed successfully!');
+        setOrderForm({ service_id: '', package_id: '', link: '', quantity: '' });
+        await onUpdateUser();
+        await new Promise(resolve => setTimeout(resolve, 500));
+        await fetchRecentOrders().catch((error) => {
+          console.error('Error fetching recent orders:', error);
+        });
+        return;
+      }
+
+      // Regular service order handling (existing code)
+      if (!orderForm.quantity) {
+        toast.error('Please fill all fields');
+        return;
+      }
 
       // Get service details from local state (from SMMGen or Supabase)
       const service = services.find(s => s.id === orderForm.service_id);
@@ -2261,7 +2386,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       }
 
       toast.success('Order placed successfully!');
-      setOrderForm({ service_id: '', link: '', quantity: '' });
+      setOrderForm({ service_id: '', package_id: '', link: '', quantity: '' });
       await onUpdateUser();
       // Wait a moment for database to sync, then refresh orders
       await new Promise(resolve => setTimeout(resolve, 500));
@@ -2273,7 +2398,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     } finally {
       setLoading(false);
     }
-  }, [orderForm, services, fetchRecentOrders]);
+  }, [orderForm, services, promotionPackages, user, fetchRecentOrders, onUpdateUser]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -2294,6 +2419,31 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
         {/* Stats Cards */}
         <DashboardStats user={user} orderCount={recentOrders.length} />
+
+        {/* Promotion Packages Section */}
+        {promotionPackages.length > 0 && (
+          <div className="mb-6 sm:mb-8">
+            <DashboardPromotionPackages
+              packages={promotionPackages}
+              onPackageSelect={(pkg) => {
+                setOrderForm({
+                  service_id: '',
+                  package_id: pkg.id,
+                  link: '',
+                  quantity: pkg.quantity.toString()
+                });
+                // Scroll to order form
+                setTimeout(() => {
+                  const orderFormSection = document.getElementById('order-form-section');
+                  if (orderFormSection) {
+                    orderFormSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                }, 100);
+              }}
+              user={user}
+            />
+          </div>
+        )}
 
         <div className="grid lg:grid-cols-2 gap-6 lg:gap-8">
           {/* Add Funds */}
@@ -2316,6 +2466,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           {/* Quick Order */}
           <DashboardOrderForm
             services={services}
+            packages={promotionPackages}
             orderForm={orderForm}
             setOrderForm={setOrderForm}
             handleOrder={handleOrder}

@@ -4,16 +4,18 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
 // SMMGen import removed - only using Supabase services
 import Navbar from '@/components/Navbar';
-import { Instagram, Youtube, Facebook, Twitter, ArrowRight } from 'lucide-react';
+import { Instagram, Youtube, Facebook, Twitter, ArrowRight, Tag } from 'lucide-react';
 import SEO from '@/components/SEO';
 import { generateServiceListSchema } from '@/utils/schema';
 import { generatePlatformMetaTags } from '@/utils/metaTags';
 import { getServiceKeywords, primaryKeywords, longTailKeywords } from '@/data/keywords';
+import { usePromotionPackages } from '@/hooks/useAdminPromotionPackages';
 
 const ServicesPage = ({ user, onLogout }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [services, setServices] = useState([]);
+  const { data: promotionPackages = [] } = usePromotionPackages();
   const [selectedPlatform, setSelectedPlatform] = useState('all');
   const [loading, setLoading] = useState(true);
   
@@ -65,6 +67,23 @@ const ServicesPage = ({ user, onLogout }) => {
   const filteredServices = selectedPlatform === 'all' 
     ? services 
     : services.filter(s => s.platform === selectedPlatform);
+
+  const filteredPackages = selectedPlatform === 'all'
+    ? promotionPackages
+    : promotionPackages.filter(p => p.platform === selectedPlatform);
+
+  const formatQuantity = (quantity) => {
+    if (quantity >= 1000000) {
+      return `${(quantity / 1000000).toFixed(1)}M`;
+    } else if (quantity >= 1000) {
+      return `${(quantity / 1000).toFixed(1)}K`;
+    }
+    return quantity.toString();
+  };
+
+  const handlePackageClick = (pkg) => {
+    navigate('/dashboard', { state: { selectedPackageId: pkg.id } });
+  };
 
   const handleServiceClick = (service) => {
     // Navigate to dashboard with the selected service ID
@@ -169,18 +188,74 @@ const ServicesPage = ({ user, onLogout }) => {
           })}
         </div>
 
+        {/* Promotion Packages Section */}
+        {filteredPackages.length > 0 && (
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <Tag className="w-5 h-5 text-purple-600" />
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Special Promotion Packages</h2>
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 animate-slideUp mb-8">
+              {filteredPackages.map((pkg, index) => (
+                <div
+                  key={`pkg-${pkg.id}`}
+                  onClick={() => handlePackageClick(pkg)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handlePackageClick(pkg);
+                    }
+                  }}
+                  tabIndex={0}
+                  className="bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-purple-300 rounded-lg p-5 sm:p-6 shadow-sm hover:shadow-md hover:border-purple-400 cursor-pointer transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+                  style={{ animationDelay: `${index * 0.05}s` }}
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <Tag className="w-4 h-4 text-purple-600" />
+                      <span className="text-xs font-medium px-2.5 py-1 rounded border bg-purple-100 text-purple-700 border-purple-200">
+                        {pkg.platform}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xl sm:text-2xl font-bold text-purple-600">{pkg.price} GHS</p>
+                      <p className="text-xs text-gray-600">Fixed Price</p>
+                    </div>
+                  </div>
+                  <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-2">
+                    {pkg.name}
+                  </h3>
+                  <p className="text-sm text-gray-600 mb-4 line-clamp-2">{pkg.description || 'Special promotion package'}</p>
+                  <div className="flex justify-between items-center text-xs text-gray-600 pt-4 border-t border-purple-200">
+                    <div>
+                      <span className="font-medium">Quantity: {formatQuantity(pkg.quantity)}</span>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-purple-600" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Services Grid */}
         {loading ? (
           <div className="text-center py-20">
             <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-indigo-600 mx-auto"></div>
             <p className="text-sm text-gray-600 mt-4">Loading services...</p>
           </div>
-        ) : filteredServices.length === 0 ? (
+        ) : filteredServices.length === 0 && filteredPackages.length === 0 ? (
           <div className="bg-white border border-gray-200 rounded-lg p-12 text-center shadow-sm">
             <p className="text-gray-600 text-base sm:text-lg">No services available for this platform yet.</p>
           </div>
         ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 animate-slideUp">
+          <>
+            {filteredServices.length > 0 && (
+              <div className="mb-4">
+                <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4">Regular Services</h2>
+              </div>
+            )}
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 animate-slideUp">
             {filteredServices.map((service, index) => {
               const getPlatformBadgeColor = () => {
                 const platform = service.platform?.toLowerCase();
@@ -239,7 +314,8 @@ const ServicesPage = ({ user, onLogout }) => {
                 </div>
               );
             })}
-          </div>
+            </div>
+          </>
         )}
       </div>
     </div>

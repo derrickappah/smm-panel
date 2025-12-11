@@ -7,7 +7,7 @@ import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/s
 import SEO from '@/components/SEO';
 import { 
   Users, ShoppingCart, DollarSign, Package, Wallet, Receipt, 
-  MessageSquare, UserPlus, RefreshCw, BarChart3, Menu, X, LayoutDashboard
+  MessageSquare, UserPlus, RefreshCw, BarChart3, Menu, X, LayoutDashboard, Tag
 } from 'lucide-react';
 import { useAdminOrders } from '@/hooks/useAdminOrders';
 import { useAdminDeposits } from '@/hooks/useAdminDeposits';
@@ -23,6 +23,7 @@ const AdminOrders = lazy(() => import('@/pages/admin/AdminOrders'));
 const AdminDeposits = lazy(() => import('@/pages/admin/AdminDeposits'));
 const AdminTransactions = lazy(() => import('@/pages/admin/AdminTransactions'));
 const AdminServices = lazy(() => import('@/pages/admin/AdminServices'));
+const AdminPromotionPackages = lazy(() => import('@/pages/admin/AdminPromotionPackages'));
 const AdminTickets = lazy(() => import('@/pages/admin/AdminTickets'));
 const AdminReferrals = lazy(() => import('@/pages/admin/AdminReferrals'));
 const AdminSettings = lazy(() => import('@/pages/admin/AdminSettings'));
@@ -58,6 +59,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
         'deposits': 'deposits',
         'orders': 'orders',
         'services': 'services',
+        'promotion-packages': 'promotion-packages',
         'payment-methods': 'payment-methods',
         'users': 'users',
         'transactions': 'transactions',
@@ -253,6 +255,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     deposits: 'Deposits',
     orders: 'Orders',
     services: 'Services',
+    'promotion-packages': 'Promotion Packages',
     'payment-methods': 'Payment Methods',
     users: 'Users',
     transactions: 'Transactions',
@@ -267,6 +270,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     { id: 'deposits', label: 'Deposits', icon: DollarSign, badge: stats.pending_deposits },
     { id: 'orders', label: 'Orders', icon: ShoppingCart },
     { id: 'services', label: 'Services', icon: Package },
+    { id: 'promotion-packages', label: 'Promotion Packages', icon: Tag },
     { id: 'payment-methods', label: 'Payment Methods', icon: Wallet },
     { id: 'users', label: 'Users', icon: Users },
     { id: 'transactions', label: 'Transactions', icon: Receipt },
@@ -563,6 +567,13 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                 <TabsContent value="services" className="lg:mt-0">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminServices />
+                  </Suspense>
+                </TabsContent>
+
+                {/* Promotion Packages Section */}
+                <TabsContent value="promotion-packages" className="lg:mt-0">
+                  <Suspense fallback={<ComponentLoader />}>
+                    <AdminPromotionPackages />
                   </Suspense>
                 </TabsContent>
 
