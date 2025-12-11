@@ -124,23 +124,6 @@ const Navbar = ({ user, onLogout }) => {
         {/* Mobile Menu - Slide Down */}
         {mobileMenuOpen && (
           <div className="md:hidden mt-4 pb-4 animate-slideDown border-t border-gray-200 pt-4">
-            {/* User Info - Mobile */}
-            <div className="mb-4 pb-4 border-b border-gray-200">
-              <div className="flex items-center space-x-3 mb-3">
-                <div className="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center">
-                  <User className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">{user?.name}</p>
-                  <p className="text-xs text-gray-600">{user?.email}</p>
-                </div>
-              </div>
-              <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5">
-                <span className="text-xs font-medium text-gray-600">Balance</span>
-                <span className="text-base sm:text-lg font-bold text-gray-900">₵{user?.balance?.toFixed(2) || '0.00'}</span>
-              </div>
-            </div>
-
             {/* Mobile Nav Items */}
             <div className="space-y-2">
               {navItems.map((item) => {
