@@ -4,7 +4,7 @@ const SEO = ({
   title,
   description,
   keywords,
-  ogImage = '/favicon.svg',
+  ogImage = '/download.png',
   canonical,
   structuredData,
   structuredDataArray, // Support multiple structured data objects

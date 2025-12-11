@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { TrendingUp, LayoutDashboard, Package, History, Shield, LogOut, Menu, X, User, HelpCircle, Receipt } from 'lucide-react';
+import { LayoutDashboard, Package, History, Shield, LogOut, Menu, X, User, HelpCircle, Receipt } from 'lucide-react';
 
 const Navbar = ({ user, onLogout }) => {
   const navigate = useNavigate();
@@ -31,7 +31,7 @@ const Navbar = ({ user, onLogout }) => {
         <div className="flex items-center justify-between">
           {/* Logo */}
           <div 
-            className="flex items-center space-x-2 cursor-pointer flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 rounded-lg" 
+            className="flex items-center cursor-pointer flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 rounded-lg" 
             onClick={() => {
               navigate('/dashboard');
               setMobileMenuOpen(false);
@@ -47,10 +47,11 @@ const Navbar = ({ user, onLogout }) => {
             role="button"
             aria-label="Go to dashboard"
           >
-            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-indigo-600 rounded-lg flex items-center justify-center">
-              <TrendingUp className="w-4 h-4 sm:w-6 sm:h-6 text-white" />
-            </div>
-            <span className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">BoostUp GH</span>
+            <img 
+              src="/download.png" 
+              alt="BoostUp GH Logo" 
+              className="h-8 sm:h-10 max-w-full"
+            />
           </div>
 
           {/* Desktop Nav Items */}

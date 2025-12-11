@@ -379,11 +379,12 @@ const LandingPage = () => {
       {/* Navigation */}
       <nav className="bg-white border-b border-gray-200 fixed top-0 left-0 right-0 z-50 shadow-sm">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-4 flex justify-between items-center">
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-indigo-600 rounded-lg flex items-center justify-center">
-              <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-            </div>
-            <span className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">BoostUp GH</span>
+          <div className="flex items-center">
+            <img 
+              src="/download.png" 
+              alt="BoostUp GH Logo" 
+              className="h-8 sm:h-10 max-w-full"
+            />
           </div>
           <Button 
             data-testid="nav-get-started-btn"

@@ -16,7 +16,7 @@ export const generateServiceSchema = (service) => {
       '@type': 'Organization',
       name: SITE_NAME,
       url: SITE_URL,
-      logo: `${SITE_URL}/favicon.svg`
+      logo: `${SITE_URL}/download.png`
     },
     areaServed: {
       '@type': 'Country',
@@ -89,7 +89,7 @@ export const generateArticleSchema = (article) => {
     '@type': 'Article',
     headline: article.title,
     description: article.description,
-    image: article.image ? `${SITE_URL}${article.image}` : `${SITE_URL}/favicon.svg`,
+    image: article.image ? `${SITE_URL}${article.image}` : `${SITE_URL}/download.png`,
     datePublished: article.publishedDate || new Date().toISOString(),
     dateModified: article.modifiedDate || article.publishedDate || new Date().toISOString(),
     author: {
@@ -102,7 +102,7 @@ export const generateArticleSchema = (article) => {
       name: SITE_NAME,
       logo: {
         '@type': 'ImageObject',
-        url: `${SITE_URL}/favicon.svg`
+        url: `${SITE_URL}/download.png`
       }
     },
     mainEntityOfPage: {
@@ -226,7 +226,7 @@ export const generateLocalBusinessSchema = () => {
     '@context': 'https://schema.org',
     '@type': 'LocalBusiness',
     name: SITE_NAME,
-    image: `${SITE_URL}/favicon.svg`,
+    image: `${SITE_URL}/download.png`,
     '@id': `${SITE_URL}#organization`,
     url: SITE_URL,
     telephone: '',

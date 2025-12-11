@@ -2,7 +2,7 @@
 
 const SITE_URL = 'https://boostupgh.com';
 const SITE_NAME = 'BoostUp GH';
-const DEFAULT_OG_IMAGE = '/favicon.svg';
+const DEFAULT_OG_IMAGE = '/download.png';
 
 // Generate meta tags for a page
 export const generateMetaTags = (config) => {
