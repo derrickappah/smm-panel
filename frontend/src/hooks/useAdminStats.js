@@ -185,8 +185,16 @@ export const useAdminStats = (options = {}) => {
       (orders || []).forEach(o => {
         if (o.status !== 'completed') return;
         
-        const serviceType = (o.services?.service_type || '').toLowerCase();
-        const serviceName = (o.services?.name || '').toLowerCase();
+        // Check if this is a promotion package order or regular service order
+        const isPromotionPackage = !!o.promotion_package_id;
+        
+        // Use promotion package data if available, otherwise use service data
+        const serviceType = isPromotionPackage
+          ? (o.promotion_packages?.service_type || '').toLowerCase()
+          : (o.services?.service_type || '').toLowerCase();
+        const serviceName = isPromotionPackage
+          ? (o.promotion_packages?.name || '').toLowerCase()
+          : (o.services?.name || '').toLowerCase();
         const quantity = parseInt(o.quantity || 0);
         
         if (serviceTypeChecks.like(serviceType, serviceName)) totalLikesSent += quantity;

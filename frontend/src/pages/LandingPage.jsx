@@ -176,14 +176,53 @@ const LandingPage = () => {
   const { data: statsData, isLoading: statsLoading } = useQuery({
     queryKey: ['landing-stats'],
     queryFn: async () => {
-      const SAMPLE_SIZE = 5000;
-      const [ordersDataResult, ordersCountResult, usersResult] = await Promise.allSettled([
-        supabase
+      const BATCH_SIZE = 1000; // Fetch in batches for optimal performance
+      
+      // Fetch all completed orders using batched pagination
+      const fetchAllCompletedOrders = async () => {
+        let allOrders = [];
+        let from = 0;
+        let hasMore = true;
+        
+        // First, get total count of completed orders
+        const { count, error: countError } = await supabase
           .from('orders')
-          .select('quantity, services(name, service_type)')
-          .eq('status', 'completed')
-          .order('created_at', { ascending: false })
-          .limit(SAMPLE_SIZE),
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'completed');
+        
+        if (countError) {
+          throw countError;
+        }
+        
+        // Fetch all batches - optimized sequential fetching for large datasets
+        while (hasMore) {
+          const to = from + BATCH_SIZE - 1;
+          
+          const { data, error } = await supabase
+            .from('orders')
+            .select('quantity, promotion_package_id, services(name, service_type), promotion_packages(name, service_type)')
+            .eq('status', 'completed')
+            .order('created_at', { ascending: false })
+            .range(from, to);
+          
+          if (error) {
+            throw error;
+          }
+          
+          if (data && data.length > 0) {
+            allOrders = allOrders.concat(data);
+            hasMore = data.length === BATCH_SIZE && allOrders.length < (count || Infinity);
+            from += BATCH_SIZE;
+          } else {
+            hasMore = false;
+          }
+        }
+        
+        return allOrders;
+      };
+      
+      const [ordersDataResult, ordersCountResult, usersResult] = await Promise.allSettled([
+        fetchAllCompletedOrders(),
         supabase
           .from('orders')
           .select('id', { count: 'exact', head: true })
@@ -200,26 +239,44 @@ const LandingPage = () => {
       let ordersCount = 0;
       let usersCount = 0;
 
-      if (ordersDataResult.status === 'fulfilled' && ordersDataResult.value?.data) {
-        const ordersData = ordersDataResult.value.data;
+      // Service type matching functions (aligned with admin stats logic)
+      const serviceTypeChecks = {
+        like: (type, name) => type.includes('like') || name.includes('like'),
+        follower: (type, name) => type.includes('follower') || name.includes('follower'),
+        view: (type, name) => type.includes('view') || name.includes('view'),
+        comment: (type, name) => type.includes('comment') || name.includes('comment'),
+      };
+
+      if (ordersDataResult.status === 'fulfilled' && ordersDataResult.value) {
+        const ordersData = Array.isArray(ordersDataResult.value) ? ordersDataResult.value : [];
         
         ordersData.forEach(order => {
           const quantity = parseInt(order.quantity || 0);
           if (isNaN(quantity) || quantity <= 0) return;
 
-          const serviceType = (order.services?.service_type || '').toLowerCase();
-          const serviceName = (order.services?.name || '').toLowerCase();
+          // Check if this is a promotion package order or regular service order
+          const isPromotionPackage = !!order.promotion_package_id;
+          
+          // Use promotion package data if available, otherwise use service data
+          // Match the exact logic from admin stats
+          const serviceType = isPromotionPackage
+            ? (order.promotion_packages?.service_type || '').toLowerCase()
+            : (order.services?.service_type || '').toLowerCase();
+          const serviceName = isPromotionPackage
+            ? (order.promotion_packages?.name || '').toLowerCase()
+            : (order.services?.name || '').toLowerCase();
 
-          if (serviceType.includes('like') || serviceName.includes('like')) {
+          // Use the same matching logic as admin stats
+          if (serviceTypeChecks.like(serviceType, serviceName)) {
             totalLikes += quantity;
           }
-          if (serviceType.includes('follower') || serviceName.includes('follower')) {
+          if (serviceTypeChecks.follower(serviceType, serviceName)) {
             totalFollowers += quantity;
           }
-          if (serviceType.includes('view') || serviceName.includes('view')) {
+          if (serviceTypeChecks.view(serviceType, serviceName)) {
             totalViews += quantity;
           }
-          if (serviceType.includes('comment') || serviceName.includes('comment')) {
+          if (serviceTypeChecks.comment(serviceType, serviceName)) {
             totalComments += quantity;
           }
         });
