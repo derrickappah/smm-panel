@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getSMMGenOrderStatus } from '@/lib/smmgen';
 import { saveOrderStatusHistory } from '@/lib/orderStatusHistory';
+import { checkOrdersStatusBatch, shouldCheckOrder } from '@/lib/orderStatusCheck';
 import Navbar from '@/components/Navbar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,7 +35,7 @@ const OrderHistory = ({ user, onLogout }) => {
       const [ordersRes, servicesRes] = await Promise.all([
         supabase
           .from('orders')
-          .select('id, user_id, service_id, link, quantity, status, smmgen_order_id, created_at, completed_at, refund_status, total_cost')
+          .select('id, user_id, service_id, link, quantity, status, smmgen_order_id, created_at, completed_at, refund_status, total_cost, last_status_check')
           .eq('user_id', authUser.id)
           .order('created_at', { ascending: false }),
         supabase
@@ -132,138 +133,122 @@ const OrderHistory = ({ user, onLogout }) => {
     return null; // Unknown status, don't update
   }, []);
 
-  // Check and update order status from SMMGen
+  // Check and update a single order's status (for manual check button)
   const checkOrderStatus = useCallback(async (order) => {
     if (!order.smmgen_order_id || order.smmgen_order_id === "order not placed at smm gen") {
       console.log(`Skipping status check for order ${order.id} - no valid SMMGen order ID`);
       return;
     }
 
-    // Don't check status for refunded orders - they should not be overwritten
     if (order.status === 'refunded') {
       console.log(`Skipping status check for order ${order.id} - order is refunded`);
       return;
     }
 
-    console.log(`Checking status for order ${order.id} with SMMGen ID: ${order.smmgen_order_id}`);
+    console.log(`Manually checking status for order ${order.id} with SMMGen ID: ${order.smmgen_order_id}`);
     setCheckingStatus(prev => ({ ...prev, [order.id]: true }));
 
     try {
-      // Get status from SMMGen
-      const statusData = await getSMMGenOrderStatus(order.smmgen_order_id);
-      
-      // SMMGen API typically returns: { status: 'Completed', charge: '0.50', start_count: 100, remains: 0, currency: 'USD' }
-      const smmgenStatus = statusData.status || statusData.Status;
-      const mappedStatus = mapSMMGenStatus(smmgenStatus);
-
-      console.log(`Order ${order.id} status check result:`, {
-        smmgenStatus,
-        mappedStatus,
-        currentStatus: order.status,
-        willUpdate: mappedStatus && mappedStatus !== order.status
+      // Use the batch utility for single order (it handles everything)
+      const result = await checkOrdersStatusBatch([order], {
+        concurrency: 1,
+        minIntervalMinutes: 0, // Force check even if recently checked
+        onStatusUpdate: (orderId, newStatus, oldStatus) => {
+          // Refresh the order from database to get latest data
+          supabase
+            .from('orders')
+            .select('*')
+            .eq('id', orderId)
+            .single()
+            .then(({ data: updatedOrder }) => {
+              if (updatedOrder) {
+                setOrders(prevOrders =>
+                  prevOrders.map(o =>
+                    o.id === orderId ? { ...o, ...updatedOrder } : o
+                  )
+                );
+              }
+            });
+        }
       });
 
-      // Don't update if order is refunded or if mapped status would overwrite refunded status
-      if (mappedStatus && mappedStatus !== order.status && order.status !== 'refunded') {
-        console.log(`Updating order ${order.id} status from ${order.status} to ${mappedStatus}`);
-        
-        // Save status to history first
-        await saveOrderStatusHistory(
-          order.id,
-          mappedStatus,
-          'smmgen',
-          statusData, // Full SMMGen response
-          order.status // Previous status
-        );
-
-        // Update order status in Supabase
-        const { error: updateError } = await supabase
-          .from('orders')
-          .update({ 
-            status: mappedStatus,
-            completed_at: mappedStatus === 'completed' ? new Date().toISOString() : order.completed_at
-          })
-          .eq('id', order.id);
-
-        if (updateError) {
-          console.error(`Failed to update order ${order.id} status in database:`, updateError);
-          throw updateError;
-        }
-
-        console.log(`Successfully updated order ${order.id} status to ${mappedStatus} in database`);
-
-        // Get updated order with refund_status
-        const { data: updatedOrder } = await supabase
-          .from('orders')
-          .select('*')
-          .eq('id', order.id)
-          .single();
-
-        // Update local state
-        setOrders(prevOrders =>
-          prevOrders.map(o =>
-            o.id === order.id
-              ? { ...o, ...updatedOrder, status: mappedStatus, completed_at: mappedStatus === 'completed' ? new Date().toISOString() : o.completed_at }
-              : o
-          )
-        );
-
-        console.log(`Order ${order.id} status updated in local state to ${mappedStatus}`);
-        // Automatic refunds disabled - admins must process refunds manually
-      } else {
-        if (!mappedStatus) {
-          console.log(`Order ${order.id} - no valid mapped status from SMMGen response`);
-        } else if (mappedStatus === order.status) {
-          console.log(`Order ${order.id} status unchanged (${order.status})`);
-        }
+      if (result.errors.length > 0) {
+        console.error(`Error checking order ${order.id}:`, result.errors[0].error);
       }
     } catch (error) {
       console.error(`Error checking order status for order ${order.id}:`, {
         error: error.message,
-        errorName: error.name,
         orderId: order.id,
-        smmgenOrderId: order.smmgen_order_id,
-        stack: error.stack
+        smmgenOrderId: order.smmgen_order_id
       });
     } finally {
       setCheckingStatus(prev => ({ ...prev, [order.id]: false }));
     }
-  }, [mapSMMGenStatus]);
+  }, []);
 
   // Auto-check status for orders with SMMGen IDs on load (only once)
   useEffect(() => {
     if (!loading && orders.length > 0 && !hasCheckedStatus.current) {
       hasCheckedStatus.current = true;
       const checkAllSMMGenOrders = async () => {
-        // Check all non-completed and non-refunded orders (to catch cancellations)
-        // Skip refunded orders - they should not be overwritten by SMMGen status
-        const ordersWithSMMGen = orders.filter(o => 
-          o.smmgen_order_id && 
-          o.smmgen_order_id !== "order not placed at smm gen" && 
-          o.status !== 'completed' && 
-          o.status !== 'refunded'
-        );
-        
-        // Check status for each order (with delay to avoid rate limiting)
-        for (let i = 0; i < ordersWithSMMGen.length; i++) {
-          await new Promise(resolve => setTimeout(resolve, 1000 * i)); // 1 second delay between checks
-          await checkOrderStatus(ordersWithSMMGen[i]);
+        // Use batch utility for parallel checking with filtering
+        const result = await checkOrdersStatusBatch(orders, {
+          concurrency: 5,
+          minIntervalMinutes: 5,
+          onStatusUpdate: (orderId, newStatus, oldStatus) => {
+            // Refresh orders from database to get latest data
+            fetchData();
+          }
+        });
+
+        if (result.updated > 0) {
+          // Refresh orders if any were updated
+          fetchData();
         }
       };
 
       checkAllSMMGenOrders();
     }
-  }, [loading, orders.length, checkOrderStatus]);
+  }, [loading, orders.length]);
 
-  // Periodic status checking for orders (every 2 minutes)
+  // Periodic status checking for orders (every 5 minutes)
   useEffect(() => {
     if (loading) return;
 
     const interval = setInterval(() => {
       console.log('Periodic order status check in OrderHistory...');
       // Fetch fresh orders and check their status
-      fetchData();
-    }, 120000); // Check every 2 minutes
+      fetchData().then(() => {
+        // After fetchData completes, orders state will be updated
+        // We'll check statuses in the next render cycle
+        setTimeout(async () => {
+          // Get fresh orders from state (will be updated after fetchData)
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+          if (!authUser) return;
+
+          const { data: currentOrders } = await supabase
+            .from('orders')
+            .select('id, user_id, service_id, link, quantity, status, smmgen_order_id, created_at, completed_at, refund_status, total_cost, last_status_check')
+            .eq('user_id', authUser.id)
+            .order('created_at', { ascending: false });
+
+          if (currentOrders && currentOrders.length > 0) {
+            const result = await checkOrdersStatusBatch(currentOrders, {
+              concurrency: 5,
+              minIntervalMinutes: 5,
+              onStatusUpdate: (orderId, newStatus, oldStatus) => {
+                // Status update handled by utility
+              }
+            });
+
+            if (result.updated > 0) {
+              // Refresh orders if any were updated
+              fetchData();
+            }
+          }
+        }, 500);
+      });
+    }, 300000); // Check every 5 minutes (increased from 2 minutes)
 
     return () => clearInterval(interval);
   }, [loading]);

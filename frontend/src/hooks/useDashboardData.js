@@ -1,41 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { getSMMGenOrderStatus } from '@/lib/smmgen';
-import { saveOrderStatusHistory } from '@/lib/orderStatusHistory';
+import { checkOrdersStatusBatch } from '@/lib/orderStatusCheck';
 import { toast } from 'sonner';
-
-// Map SMMGen status to our status format
-const mapSMMGenStatus = (smmgenStatus) => {
-  if (!smmgenStatus) return null;
-  
-  const statusString = String(smmgenStatus).trim();
-  const statusLower = statusString.toLowerCase();
-  
-  // Map to exact SMMGen statuses (normalized to lowercase)
-  if (statusLower === 'pending' || statusLower.includes('pending')) {
-    return 'pending';
-  }
-  if (statusLower === 'in progress' || statusLower.includes('in progress')) {
-    return 'in progress';
-  }
-  if (statusLower === 'completed' || statusLower.includes('completed')) {
-    return 'completed';
-  }
-  if (statusLower === 'partial' || statusLower.includes('partial')) {
-    return 'partial';
-  }
-  if (statusLower === 'processing' || statusLower.includes('processing')) {
-    return 'processing';
-  }
-  if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower.includes('cancel')) {
-    return 'canceled';
-  }
-  if (statusLower === 'refunds' || statusLower.includes('refund')) {
-    return 'refunds';
-  }
-  
-  return null;
-};
 
 // Fetch services query function
 const fetchServices = async () => {
@@ -80,7 +46,7 @@ const fetchRecentOrders = async () => {
 
   const { data, error } = await supabase
     .from('orders')
-    .select('id, user_id, service_id, link, quantity, status, smmgen_order_id, created_at, completed_at, refund_status, total_cost')
+    .select('id, user_id, service_id, link, quantity, status, smmgen_order_id, created_at, completed_at, refund_status, total_cost, last_status_check')
     .eq('user_id', authUser.id)
     .order('created_at', { ascending: false })
     .limit(5);
@@ -93,44 +59,27 @@ const fetchRecentOrders = async () => {
     throw error;
   }
   
-  // Check SMMGen status for orders with SMMGen IDs
-  const updatedOrders = await Promise.all(
-    (data || []).map(async (order) => {
-      if (order.smmgen_order_id && order.status !== 'completed' && order.status !== 'refunded') {
-        try {
-          const statusData = await getSMMGenOrderStatus(order.smmgen_order_id);
-          const smmgenStatus = statusData.status || statusData.Status;
-          const mappedStatus = mapSMMGenStatus(smmgenStatus);
+  const orders = data || [];
+  
+  // Check SMMGen status for orders using optimized batch utility
+  if (orders.length > 0) {
+    await checkOrdersStatusBatch(orders, {
+      concurrency: 3, // Lower concurrency for dashboard (only 5 orders)
+      minIntervalMinutes: 5
+    });
+    
+    // Fetch updated orders to return latest status
+    const { data: updatedData } = await supabase
+      .from('orders')
+      .select('id, user_id, service_id, link, quantity, status, smmgen_order_id, created_at, completed_at, refund_status, total_cost, last_status_check')
+      .eq('user_id', authUser.id)
+      .in('id', orders.map(o => o.id))
+      .order('created_at', { ascending: false });
+    
+    return updatedData || orders;
+  }
 
-          if (mappedStatus && mappedStatus !== order.status && order.status !== 'refunded') {
-            await saveOrderStatusHistory(
-              order.id,
-              mappedStatus,
-              'smmgen',
-              statusData,
-              order.status
-            );
-
-            await supabase
-              .from('orders')
-              .update({ 
-                status: mappedStatus,
-                completed_at: mappedStatus === 'completed' ? new Date().toISOString() : order.completed_at
-              })
-              .eq('id', order.id);
-            
-            return { ...order, status: mappedStatus };
-          }
-        } catch (error) {
-          console.warn('Failed to check SMMGen status for order:', order.id, error);
-        }
-      }
-      
-      return order;
-    })
-  );
-
-  return updatedOrders;
+  return orders;
 };
 
 export const useDashboardData = () => {

@@ -2,6 +2,7 @@ import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tansta
 import { supabase } from '@/lib/supabase';
 import { getSMMGenOrderStatus, placeSMMGenOrder } from '@/lib/smmgen';
 import { saveOrderStatusHistory } from '@/lib/orderStatusHistory';
+import { checkOrdersStatusBatch, shouldCheckOrder } from '@/lib/orderStatusCheck';
 import { useUserRole } from './useUserRole';
 import { queryClient } from '@/lib/queryClient';
 import { toast } from 'sonner';
@@ -9,67 +10,21 @@ import { toast } from 'sonner';
 const PAGE_SIZE = 50;
 
 // Background function to check SMMGen statuses (non-blocking)
+// Now uses the optimized batch utility with last_status_check filtering
 const checkSMMGenStatusesInBackground = async (ordersToCheck) => {
   console.log(`Checking SMMGen status for ${ordersToCheck.length} orders in background`);
   
-  // Process in batches to avoid overwhelming the API
-  const BATCH_SIZE = 10;
-  for (let i = 0; i < ordersToCheck.length; i += BATCH_SIZE) {
-    const batch = ordersToCheck.slice(i, i + BATCH_SIZE);
-    
-    await Promise.all(
-      batch.map(async (order) => {
-        try {
-          const statusData = await getSMMGenOrderStatus(order.smmgen_order_id);
-          const smmgenStatus = statusData.status || statusData.Status;
-          const mappedStatus = mapSMMGenStatus(smmgenStatus);
-
-          if (mappedStatus && mappedStatus !== order.status) {
-            await saveOrderStatusHistory(
-              order.id,
-              mappedStatus,
-              'smmgen',
-              statusData,
-              order.status
-            );
-
-            await supabase
-              .from('orders')
-              .update({ 
-                status: mappedStatus,
-                completed_at: mappedStatus === 'completed' ? new Date().toISOString() : order.completed_at
-              })
-              .eq('id', order.id);
-            
-            // Invalidate queries to refresh UI with updated status
-            queryClient.invalidateQueries({ queryKey: ['admin', 'orders'] });
-          }
-        } catch (error) {
-          console.warn(`Failed to check SMMGen status for order ${order.id}:`, error.message);
-        }
-      })
-    );
-  }
+  // Use the optimized batch utility
+  const result = await checkOrdersStatusBatch(ordersToCheck, {
+    concurrency: 10,
+    minIntervalMinutes: 5,
+    onStatusUpdate: (orderId, newStatus, oldStatus) => {
+      // Invalidate queries to refresh UI with updated status
+      queryClient.invalidateQueries({ queryKey: ['admin', 'orders'] });
+    }
+  });
   
-  console.log(`Completed background SMMGen status check for ${ordersToCheck.length} orders`);
-};
-
-// Map SMMGen status to our status format
-const mapSMMGenStatus = (smmgenStatus) => {
-  if (!smmgenStatus) return null;
-  
-  const statusString = String(smmgenStatus).trim();
-  const statusLower = statusString.toLowerCase();
-  
-  if (statusLower === 'pending' || statusLower.includes('pending')) return 'pending';
-  if (statusLower === 'in progress' || statusLower.includes('in progress')) return 'in progress';
-  if (statusLower === 'completed' || statusLower.includes('completed')) return 'completed';
-  if (statusLower === 'partial' || statusLower.includes('partial')) return 'partial';
-  if (statusLower === 'processing' || statusLower.includes('processing')) return 'processing';
-  if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower.includes('cancel')) return 'canceled';
-  if (statusLower === 'refunds' || statusLower.includes('refund')) return 'refunds';
-  
-  return null;
+  console.log(`Completed background SMMGen status check: ${result.checked} checked, ${result.updated} updated, ${result.errors.length} errors`);
 };
 
 // Fetch orders with pagination
@@ -79,7 +34,7 @@ const fetchOrders = async ({ pageParam = 0, checkSMMGenStatus = false }) => {
 
   const { data, error, count } = await supabase
     .from('orders')
-    .select('id, user_id, service_id, link, quantity, total_cost, status, smmgen_order_id, created_at, completed_at, refund_status, services(name, platform, service_type, smmgen_service_id), profiles(name, email, phone_number)', { count: 'exact' })
+    .select('id, user_id, service_id, link, quantity, total_cost, status, smmgen_order_id, created_at, completed_at, refund_status, last_status_check, services(name, platform, service_type, smmgen_service_id), profiles(name, email, phone_number)', { count: 'exact' })
     .order('created_at', { ascending: false })
     .range(from, to);
 
@@ -94,14 +49,9 @@ const fetchOrders = async ({ pageParam = 0, checkSMMGenStatus = false }) => {
 
   // Check SMMGen status if requested (non-blocking - runs in background)
   if (checkSMMGenStatus && finalOrders.length > 0) {
-    // Filter to only orders that need status checking
-    const ordersToCheck = finalOrders.filter(order => 
-      order.smmgen_order_id && 
-      order.smmgen_order_id !== "order not placed at smm gen" &&
-      order.status !== 'completed' && 
-      order.status !== 'refunded' &&
-      (order.status === 'pending' || order.status === 'processing' || order.status === 'in progress')
-    );
+    // Filter to only orders that need status checking using the utility function
+    // This now includes last_status_check filtering
+    const ordersToCheck = finalOrders.filter(order => shouldCheckOrder(order, 5));
 
     if (ordersToCheck.length > 0) {
       // Run SMMGen checks in background (non-blocking)
@@ -142,7 +92,7 @@ const fetchAllOrders = async (checkSMMGenStatus = false) => {
     
     const { data, error } = await supabase
       .from('orders')
-      .select('id, user_id, service_id, link, quantity, total_cost, status, smmgen_order_id, created_at, completed_at, refund_status, services(name, platform, service_type, smmgen_service_id), profiles(name, email, phone_number)')
+      .select('id, user_id, service_id, link, quantity, total_cost, status, smmgen_order_id, created_at, completed_at, refund_status, last_status_check, services(name, platform, service_type, smmgen_service_id), profiles(name, email, phone_number)')
       .order('created_at', { ascending: false })
       .range(from, to);
 
@@ -161,14 +111,9 @@ const fetchAllOrders = async (checkSMMGenStatus = false) => {
 
   // Only check SMMGen status if explicitly requested (non-blocking - runs in background)
   if (checkSMMGenStatus && allRecords.length > 0) {
-    // Filter to only orders that need status checking
-    const ordersToCheck = allRecords.filter(order => 
-      order.smmgen_order_id && 
-      order.smmgen_order_id !== "order not placed at smm gen" &&
-      order.status !== 'completed' && 
-      order.status !== 'refunded' &&
-      (order.status === 'pending' || order.status === 'processing' || order.status === 'in progress')
-    );
+    // Filter to only orders that need status checking using the utility function
+    // This now includes last_status_check filtering
+    const ordersToCheck = allRecords.filter(order => shouldCheckOrder(order, 5));
 
     if (ordersToCheck.length > 0) {
       // Run SMMGen checks in background (non-blocking)

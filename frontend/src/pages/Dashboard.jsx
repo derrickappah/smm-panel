@@ -329,6 +329,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       // Only check if user is authenticated
       if (user) {
         console.log('Periodic status check...');
+        // fetchRecentOrders now uses optimized batch checking internally
         fetchRecentOrders().catch((error) => {
           console.error('Error in periodic order status check:', error);
         });
@@ -336,7 +337,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           console.error('Error in periodic payment verification:', error);
         });
       }
-    }, 180000); // Check every 3 minutes (reduced frequency for better performance)
+    }, 300000); // Check every 5 minutes (increased from 3 minutes, optimized with last_status_check)
 
     return () => clearInterval(interval);
   }, [user, fetchRecentOrders, verifyPendingPayments]);
