@@ -554,7 +554,7 @@ const TransactionsPage = ({ user, onLogout }) => {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navbar user={user} onLogout={onLogout} />
-        <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="flex items-center justify-center min-h-[60vh] pt-20 md:pt-0">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-indigo-600 mx-auto"></div>
             <p className="text-sm text-gray-600 mt-4">Loading transactions...</p>
@@ -574,7 +574,7 @@ const TransactionsPage = ({ user, onLogout }) => {
       />
       <Navbar user={user} onLogout={onLogout} />
       
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 md:pt-6 pb-6 sm:pb-8">
         <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 lg:p-8 shadow-sm">
           {/* Header */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">

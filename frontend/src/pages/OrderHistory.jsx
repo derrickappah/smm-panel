@@ -292,7 +292,7 @@ const OrderHistory = ({ user, onLogout }) => {
       />
       <Navbar user={user} onLogout={onLogout} />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 md:pt-6 pb-6 sm:pb-8">
         <div className="mb-6 sm:mb-8 animate-fadeIn">
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">Order History</h1>
           <p className="text-sm sm:text-base text-gray-600">Track all your orders and their status</p>

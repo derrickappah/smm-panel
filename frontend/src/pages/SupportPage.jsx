@@ -257,7 +257,7 @@ const SupportPage = ({ user, onLogout }) => {
       />
       <Navbar user={user} onLogout={onLogout} />
       
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 md:pt-6 pb-6 sm:pb-8 lg:pb-12">
         {/* Header */}
         <div className="text-center mb-6 sm:mb-8 lg:mb-12 animate-fadeIn">
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2 sm:mb-4">
