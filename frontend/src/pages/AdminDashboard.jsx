@@ -289,7 +289,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
         />
         <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50">
           {/* Mobile Header Skeleton */}
-          <div className="sticky top-0 z-40 lg:hidden bg-white border-b border-gray-200 shadow-sm">
+          <div className="fixed top-0 left-0 right-0 z-40 lg:hidden bg-white border-b border-gray-200 shadow-sm">
             <div className="flex items-center justify-between px-4 py-3">
               <div className="flex items-center gap-3">
                 <div className="h-11 w-11 bg-gray-200 rounded animate-pulse"></div>
@@ -302,7 +302,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
             </div>
           </div>
 
-          <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+          <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 pt-20 md:pt-6 sm:py-8">
             <div className="flex flex-col lg:flex-row gap-6">
               {/* Desktop Sidebar Skeleton */}
               <div className="hidden lg:flex lg:flex-col lg:w-64 lg:flex-shrink-0">
@@ -355,7 +355,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
       />
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 overflow-x-hidden">
         {/* Sticky Header - Mobile */}
-        <div className="sticky top-0 z-40 lg:hidden bg-white border-b border-gray-200 shadow-sm">
+        <div className="fixed top-0 left-0 right-0 z-40 lg:hidden bg-white border-b border-gray-200 shadow-sm">
           <div className="flex items-center justify-between px-4 py-3">
             <div className="flex items-center gap-3">
               <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
@@ -452,7 +452,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
           </div>
         </div>
 
-        <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 overflow-x-hidden">
+        <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 pt-20 md:pt-6 sm:py-8 overflow-x-hidden">
           <div className="flex flex-col lg:flex-row gap-6 w-full">
             {/* Sidebar Navigation - Desktop */}
             <div className="hidden lg:flex lg:flex-col lg:w-64 lg:flex-shrink-0">
