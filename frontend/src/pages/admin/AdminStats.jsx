@@ -48,6 +48,40 @@ const AdminStats = memo(({
   const recentOrders = useMemo(() => orders.slice(0, 5), [orders]);
   const recentDeposits = useMemo(() => deposits.slice(0, 5), [deposits]);
 
+  const topCustomers = useMemo(() => {
+    // Aggregate deposits by user_id, summing only approved deposits
+    const customerTotals = {};
+    
+    (deposits || []).forEach(deposit => {
+      if (deposit.status === 'approved' && deposit.user_id) {
+        const userId = deposit.user_id;
+        const amount = parseFloat(deposit.amount || 0);
+        
+        if (!customerTotals[userId]) {
+          customerTotals[userId] = {
+            user_id: userId,
+            totalDeposits: 0,
+            depositCount: 0,
+            name: deposit.profiles?.name || deposit.profiles?.email || 'Unknown User',
+            email: deposit.profiles?.email || '',
+          };
+        }
+        
+        customerTotals[userId].totalDeposits += amount;
+        customerTotals[userId].depositCount += 1;
+      }
+    });
+    
+    // Convert to array, sort by total deposits descending, and take top 100
+    return Object.values(customerTotals)
+      .sort((a, b) => b.totalDeposits - a.totalDeposits)
+      .slice(0, 100)
+      .map((customer, index) => ({
+        ...customer,
+        rank: index + 1
+      }));
+  }, [deposits]);
+
   const balanceNotUpdatedCount = useMemo(() => {
     return allTransactions.filter(t => 
       t.type === 'deposit' && 
@@ -584,7 +618,7 @@ const AdminStats = memo(({
       </div>
 
       {/* Recent Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Recent Orders */}
         <div className="bg-white border border-gray-200 rounded-lg p-5 sm:p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
@@ -687,6 +721,49 @@ const AdminStats = memo(({
             ))}
             {recentDeposits.length === 0 && (
               <p className="text-center text-gray-500 text-sm py-4">No deposits yet</p>
+            )}
+          </div>
+        </div>
+
+        {/* Top Customers */}
+        <div className="bg-white border border-gray-200 rounded-lg p-5 sm:p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2">
+              <Users className="w-5 h-5 text-indigo-600" />
+              Top Customers
+            </h3>
+            <Button
+              onClick={() => handleSectionClick('users')}
+              variant="ghost"
+              size="sm"
+              className="text-xs h-8"
+            >
+              View All
+            </Button>
+          </div>
+          <div className="space-y-3 max-h-[300px] overflow-y-auto">
+            {topCustomers.map((customer) => (
+              <div key={customer.user_id} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className="flex-shrink-0 w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
+                    <span className="text-xs font-bold text-indigo-600">{customer.rank}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{customer.name}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs text-gray-600 truncate">{customer.email}</span>
+                      <span className="text-xs text-gray-500">•</span>
+                      <span className="text-xs text-gray-500">{customer.depositCount} deposit{customer.depositCount !== 1 ? 's' : ''}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right ml-4 flex-shrink-0">
+                  <p className="text-sm font-semibold text-gray-900">₵{customer.totalDeposits.toFixed(2)}</p>
+                </div>
+              </div>
+            ))}
+            {topCustomers.length === 0 && (
+              <p className="text-center text-gray-500 text-sm py-4">No customers with deposits yet</p>
             )}
           </div>
         </div>
