@@ -159,7 +159,7 @@ const DashboardDeposit = React.memo(({
                 rel="noopener noreferrer"
                 className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
               >
-                0559272762
+                0550069661
               </a>
             </p>
           </div>
