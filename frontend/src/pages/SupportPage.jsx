@@ -100,6 +100,16 @@ const SupportPage = ({ user, onLogout }) => {
       id: 8,
       question: 'Is my information secure?',
       answer: 'Yes, we use industry-standard encryption and security measures to protect your data. Your payment information is processed securely through Paystack, and we never store your payment details.'
+    },
+    {
+      id: 9,
+      question: 'Why are my likes reducing?',
+      answer: 'When you buy likes, TikTok sometimes reduces them after a few days — especially around the 6th day. This is TikTok\'s automated system detecting and removing engagement it considers suspicious.\n\n⭐ Solution 1: Delete and Restore Method\nA simple trick to avoid this loss is to delete the video and restore it after a few minutes or hours. This refreshes the video and helps keep your purchased likes safe.\n\nHow to Restore a Deleted TikTok Video:\n1. Open TikTok\n2. Go to Your Profile (bottom right)\n3. Tap the three lines (☰) in the top-right\n4. Tap Settings and Privacy\n5. Go to Activity Center\n6. Tap Recently Deleted\n7. Find your video\n8. Tap it, then tap Restore\n\n⭐ Solution 2: Hide Video Method\nIf you bought 1,000 likes on Monday, wait until Friday evening or Saturday morning and then hide the video. Keep it hidden for 48 hours (until Monday), and then make the video visible again. By doing this, the likes will stay permanently.\n\n⚠ Disclaimer: Even if you buy likes, views, or comments without a refill policy, there is still a way to prevent them from dropping. Most drops usually happen about one week after purchasing, and we have methods to avoid that.'
+    },
+    {
+      id: 10,
+      question: 'What Is a Refill Policy?',
+      answer: 'A refill policy means that if your order (likes, views, or comments) drops after some time, the site will automatically replace them for you at no extra cost.\n\nSo when you\'re buying likes, views, or comments, always check whether the service has:\n• Refill Policy ➜ They will replace any drops\n• No Refill ➜ They won\'t restore anything if the numbers go down\n\n⚠ Disclaimer: Even if you buy likes, views, or comments without a refill policy, there is still a way to prevent them from dropping. Most drops usually happen about one week after purchasing, and we have methods to avoid that.'
     }
   ];
 
@@ -739,7 +749,7 @@ const SupportPage = ({ user, onLogout }) => {
                   </button>
                   {openFaq === faq.id && (
                     <div className="px-4 sm:px-6 pb-4 sm:pb-5 pt-0">
-                      <p className="text-sm sm:text-base text-gray-600 leading-relaxed">{faq.answer}</p>
+                      <p className="text-sm sm:text-base text-gray-600 leading-relaxed whitespace-pre-line">{faq.answer}</p>
                     </div>
                   )}
                 </div>
