@@ -1,13 +1,13 @@
 // Service Worker for offline support and caching
-const CACHE_NAME = 'boostup-gh-v1';
-const RUNTIME_CACHE = 'boostup-gh-runtime-v1';
+const CACHE_NAME = 'boostup-gh-v2';
+const RUNTIME_CACHE = 'boostup-gh-runtime-v2';
 
 // Assets to cache on install
 const PRECACHE_ASSETS = [
   '/',
   '/static/js/bundle.js',
   '/static/css/main.css',
-  '/manifest.json',
+  // Note: manifest.json is NOT precached - always fetch from network
 ];
 
 // Install event - cache static assets
@@ -86,6 +86,22 @@ self.addEventListener('fetch', (event) => {
         })
     );
   } else {
+    // manifest.json: Network First (always get latest version)
+    if (url.pathname === '/manifest.json') {
+      event.respondWith(
+        fetch(request)
+          .then((response) => {
+            // Don't cache manifest.json to ensure latest version
+            return response;
+          })
+          .catch(() => {
+            // Fallback to cache only if network fails
+            return caches.match(request);
+          })
+      );
+      return;
+    }
+    
     // Static assets: Cache First, fallback to network
     event.respondWith(
       caches.match(request)
