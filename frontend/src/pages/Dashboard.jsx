@@ -615,33 +615,113 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             throw new Error(`Invalid payment amount: ${amount}. Reference: ${reference || 'N/A'}. Please contact support.`);
           }
 
-          console.log('Payment verified successfully, creating transaction record:', {
+          console.log('Payment verified successfully, checking for existing transaction before creating:', {
             amount,
             reference,
             transactionIdFromMetadata
           });
 
-          // Create transaction record with the reference
-          const { data: newTransaction, error: createError } = await supabase
-            .from('transactions')
-            .insert({
-              user_id: authUser.id,
-              amount: amount,
-              type: 'deposit',
-              status: 'pending', // Will be approved by the API call below
-              deposit_method: 'paystack',
-              paystack_reference: reference
-            })
-            .select()
-            .single();
+          // CRITICAL: Check if transaction with this reference already exists (globally)
+          // This prevents duplicates when webhook processes payment before frontend callback
+          if (reference) {
+            const { data: existingByRef, error: checkRefError } = await supabase
+              .from('transactions')
+              .select('id, user_id, type, amount, status, paystack_reference, created_at')
+              .eq('paystack_reference', reference)
+              .maybeSingle();
 
-          if (createError || !newTransaction) {
-            console.error('Error creating transaction record:', createError);
-            throw new Error(`Failed to create transaction record: ${createError?.message || 'Unknown error'}. Reference: ${reference || 'N/A'}. Please contact support with this reference.`);
+            if (!checkRefError && existingByRef) {
+              console.warn('Transaction with this reference already exists, using existing transaction:', {
+                existingId: existingByRef.id,
+                status: existingByRef.status,
+                userId: existingByRef.user_id,
+                currentUserId: authUser.id,
+                reference
+              });
+              
+              // Use existing transaction instead of creating duplicate
+              transactionToUpdate = existingByRef;
+              
+              // If it's for a different user, log error but still use it (webhook might have created it)
+              if (existingByRef.user_id !== authUser.id) {
+                console.error('CRITICAL: Transaction reference belongs to different user!', {
+                  reference,
+                  existingUserId: existingByRef.user_id,
+                  currentUserId: authUser.id,
+                  existingTransactionId: existingByRef.id
+                });
+              }
+              
+              // Skip transaction creation, continue with approval logic below
+            } else {
+              // No existing transaction found, safe to create
+              // Add small delay to handle race conditions with webhook
+              console.log('No existing transaction found, waiting 500ms to handle race conditions...');
+              await new Promise(resolve => setTimeout(resolve, 500));
+              
+              // Re-check one more time after delay (webhook might have created it)
+              const { data: recheckByRef, error: recheckError } = await supabase
+                .from('transactions')
+                .select('id, user_id, type, amount, status, paystack_reference, created_at')
+                .eq('paystack_reference', reference)
+                .maybeSingle();
+              
+              if (!recheckError && recheckByRef) {
+                console.log('Transaction found after delay, using existing:', {
+                  transactionId: recheckByRef.id,
+                  status: recheckByRef.status
+                });
+                transactionToUpdate = recheckByRef;
+              } else {
+                // Still no transaction, safe to create
+                console.log('No transaction found after delay, creating new transaction record');
+                const { data: newTransaction, error: createError } = await supabase
+                  .from('transactions')
+                  .insert({
+                    user_id: authUser.id,
+                    amount: amount,
+                    type: 'deposit',
+                    status: 'pending', // Will be approved by the API call below
+                    deposit_method: 'paystack',
+                    paystack_reference: reference
+                  })
+                  .select()
+                  .single();
+
+                if (createError || !newTransaction) {
+                  // Check if error is due to duplicate reference (unique constraint violation)
+                  if (createError?.code === '23505' || createError?.message?.includes('duplicate') || createError?.message?.includes('unique') || createError?.message?.includes('paystack_reference')) {
+                    // Transaction was created by another process (webhook), fetch it
+                    console.log('Transaction creation failed due to duplicate, fetching existing transaction');
+                    const { data: existingTx, error: fetchError } = await supabase
+                      .from('transactions')
+                      .select('id, user_id, type, amount, status, paystack_reference, created_at')
+                      .eq('paystack_reference', reference)
+                      .maybeSingle();
+                    
+                    if (!fetchError && existingTx) {
+                      transactionToUpdate = existingTx;
+                      console.log('Using existing transaction after duplicate error:', {
+                        transactionId: existingTx.id,
+                        status: existingTx.status
+                      });
+                    } else {
+                      throw new Error(`Failed to create transaction: ${createError?.message || 'Unknown error'}. Reference: ${reference || 'N/A'}. Please contact support.`);
+                    }
+                  } else {
+                    throw new Error(`Failed to create transaction record: ${createError?.message || 'Unknown error'}. Reference: ${reference || 'N/A'}. Please contact support with this reference.`);
+                  }
+                } else {
+                  console.log('Transaction record created successfully:', newTransaction.id);
+                  transactionToUpdate = newTransaction;
+                }
+              }
+            }
+          } else {
+            // No reference available, cannot check for duplicates
+            // This should not happen if payment was successful, but handle it gracefully
+            throw new Error('Cannot create transaction: No Paystack reference available. Reference: N/A. Please contact support.');
           }
-
-          console.log('Transaction record created successfully:', newTransaction.id);
-          transactionToUpdate = newTransaction;
         } catch (fallbackError) {
           console.error('Fallback transaction creation failed:', fallbackError);
           // If fallback fails, throw the original error with more details
