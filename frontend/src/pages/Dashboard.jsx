@@ -654,66 +654,181 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               
               // Skip transaction creation, continue with approval logic below
             } else {
-              // No existing transaction found, safe to create
-              // Add small delay to handle race conditions with webhook
-              console.log('No existing transaction found, waiting 500ms to handle race conditions...');
-              await new Promise(resolve => setTimeout(resolve, 500));
-              
-              // Re-check one more time after delay (webhook might have created it)
-              const { data: recheckByRef, error: recheckError } = await supabase
+              // No existing transaction found by reference, check for transaction by user + amount + time
+              // This handles case where initial transaction was created without reference
+              const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+              const { data: existingByUserAmount, error: checkUserAmountError } = await supabase
                 .from('transactions')
                 .select('id, user_id, type, amount, status, paystack_reference, created_at')
-                .eq('paystack_reference', reference)
+                .eq('user_id', authUser.id)
+                .eq('type', 'deposit')
+                .eq('amount', amount)
+                .eq('deposit_method', 'paystack')
+                .gte('created_at', tenMinutesAgo)
+                .order('created_at', { ascending: false })
+                .limit(1)
                 .maybeSingle();
-              
-              if (!recheckError && recheckByRef) {
-                console.log('Transaction found after delay, using existing:', {
-                  transactionId: recheckByRef.id,
-                  status: recheckByRef.status
-                });
-                transactionToUpdate = recheckByRef;
-              } else {
-                // Still no transaction, safe to create
-                console.log('No transaction found after delay, creating new transaction record');
-                const { data: newTransaction, error: createError } = await supabase
-                  .from('transactions')
-                  .insert({
-                    user_id: authUser.id,
-                    amount: amount,
-                    type: 'deposit',
-                    status: 'pending', // Will be approved by the API call below
-                    deposit_method: 'paystack',
-                    paystack_reference: reference
-                  })
-                  .select()
-                  .single();
 
-                if (createError || !newTransaction) {
-                  // Check if error is due to duplicate reference (unique constraint violation)
-                  if (createError?.code === '23505' || createError?.message?.includes('duplicate') || createError?.message?.includes('unique') || createError?.message?.includes('paystack_reference')) {
-                    // Transaction was created by another process (webhook), fetch it
-                    console.log('Transaction creation failed due to duplicate, fetching existing transaction');
-                    const { data: existingTx, error: fetchError } = await supabase
+              if (!checkUserAmountError && existingByUserAmount) {
+                console.log('Found existing transaction by user + amount + time, updating with reference:', {
+                  transactionId: existingByUserAmount.id,
+                  status: existingByUserAmount.status,
+                  hasReference: !!existingByUserAmount.paystack_reference
+                });
+                
+                // Use existing transaction and update it with reference
+                transactionToUpdate = existingByUserAmount;
+                
+                // Update with reference if it doesn't have one
+                // But first check if another transaction already has this reference
+                if (!existingByUserAmount.paystack_reference) {
+                  const { data: refCheck } = await supabase
+                    .from('transactions')
+                    .select('id')
+                    .eq('paystack_reference', reference)
+                    .neq('id', existingByUserAmount.id)
+                    .maybeSingle();
+                  
+                  if (refCheck) {
+                    console.warn('Another transaction already has this reference, using that transaction instead:', {
+                      existingTransactionId: existingByUserAmount.id,
+                      transactionWithReference: refCheck.id,
+                      reference
+                    });
+                    // Use the transaction that already has the reference
+                    const { data: txWithRef } = await supabase
                       .from('transactions')
                       .select('id, user_id, type, amount, status, paystack_reference, created_at')
-                      .eq('paystack_reference', reference)
+                      .eq('id', refCheck.id)
                       .maybeSingle();
-                    
-                    if (!fetchError && existingTx) {
-                      transactionToUpdate = existingTx;
-                      console.log('Using existing transaction after duplicate error:', {
-                        transactionId: existingTx.id,
-                        status: existingTx.status
-                      });
-                    } else {
-                      throw new Error(`Failed to create transaction: ${createError?.message || 'Unknown error'}. Reference: ${reference || 'N/A'}. Please contact support.`);
+                    if (txWithRef) {
+                      transactionToUpdate = txWithRef;
                     }
                   } else {
-                    throw new Error(`Failed to create transaction record: ${createError?.message || 'Unknown error'}. Reference: ${reference || 'N/A'}. Please contact support with this reference.`);
+                    // Safe to update with reference
+                    await supabase
+                      .from('transactions')
+                      .update({ paystack_reference: reference })
+                      .eq('id', existingByUserAmount.id);
+                    console.log('Updated existing transaction with reference:', reference);
                   }
+                }
+              } else {
+                // No existing transaction found, safe to create
+                // Add small delay to handle race conditions with webhook
+                console.log('No existing transaction found, waiting 500ms to handle race conditions...');
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // Re-check one more time after delay (webhook might have created it)
+                const { data: recheckByRef, error: recheckError } = await supabase
+                  .from('transactions')
+                  .select('id, user_id, type, amount, status, paystack_reference, created_at')
+                  .eq('paystack_reference', reference)
+                  .maybeSingle();
+                
+                if (!recheckError && recheckByRef) {
+                  console.log('Transaction found after delay, using existing:', {
+                    transactionId: recheckByRef.id,
+                    status: recheckByRef.status
+                  });
+                  transactionToUpdate = recheckByRef;
                 } else {
-                  console.log('Transaction record created successfully:', newTransaction.id);
-                  transactionToUpdate = newTransaction;
+                  // Final check: look for transaction by user + amount again after delay
+                  const { data: recheckByUserAmount } = await supabase
+                    .from('transactions')
+                    .select('id, user_id, type, amount, status, paystack_reference, created_at')
+                    .eq('user_id', authUser.id)
+                    .eq('type', 'deposit')
+                    .eq('amount', amount)
+                    .eq('deposit_method', 'paystack')
+                    .gte('created_at', tenMinutesAgo)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                  if (recheckByUserAmount) {
+                    console.log('Found transaction by user + amount after delay, updating with reference:', {
+                      transactionId: recheckByUserAmount.id,
+                      status: recheckByUserAmount.status
+                    });
+                    transactionToUpdate = recheckByUserAmount;
+                    
+                    // Update with reference, but first check if another transaction already has it
+                    if (!recheckByUserAmount.paystack_reference) {
+                      const { data: refCheck } = await supabase
+                        .from('transactions')
+                        .select('id')
+                        .eq('paystack_reference', reference)
+                        .neq('id', recheckByUserAmount.id)
+                        .maybeSingle();
+                      
+                      if (refCheck) {
+                        console.warn('Another transaction already has this reference, using that transaction instead:', {
+                          existingTransactionId: recheckByUserAmount.id,
+                          transactionWithReference: refCheck.id,
+                          reference
+                        });
+                        // Use the transaction that already has the reference
+                        const { data: txWithRef } = await supabase
+                          .from('transactions')
+                          .select('id, user_id, type, amount, status, paystack_reference, created_at')
+                          .eq('id', refCheck.id)
+                          .maybeSingle();
+                        if (txWithRef) {
+                          transactionToUpdate = txWithRef;
+                        }
+                      } else {
+                        // Safe to update with reference
+                        await supabase
+                          .from('transactions')
+                          .update({ paystack_reference: reference })
+                          .eq('id', recheckByUserAmount.id);
+                      }
+                    }
+                  } else {
+                    // Still no transaction, safe to create
+                    console.log('No transaction found after delay, creating new transaction record');
+                    const { data: newTransaction, error: createError } = await supabase
+                      .from('transactions')
+                      .insert({
+                        user_id: authUser.id,
+                        amount: amount,
+                        type: 'deposit',
+                        status: 'pending', // Will be approved by the API call below
+                        deposit_method: 'paystack',
+                        paystack_reference: reference
+                      })
+                      .select()
+                      .single();
+
+                    if (createError || !newTransaction) {
+                      // Check if error is due to duplicate reference (unique constraint violation)
+                      if (createError?.code === '23505' || createError?.message?.includes('duplicate') || createError?.message?.includes('unique') || createError?.message?.includes('paystack_reference')) {
+                        // Transaction was created by another process (webhook), fetch it
+                        console.log('Transaction creation failed due to duplicate, fetching existing transaction');
+                        const { data: existingTx, error: fetchError } = await supabase
+                          .from('transactions')
+                          .select('id, user_id, type, amount, status, paystack_reference, created_at')
+                          .eq('paystack_reference', reference)
+                          .maybeSingle();
+                        
+                        if (!fetchError && existingTx) {
+                          transactionToUpdate = existingTx;
+                          console.log('Using existing transaction after duplicate error:', {
+                            transactionId: existingTx.id,
+                            status: existingTx.status
+                          });
+                        } else {
+                          throw new Error(`Failed to create transaction: ${createError?.message || 'Unknown error'}. Reference: ${reference || 'N/A'}. Please contact support.`);
+                        }
+                      } else {
+                        throw new Error(`Failed to create transaction record: ${createError?.message || 'Unknown error'}. Reference: ${reference || 'N/A'}. Please contact support with this reference.`);
+                      }
+                    } else {
+                      console.log('Transaction record created successfully:', newTransaction.id);
+                      transactionToUpdate = newTransaction;
+                    }
+                  }
                 }
               }
             }
@@ -1843,27 +1958,33 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       }
 
       // Check for existing pending transactions for this amount (prevent duplicates)
+      // Also check for approved transactions with same amount (webhook might have processed it)
       const { data: existingPending, error: checkPendingError } = await supabase
         .from('transactions')
-        .select('id, status, amount, created_at')
+        .select('id, status, amount, created_at, paystack_reference')
         .eq('user_id', authUser.id)
         .eq('type', 'deposit')
-        .eq('status', 'pending')
+        .in('status', ['pending', 'approved'])
         .eq('amount', amount)
+        .eq('deposit_method', 'paystack')
         .order('created_at', { ascending: false })
         .limit(1);
 
-      // If there's a recent pending transaction (within last 5 minutes), reuse it
+      // If there's a recent transaction (within last 5 minutes), reuse it
       if (!checkPendingError && existingPending && existingPending.length > 0) {
-        const pendingTx = existingPending[0];
-        const txAge = Date.now() - new Date(pendingTx.created_at).getTime();
+        const existingTx = existingPending[0];
+        const txAge = Date.now() - new Date(existingTx.created_at).getTime();
         const fiveMinutes = 5 * 60 * 1000;
         
         if (txAge < fiveMinutes) {
-          console.log('Reusing existing pending transaction:', pendingTx.id);
+          console.log('Reusing existing transaction:', {
+            transactionId: existingTx.id,
+            status: existingTx.status,
+            hasReference: !!existingTx.paystack_reference
+          });
           setPendingTransaction({
-            id: pendingTx.id,
-            amount: pendingTx.amount,
+            id: existingTx.id,
+            amount: existingTx.amount,
             user_id: authUser.id
           });
           setDepositAmount('');
