@@ -483,11 +483,31 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         if (!findByIdError && foundById) {
           transactionToUpdate = foundById;
           // Update the transaction with the reference for future verification
+          // But first check if another transaction already has this reference
           if (reference && !foundById.paystack_reference) {
-            await supabase
+            const { data: existingWithRef } = await supabase
               .from('transactions')
-              .update({ paystack_reference: reference })
-              .eq('id', foundById.id);
+              .select('id, user_id, amount, status')
+              .eq('paystack_reference', reference)
+              .neq('id', foundById.id)
+              .maybeSingle();
+            
+            if (existingWithRef) {
+              // Another transaction already has this reference
+              console.warn('Reference collision detected (by ID):', {
+                currentTransactionId: foundById.id,
+                existingTransactionId: existingWithRef.id,
+                reference
+              });
+              // Use the existing transaction instead
+              transactionToUpdate = existingWithRef;
+            } else {
+              // Safe to update
+              await supabase
+                .from('transactions')
+                .update({ paystack_reference: reference })
+                .eq('id', foundById.id);
+            }
           }
         }
       }
@@ -505,12 +525,31 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         
         if (!findPendingError && pendingTransactions && pendingTransactions.length > 0) {
           transactionToUpdate = pendingTransactions[0];
-          // Update with reference
-          if (reference) {
-            await supabase
+          // Update with reference, but first check if another transaction already has it
+          if (reference && !transactionToUpdate.paystack_reference) {
+            const { data: existingWithRef } = await supabase
               .from('transactions')
-              .update({ paystack_reference: reference })
-              .eq('id', transactionToUpdate.id);
+              .select('id, user_id, amount, status')
+              .eq('paystack_reference', reference)
+              .neq('id', transactionToUpdate.id)
+              .maybeSingle();
+            
+            if (existingWithRef) {
+              // Another transaction already has this reference
+              console.warn('Reference collision detected (by search):', {
+                currentTransactionId: transactionToUpdate.id,
+                existingTransactionId: existingWithRef.id,
+                reference
+              });
+              // Use the existing transaction instead
+              transactionToUpdate = existingWithRef;
+            } else {
+              // Safe to update
+              await supabase
+                .from('transactions')
+                .update({ paystack_reference: reference })
+                .eq('id', transactionToUpdate.id);
+            }
           }
           console.log('Found pending transaction by search:', transactionToUpdate.id);
         }
@@ -536,12 +575,31 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           } else {
             // If reference doesn't match, use most recent one (might be the payment)
             transactionToUpdate = approvedTransactions[0];
-            // Update with reference if it's missing
+            // Update with reference if it's missing, but first check for duplicates
             if (reference && !transactionToUpdate.paystack_reference) {
-              await supabase
+              const { data: existingWithRef } = await supabase
                 .from('transactions')
-                .update({ paystack_reference: reference })
-                .eq('id', transactionToUpdate.id);
+                .select('id, user_id, amount, status')
+                .eq('paystack_reference', reference)
+                .neq('id', transactionToUpdate.id)
+                .maybeSingle();
+              
+              if (existingWithRef) {
+                // Another transaction already has this reference
+                console.warn('Reference collision detected (recent transactions):', {
+                  currentTransactionId: transactionToUpdate.id,
+                  existingTransactionId: existingWithRef.id,
+                  reference
+                });
+                // Use the existing transaction instead
+                transactionToUpdate = existingWithRef;
+              } else {
+                // Safe to update
+                await supabase
+                  .from('transactions')
+                  .update({ paystack_reference: reference })
+                  .eq('id', transactionToUpdate.id);
+              }
             }
             console.log('Found recent transaction (may have been processed by webhook):', transactionToUpdate.id);
           }
@@ -844,12 +902,31 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         }
       }
       
-      // Store reference if not already stored
+      // Store reference if not already stored, but first check for duplicates
       if (reference && !transactionToUpdate.paystack_reference) {
-        await supabase
+        const { data: existingWithRef } = await supabase
           .from('transactions')
-          .update({ paystack_reference: reference })
-          .eq('id', transactionToUpdate.id);
+          .select('id, user_id, amount, status')
+          .eq('paystack_reference', reference)
+          .neq('id', transactionToUpdate.id)
+          .maybeSingle();
+        
+        if (existingWithRef) {
+          // Another transaction already has this reference
+          console.warn('Reference collision detected (main update):', {
+            currentTransactionId: transactionToUpdate.id,
+            existingTransactionId: existingWithRef.id,
+            reference
+          });
+          // Use the existing transaction instead
+          transactionToUpdate = existingWithRef;
+        } else {
+          // Safe to update
+          await supabase
+            .from('transactions')
+            .update({ paystack_reference: reference })
+            .eq('id', transactionToUpdate.id);
+        }
       }
 
       // Check if already approved (avoid duplicate processing)
@@ -1105,6 +1182,23 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         hasReference: !!reference
       });
       return false;
+    }
+
+    // First, check if another transaction already has this reference
+    const { data: existingWithRef } = await supabase
+      .from('transactions')
+      .select('id, user_id, amount, status')
+      .eq('paystack_reference', reference)
+      .neq('id', transactionId)
+      .maybeSingle();
+    
+    if (existingWithRef) {
+      console.warn('[REFERENCE] Another transaction already has this reference, skipping update:', {
+        currentTransactionId: transactionId,
+        existingTransactionId: existingWithRef.id,
+        reference
+      });
+      return false; // Don't update, another transaction has it
     }
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
