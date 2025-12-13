@@ -516,7 +516,73 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         }
       }
 
+      // If still not found, check for approved transactions (webhook might have processed it)
+      if (!transactionToUpdate && reference) {
+        const { data: approvedTransactions, error: findApprovedError } = await supabase
+          .from('transactions')
+          .select('id, user_id, type, amount, status, payment_method, paystack_reference, korapay_reference, created_at')
+          .eq('user_id', authUser.id)
+          .eq('type', 'deposit')
+          .in('status', ['approved', 'pending'])
+          .order('created_at', { ascending: false })
+          .limit(5);
+        
+        if (!findApprovedError && approvedTransactions && approvedTransactions.length > 0) {
+          // Try to find by reference first
+          const foundByRef = approvedTransactions.find(tx => tx.paystack_reference === reference);
+          if (foundByRef) {
+            transactionToUpdate = foundByRef;
+            console.log('Found transaction by reference in recent transactions:', transactionToUpdate.id);
+          } else {
+            // If reference doesn't match, use most recent one (might be the payment)
+            transactionToUpdate = approvedTransactions[0];
+            // Update with reference if it's missing
+            if (reference && !transactionToUpdate.paystack_reference) {
+              await supabase
+                .from('transactions')
+                .update({ paystack_reference: reference })
+                .eq('id', transactionToUpdate.id);
+            }
+            console.log('Found recent transaction (may have been processed by webhook):', transactionToUpdate.id);
+          }
+        }
+      }
+
+      // Final fallback: search for ANY transaction with this reference (regardless of status)
+      if (!transactionToUpdate && reference) {
+        const { data: anyTransaction, error: findAnyError } = await supabase
+          .from('transactions')
+          .select('id, user_id, type, amount, status, payment_method, paystack_reference, korapay_reference, created_at')
+          .eq('paystack_reference', reference)
+          .eq('user_id', authUser.id)
+          .maybeSingle();
+        
+        if (!findAnyError && anyTransaction) {
+          transactionToUpdate = anyTransaction;
+          console.log('Found transaction by reference (any status):', transactionToUpdate.id, 'Status:', transactionToUpdate.status);
+        }
+      }
+
       if (!transactionToUpdate) {
+        // Log detailed debugging information
+        console.error('Transaction not found for payment success callback:', {
+          reference,
+          pendingTransactionId: pendingTransaction?.id,
+          userId: authUser.id,
+          timestamp: new Date().toISOString()
+        });
+        
+        // Try to get recent transactions for debugging
+        const { data: recentTxs } = await supabase
+          .from('transactions')
+          .select('id, status, paystack_reference, amount, created_at')
+          .eq('user_id', authUser.id)
+          .eq('type', 'deposit')
+          .order('created_at', { ascending: false })
+          .limit(10);
+        
+        console.error('Recent deposit transactions:', recentTxs);
+        
         throw new Error('No pending transaction found for this payment');
       }
       
