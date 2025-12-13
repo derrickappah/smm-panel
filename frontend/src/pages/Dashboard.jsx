@@ -15,6 +15,7 @@ import DashboardPromotionPackages from '@/components/dashboard/DashboardPromotio
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { usePaymentMethods } from '@/hooks/usePaymentMethods';
 import { usePromotionPackages } from '@/hooks/useAdminPromotionPackages';
+import { useDepositPolling } from '@/hooks/useDepositPolling';
 // Paystack will be loaded via react-paystack package
 
 const Dashboard = ({ user, onLogout, onUpdateUser }) => {
@@ -46,6 +47,42 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     payment_proof_file: null
   });
   const [uploadingProof, setUploadingProof] = useState(false);
+  
+  // Optimistic balance state for instant UI updates
+  const [optimisticBalance, setOptimisticBalance] = useState(null);
+
+  // Create merged user object that uses optimistic balance when available
+  const displayUser = optimisticBalance !== null 
+    ? { ...user, balance: optimisticBalance }
+    : user;
+
+  // Clear optimistic balance when user prop changes (after real data syncs)
+  useEffect(() => {
+    if (user && optimisticBalance !== null) {
+      // Clear optimistic balance when real user data updates
+      // This ensures we use real data once it's synced
+      setOptimisticBalance(null);
+    }
+  }, [user?.balance, optimisticBalance]);
+
+  // Automatic deposit polling - polls transaction status and updates balance automatically
+  const [isPollingDeposit, setIsPollingDeposit] = useState(false);
+  const { isPolling, stopPolling } = useDepositPolling(
+    pendingTransaction,
+    onUpdateUser,
+    setPendingTransaction,
+    setOptimisticBalance,
+    {
+      interval: 2000, // Poll every 2 seconds
+      maxDuration: 180000, // Max 3 minutes
+      maxAttempts: 90 // 90 attempts
+    }
+  );
+
+  // Update polling state for UI
+  useEffect(() => {
+    setIsPollingDeposit(isPolling);
+  }, [isPolling]);
 
   // Paystack public key - should be in environment variable
   const paystackPublicKey = process.env.REACT_APP_PAYSTACK_PUBLIC_KEY || 'pk_test_xxxxxxxxxxxxx';
@@ -695,72 +732,79 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           newBalance 
         });
 
-        // DOUBLE-CHECK: Verify balance was actually updated (CRITICAL)
-        console.log('Verifying balance was updated (fallback path)...');
-        let balanceVerified = false;
-        for (let verifyAttempt = 1; verifyAttempt <= 3; verifyAttempt++) {
-          // Wait a moment for database to sync
-          await new Promise(resolve => setTimeout(resolve, 200));
-          
-          const { data: verifyProfile, error: verifyError } = await supabase
-            .from('profiles')
-            .select('balance')
-            .eq('id', authUser.id)
-            .maybeSingle();
-
-          if (verifyError || !verifyProfile) {
-            console.warn(`Balance verification attempt ${verifyAttempt} failed:`, verifyError);
-            continue;
-          }
-
-          const verifiedBalance = parseFloat(verifyProfile.balance || 0);
-          const expectedBalance = newBalance;
-          
-          // Allow small floating point differences (0.01)
-          if (Math.abs(verifiedBalance - expectedBalance) < 0.01) {
-            balanceVerified = true;
-            console.log(`✅ Balance verified successfully (fallback, attempt ${verifyAttempt}):`, {
-              expected: expectedBalance,
-              actual: verifiedBalance
-            });
-            break;
-          } else {
-            console.warn(`Balance verification attempt ${verifyAttempt} - mismatch:`, {
-              expected: expectedBalance,
-              actual: verifiedBalance
-            });
-            
-            // If balance doesn't match, try updating again
-            if (verifyAttempt < 3) {
-              console.log(`Retrying balance update (fallback, verification attempt ${verifyAttempt})...`);
-              const retryNewBalance = verifiedBalance + transactionAmount;
-              const { error: retryError } = await supabase
-                .from('profiles')
-                .update({ balance: retryNewBalance })
-                .eq('id', authUser.id);
-              
-              if (!retryError) {
-                console.log('Balance update retry successful (fallback), will verify again...');
-              } else {
-                console.error('Balance update retry failed (fallback):', retryError);
-              }
-            }
-          }
-        }
-
-        if (!balanceVerified) {
-          console.error('⚠️ WARNING: Balance verification failed after multiple attempts (fallback)!', {
-            transactionId: transactionToUpdate.id,
-            transactionAmount,
-            expectedBalance: newBalance
-          });
-          toast.warning('Payment approved but balance verification failed. Please check your balance or contact support.');
-        }
-
+        // INSTANT UI UPDATE: Set optimistic balance and refresh user data immediately
+        setOptimisticBalance(newBalance);
+        onUpdateUser(); // Don't await - let it run in background
+        
+        // Show success toast immediately
         toast.success(`Payment successful! ₵${transactionAmount.toFixed(2)} added to your balance.`);
         setDepositAmount('');
         setPendingTransaction(null);
-        await onUpdateUser();
+
+        // Run verification in background (non-blocking)
+        (async () => {
+          console.log('Verifying balance was updated (fallback path, background)...');
+          let balanceVerified = false;
+          for (let verifyAttempt = 1; verifyAttempt <= 3; verifyAttempt++) {
+            // Wait a moment for database to sync
+            await new Promise(resolve => setTimeout(resolve, 200));
+            
+            const { data: verifyProfile, error: verifyError } = await supabase
+              .from('profiles')
+              .select('balance')
+              .eq('id', authUser.id)
+              .maybeSingle();
+
+            if (verifyError || !verifyProfile) {
+              console.warn(`Balance verification attempt ${verifyAttempt} failed (fallback, background):`, verifyError);
+              continue;
+            }
+
+            const verifiedBalance = parseFloat(verifyProfile.balance || 0);
+            const expectedBalance = newBalance;
+            
+            // Allow small floating point differences (0.01)
+            if (Math.abs(verifiedBalance - expectedBalance) < 0.01) {
+              balanceVerified = true;
+              console.log(`✅ Balance verified successfully (fallback, background, attempt ${verifyAttempt}):`, {
+                expected: expectedBalance,
+                actual: verifiedBalance
+              });
+              break;
+            } else {
+              console.warn(`Balance verification attempt ${verifyAttempt} - mismatch (fallback, background):`, {
+                expected: expectedBalance,
+                actual: verifiedBalance
+              });
+              
+              // If balance doesn't match, try updating again
+              if (verifyAttempt < 3) {
+                console.log(`Retrying balance update (fallback, verification attempt ${verifyAttempt}, background)...`);
+                const retryNewBalance = verifiedBalance + transactionAmount;
+                const { error: retryError } = await supabase
+                  .from('profiles')
+                  .update({ balance: retryNewBalance })
+                  .eq('id', authUser.id);
+                
+                if (!retryError) {
+                  console.log('Balance update retry successful (fallback, background), will verify again...');
+                } else {
+                  console.error('Balance update retry failed (fallback, background):', retryError);
+                }
+              }
+            }
+          }
+
+          if (!balanceVerified) {
+            console.error('⚠️ WARNING: Balance verification failed after multiple attempts (fallback, background)!', {
+              transactionId: transactionToUpdate.id,
+              transactionAmount,
+              expectedBalance: newBalance
+            });
+            toast.warning('Balance verification failed. Please refresh the page to confirm your balance.');
+          }
+        })();
+        
         return;
       }
 
@@ -816,34 +860,47 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             newBalance: retryBalance 
           });
 
-          // DOUBLE-CHECK: Verify balance was actually updated after retry
-          console.log('Verifying balance was updated (retry path)...');
-          await new Promise(resolve => setTimeout(resolve, 200));
+          // INSTANT UI UPDATE: Set optimistic balance and refresh user data immediately
+          setOptimisticBalance(retryBalance);
+          onUpdateUser(); // Don't await - let it run in background
           
-          const { data: verifyProfile, error: verifyError } = await supabase
-            .from('profiles')
-            .select('balance')
-            .eq('id', authUser.id)
-            .single();
+          // Show success toast immediately
+          toast.success(`Payment successful! ₵${transactionAmount.toFixed(2)} added to your balance.`);
+          setDepositAmount('');
+          setPendingTransaction(null);
 
-          if (!verifyError && verifyProfile) {
-            const verifiedBalance = parseFloat(verifyProfile.balance || 0);
-            const expectedBalance = retryBalance;
+          // Run verification in background (non-blocking)
+          (async () => {
+            console.log('Verifying balance was updated (retry path, background)...');
+            await new Promise(resolve => setTimeout(resolve, 200));
             
-            if (Math.abs(verifiedBalance - expectedBalance) < 0.01) {
-              console.log('✅ Balance verified successfully (retry path):', {
-                expected: expectedBalance,
-                actual: verifiedBalance
-              });
-            } else {
-              console.error('⚠️ WARNING: Balance verification failed after retry!', {
-                expected: expectedBalance,
-                actual: verifiedBalance,
-                difference: Math.abs(verifiedBalance - expectedBalance)
-              });
-              toast.warning('Payment approved but balance verification failed. Please check your balance or contact support.');
+            const { data: verifyProfile, error: verifyError } = await supabase
+              .from('profiles')
+              .select('balance')
+              .eq('id', authUser.id)
+              .single();
+
+            if (!verifyError && verifyProfile) {
+              const verifiedBalance = parseFloat(verifyProfile.balance || 0);
+              const expectedBalance = retryBalance;
+              
+              if (Math.abs(verifiedBalance - expectedBalance) >= 0.01) {
+                console.error('⚠️ WARNING: Balance verification failed after retry (background check)!', {
+                  expected: expectedBalance,
+                  actual: verifiedBalance,
+                  difference: Math.abs(verifiedBalance - expectedBalance)
+                });
+              } else {
+                console.log('✅ Balance verified successfully (retry path, background):', {
+                  expected: expectedBalance,
+                  actual: verifiedBalance
+                });
+              }
             }
-          }
+          })();
+          
+          // Skip to end - verification runs in background
+          return;
         } else {
           throw new Error(`Failed to update balance: ${balanceError.message}`);
         }
@@ -855,186 +912,191 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         });
       }
 
-      // DOUBLE-CHECK: Verify balance was actually updated (CRITICAL)
-      console.log('Verifying balance was updated...');
-      let balanceVerified = false;
-      for (let verifyAttempt = 1; verifyAttempt <= 3; verifyAttempt++) {
-        // Wait a moment for database to sync
-        await new Promise(resolve => setTimeout(resolve, 200));
-        
-        const { data: verifyProfile, error: verifyError } = await supabase
-          .from('profiles')
-          .select('balance')
-          .eq('id', authUser.id)
-          .single();
-
-        if (verifyError) {
-          console.warn(`Balance verification attempt ${verifyAttempt} failed:`, verifyError);
-          continue;
-        }
-
-        const verifiedBalance = parseFloat(verifyProfile.balance || 0);
-        const expectedBalance = newBalance;
-        
-        // Allow small floating point differences (0.01)
-        if (Math.abs(verifiedBalance - expectedBalance) < 0.01) {
-          balanceVerified = true;
-          console.log(`✅ Balance verified successfully (attempt ${verifyAttempt}):`, {
-            expected: expectedBalance,
-            actual: verifiedBalance,
-            difference: Math.abs(verifiedBalance - expectedBalance)
-          });
-          break;
-        } else {
-          console.warn(`Balance verification attempt ${verifyAttempt} - mismatch:`, {
-            expected: expectedBalance,
-            actual: verifiedBalance,
-            difference: Math.abs(verifiedBalance - expectedBalance)
-          });
-          
-          // If balance doesn't match, try updating again
-          if (verifyAttempt < 3) {
-            console.log(`Retrying balance update (verification attempt ${verifyAttempt})...`);
-            const retryNewBalance = verifiedBalance + transactionAmount;
-            const { error: retryError } = await supabase
-              .from('profiles')
-              .update({ balance: retryNewBalance })
-              .eq('id', authUser.id);
-            
-            if (!retryError) {
-              console.log('Balance update retry successful, will verify again...');
-              // Will verify again in next iteration
-            } else {
-              console.error('Balance update retry failed:', retryError);
-            }
-          }
-        }
-      }
-
-      if (!balanceVerified) {
-        console.error('⚠️ WARNING: Balance verification failed after multiple attempts!', {
-          transactionId: transactionToUpdate.id,
-          transactionAmount,
-          expectedBalance: newBalance
-        });
-        // Don't fail the payment process, but log the issue
-        // Admin can manually credit if needed
-        toast.warning('Payment approved but balance verification failed. Please check your balance or contact support.');
-      }
-
-      // Final verification: ensure transaction is marked as approved AND reference is stored (CRITICAL - must succeed)
-      // Try multiple times to ensure status and reference are updated
-      let finalStatusUpdated = false;
-      let finalReferenceStored = false;
+      // INSTANT UI UPDATE: Set optimistic balance and refresh user data immediately
+      setOptimisticBalance(newBalance);
+      onUpdateUser(); // Don't await - let it run in background
       
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          const { data: finalTransaction } = await supabase
-            .from('transactions')
-            .select('status, paystack_reference')
-            .eq('id', transactionToUpdate.id)
-            .maybeSingle();
+      // Show success toast immediately
+      toast.success(`Payment successful! ₵${transactionAmount.toFixed(2)} added to your balance.`);
+      setDepositAmount('');
+      setPendingTransaction(null);
+
+      // Run verification in background (non-blocking)
+      (async () => {
+        console.log('Verifying balance was updated (background)...');
+        let balanceVerified = false;
+        for (let verifyAttempt = 1; verifyAttempt <= 3; verifyAttempt++) {
+          // Wait a moment for database to sync
+          await new Promise(resolve => setTimeout(resolve, 200));
           
-          const isApproved = finalTransaction?.status === 'approved';
-          const hasReference = !!finalTransaction?.paystack_reference;
+          const { data: verifyProfile, error: verifyError } = await supabase
+            .from('profiles')
+            .select('balance')
+            .eq('id', authUser.id)
+            .single();
+
+          if (verifyError) {
+            console.warn(`Balance verification attempt ${verifyAttempt} failed (background):`, verifyError);
+            continue;
+          }
+
+          const verifiedBalance = parseFloat(verifyProfile.balance || 0);
+          const expectedBalance = newBalance;
           
-          if (isApproved && (hasReference || !reference)) {
-            // Status is approved and either reference is stored or we don't have a reference to store
-            finalStatusUpdated = true;
-            if (hasReference) {
-              finalReferenceStored = true;
-            }
-            console.log(`Transaction verified (final check attempt ${attempt}):`, {
-              status: finalTransaction.status,
-              hasReference: hasReference,
-              reference: finalTransaction.paystack_reference
+          // Allow small floating point differences (0.01)
+          if (Math.abs(verifiedBalance - expectedBalance) < 0.01) {
+            balanceVerified = true;
+            console.log(`✅ Balance verified successfully (background, attempt ${verifyAttempt}):`, {
+              expected: expectedBalance,
+              actual: verifiedBalance,
+              difference: Math.abs(verifiedBalance - expectedBalance)
             });
             break;
           } else {
-            // Need to update status and/or reference
-            // ALWAYS include reference if we have it (even if it already exists)
-            const updateData = { status: 'approved' };
-            if (reference) {
-              updateData.paystack_reference = reference; // Always include reference
-            }
-            
-            console.log(`Final transaction check (attempt ${attempt}) - updating:`, {
-              currentStatus: finalTransaction?.status,
-              currentReference: finalTransaction?.paystack_reference,
-              hasReference: hasReference,
-              willUpdateReference: !!reference,
-              reference: reference
+            console.warn(`Balance verification attempt ${verifyAttempt} - mismatch (background):`, {
+              expected: expectedBalance,
+              actual: verifiedBalance,
+              difference: Math.abs(verifiedBalance - expectedBalance)
             });
             
-            const { data: updateResult, error: updateError } = await supabase
-              .from('transactions')
-              .update(updateData)
-              .eq('id', transactionToUpdate.id)
-              .select();
-            
-            if (!updateError && updateResult && updateResult.length > 0) {
-              finalStatusUpdated = updateResult[0].status === 'approved';
-              finalReferenceStored = !!updateResult[0].paystack_reference;
-              console.log(`Transaction updated (final check attempt ${attempt}):`, {
-                status: updateResult[0].status,
-                reference: updateResult[0].paystack_reference
-              });
-              if (finalStatusUpdated && (finalReferenceStored || !reference)) break;
-            } else if (updateError) {
-              console.warn(`Failed to update transaction (final check attempt ${attempt}):`, updateError);
+            // If balance doesn't match, try updating again
+            if (verifyAttempt < 3) {
+              console.log(`Retrying balance update (verification attempt ${verifyAttempt}, background)...`);
+              const retryNewBalance = verifiedBalance + transactionAmount;
+              const { error: retryError } = await supabase
+                .from('profiles')
+                .update({ balance: retryNewBalance })
+                .eq('id', authUser.id);
+              
+              if (!retryError) {
+                console.log('Balance update retry successful (background), will verify again...');
+                // Will verify again in next iteration
+              } else {
+                console.error('Balance update retry failed (background):', retryError);
+              }
             }
           }
-        } catch (finalUpdateError) {
-          console.warn(`Error in final transaction check (attempt ${attempt}):`, finalUpdateError);
         }
+
+        if (!balanceVerified) {
+          console.error('⚠️ WARNING: Balance verification failed after multiple attempts (background)!', {
+            transactionId: transactionToUpdate.id,
+            transactionAmount,
+            expectedBalance: newBalance
+          });
+          // Show non-intrusive notification if verification fails
+          toast.warning('Balance verification failed. Please refresh the page to confirm your balance.');
+        }
+      })();
+
+      // Final verification: ensure transaction is marked as approved AND reference is stored (run in background)
+      // Try multiple times to ensure status and reference are updated
+      (async () => {
+        let finalStatusUpdated = false;
+        let finalReferenceStored = false;
         
-        // Wait a bit before retrying (only if not last attempt)
-        if (attempt < 3 && !finalStatusUpdated) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-      }
-      
-      if (!finalStatusUpdated) {
-        console.error('WARNING: Could not confirm transaction status as approved after multiple attempts. Transaction ID:', transactionToUpdate.id);
-        // Log this for admin review, but don't fail the payment process
-      }
-      
-      if (reference && !finalReferenceStored) {
-        console.warn('WARNING: Could not confirm paystack_reference was stored. Transaction ID:', transactionToUpdate.id, 'Reference:', reference);
-        // Try multiple times to store the reference
-        for (let refAttempt = 1; refAttempt <= 3; refAttempt++) {
-          const { data: refCheck, error: refError } = await supabase
-            .from('transactions')
-            .update({ paystack_reference: reference })
-            .eq('id', transactionToUpdate.id)
-            .select('paystack_reference')
-            .single();
-          
-          if (!refError && refCheck?.paystack_reference === reference) {
-            console.log(`✅ Reference stored successfully (final attempt ${refAttempt})`);
-            finalReferenceStored = true;
-            break;
-          } else if (refError) {
-            console.error(`Failed to store reference (final attempt ${refAttempt}):`, refError);
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            const { data: finalTransaction } = await supabase
+              .from('transactions')
+              .select('status, paystack_reference')
+              .eq('id', transactionToUpdate.id)
+              .maybeSingle();
+            
+            const isApproved = finalTransaction?.status === 'approved';
+            const hasReference = !!finalTransaction?.paystack_reference;
+            
+            if (isApproved && (hasReference || !reference)) {
+              // Status is approved and either reference is stored or we don't have a reference to store
+              finalStatusUpdated = true;
+              if (hasReference) {
+                finalReferenceStored = true;
+              }
+              console.log(`Transaction verified (final check attempt ${attempt}, background):`, {
+                status: finalTransaction.status,
+                hasReference: hasReference,
+                reference: finalTransaction.paystack_reference
+              });
+              break;
+            } else {
+              // Need to update status and/or reference
+              // ALWAYS include reference if we have it (even if it already exists)
+              const updateData = { status: 'approved' };
+              if (reference) {
+                updateData.paystack_reference = reference; // Always include reference
+              }
+              
+              console.log(`Final transaction check (attempt ${attempt}, background) - updating:`, {
+                currentStatus: finalTransaction?.status,
+                currentReference: finalTransaction?.paystack_reference,
+                hasReference: hasReference,
+                willUpdateReference: !!reference,
+                reference: reference
+              });
+              
+              const { data: updateResult, error: updateError } = await supabase
+                .from('transactions')
+                .update(updateData)
+                .eq('id', transactionToUpdate.id)
+                .select();
+              
+              if (!updateError && updateResult && updateResult.length > 0) {
+                finalStatusUpdated = updateResult[0].status === 'approved';
+                finalReferenceStored = !!updateResult[0].paystack_reference;
+                console.log(`Transaction updated (final check attempt ${attempt}, background):`, {
+                  status: updateResult[0].status,
+                  reference: updateResult[0].paystack_reference
+                });
+                if (finalStatusUpdated && (finalReferenceStored || !reference)) break;
+              } else if (updateError) {
+                console.warn(`Failed to update transaction (final check attempt ${attempt}, background):`, updateError);
+              }
+            }
+          } catch (finalUpdateError) {
+            console.warn(`Error in final transaction check (attempt ${attempt}, background):`, finalUpdateError);
           }
           
-          // Wait before retry
-          if (refAttempt < 3) {
+          // Wait a bit before retrying (only if not last attempt)
+          if (attempt < 3 && !finalStatusUpdated) {
             await new Promise(resolve => setTimeout(resolve, 100));
           }
         }
         
-        if (!finalReferenceStored) {
-          console.error('CRITICAL: Failed to store paystack_reference after all attempts. Transaction ID:', transactionToUpdate.id);
+        if (!finalStatusUpdated) {
+          console.error('WARNING: Could not confirm transaction status as approved after multiple attempts (background). Transaction ID:', transactionToUpdate.id);
+          // Log this for admin review, but don't fail the payment process
         }
-      }
-
-      toast.success(`Payment successful! ₵${transactionAmount.toFixed(2)} added to your balance.`);
-      setDepositAmount('');
-      setPendingTransaction(null);
-      
-      // Refresh user data
-      await onUpdateUser();
+        
+        if (reference && !finalReferenceStored) {
+          console.warn('WARNING: Could not confirm paystack_reference was stored (background). Transaction ID:', transactionToUpdate.id, 'Reference:', reference);
+          // Try multiple times to store the reference
+          for (let refAttempt = 1; refAttempt <= 3; refAttempt++) {
+            const { data: refCheck, error: refError } = await supabase
+              .from('transactions')
+              .update({ paystack_reference: reference })
+              .eq('id', transactionToUpdate.id)
+              .select('paystack_reference')
+              .single();
+            
+            if (!refError && refCheck?.paystack_reference === reference) {
+              console.log(`✅ Reference stored successfully (final attempt ${refAttempt}, background)`);
+              finalReferenceStored = true;
+              break;
+            } else if (refError) {
+              console.error(`Failed to store reference (final attempt ${refAttempt}, background):`, refError);
+            }
+            
+            // Wait before retry
+            if (refAttempt < 3) {
+              await new Promise(resolve => setTimeout(resolve, 100));
+            }
+          }
+          
+          if (!finalReferenceStored) {
+            console.error('CRITICAL: Failed to store paystack_reference after all attempts (background). Transaction ID:', transactionToUpdate.id);
+          }
+        }
+      })();
     } catch (error) {
       console.error('Error processing payment:', error);
       console.error('Error details:', {
@@ -2036,8 +2098,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         const quantity = pkg.quantity;
         const totalCost = pkg.price;
 
-        // Check balance
-        if (user.balance < totalCost) {
+        // Check balance (use displayUser to allow immediate orders after deposit)
+        if (displayUser.balance < totalCost) {
           throw new Error('Insufficient balance');
         }
 
@@ -2109,13 +2171,17 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         
         console.log('Package order created successfully:', orderData);
 
-        // Deduct balance
+        // Deduct balance (use displayUser to reflect optimistic balance)
+        const newBalanceAfterOrder = displayUser.balance - totalCost;
         const { error: balanceError } = await supabase
           .from('profiles')
-          .update({ balance: user.balance - totalCost })
+          .update({ balance: newBalanceAfterOrder })
           .eq('id', authUser.id);
 
         if (balanceError) throw balanceError;
+        
+        // Update optimistic balance immediately
+        setOptimisticBalance(newBalanceAfterOrder);
 
         // Record transaction
         const { error: transactionError } = await supabase
@@ -2132,13 +2198,18 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           console.warn('Failed to create transaction record for package order:', transactionError);
         }
 
+        // Show success immediately
         toast.success('Package order placed successfully!');
         setOrderForm({ service_id: '', package_id: '', link: '', quantity: '' });
-        await onUpdateUser();
-        await new Promise(resolve => setTimeout(resolve, 500));
-        await fetchRecentOrders().catch((error) => {
-          console.error('Error fetching recent orders:', error);
-        });
+        
+        // Refresh user data and orders in background (non-blocking)
+        onUpdateUser(); // Don't await - let it run in background
+        // Fetch orders after a short delay in background
+        setTimeout(() => {
+          fetchRecentOrders().catch((error) => {
+            console.error('Error fetching recent orders:', error);
+          });
+        }, 300);
         return;
       }
 
@@ -2249,8 +2320,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           );
         }
 
-        // Check balance
-        if (user.balance < totalCost) {
+        // Check balance (use displayUser to allow immediate orders after deposit)
+        if (displayUser.balance < totalCost) {
           throw new Error('Insufficient balance');
         }
 
@@ -2262,13 +2333,17 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           throw new Error(`Failed to create some orders: ${orderErrors[0].error.message}`);
         }
 
-        // Deduct balance
+        // Deduct balance (use displayUser to reflect optimistic balance)
+        const newBalanceAfterOrder = displayUser.balance - totalCost;
         const { error: balanceError } = await supabase
           .from('profiles')
-          .update({ balance: user.balance - totalCost })
+          .update({ balance: newBalanceAfterOrder })
           .eq('id', authUser.id);
 
         if (balanceError) throw balanceError;
+        
+        // Update optimistic balance immediately
+        setOptimisticBalance(newBalanceAfterOrder);
 
         // Record transaction for combo order (balance subtraction)
         // Create one transaction record for the total cost
@@ -2300,8 +2375,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       // Calculate cost
       const totalCost = (quantity / 1000) * service.rate;
 
-      // Check balance
-      if (user.balance < totalCost) {
+      // Check balance (use displayUser to allow immediate orders after deposit)
+      if (displayUser.balance < totalCost) {
         throw new Error('Insufficient balance');
       }
 
@@ -2393,13 +2468,17 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       console.log('Order created successfully:', orderData);
       console.log('Order SMMGen ID in database:', orderData.smmgen_order_id);
 
-      // Deduct balance
+      // Deduct balance (use displayUser to reflect optimistic balance)
+      const newBalanceAfterOrder = displayUser.balance - totalCost;
       const { error: balanceError } = await supabase
         .from('profiles')
-        .update({ balance: user.balance - totalCost })
+        .update({ balance: newBalanceAfterOrder })
         .eq('id', authUser.id);
 
       if (balanceError) throw balanceError;
+      
+      // Update optimistic balance immediately
+      setOptimisticBalance(newBalanceAfterOrder);
 
       // Record transaction for order (balance subtraction)
       const { error: transactionError } = await supabase
@@ -2430,7 +2509,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     } finally {
       setLoading(false);
     }
-  }, [orderForm, services, promotionPackages, user, fetchRecentOrders, onUpdateUser]);
+  }, [orderForm, services, promotionPackages, displayUser, fetchRecentOrders, onUpdateUser]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -2440,17 +2519,17 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         canonical="/dashboard"
         noindex={true}
       />
-      <Navbar user={user} onLogout={onLogout} />
+      <Navbar user={displayUser} onLogout={onLogout} />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 md:pt-6 pb-6 sm:pb-8">
         {/* Welcome Section */}
         <div className="mb-6 sm:mb-8 animate-fadeIn">
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">Welcome back, {user.name}!</h1>
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">Welcome back, {displayUser.name}!</h1>
           <p className="text-sm sm:text-base text-gray-600">Manage your orders and grow your social presence</p>
         </div>
 
         {/* Stats Cards */}
-        <DashboardStats user={user} orderCount={recentOrders.length} />
+        <DashboardStats user={displayUser} orderCount={recentOrders.length} />
 
         {/* Promotion Packages Section */}
         {promotionPackages.length > 0 && (
@@ -2472,7 +2551,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                   }
                 }, 100);
               }}
-              user={user}
+              user={displayUser}
             />
           </div>
         )}
@@ -2492,7 +2571,9 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             handleManualDeposit={handleManualDeposit}
             handleHubtelDeposit={handleHubtelDeposit}
             handleKorapayDeposit={handleKorapayDeposit}
-            loading={loading}
+            loading={loading || isPollingDeposit}
+            isPollingDeposit={isPollingDeposit}
+            pendingTransaction={pendingTransaction}
           />
 
           {/* Quick Order */}
@@ -2511,7 +2592,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
         {/* Referral Section */}
         <div className="mt-6 sm:mt-8 animate-slideUp">
-          <ReferralSection user={user} />
+          <ReferralSection user={displayUser} />
         </div>
       </div>
     </div>

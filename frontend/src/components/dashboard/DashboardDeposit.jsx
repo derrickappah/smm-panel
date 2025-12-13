@@ -18,7 +18,9 @@ const DashboardDeposit = React.memo(({
   handleManualDeposit,
   handleHubtelDeposit,
   handleKorapayDeposit,
-  loading
+  loading,
+  isPollingDeposit = false,
+  pendingTransaction = null
 }) => {
   const enabledMethods = useMemo(() => [
     paymentMethodSettings.paystack_enabled && 'paystack',
@@ -52,7 +54,17 @@ const DashboardDeposit = React.memo(({
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-6 sm:p-8 shadow-sm animate-slideUp">
-      <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">Add Funds</h2>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Add Funds</h2>
+        {isPollingDeposit && pendingTransaction && (
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
+            <span className="text-xs sm:text-sm font-medium text-blue-700">
+              Confirming payment...
+            </span>
+          </div>
+        )}
+      </div>
       
       {enabledMethods.length > 1 && depositMethod !== null && (
         <div className="flex gap-2 mb-6 p-1 bg-gray-100 rounded-lg">
@@ -140,10 +152,10 @@ const DashboardDeposit = React.memo(({
           <Button
             data-testid="deposit-submit-btn"
             type="submit"
-            disabled={loading || !depositAmount}
+            disabled={loading || isPollingDeposit || !depositAmount}
             className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? 'Processing...' : 'Pay with Paystack'}
+            {isPollingDeposit ? 'Confirming payment...' : loading ? 'Processing...' : 'Pay with Paystack'}
           </Button>
           <p className="text-xs sm:text-sm text-gray-600 text-center">
             Secure payment via Paystack. Funds are added instantly after successful payment.
