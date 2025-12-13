@@ -602,6 +602,42 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
       metrics
     });
 
+    // Run automatic manual verification in background (non-blocking)
+    (async () => {
+      try {
+        console.log('[WEBHOOK] Running automatic verification for transaction:', transaction.id);
+        
+        // Make internal call to verification endpoint
+        // Use VERCEL_URL if available (production), otherwise localhost for development
+        const baseUrl = process.env.VERCEL_URL 
+          ? `https://${process.env.VERCEL_URL}` 
+          : (process.env.NEXT_PUBLIC_VERCEL_URL 
+            ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
+            : 'http://localhost:3000');
+        
+        const verifyResponse = await fetch(`${baseUrl}/api/manual-verify-paystack-deposit`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ 
+            transactionId: transaction.id 
+          })
+        });
+
+        if (verifyResponse.ok) {
+          const verifyData = await verifyResponse.json();
+          console.log('[WEBHOOK] Automatic verification completed:', verifyData);
+        } else {
+          const errorData = await verifyResponse.json().catch(() => ({}));
+          console.warn('[WEBHOOK] Automatic verification warning (non-critical):', errorData.error || 'Unknown error');
+        }
+      } catch (verifyError) {
+        // Log but don't fail - this is a background verification step
+        console.warn('[WEBHOOK] Automatic verification error (non-critical):', verifyError);
+      }
+    })();
+
     return; // Success - exit early since we're done
   } catch (error) {
     metrics.totalTime = Date.now() - startTime;

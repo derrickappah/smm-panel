@@ -784,6 +784,33 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       setDepositAmount('');
       setPendingTransaction(null);
 
+      // Run automatic manual verification in background (non-blocking)
+      (async () => {
+        try {
+          console.log('Running automatic verification for transaction:', transactionToUpdate.id);
+          const verifyResponse = await fetch('/api/manual-verify-paystack-deposit', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ 
+              transactionId: transactionToUpdate.id 
+            })
+          });
+
+          if (verifyResponse.ok) {
+            const verifyData = await verifyResponse.json();
+            console.log('Automatic verification completed:', verifyData);
+          } else {
+            const errorData = await verifyResponse.json().catch(() => ({}));
+            console.warn('Automatic verification warning (non-critical):', errorData.error || 'Unknown error');
+          }
+        } catch (verifyError) {
+          // Log but don't fail - this is a background verification step
+          console.warn('Automatic verification error (non-critical):', verifyError);
+        }
+      })();
+
       // Run verification in background (non-blocking)
       (async () => {
         console.log('Verifying balance was updated (background)...');
@@ -1131,8 +1158,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               transaction_id: pendingTransaction.id,
               user_id: authUser.id
             },
-            callback: async (response) => {
-              // Paystack callback - handle async operations properly
+            callback: (response) => {
+              // Paystack callback must be synchronous, handle async operations inside
               console.log('Paystack callback triggered:', response);
               
               // Check if response indicates failure
@@ -1167,32 +1194,43 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
               // CRITICAL: Store reference BEFORE processing payment success
               // This ensures the reference is in the database before handlePaymentSuccess tries to find the transaction
+              // Handle async operations inside synchronous callback
               if (pendingTransaction?.id && response.reference) {
                 console.log('[CALLBACK] Storing Paystack reference before processing success:', response.reference);
-                try {
-                  const refStored = await storePaystackReference(pendingTransaction.id, response.reference);
-                  if (refStored) {
-                    console.log('[CALLBACK] Reference stored successfully, proceeding with payment success handler');
-                  } else {
-                    console.warn('[CALLBACK] Reference storage returned false, but continuing anyway');
-                  }
-                } catch (refError) {
-                  console.error('[CALLBACK] Error storing reference in callback:', refError);
-                  // Continue anyway - handlePaymentSuccess will try to store it again
-                }
+                // Call async function without await (fire and forget in callback)
+                storePaystackReference(pendingTransaction.id, response.reference)
+                  .then((refStored) => {
+                    if (refStored) {
+                      console.log('[CALLBACK] Reference stored successfully, proceeding with payment success handler');
+                    } else {
+                      console.warn('[CALLBACK] Reference storage returned false, but continuing anyway');
+                    }
+                    // Now call the async handler after reference is stored
+                    handlePaymentSuccess(response.reference).catch((error) => {
+                      console.error('Payment success handler error:', error);
+                      toast.error(`Payment processed but failed to update: ${error.message || 'Unknown error'}. Transaction ID: ${pendingTransaction?.id || 'N/A'}, Reference: ${response.reference || 'N/A'}. Please contact support.`);
+                    });
+                  })
+                  .catch((refError) => {
+                    console.error('[CALLBACK] Error storing reference in callback:', refError);
+                    // Continue anyway - handlePaymentSuccess will try to store it again
+                    handlePaymentSuccess(response.reference).catch((error) => {
+                      console.error('Payment success handler error:', error);
+                      toast.error(`Payment processed but failed to update: ${error.message || 'Unknown error'}. Transaction ID: ${pendingTransaction?.id || 'N/A'}, Reference: ${response.reference || 'N/A'}. Please contact support.`);
+                    });
+                  });
               } else {
                 console.warn('[CALLBACK] Cannot store reference - missing transaction ID or reference:', {
                   hasTransactionId: !!pendingTransaction?.id,
                   hasReference: !!response?.reference,
                   response: response
                 });
+                // Call handler even if reference storage isn't possible
+                handlePaymentSuccess(response.reference).catch((error) => {
+                  console.error('Payment success handler error:', error);
+                  toast.error(`Payment processed but failed to update: ${error.message || 'Unknown error'}. Transaction ID: ${pendingTransaction?.id || 'N/A'}, Reference: ${response.reference || 'N/A'}. Please contact support.`);
+                });
               }
-
-              // Now call the async handler (reference should be stored by now)
-              handlePaymentSuccess(response.reference).catch((error) => {
-                console.error('Payment success handler error:', error);
-                toast.error(`Payment processed but failed to update: ${error.message || 'Unknown error'}. Transaction ID: ${pendingTransaction?.id || 'N/A'}, Reference: ${response.reference || 'N/A'}. Please contact support.`);
-              });
             },
             onClose: () => {
               console.log('[CALLBACK] Payment window closed by user before confirmation');
