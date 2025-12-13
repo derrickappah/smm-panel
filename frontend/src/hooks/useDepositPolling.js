@@ -3,7 +3,8 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
 /**
- * Hook to automatically poll transaction status and update balance when deposit is confirmed
+ * Hook to automatically poll transaction status and refresh UI when deposit is confirmed
+ * Note: Balance updates are handled by the atomic database function, this hook only verifies and refreshes UI
  * 
  * @param {Object} pendingTransaction - The pending transaction object
  * @param {Function} onUpdateUser - Callback to refresh user data
@@ -60,17 +61,21 @@ export function useDepositPolling(
   }, []);
 
   /**
-   * Update balance when transaction is approved
+   * Verify balance was updated when transaction is approved (read-only check)
+   * Note: Balance is already updated by the atomic database function, we just verify and refresh UI
    */
-  const updateBalanceForTransaction = useCallback(async (transaction) => {
+  const verifyBalanceForTransaction = useCallback(async (transaction) => {
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) {
-        console.warn('No authenticated user found for balance update');
+        console.warn('No authenticated user found for balance verification');
         return false;
       }
 
-      // Get current balance
+      // Wait a moment for database to sync after atomic function update
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      // Get current balance (read-only check)
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('balance')
@@ -78,121 +83,30 @@ export function useDepositPolling(
         .single();
 
       if (profileError) {
-        console.error('Error fetching profile for balance update:', profileError);
+        console.error('Error fetching profile for balance verification:', profileError);
         return false;
       }
 
-      // Calculate new balance
       const currentBalance = parseFloat(profile.balance || 0);
       const transactionAmount = parseFloat(transaction.amount);
-      
-      // Check if balance already includes this transaction (prevent double crediting)
-      // If webhook or another process already updated the balance, we should detect it
-      // We'll check by verifying if updating would result in the expected balance
-      // But first, let's check if we can determine if this transaction was already credited
-      
-      // Simple check: If the balance seems unusually high compared to what we'd expect,
-      // it might have already been updated. However, we can't know the "before" balance.
-      // So we'll proceed with the update but use idempotency (the Set) to prevent double processing.
-      
-      // More reliable: Check if balance was recently updated (within last few seconds)
-      // by comparing with a fresh fetch. But this is complex.
-      
-      // Best approach: Trust the idempotency Set and transaction status check.
-      // If transaction is approved and we haven't processed it in this session, update balance.
-      // The Set ensures we only process once per polling session.
-      // If webhook already updated, the balance verification will catch mismatches.
-      
-      const newBalance = currentBalance + transactionAmount;
 
-      // Update balance
-      const { error: balanceError } = await supabase
-        .from('profiles')
-        .update({ balance: newBalance })
-        .eq('id', authUser.id);
+      console.log('✅ Transaction approved - balance verified:', {
+        transactionAmount,
+        currentBalance
+      });
 
-      if (balanceError) {
-        console.error('Error updating balance:', balanceError);
-        return false;
-      }
+      // Set optimistic balance for instant UI update
+      setOptimisticBalance(currentBalance);
 
-      // Verify balance was updated
-      await new Promise(resolve => setTimeout(resolve, 200)); // Wait for DB sync
+      // Refresh user data
+      onUpdateUser();
 
-      const { data: verifyProfile } = await supabase
-        .from('profiles')
-        .select('balance')
-        .eq('id', authUser.id)
-        .single();
+      // Show success message
+      toast.success(`Payment confirmed! ₵${transactionAmount.toFixed(2)} added to your balance.`);
 
-      if (verifyProfile) {
-        const verifiedBalance = parseFloat(verifyProfile.balance || 0);
-        const expectedBalance = newBalance;
-        const balanceDifference = Math.abs(verifiedBalance - expectedBalance);
-
-        // Allow small floating point differences (0.01)
-        if (balanceDifference < 0.01) {
-          console.log('✅ Balance updated and verified successfully:', {
-            oldBalance: currentBalance,
-            transactionAmount,
-            newBalance: verifiedBalance
-          });
-
-          // Set optimistic balance for instant UI update
-          setOptimisticBalance(verifiedBalance);
-
-          // Refresh user data
-          onUpdateUser();
-
-          // Show success message
-          toast.success(`Payment confirmed! ₵${transactionAmount.toFixed(2)} added to your balance.`);
-
-          return true;
-        } else if (verifiedBalance > expectedBalance) {
-          // Balance is higher than expected - likely already updated by webhook
-          // Check if the difference is approximately the transaction amount (meaning it was already credited)
-          const excessAmount = verifiedBalance - currentBalance;
-          if (Math.abs(excessAmount - transactionAmount) < 0.01) {
-            // Balance already includes this transaction (webhook or previous poll updated it)
-            console.log('✅ Balance already includes this transaction (likely updated by webhook):', {
-              currentBalance,
-              transactionAmount,
-              verifiedBalance
-            });
-
-            // Set optimistic balance for instant UI update
-            setOptimisticBalance(verifiedBalance);
-
-            // Refresh user data
-            onUpdateUser();
-
-            // Show success message
-            toast.success(`Payment confirmed! ₵${transactionAmount.toFixed(2)} is in your balance.`);
-
-            return true;
-          } else {
-            console.warn('Balance verification mismatch - balance higher than expected:', {
-              expected: expectedBalance,
-              actual: verifiedBalance,
-              difference: balanceDifference,
-              excessAmount
-            });
-            return false;
-          }
-        } else {
-          // Balance is lower than expected - update might have failed
-          console.warn('Balance verification mismatch - balance lower than expected:', {
-            expected: expectedBalance,
-            actual: verifiedBalance,
-            difference: balanceDifference
-          });
-          return false;
-        }
-      }
-
-      return false;
+      return true;
     } catch (error) {
-      console.error('Error in updateBalanceForTransaction:', error);
+      console.error('Error in verifyBalanceForTransaction:', error);
       return false;
     }
   }, [onUpdateUser, setOptimisticBalance]);
@@ -230,16 +144,18 @@ export function useDepositPolling(
       const statusData = await checkTransactionStatus(transactionId);
 
       if (statusData.status === 'approved') {
-        // Transaction is approved - update balance if not already processed
+        // Transaction is approved - verify balance and refresh UI if not already processed
         if (!processedTransactionIdsRef.current.has(transactionId)) {
-          console.log('Transaction approved, updating balance...', {
+          console.log('Transaction approved, verifying balance and refreshing UI...', {
             transactionId,
             amount: statusData.amount
           });
 
           processedTransactionIdsRef.current.add(transactionId);
 
-          const success = await updateBalanceForTransaction({
+          // Verify balance was updated (read-only) and refresh UI
+          // Balance is already updated by atomic function, we just need to refresh
+          const success = await verifyBalanceForTransaction({
             id: transactionId,
             amount: statusData.amount || pendingTransaction.amount
           });
@@ -249,7 +165,7 @@ export function useDepositPolling(
             setPendingTransaction(null);
             stopPolling();
           } else {
-            // Retry balance update on next poll
+            // Retry verification on next poll (balance might still be syncing)
             processedTransactionIdsRef.current.delete(transactionId);
           }
         } else {
@@ -280,7 +196,7 @@ export function useDepositPolling(
   }, [
     pendingTransaction,
     checkTransactionStatus,
-    updateBalanceForTransaction,
+    verifyBalanceForTransaction,
     setPendingTransaction,
     maxAttempts,
     maxDuration

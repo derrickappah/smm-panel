@@ -494,97 +494,82 @@ export default async function handler(req, res) {
     let balanceUpdated = false;
 
     if (paymentStatus === 'success') {
-      // Payment was successful - approve the transaction
-      const updateData = {
-        status: 'approved',
-        paystack_status: 'success',
-        paystack_reference: paystackReference
-      };
-
-      // Update status (without strict pending condition - like reject does)
-      const { data: updatedData, error: updateError } = await supabase
-        .from('transactions')
-        .update(updateData)
-        .eq('id', transaction.id)
-        .select('status');
-
-      if (updateError) {
-        console.error('[MANUAL-VERIFY] Error updating transaction status:', updateError);
-        return res.status(500).json({ 
-          error: 'Failed to update transaction status',
-          details: updateError.message
-        });
-      }
-
-      // Verify status was updated
-      const { data: statusCheck } = await supabase
-        .from('transactions')
-        .select('status')
-        .eq('id', transaction.id)
-        .single();
-
-      if (statusCheck?.status !== 'approved') {
-        // Try one more time without status condition
-        await supabase
-          .from('transactions')
-          .update(updateData)
-          .eq('id', transaction.id);
-      }
-
-      // Update user balance if transaction wasn't already approved
-      if (transaction.status !== 'approved') {
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('balance')
-          .eq('id', transaction.user_id)
-          .single();
-
-        if (profileError) {
-          console.error('[MANUAL-VERIFY] Error fetching profile:', profileError);
-          return res.status(500).json({ 
-            error: 'Failed to fetch user profile',
-            details: profileError.message
-          });
-        }
-
-        const currentBalance = parseFloat(profile.balance || 0);
-        const newBalance = currentBalance + parseFloat(transaction.amount);
-
-        const { error: balanceError } = await supabase
-          .from('profiles')
-          .update({ balance: newBalance })
-          .eq('id', transaction.user_id);
-
-        if (balanceError) {
-          console.error('[MANUAL-VERIFY] Error updating balance:', balanceError);
-          return res.status(500).json({ 
-            error: 'Failed to update user balance',
-            details: balanceError.message,
-            note: 'Transaction status was updated but balance update failed'
-          });
-        }
-
-        // Verify balance was updated
-        const { data: verifyProfile } = await supabase
-          .from('profiles')
-          .select('balance')
-          .eq('id', transaction.user_id)
-          .single();
-
-        if (verifyProfile && parseFloat(verifyProfile.balance) === newBalance) {
-          balanceUpdated = true;
-        }
+      // Payment was successful - use atomic function to approve transaction and update balance
+      // This prevents race conditions and ensures balance is only updated once
+      
+      // Check if transaction is already approved
+      if (transaction.status === 'approved') {
+        // Already approved, balance should already be updated
+        console.log('[MANUAL-VERIFY] Transaction already approved, skipping update');
+        balanceUpdated = true;
+        updateResult = {
+          success: true,
+          message: 'Transaction already approved',
+          oldStatus: transaction.status,
+          newStatus: 'approved',
+          balanceUpdated: true
+        };
       } else {
-        balanceUpdated = true; // Already approved, balance should already be updated
-      }
+        // Use atomic function to approve transaction and update balance atomically
+        console.log('[MANUAL-VERIFY] Using atomic function to approve transaction and update balance');
+        
+        const { data: approvalResult, error: rpcError } = await supabase.rpc('approve_deposit_transaction', {
+          p_transaction_id: transaction.id,
+          p_paystack_status: 'success',
+          p_paystack_reference: paystackReference
+        });
 
-      updateResult = {
-        success: true,
-        message: 'Deposit approved and balance updated',
-        oldStatus: transaction.status,
-        newStatus: 'approved',
-        balanceUpdated
-      };
+        if (rpcError) {
+          console.error('[MANUAL-VERIFY] Atomic function error:', rpcError);
+          return res.status(500).json({ 
+            error: 'Failed to approve transaction',
+            details: rpcError.message || rpcError.code,
+            transactionId: transaction.id
+          });
+        }
+
+        // The function returns an array with one row
+        const result = approvalResult && approvalResult.length > 0 ? approvalResult[0] : null;
+
+        if (!result) {
+          return res.status(500).json({ 
+            error: 'Atomic function returned no result',
+            transactionId: transaction.id
+          });
+        }
+
+        if (!result.success) {
+          // Check if transaction was already approved (idempotent)
+          if (result.message && result.message.includes('already approved')) {
+            console.log('[MANUAL-VERIFY] Transaction already approved via atomic function');
+            balanceUpdated = true;
+            updateResult = {
+              success: true,
+              message: 'Transaction already approved',
+              oldStatus: transaction.status,
+              newStatus: 'approved',
+              balanceUpdated: true
+            };
+          } else {
+            return res.status(400).json({ 
+              error: result.message || 'Transaction approval failed',
+              transactionId: transaction.id
+            });
+          }
+        } else {
+          // Success - balance was updated atomically
+          balanceUpdated = true;
+          updateResult = {
+            success: true,
+            message: result.message || 'Deposit approved and balance updated',
+            oldStatus: result.old_status,
+            newStatus: result.new_status,
+            oldBalance: result.old_balance,
+            newBalance: result.new_balance,
+            balanceUpdated: true
+          };
+        }
+      }
     } else if (paymentStatus === 'failed' || paymentStatus === 'abandoned') {
       // Payment failed - reject the transaction
       const { error: updateError } = await supabase
