@@ -2,6 +2,10 @@
 -- Only apply to non-null values (multiple nulls are allowed)
 -- This prevents the same Paystack payment from creating multiple transaction records
 
+-- First, ensure the paystack_reference column exists (in case ADD_PAYSTACK_REFERENCE.sql wasn't run)
+ALTER TABLE transactions 
+ADD COLUMN IF NOT EXISTS paystack_reference TEXT;
+
 -- Drop existing index if it exists (in case we need to recreate it)
 DROP INDEX IF EXISTS unique_paystack_reference;
 
