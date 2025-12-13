@@ -18,34 +18,32 @@ SELECT
   SUM(count) as total_duplicate_transactions
 FROM duplicate_refs;
 
--- Step 2: For each duplicate, identify which to keep (oldest approved, or oldest if none approved)
-WITH duplicate_refs AS (
-  SELECT paystack_reference, COUNT(*) as count
+-- Step 2: Create a temporary view to identify duplicates
+-- This helps avoid parsing issues with window functions in UPDATE statements
+CREATE OR REPLACE VIEW duplicate_transactions_to_clean AS
+SELECT 
+  id,
+  paystack_reference,
+  status,
+  created_at,
+  ROW_NUMBER() OVER (
+    PARTITION BY paystack_reference 
+    ORDER BY 
+      CASE WHEN status = 'approved' THEN 0 ELSE 1 END,
+      created_at ASC
+  ) as rn
+FROM transactions
+WHERE paystack_reference IN (
+  SELECT paystack_reference
   FROM transactions
   WHERE paystack_reference IS NOT NULL
     AND type = 'deposit'
   GROUP BY paystack_reference
   HAVING COUNT(*) > 1
-),
-duplicate_groups AS (
-  SELECT 
-    t.id,
-    t.paystack_reference,
-    t.user_id,
-    t.amount,
-    t.status,
-    t.created_at,
-    -- Prioritize approved transactions, then oldest
-    ROW_NUMBER() OVER (
-      PARTITION BY t.paystack_reference 
-      ORDER BY 
-        CASE WHEN t.status = 'approved' THEN 0 ELSE 1 END,
-        t.created_at ASC
-    ) as rn
-  FROM transactions t
-  INNER JOIN duplicate_refs dr ON t.paystack_reference = dr.paystack_reference
-  WHERE t.type = 'deposit' AND t.paystack_reference IS NOT NULL
 )
+  AND type = 'deposit'
+  AND paystack_reference IS NOT NULL;
+
 -- Step 3: Mark duplicates as rejected (keep rn=1, mark others)
 UPDATE transactions
 SET 
@@ -53,10 +51,15 @@ SET
   paystack_status = 'duplicate',
   paystack_reference = NULL -- Remove reference to allow unique constraint
 WHERE id IN (
-  SELECT id FROM duplicate_groups WHERE rn > 1
+  SELECT id 
+  FROM duplicate_transactions_to_clean 
+  WHERE rn > 1
 );
 
--- Step 4: Log cleanup results
+-- Step 4: Drop the temporary view
+DROP VIEW IF EXISTS duplicate_transactions_to_clean;
+
+-- Step 5: Log cleanup results
 WITH duplicate_refs AS (
   SELECT paystack_reference, COUNT(*) as count
   FROM transactions
@@ -70,7 +73,7 @@ SELECT
   COUNT(*) as remaining_duplicate_groups
 FROM duplicate_refs;
 
--- Step 5: Show summary of cleaned up transactions
+-- Step 6: Show summary of cleaned up transactions
 SELECT 
   'Summary of cleaned transactions:' as info,
   COUNT(*) as total_cleaned,
