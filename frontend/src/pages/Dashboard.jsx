@@ -583,7 +583,70 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         
         console.error('Recent deposit transactions:', recentTxs);
         
-        throw new Error('No pending transaction found for this payment');
+        // FALLBACK: Verify payment with Paystack and create transaction if payment is successful
+        console.log('Attempting fallback: Verifying payment with Paystack API and creating transaction if needed...');
+        try {
+          const verifyResponse = await fetch('/api/verify-paystack-payment', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ reference })
+          });
+
+          if (!verifyResponse.ok) {
+            const errorData = await verifyResponse.json().catch(() => ({ error: 'Unknown error' }));
+            throw new Error(`Payment verification failed: ${errorData.error || 'Unknown error'}. Reference: ${reference || 'N/A'}. Please contact support with this reference.`);
+          }
+
+          const verifyData = await verifyResponse.json();
+          
+          // Only create transaction if payment was actually successful
+          if (!verifyData.success || verifyData.status !== 'success') {
+            throw new Error(`Payment was not successful. Status: ${verifyData.status || 'unknown'}. Reference: ${reference || 'N/A'}. Please contact support.`);
+          }
+
+          // Extract amount and metadata from Paystack response
+          const amount = verifyData.amount;
+          const metadata = verifyData.metadata || {};
+          const transactionIdFromMetadata = metadata.transaction_id;
+
+          if (!amount || amount <= 0) {
+            throw new Error(`Invalid payment amount: ${amount}. Reference: ${reference || 'N/A'}. Please contact support.`);
+          }
+
+          console.log('Payment verified successfully, creating transaction record:', {
+            amount,
+            reference,
+            transactionIdFromMetadata
+          });
+
+          // Create transaction record with the reference
+          const { data: newTransaction, error: createError } = await supabase
+            .from('transactions')
+            .insert({
+              user_id: authUser.id,
+              amount: amount,
+              type: 'deposit',
+              status: 'pending', // Will be approved by the API call below
+              deposit_method: 'paystack',
+              paystack_reference: reference
+            })
+            .select()
+            .single();
+
+          if (createError || !newTransaction) {
+            console.error('Error creating transaction record:', createError);
+            throw new Error(`Failed to create transaction record: ${createError?.message || 'Unknown error'}. Reference: ${reference || 'N/A'}. Please contact support with this reference.`);
+          }
+
+          console.log('Transaction record created successfully:', newTransaction.id);
+          transactionToUpdate = newTransaction;
+        } catch (fallbackError) {
+          console.error('Fallback transaction creation failed:', fallbackError);
+          // If fallback fails, throw the original error with more details
+          throw new Error(`No pending transaction found for this payment. Reference: ${reference || 'N/A'}, Transaction ID: ${pendingTransaction?.id || 'N/A'}. ${fallbackError.message || ''} Please contact support with this information.`);
+        }
       }
       
       // Store reference if not already stored
@@ -612,9 +675,9 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         return;
       }
 
-      // Update transaction status to approved AND store paystack_reference
-      // Since payment was successful, we must mark transaction as approved and store reference
-      console.log('Updating transaction status to approved and storing reference:', { 
+      // Use atomic database function to approve transaction and update balance
+      // This prevents race conditions and ensures consistency
+      console.log('Approving transaction using atomic database function:', { 
         transactionId: transactionToUpdate.id, 
         reference 
       });
@@ -640,124 +703,63 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         // Continue with success assumption since callback was triggered
       }
       
-      // Prepare update object with both status and reference
-      // CRITICAL: Always include reference if we have it, even if it was stored before
-      // This ensures the reference is never lost
-      const updateData = {
-        status: 'approved',
-        paystack_status: paystackStatus // Store Paystack status
-      };
-      
-      // ALWAYS include reference if we have it (don't check if it exists)
-      // This ensures it's always stored, even if previous attempts failed
-      if (reference) {
-        updateData.paystack_reference = reference;
-        console.log('Including reference in update data:', reference);
-      } else {
-        console.warn('No reference provided to store in transaction');
-      }
-      
-      // First attempt: Update without status condition (force update)
-      let transactionUpdated = false;
-      const { data: updatedTransactions, error: transactionError } = await supabase
-        .from('transactions')
-        .update(updateData)
-        .eq('id', transactionToUpdate.id)
-        .select();
+      // Call the atomic approval API endpoint
+      // This uses the approve_deposit_transaction database function which:
+      // 1. Atomically updates transaction status to 'approved'
+      // 2. Stores the paystack_reference
+      // 3. Updates user balance atomically (prevents race conditions)
+      const approveResponse = await fetch('/api/approve-paystack-deposit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          transaction_id: transactionToUpdate.id,
+          reference: reference,
+          paystack_status: paystackStatus
+        })
+      });
 
-      if (transactionError) {
-        console.error('Error updating transaction status and reference (attempt 1):', transactionError);
-      } else if (updatedTransactions && updatedTransactions.length > 0) {
-        transactionUpdated = true;
-        console.log('Transaction updated successfully:', {
-          id: updatedTransactions[0].id,
-          status: updatedTransactions[0].status,
-          reference: updatedTransactions[0].paystack_reference
-        });
+      if (!approveResponse.ok) {
+        const errorData = await approveResponse.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('Error approving transaction via API:', errorData);
+        throw new Error(`Failed to approve transaction: ${errorData.error || errorData.message || 'Unknown error'}. Transaction ID: ${transactionToUpdate.id}, Reference: ${reference || 'N/A'}`);
       }
 
-      // If first attempt didn't work, try again (might be a race condition)
-      if (!transactionUpdated) {
-        console.log('Retrying transaction update (attempt 2)...');
-        const { data: retryUpdated, error: retryError } = await supabase
-          .from('transactions')
-          .update(updateData)
-          .eq('id', transactionToUpdate.id)
-          .select();
+      const approveResult = await approveResponse.json();
+      
+      if (!approveResult.success) {
+        // Check if transaction was already approved (idempotent)
+        if (approveResult.message && approveResult.message.includes('already approved')) {
+          console.log('Transaction already approved, verifying balance...');
+          // Transaction is already approved, just verify balance and show success
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('balance')
+            .eq('id', authUser.id)
+            .single();
+          
+          toast.success(`Payment already processed! ₵${transactionToUpdate.amount.toFixed(2)} is in your balance.`);
+          setDepositAmount('');
+          setPendingTransaction(null);
+          await onUpdateUser();
+          return;
+        }
         
-        if (retryError) {
-          console.error('Error updating transaction (attempt 2):', retryError);
-        } else if (retryUpdated && retryUpdated.length > 0) {
-          transactionUpdated = true;
-          console.log('Transaction updated successfully (retry):', {
-            id: retryUpdated[0].id,
-            status: retryUpdated[0].status,
-            reference: retryUpdated[0].paystack_reference
-          });
-        }
+        // Other error
+        throw new Error(`Transaction approval failed: ${approveResult.message || 'Unknown error'}. Transaction ID: ${transactionToUpdate.id}, Reference: ${reference || 'N/A'}`);
       }
 
-      // Final verification - check current status and reference
-      // CRITICAL: Always verify and update reference if missing
-      const { data: finalStatusCheck } = await supabase
-        .from('transactions')
-        .select('status, paystack_reference')
-        .eq('id', transactionToUpdate.id)
-        .maybeSingle();
+      console.log('Transaction approved successfully via atomic function:', {
+        transactionId: transactionToUpdate.id,
+        oldStatus: approveResult.old_status,
+        newStatus: approveResult.new_status,
+        oldBalance: approveResult.old_balance,
+        newBalance: approveResult.new_balance,
+        reference: reference
+      });
 
-      if (finalStatusCheck?.status === 'approved') {
-        console.log('Transaction status confirmed as approved');
-        // ALWAYS ensure reference is stored - even if it was stored before
-        if (reference) {
-          if (!finalStatusCheck.paystack_reference) {
-            console.log('Reference missing, storing it now...');
-            const { error: refUpdateError } = await supabase
-              .from('transactions')
-              .update({ paystack_reference: reference })
-              .eq('id', transactionToUpdate.id);
-            
-            if (refUpdateError) {
-              console.error('Failed to store reference in final check:', refUpdateError);
-              // Try one more time
-              await supabase
-                .from('transactions')
-                .update({ paystack_reference: reference })
-                .eq('id', transactionToUpdate.id);
-            } else {
-              console.log('✅ Reference stored in final check');
-            }
-          } else if (finalStatusCheck.paystack_reference !== reference) {
-            // Reference exists but is different - update it
-            console.log('Reference mismatch, updating...', {
-              current: finalStatusCheck.paystack_reference,
-              expected: reference
-            });
-            await supabase
-              .from('transactions')
-              .update({ paystack_reference: reference })
-              .eq('id', transactionToUpdate.id);
-          } else {
-            console.log('✅ Reference confirmed:', finalStatusCheck.paystack_reference);
-          }
-        }
-      } else {
-        console.warn('Transaction status may not be approved yet:', finalStatusCheck?.status);
-        // Try one more time with a direct update (include reference)
-        // Make sure updateData includes reference
-        const finalUpdateData = {
-          status: 'approved'
-        };
-        if (reference) {
-          finalUpdateData.paystack_reference = reference;
-        }
-        await supabase
-          .from('transactions')
-          .update(finalUpdateData)
-          .eq('id', transactionToUpdate.id);
-      }
-
-      // Get current balance and update it (use atomic update to prevent race conditions)
-      // This is the critical part - we must update balance since payment was successful
+      // Get updated balance for UI
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('balance')
@@ -765,78 +767,53 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         .single();
 
       if (profileError) {
-        console.error('Error fetching profile:', profileError);
-        // Try to get balance with maybeSingle as fallback
-        const { data: profileFallback } = await supabase
-          .from('profiles')
-          .select('balance')
-          .eq('id', authUser.id)
-          .maybeSingle();
-        
-        if (!profileFallback) {
-          throw new Error(`Failed to fetch profile: ${profileError.message}`);
-        }
-        
-        // Use fallback profile
-        const transactionAmount = transactionToUpdate.amount;
-        const currentBalance = profileFallback.balance || 0;
-        const newBalance = currentBalance + transactionAmount;
-        
-        const { error: balanceError } = await supabase
-          .from('profiles')
-          .update({ balance: newBalance })
-          .eq('id', authUser.id);
-
-        if (balanceError) {
-          console.error('Error updating balance:', balanceError);
-          throw new Error(`Failed to update balance: ${balanceError.message}`);
-        }
-
-        console.log('Balance updated successfully (fallback):', { 
-          oldBalance: currentBalance, 
-          transactionAmount, 
-          newBalance 
-        });
-
-        // INSTANT UI UPDATE: Set optimistic balance and refresh user data immediately
+        console.warn('Error fetching profile after approval (non-critical):', profileError);
+        // Use balance from approval result if available
+        const newBalance = approveResult.new_balance || (approveResult.old_balance + transactionToUpdate.amount);
         setOptimisticBalance(newBalance);
-        onUpdateUser(); // Don't await - let it run in background
-        
-        // Show success toast immediately
-        toast.success(`Payment successful! ₵${transactionAmount.toFixed(2)} added to your balance.`);
-        setDepositAmount('');
-        setPendingTransaction(null);
+      } else {
+        const newBalance = parseFloat(profile.balance || 0);
+        setOptimisticBalance(newBalance);
+      }
 
-        // Run verification in background (non-blocking)
-        (async () => {
-          console.log('Verifying balance was updated (fallback path, background)...');
-          let balanceVerified = false;
-          for (let verifyAttempt = 1; verifyAttempt <= 3; verifyAttempt++) {
-            // Wait a moment for database to sync
-            await new Promise(resolve => setTimeout(resolve, 200));
-            
-            const { data: verifyProfile, error: verifyError } = await supabase
-              .from('profiles')
-              .select('balance')
-              .eq('id', authUser.id)
-              .maybeSingle();
+      // INSTANT UI UPDATE: Refresh user data immediately
+      onUpdateUser(); // Don't await - let it run in background
+      
+      // Show success toast immediately
+      toast.success(`Payment successful! ₵${transactionToUpdate.amount.toFixed(2)} added to your balance.`);
+      setDepositAmount('');
+      setPendingTransaction(null);
 
-            if (verifyError || !verifyProfile) {
-              console.warn(`Balance verification attempt ${verifyAttempt} failed (fallback, background):`, verifyError);
-              continue;
-            }
+      // Run verification in background (non-blocking)
+      (async () => {
+        console.log('Verifying balance was updated (background)...');
+        let balanceVerified = false;
+        for (let verifyAttempt = 1; verifyAttempt <= 3; verifyAttempt++) {
+          // Wait a moment for database to sync
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
+          const { data: verifyProfile, error: verifyError } = await supabase
+            .from('profiles')
+            .select('balance')
+            .eq('id', authUser.id)
+            .maybeSingle();
 
-            const verifiedBalance = parseFloat(verifyProfile.balance || 0);
-            const expectedBalance = newBalance;
-            
-            // Allow small floating point differences (0.01)
-            if (Math.abs(verifiedBalance - expectedBalance) < 0.01) {
-              balanceVerified = true;
-              console.log(`✅ Balance verified successfully (fallback, background, attempt ${verifyAttempt}):`, {
-                expected: expectedBalance,
-                actual: verifiedBalance
-              });
-              break;
+          if (verifyError || !verifyProfile) {
+            console.warn(`Balance verification attempt ${verifyAttempt} failed (background):`, verifyError);
+            continue;
+          }
+
+          const verifiedBalance = parseFloat(verifyProfile.balance || 0);
+          const expectedBalance = approveResult.new_balance || (approveResult.old_balance + transactionToUpdate.amount);
+          
+          // Allow small floating point differences (0.01)
+          if (Math.abs(verifiedBalance - expectedBalance) < 0.01) {
+            balanceVerified = true;
+            console.log(`✅ Balance verified successfully (background, attempt ${verifyAttempt}):`, {
+              expected: expectedBalance,
+              actual: verifiedBalance
+            });
+            break;
             } else {
               console.warn(`Balance verification attempt ${verifyAttempt} - mismatch (fallback, background):`, {
                 expected: expectedBalance,
@@ -870,299 +847,6 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             toast.warning('Balance verification failed. Please refresh the page to confirm your balance.');
           }
         })();
-        
-        return;
-      }
-
-      // Calculate new balance
-      const transactionAmount = transactionToUpdate.amount;
-      const currentBalance = profile.balance || 0;
-      const newBalance = currentBalance + transactionAmount;
-      
-      // Double-check transaction status before updating balance (prevent double crediting)
-      const { data: preBalanceStatusCheck } = await supabase
-        .from('transactions')
-        .select('status')
-        .eq('id', transactionToUpdate.id)
-        .maybeSingle();
-      
-      if (preBalanceStatusCheck?.status === 'approved') {
-        // Transaction is already approved - verify balance was updated
-        // If balance seems correct (accounting for this transaction), don't update again
-        console.log('Transaction already approved, verifying balance was updated');
-        // We'll still update balance to be safe, but log it
-      }
-      
-      // Update balance atomically
-      const { error: balanceError } = await supabase
-        .from('profiles')
-        .update({ balance: newBalance })
-        .eq('id', authUser.id);
-
-      if (balanceError) {
-        console.error('Error updating balance:', balanceError);
-        // Try one more time with a retry
-        console.log('Retrying balance update...');
-        const { data: retryProfile } = await supabase
-          .from('profiles')
-          .select('balance')
-          .eq('id', authUser.id)
-          .single();
-        
-        if (retryProfile) {
-          const retryBalance = (retryProfile.balance || 0) + transactionAmount;
-          const { error: retryBalanceError } = await supabase
-            .from('profiles')
-            .update({ balance: retryBalance })
-            .eq('id', authUser.id);
-          
-          if (retryBalanceError) {
-            throw new Error(`Failed to update balance after retry: ${retryBalanceError.message}`);
-          }
-          
-          console.log('Balance updated successfully (retry):', { 
-            oldBalance: retryProfile.balance, 
-            transactionAmount, 
-            newBalance: retryBalance 
-          });
-
-          // INSTANT UI UPDATE: Set optimistic balance and refresh user data immediately
-          setOptimisticBalance(retryBalance);
-          onUpdateUser(); // Don't await - let it run in background
-          
-          // Show success toast immediately
-          toast.success(`Payment successful! ₵${transactionAmount.toFixed(2)} added to your balance.`);
-          setDepositAmount('');
-          setPendingTransaction(null);
-
-          // Run verification in background (non-blocking)
-          (async () => {
-            console.log('Verifying balance was updated (retry path, background)...');
-            await new Promise(resolve => setTimeout(resolve, 200));
-            
-            const { data: verifyProfile, error: verifyError } = await supabase
-              .from('profiles')
-              .select('balance')
-              .eq('id', authUser.id)
-              .single();
-
-            if (!verifyError && verifyProfile) {
-              const verifiedBalance = parseFloat(verifyProfile.balance || 0);
-              const expectedBalance = retryBalance;
-              
-              if (Math.abs(verifiedBalance - expectedBalance) >= 0.01) {
-                console.error('⚠️ WARNING: Balance verification failed after retry (background check)!', {
-                  expected: expectedBalance,
-                  actual: verifiedBalance,
-                  difference: Math.abs(verifiedBalance - expectedBalance)
-                });
-              } else {
-                console.log('✅ Balance verified successfully (retry path, background):', {
-                  expected: expectedBalance,
-                  actual: verifiedBalance
-                });
-              }
-            }
-          })();
-          
-          // Skip to end - verification runs in background
-          return;
-        } else {
-          throw new Error(`Failed to update balance: ${balanceError.message}`);
-        }
-      } else {
-        console.log('Balance updated successfully:', { 
-          oldBalance: currentBalance, 
-          transactionAmount, 
-          newBalance 
-        });
-      }
-
-      // INSTANT UI UPDATE: Set optimistic balance and refresh user data immediately
-      setOptimisticBalance(newBalance);
-      onUpdateUser(); // Don't await - let it run in background
-      
-      // Show success toast immediately
-      toast.success(`Payment successful! ₵${transactionAmount.toFixed(2)} added to your balance.`);
-      setDepositAmount('');
-      setPendingTransaction(null);
-
-      // Run verification in background (non-blocking)
-      (async () => {
-        console.log('Verifying balance was updated (background)...');
-        let balanceVerified = false;
-        for (let verifyAttempt = 1; verifyAttempt <= 3; verifyAttempt++) {
-          // Wait a moment for database to sync
-          await new Promise(resolve => setTimeout(resolve, 200));
-          
-          const { data: verifyProfile, error: verifyError } = await supabase
-            .from('profiles')
-            .select('balance')
-            .eq('id', authUser.id)
-            .single();
-
-          if (verifyError) {
-            console.warn(`Balance verification attempt ${verifyAttempt} failed (background):`, verifyError);
-            continue;
-          }
-
-          const verifiedBalance = parseFloat(verifyProfile.balance || 0);
-          const expectedBalance = newBalance;
-          
-          // Allow small floating point differences (0.01)
-          if (Math.abs(verifiedBalance - expectedBalance) < 0.01) {
-            balanceVerified = true;
-            console.log(`✅ Balance verified successfully (background, attempt ${verifyAttempt}):`, {
-              expected: expectedBalance,
-              actual: verifiedBalance,
-              difference: Math.abs(verifiedBalance - expectedBalance)
-            });
-            break;
-          } else {
-            console.warn(`Balance verification attempt ${verifyAttempt} - mismatch (background):`, {
-              expected: expectedBalance,
-              actual: verifiedBalance,
-              difference: Math.abs(verifiedBalance - expectedBalance)
-            });
-            
-            // If balance doesn't match, try updating again
-            if (verifyAttempt < 3) {
-              console.log(`Retrying balance update (verification attempt ${verifyAttempt}, background)...`);
-              const retryNewBalance = verifiedBalance + transactionAmount;
-              const { error: retryError } = await supabase
-                .from('profiles')
-                .update({ balance: retryNewBalance })
-                .eq('id', authUser.id);
-              
-              if (!retryError) {
-                console.log('Balance update retry successful (background), will verify again...');
-                // Will verify again in next iteration
-              } else {
-                console.error('Balance update retry failed (background):', retryError);
-              }
-            }
-          }
-        }
-
-        if (!balanceVerified) {
-          console.error('⚠️ WARNING: Balance verification failed after multiple attempts (background)!', {
-            transactionId: transactionToUpdate.id,
-            transactionAmount,
-            expectedBalance: newBalance
-          });
-          // Show non-intrusive notification if verification fails
-          toast.warning('Balance verification failed. Please refresh the page to confirm your balance.');
-        }
-      })();
-
-      // Final verification: ensure transaction is marked as approved AND reference is stored (run in background)
-      // Try multiple times to ensure status and reference are updated
-      (async () => {
-        let finalStatusUpdated = false;
-        let finalReferenceStored = false;
-        
-        for (let attempt = 1; attempt <= 3; attempt++) {
-          try {
-            const { data: finalTransaction } = await supabase
-              .from('transactions')
-              .select('status, paystack_reference')
-              .eq('id', transactionToUpdate.id)
-              .maybeSingle();
-            
-            const isApproved = finalTransaction?.status === 'approved';
-            const hasReference = !!finalTransaction?.paystack_reference;
-            
-            if (isApproved && (hasReference || !reference)) {
-              // Status is approved and either reference is stored or we don't have a reference to store
-              finalStatusUpdated = true;
-              if (hasReference) {
-                finalReferenceStored = true;
-              }
-              console.log(`Transaction verified (final check attempt ${attempt}, background):`, {
-                status: finalTransaction.status,
-                hasReference: hasReference,
-                reference: finalTransaction.paystack_reference
-              });
-              break;
-            } else {
-              // Need to update status and/or reference
-              // ALWAYS include reference if we have it (even if it already exists)
-              const updateData = { status: 'approved' };
-              if (reference) {
-                updateData.paystack_reference = reference; // Always include reference
-              }
-              
-              console.log(`Final transaction check (attempt ${attempt}, background) - updating:`, {
-                currentStatus: finalTransaction?.status,
-                currentReference: finalTransaction?.paystack_reference,
-                hasReference: hasReference,
-                willUpdateReference: !!reference,
-                reference: reference
-              });
-              
-              const { data: updateResult, error: updateError } = await supabase
-                .from('transactions')
-                .update(updateData)
-                .eq('id', transactionToUpdate.id)
-                .select();
-              
-              if (!updateError && updateResult && updateResult.length > 0) {
-                finalStatusUpdated = updateResult[0].status === 'approved';
-                finalReferenceStored = !!updateResult[0].paystack_reference;
-                console.log(`Transaction updated (final check attempt ${attempt}, background):`, {
-                  status: updateResult[0].status,
-                  reference: updateResult[0].paystack_reference
-                });
-                if (finalStatusUpdated && (finalReferenceStored || !reference)) break;
-              } else if (updateError) {
-                console.warn(`Failed to update transaction (final check attempt ${attempt}, background):`, updateError);
-              }
-            }
-          } catch (finalUpdateError) {
-            console.warn(`Error in final transaction check (attempt ${attempt}, background):`, finalUpdateError);
-          }
-          
-          // Wait a bit before retrying (only if not last attempt)
-          if (attempt < 3 && !finalStatusUpdated) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-          }
-        }
-        
-        if (!finalStatusUpdated) {
-          console.error('WARNING: Could not confirm transaction status as approved after multiple attempts (background). Transaction ID:', transactionToUpdate.id);
-          // Log this for admin review, but don't fail the payment process
-        }
-        
-        if (reference && !finalReferenceStored) {
-          console.warn('WARNING: Could not confirm paystack_reference was stored (background). Transaction ID:', transactionToUpdate.id, 'Reference:', reference);
-          // Try multiple times to store the reference
-          for (let refAttempt = 1; refAttempt <= 3; refAttempt++) {
-            const { data: refCheck, error: refError } = await supabase
-              .from('transactions')
-              .update({ paystack_reference: reference })
-              .eq('id', transactionToUpdate.id)
-              .select('paystack_reference')
-              .single();
-            
-            if (!refError && refCheck?.paystack_reference === reference) {
-              console.log(`✅ Reference stored successfully (final attempt ${refAttempt}, background)`);
-              finalReferenceStored = true;
-              break;
-            } else if (refError) {
-              console.error(`Failed to store reference (final attempt ${refAttempt}, background):`, refError);
-            }
-            
-            // Wait before retry
-            if (refAttempt < 3) {
-              await new Promise(resolve => setTimeout(resolve, 100));
-            }
-          }
-          
-          if (!finalReferenceStored) {
-            console.error('CRITICAL: Failed to store paystack_reference after all attempts (background). Transaction ID:', transactionToUpdate.id);
-          }
-        }
-      })();
     } catch (error) {
       console.error('Error processing payment:', error);
       console.error('Error details:', {
@@ -1171,11 +855,19 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         details: error.details,
         hint: error.hint,
         reference,
-        pendingTransactionId: pendingTransaction?.id
+        pendingTransactionId: pendingTransaction?.id,
+        userId: authUser?.id
       });
       
-      const transactionId = pendingTransaction?.id?.slice(0, 8) || 'unknown';
-      toast.error(`Payment successful but failed to update: ${error.message || 'Unknown error'}. Transaction ID: ${transactionId}. Please contact support with this ID.`);
+      // Extract transaction ID and reference for error message
+      const transactionId = pendingTransaction?.id || 'N/A';
+      const transactionIdShort = transactionId !== 'N/A' ? transactionId.slice(0, 8) : 'N/A';
+      const referenceDisplay = reference || 'N/A';
+      
+      // Create detailed error message
+      const errorMessage = `Payment successful but failed to update: ${error.message || 'Unknown error'}. Transaction ID: ${transactionIdShort}, Reference: ${referenceDisplay}. Please contact support with this information.`;
+      
+      toast.error(errorMessage);
       
       // Don't try to update transaction status here - let admin handle it manually
       // Just clear the pending transaction state
@@ -1439,31 +1131,21 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               transaction_id: pendingTransaction.id,
               user_id: authUser.id
             },
-            callback: (response) => {
-              // Paystack callback must be synchronous, handle async operation inside
+            callback: async (response) => {
+              // Paystack callback - handle async operations properly
               console.log('Paystack callback triggered:', response);
-              
-              // CRITICAL: Store reference for ALL payment states (success, failed, abandoned)
-              // This ensures every Paystack deposit has a reference regardless of outcome
-              if (pendingTransaction?.id && response?.reference) {
-                console.log('[CALLBACK] Storing Paystack reference for all payment states:', response.reference);
-                storePaystackReference(pendingTransaction.id, response.reference).catch((refError) => {
-                  console.error('[CALLBACK] Error storing reference in callback:', refError);
-                  // Continue processing even if reference storage fails - we'll retry later
-                });
-              } else {
-                console.warn('[CALLBACK] Cannot store reference - missing transaction ID or reference:', {
-                  hasTransactionId: !!pendingTransaction?.id,
-                  hasReference: !!response?.reference,
-                  response: response
-                });
-              }
               
               // Check if response indicates failure
               if (!response || response.status === 'error' || response.status === 'failed') {
                 console.error('[CALLBACK] Payment failed:', response);
                 toast.error('Payment failed. Please try again.');
-                // Reference already stored above, now handle cancellation
+                // Try to store reference even for failed payments for tracking
+                if (pendingTransaction?.id && response?.reference) {
+                  storePaystackReference(pendingTransaction.id, response.reference).catch((refError) => {
+                    console.error('[CALLBACK] Error storing reference for failed payment:', refError);
+                  });
+                }
+                // Handle cancellation
                 handlePaymentCancellation().catch((error) => {
                   console.error('Error handling payment failure:', error);
                 });
@@ -1483,10 +1165,33 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               console.log('[CALLBACK] Paystack reference:', response.reference);
               console.log('[CALLBACK] Pending transaction:', pendingTransaction);
 
-              // Call the async handler (this will also ensure reference is stored)
+              // CRITICAL: Store reference BEFORE processing payment success
+              // This ensures the reference is in the database before handlePaymentSuccess tries to find the transaction
+              if (pendingTransaction?.id && response.reference) {
+                console.log('[CALLBACK] Storing Paystack reference before processing success:', response.reference);
+                try {
+                  const refStored = await storePaystackReference(pendingTransaction.id, response.reference);
+                  if (refStored) {
+                    console.log('[CALLBACK] Reference stored successfully, proceeding with payment success handler');
+                  } else {
+                    console.warn('[CALLBACK] Reference storage returned false, but continuing anyway');
+                  }
+                } catch (refError) {
+                  console.error('[CALLBACK] Error storing reference in callback:', refError);
+                  // Continue anyway - handlePaymentSuccess will try to store it again
+                }
+              } else {
+                console.warn('[CALLBACK] Cannot store reference - missing transaction ID or reference:', {
+                  hasTransactionId: !!pendingTransaction?.id,
+                  hasReference: !!response?.reference,
+                  response: response
+                });
+              }
+
+              // Now call the async handler (reference should be stored by now)
               handlePaymentSuccess(response.reference).catch((error) => {
                 console.error('Payment success handler error:', error);
-                toast.error(`Payment processed but failed to update: ${error.message || 'Unknown error'}. Please contact support.`);
+                toast.error(`Payment processed but failed to update: ${error.message || 'Unknown error'}. Transaction ID: ${pendingTransaction?.id || 'N/A'}, Reference: ${response.reference || 'N/A'}. Please contact support.`);
               });
             },
             onClose: () => {
