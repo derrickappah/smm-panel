@@ -1,5 +1,5 @@
 import React, { memo, useState, useMemo, useCallback, useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAdminDeposits, useApproveDeposit, useRejectDeposit } from '@/hooks/useAdminDeposits';
 import { useDebounce } from '@/hooks/useDebounce';
 import VirtualizedList from '@/components/VirtualizedList';
@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Search, RefreshCw, Filter, CheckCircle, XCircle, AlertCircle, Image as ImageIcon } from 'lucide-react';
+import { Search, RefreshCw, Filter, CheckCircle, XCircle, AlertCircle, Image as ImageIcon, Info } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
@@ -25,9 +25,46 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
   const [verifyingDeposit, setVerifyingDeposit] = useState(null);
   const [manualRefDialog, setManualRefDialog] = useState({ open: false, deposit: null, error: null });
   const [manualReference, setManualReference] = useState('');
-  const [paymentProofDialog, setPaymentProofDialog] = useState({ open: false, imageUrl: null });
+  const [paymentProofDialog, setPaymentProofDialog] = useState({ open: false, imageUrl: null, deposit: null });
 
   const debouncedSearch = useDebounce(searchTerm, 300);
+
+  // Fetch manual deposit details from settings
+  const { data: manualDepositDetails } = useQuery({
+    queryKey: ['admin', 'manual-deposit-details'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('app_settings')
+        .select('key, value')
+        .in('key', [
+          'manual_deposit_phone_number',
+          'manual_deposit_account_name',
+          'manual_deposit_instructions'
+        ]);
+
+      if (error) throw error;
+
+      const details = {
+        phone_number: '0559272762',
+        account_name: 'MTN - APPIAH MANASSEH ATTAH',
+        instructions: 'Make PAYMENT to 0559272762\nMTN - APPIAH MANASSEH ATTAH\nuse your USERNAME as reference\nsend SCREENSHOT of PAYMENT when done'
+      };
+
+      data?.forEach(item => {
+        if (item.key === 'manual_deposit_phone_number') {
+          details.phone_number = item.value;
+        } else if (item.key === 'manual_deposit_account_name') {
+          details.account_name = item.value;
+        } else if (item.key === 'manual_deposit_instructions') {
+          details.instructions = item.value;
+        }
+      });
+
+      return details;
+    },
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    gcTime: 5 * 60 * 1000, // 5 minutes
+  });
 
   const { 
     data, 
@@ -363,7 +400,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
             <div className="flex flex-col gap-2">
               {deposit.payment_proof_url && (
                 <Button
-                  onClick={() => setPaymentProofDialog({ open: true, imageUrl: deposit.payment_proof_url })}
+                  onClick={() => setPaymentProofDialog({ open: true, imageUrl: deposit.payment_proof_url, deposit })}
                   variant="outline"
                   size="sm"
                   className="text-xs min-h-[36px] border-blue-500 text-blue-600 hover:bg-blue-50"
@@ -384,7 +421,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
             </div>
           ) : isManual && deposit.payment_proof_url ? (
             <Button
-              onClick={() => setPaymentProofDialog({ open: true, imageUrl: deposit.payment_proof_url })}
+              onClick={() => setPaymentProofDialog({ open: true, imageUrl: deposit.payment_proof_url, deposit })}
               variant="outline"
               size="sm"
               className="text-xs min-h-[44px] border-blue-500 text-blue-600 hover:bg-blue-50"
@@ -470,7 +507,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
           <div className="pt-3 border-t border-gray-200 space-y-2">
             {deposit.payment_proof_url && (
               <Button
-                onClick={() => setPaymentProofDialog({ open: true, imageUrl: deposit.payment_proof_url })}
+                onClick={() => setPaymentProofDialog({ open: true, imageUrl: deposit.payment_proof_url, deposit })}
                 variant="outline"
                 size="sm"
                 className="w-full border-blue-500 text-blue-600 hover:bg-blue-50 min-h-[44px]"
@@ -493,7 +530,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
         {isManual && deposit.payment_proof_url && deposit.status !== 'pending' && (
           <div className="pt-3 border-t border-gray-200">
             <Button
-              onClick={() => setPaymentProofDialog({ open: true, imageUrl: deposit.payment_proof_url })}
+              onClick={() => setPaymentProofDialog({ open: true, imageUrl: deposit.payment_proof_url, deposit })}
               variant="outline"
               size="sm"
               className="w-full border-blue-500 text-blue-600 hover:bg-blue-50 min-h-[44px]"
@@ -754,7 +791,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
       {/* Payment Proof Image Dialog */}
       <Dialog open={paymentProofDialog.open} onOpenChange={(open) => {
         if (!open) {
-          setPaymentProofDialog({ open: false, imageUrl: null });
+          setPaymentProofDialog({ open: false, imageUrl: null, deposit: null });
         }
       }}>
         <DialogContent className="sm:max-w-[90vw] max-w-[95vw] p-0">
@@ -764,7 +801,22 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
               Payment Proof Screenshot
             </DialogTitle>
           </DialogHeader>
-          <div className="px-6 pb-6">
+          <div className="px-6 pb-6 space-y-4">
+            {/* Show current manual deposit details if this is a manual deposit */}
+            {paymentProofDialog.deposit && (paymentProofDialog.deposit.deposit_method === 'manual' || paymentProofDialog.deposit.deposit_method === 'momo') && manualDepositDetails && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-start gap-2 mb-2">
+                  <Info className="w-5 h-5 text-blue-600 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-blue-900 mb-2">Current Manual Deposit Details:</p>
+                    <div className="space-y-1 text-sm text-blue-800">
+                      <p><span className="font-medium">Phone Number:</span> {manualDepositDetails.phone_number}</p>
+                      <p><span className="font-medium">Account Name:</span> {manualDepositDetails.account_name}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             {paymentProofDialog.imageUrl ? (
               <div className="relative w-full flex items-center justify-center bg-gray-100 rounded-lg overflow-hidden">
                 <img

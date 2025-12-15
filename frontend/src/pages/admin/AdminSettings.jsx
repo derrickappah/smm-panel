@@ -266,6 +266,7 @@ const AdminSettings = memo(() => {
         instructions: instructions
       });
       queryClient.invalidateQueries({ queryKey: ['admin', 'payment-settings'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'manual-deposit-details'] });
       queryClient.invalidateQueries({ queryKey: ['payment-methods'] });
       toast.success('Manual deposit details updated successfully');
     },
