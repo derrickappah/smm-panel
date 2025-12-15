@@ -4,7 +4,8 @@ import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { RefreshCw, Power, PowerOff, CheckCircle, Wallet } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { RefreshCw, Power, PowerOff, CheckCircle, Wallet, Save } from 'lucide-react';
 import { toast } from 'sonner';
 
 const AdminSettings = memo(() => {
@@ -20,6 +21,11 @@ const AdminSettings = memo(() => {
     manual_min: 10,
     hubtel_min: 1,
     korapay_min: 1
+  });
+  const [manualDepositDetails, setManualDepositDetails] = useState({
+    phone_number: '0559272762',
+    account_name: 'MTN - APPIAH MANASSEH ATTAH',
+    instructions: 'Make PAYMENT to 0559272762\nMTN - APPIAH MANASSEH ATTAH\nuse your USERNAME as reference\nsend SCREENSHOT of PAYMENT when done'
   });
 
   // Fetch payment method settings
@@ -37,7 +43,10 @@ const AdminSettings = memo(() => {
           'payment_method_paystack_min_deposit',
           'payment_method_manual_min_deposit',
           'payment_method_hubtel_min_deposit',
-          'payment_method_korapay_min_deposit'
+          'payment_method_korapay_min_deposit',
+          'manual_deposit_phone_number',
+          'manual_deposit_account_name',
+          'manual_deposit_instructions'
         ]);
 
       if (error) throw error;
@@ -50,6 +59,12 @@ const AdminSettings = memo(() => {
         } else if (item.key.includes('_min_deposit')) {
           const method = item.key.replace('payment_method_', '').replace('_min_deposit', '');
           settings[`${method}_min`] = parseFloat(item.value) || 0;
+        } else if (item.key === 'manual_deposit_phone_number') {
+          settings.manual_deposit_phone_number = item.value;
+        } else if (item.key === 'manual_deposit_account_name') {
+          settings.manual_deposit_account_name = item.value;
+        } else if (item.key === 'manual_deposit_instructions') {
+          settings.manual_deposit_instructions = item.value;
         }
       });
 
@@ -74,6 +89,11 @@ const AdminSettings = memo(() => {
         manual_min: settingsData.manual_min ?? prev.manual_min,
         hubtel_min: settingsData.hubtel_min ?? prev.hubtel_min,
         korapay_min: settingsData.korapay_min ?? prev.korapay_min,
+      }));
+      setManualDepositDetails(prev => ({
+        phone_number: settingsData.manual_deposit_phone_number ?? prev.phone_number,
+        account_name: settingsData.manual_deposit_account_name ?? prev.account_name,
+        instructions: settingsData.manual_deposit_instructions ?? prev.instructions,
       }));
     }
   }, [settingsData]);
@@ -200,6 +220,68 @@ const AdminSettings = memo(() => {
     updateMinDeposit.mutate({ method, minAmount: value });
   }, [updateMinDeposit]);
 
+  const updateManualDepositDetails = useMutation({
+    mutationFn: async ({ phoneNumber, accountName, instructions }) => {
+      if (!phoneNumber || !phoneNumber.trim()) {
+        throw new Error('Phone number is required');
+      }
+      if (!accountName || !accountName.trim()) {
+        throw new Error('Account name is required');
+      }
+      if (!instructions || !instructions.trim()) {
+        throw new Error('Instructions are required');
+      }
+
+      const updates = [
+        {
+          key: 'manual_deposit_phone_number',
+          value: phoneNumber.trim(),
+          description: 'Phone number for manual deposit payments'
+        },
+        {
+          key: 'manual_deposit_account_name',
+          value: accountName.trim(),
+          description: 'Account holder name for manual deposits'
+        },
+        {
+          key: 'manual_deposit_instructions',
+          value: instructions.trim(),
+          description: 'Instructions text for manual deposit process'
+        }
+      ];
+
+      const { error } = await supabase
+        .from('app_settings')
+        .upsert(updates, {
+          onConflict: 'key'
+        });
+
+      if (error) throw error;
+      return { phoneNumber: phoneNumber.trim(), accountName: accountName.trim(), instructions: instructions.trim() };
+    },
+    onSuccess: ({ phoneNumber, accountName, instructions }) => {
+      setManualDepositDetails({
+        phone_number: phoneNumber,
+        account_name: accountName,
+        instructions: instructions
+      });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'payment-settings'] });
+      queryClient.invalidateQueries({ queryKey: ['payment-methods'] });
+      toast.success('Manual deposit details updated successfully');
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to update manual deposit details');
+    },
+  });
+
+  const handleSaveManualDepositDetails = useCallback(() => {
+    updateManualDepositDetails.mutate({
+      phoneNumber: manualDepositDetails.phone_number,
+      accountName: manualDepositDetails.account_name,
+      instructions: manualDepositDetails.instructions
+    });
+  }, [updateManualDepositDetails, manualDepositDetails]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -289,59 +371,124 @@ const AdminSettings = memo(() => {
           </div>
           
           {/* Manual */}
-          <div className="flex items-center justify-between p-4 bg-white/50 rounded-xl border-2 border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-lg flex items-center justify-center">
-                <Wallet className="w-5 h-5 text-white" />
+          <div className="p-4 bg-white/50 rounded-xl border-2 border-gray-200 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-lg flex items-center justify-center">
+                  <Wallet className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900">Manual (Mobile Money)</p>
+                  <p className="text-sm text-gray-600">MTN Mobile Money payment</p>
+                </div>
               </div>
-              <div>
-                <p className="font-semibold text-gray-900">Manual (Mobile Money)</p>
-                <p className="text-sm text-gray-600">MTN Mobile Money payment</p>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="manual-min" className="text-sm text-gray-700 whitespace-nowrap">Min: ₵</Label>
+                  <Input
+                    id="manual-min"
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={minDepositSettings.manual_min}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === '' || parseFloat(value) >= 0) {
+                        setMinDepositSettings(prev => ({ ...prev, manual_min: value }));
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const value = parseFloat(e.target.value);
+                      if (!isNaN(value) && value > 0) {
+                        handleUpdateMinDeposit('manual', value);
+                      }
+                    }}
+                    className="w-20 h-9 text-sm"
+                  />
+                </div>
+                <Button
+                  onClick={() => handleTogglePaymentMethod('manual', !paymentMethodSettings.manual_enabled)}
+                  variant={paymentMethodSettings.manual_enabled ? "default" : "outline"}
+                  size="sm"
+                  disabled={togglePaymentMethod.isPending}
+                  className={paymentMethodSettings.manual_enabled ? "bg-green-600 hover:bg-green-700" : ""}
+                >
+                  {paymentMethodSettings.manual_enabled ? (
+                    <>
+                      <Power className="w-4 h-4 mr-2" />
+                      Enabled
+                    </>
+                  ) : (
+                    <>
+                      <PowerOff className="w-4 h-4 mr-2" />
+                      Disabled
+                    </>
+                  )}
+                </Button>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <Label htmlFor="manual-min" className="text-sm text-gray-700 whitespace-nowrap">Min: ₵</Label>
-                <Input
-                  id="manual-min"
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  value={minDepositSettings.manual_min}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (value === '' || parseFloat(value) >= 0) {
-                      setMinDepositSettings(prev => ({ ...prev, manual_min: value }));
-                    }
-                  }}
-                  onBlur={(e) => {
-                    const value = parseFloat(e.target.value);
-                    if (!isNaN(value) && value > 0) {
-                      handleUpdateMinDeposit('manual', value);
-                    }
-                  }}
-                  className="w-20 h-9 text-sm"
-                />
+            
+            {/* Manual Deposit Details Editor */}
+            <div className="mt-4 pt-4 border-t border-gray-200 space-y-4">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold text-gray-900">Deposit Details</h3>
+                <Button
+                  onClick={handleSaveManualDepositDetails}
+                  size="sm"
+                  disabled={updateManualDepositDetails.isPending}
+                  className="bg-indigo-600 hover:bg-indigo-700"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  {updateManualDepositDetails.isPending ? 'Saving...' : 'Save Details'}
+                </Button>
               </div>
-              <Button
-                onClick={() => handleTogglePaymentMethod('manual', !paymentMethodSettings.manual_enabled)}
-                variant={paymentMethodSettings.manual_enabled ? "default" : "outline"}
-                size="sm"
-                disabled={togglePaymentMethod.isPending}
-                className={paymentMethodSettings.manual_enabled ? "bg-green-600 hover:bg-green-700" : ""}
-              >
-                {paymentMethodSettings.manual_enabled ? (
-                  <>
-                    <Power className="w-4 h-4 mr-2" />
-                    Enabled
-                  </>
-                ) : (
-                  <>
-                    <PowerOff className="w-4 h-4 mr-2" />
-                    Disabled
-                  </>
-                )}
-              </Button>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="manual-phone" className="text-sm font-medium text-gray-700">
+                    Phone Number
+                  </Label>
+                  <Input
+                    id="manual-phone"
+                    type="text"
+                    value={manualDepositDetails.phone_number}
+                    onChange={(e) => setManualDepositDetails(prev => ({ ...prev, phone_number: e.target.value }))}
+                    placeholder="0559272762"
+                    className="w-full"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="manual-account-name" className="text-sm font-medium text-gray-700">
+                    Account Name
+                  </Label>
+                  <Input
+                    id="manual-account-name"
+                    type="text"
+                    value={manualDepositDetails.account_name}
+                    onChange={(e) => setManualDepositDetails(prev => ({ ...prev, account_name: e.target.value }))}
+                    placeholder="MTN - APPIAH MANASSEH ATTAH"
+                    className="w-full"
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="manual-instructions" className="text-sm font-medium text-gray-700">
+                  Instructions
+                </Label>
+                <Textarea
+                  id="manual-instructions"
+                  value={manualDepositDetails.instructions}
+                  onChange={(e) => setManualDepositDetails(prev => ({ ...prev, instructions: e.target.value }))}
+                  placeholder="Enter instructions for manual deposit..."
+                  rows={4}
+                  className="w-full resize-none"
+                />
+                <p className="text-xs text-gray-500">
+                  Use newlines to separate instruction steps. Use \n for line breaks.
+                </p>
+              </div>
             </div>
           </div>
           

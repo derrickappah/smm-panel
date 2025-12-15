@@ -29,7 +29,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     depositMethod, 
     setDepositMethod, 
     paymentMethodSettings, 
-    minDepositSettings 
+    minDepositSettings,
+    manualDepositDetails
   } = usePaymentMethods();
   const [depositAmount, setDepositAmount] = useState('');
   const [loading, setLoading] = useState(false);
@@ -2666,6 +2667,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             loading={loading || isPollingDeposit}
             isPollingDeposit={isPollingDeposit}
             pendingTransaction={pendingTransaction}
+            manualDepositDetails={manualDepositDetails}
           />
 
           {/* Quick Order */}

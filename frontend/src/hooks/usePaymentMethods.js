@@ -15,6 +15,11 @@ export const usePaymentMethods = () => {
     hubtel_min: 1,
     korapay_min: 1
   });
+  const [manualDepositDetails, setManualDepositDetails] = useState({
+    phone_number: '0559272762',
+    account_name: 'MTN - APPIAH MANASSEH ATTAH',
+    instructions: 'Make PAYMENT to 0559272762\nMTN - APPIAH MANASSEH ATTAH\nuse your USERNAME as reference\nsend SCREENSHOT of PAYMENT when done'
+  });
 
   const fetchPaymentSettings = useCallback(async () => {
     try {
@@ -29,7 +34,10 @@ export const usePaymentMethods = () => {
           'payment_method_paystack_min_deposit',
           'payment_method_manual_min_deposit',
           'payment_method_hubtel_min_deposit',
-          'payment_method_korapay_min_deposit'
+          'payment_method_korapay_min_deposit',
+          'manual_deposit_phone_number',
+          'manual_deposit_account_name',
+          'manual_deposit_instructions'
         ]);
       
       if (!error && data) {
@@ -51,6 +59,13 @@ export const usePaymentMethods = () => {
           manual_min: parseFloat(settings.payment_method_manual_min_deposit) || 10,
           hubtel_min: parseFloat(settings.payment_method_hubtel_min_deposit) || 1,
           korapay_min: parseFloat(settings.payment_method_korapay_min_deposit) || 1
+        });
+        
+        // Set manual deposit details with fallback to defaults
+        setManualDepositDetails({
+          phone_number: settings.manual_deposit_phone_number || '0559272762',
+          account_name: settings.manual_deposit_account_name || 'MTN - APPIAH MANASSEH ATTAH',
+          instructions: settings.manual_deposit_instructions || 'Make PAYMENT to 0559272762\nMTN - APPIAH MANASSEH ATTAH\nuse your USERNAME as reference\nsend SCREENSHOT of PAYMENT when done'
         });
         
         // Auto-select method based on what's enabled
@@ -102,6 +117,7 @@ export const usePaymentMethods = () => {
     setDepositMethod,
     paymentMethodSettings,
     minDepositSettings,
+    manualDepositDetails,
     fetchPaymentSettings,
   };
 };

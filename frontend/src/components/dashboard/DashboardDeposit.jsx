@@ -20,7 +20,12 @@ const DashboardDeposit = React.memo(({
   handleKorapayDeposit,
   loading,
   isPollingDeposit = false,
-  pendingTransaction = null
+  pendingTransaction = null,
+  manualDepositDetails = {
+    phone_number: '0559272762',
+    account_name: 'MTN - APPIAH MANASSEH ATTAH',
+    instructions: 'Make PAYMENT to 0559272762\nMTN - APPIAH MANASSEH ATTAH\nuse your USERNAME as reference\nsend SCREENSHOT of PAYMENT when done'
+  }
 }) => {
   const enabledMethods = useMemo(() => [
     paymentMethodSettings.paystack_enabled && 'paystack',
@@ -51,6 +56,55 @@ const DashboardDeposit = React.memo(({
     !paymentMethodSettings.korapay_enabled,
     [paymentMethodSettings]
   );
+
+  // Helper function to highlight specific words in text
+  const highlightWords = useCallback((text, phoneNumber, accountName) => {
+    // Keywords to highlight
+    const keywords = ['PAYMENT', 'USERNAME', 'SCREENSHOT'];
+    
+    // Create a regex pattern that matches keywords, phone number, or account name
+    const pattern = new RegExp(
+      `(${keywords.join('|')}|${phoneNumber.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}|${accountName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`,
+      'gi'
+    );
+    
+    // Split text by the pattern, keeping the matches
+    const parts = text.split(pattern);
+    
+    return parts.map((part, index) => {
+      const upperPart = part.toUpperCase();
+      
+      // Check if it's a keyword
+      if (keywords.some(keyword => upperPart === keyword)) {
+        return (
+          <span key={index} className="text-blue-600 font-semibold">
+            {part}
+          </span>
+        );
+      }
+      
+      // Check if it's the phone number
+      if (part === phoneNumber) {
+        return (
+          <span key={index} className="text-blue-600 font-semibold">
+            {part}
+          </span>
+        );
+      }
+      
+      // Check if it's the account name
+      if (part === accountName) {
+        return (
+          <span key={index} className="font-semibold">
+            {part}
+          </span>
+        );
+      }
+      
+      // Regular text
+      return <span key={index}>{part}</span>;
+    });
+  }, []);
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-6 sm:p-8 shadow-sm animate-slideUp">
@@ -204,18 +258,41 @@ const DashboardDeposit = React.memo(({
       ) : depositMethod === 'manual' && paymentMethodSettings.manual_enabled ? (
         <form onSubmit={handleManualDeposit} className="space-y-6">
           <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
-            <ol className="list-decimal list-inside space-y-3 text-gray-900 text-base sm:text-lg">
-              <li>
-                Make <span className="text-blue-600 font-semibold">PAYMENT</span> to 0559272762
-              </li>
-              <li className="font-semibold">MTN - APPIAH MANASSEH ATTAH</li>
-              <li>
-                use your <span className="text-blue-600 font-semibold">USERNAME</span> as reference
-              </li>
-              <li>
-                send <span className="text-blue-600 font-semibold">SCREENSHOT</span> of <span className="text-blue-600 font-semibold">PAYMENT</span> when done
-              </li>
-            </ol>
+            {(() => {
+              // Parse instructions - split by \n and format
+              const instructionLines = manualDepositDetails.instructions.split('\n').filter(line => line.trim());
+              
+              return (
+                <ol className="list-decimal list-inside space-y-3 text-gray-900 text-base sm:text-lg">
+                  {instructionLines.map((line, index) => {
+                    // Replace phone number placeholder if exists (any 10-digit number)
+                    let processedLine = line.replace(/\d{10}/g, manualDepositDetails.phone_number);
+                    
+                    // Replace account name if it matches the old format
+                    if (line.includes('MTN') && line.includes('APPIAH')) {
+                      processedLine = processedLine.replace(/MTN\s*-\s*APPIAH\s*MANASSEH\s*ATTAH/gi, manualDepositDetails.account_name);
+                    } else if (line.trim() === manualDepositDetails.account_name || 
+                               (index === 1 && !line.includes('PAYMENT') && !line.includes('USERNAME') && !line.includes('SCREENSHOT') && !line.match(/\d{10}/))) {
+                      // If it's the account name line (usually second line without keywords)
+                      processedLine = manualDepositDetails.account_name;
+                    }
+                    
+                    // Check if this line is just the account name
+                    const isAccountNameLine = processedLine.trim() === manualDepositDetails.account_name;
+                    
+                    return (
+                      <li key={index} className={isAccountNameLine ? 'font-semibold' : ''}>
+                        {isAccountNameLine ? (
+                          <span className="font-semibold">{processedLine}</span>
+                        ) : (
+                          highlightWords(processedLine, manualDepositDetails.phone_number, manualDepositDetails.account_name)
+                        )}
+                      </li>
+                    );
+                  })}
+                </ol>
+              );
+            })()}
           </div>
           <div>
             <Label htmlFor="payment-proof" className="text-sm font-medium text-gray-700 mb-2 block">
