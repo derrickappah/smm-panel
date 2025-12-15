@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Search, RefreshCw, Filter, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Search, RefreshCw, Filter, CheckCircle, XCircle, AlertCircle, Image as ImageIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
@@ -25,6 +25,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
   const [verifyingDeposit, setVerifyingDeposit] = useState(null);
   const [manualRefDialog, setManualRefDialog] = useState({ open: false, deposit: null, error: null });
   const [manualReference, setManualReference] = useState('');
+  const [paymentProofDialog, setPaymentProofDialog] = useState({ open: false, imageUrl: null });
 
   const debouncedSearch = useDebounce(searchTerm, 300);
 
@@ -359,14 +360,37 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
         </div>
         <div className="col-span-3">
           {deposit.status === 'pending' && isManual ? (
+            <div className="flex flex-col gap-2">
+              {deposit.payment_proof_url && (
+                <Button
+                  onClick={() => setPaymentProofDialog({ open: true, imageUrl: deposit.payment_proof_url })}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs min-h-[36px] border-blue-500 text-blue-600 hover:bg-blue-50"
+                >
+                  <ImageIcon className="w-4 h-4 mr-1" />
+                  View Proof
+                </Button>
+              )}
+              <Button
+                onClick={() => handleApproveManualDeposit(deposit)}
+                disabled={approvingDeposit === deposit.id}
+                variant="default"
+                size="sm"
+                className="bg-green-600 hover:bg-green-700 text-white text-xs min-h-[44px]"
+              >
+                {approvingDeposit === deposit.id ? 'Approving...' : 'Approve'}
+              </Button>
+            </div>
+          ) : isManual && deposit.payment_proof_url ? (
             <Button
-              onClick={() => handleApproveManualDeposit(deposit)}
-              disabled={approvingDeposit === deposit.id}
-              variant="default"
+              onClick={() => setPaymentProofDialog({ open: true, imageUrl: deposit.payment_proof_url })}
+              variant="outline"
               size="sm"
-              className="bg-green-600 hover:bg-green-700 text-white text-xs min-h-[44px]"
+              className="text-xs min-h-[44px] border-blue-500 text-blue-600 hover:bg-blue-50"
             >
-              {approvingDeposit === deposit.id ? 'Approving...' : 'Approve'}
+              <ImageIcon className="w-4 h-4 mr-1" />
+              View Proof
             </Button>
           ) : deposit.status === 'pending' && isPaystack ? (
             <Button
@@ -443,7 +467,18 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
           </div>
         </div>
         {deposit.status === 'pending' && isManual && (
-          <div className="pt-3 border-t border-gray-200">
+          <div className="pt-3 border-t border-gray-200 space-y-2">
+            {deposit.payment_proof_url && (
+              <Button
+                onClick={() => setPaymentProofDialog({ open: true, imageUrl: deposit.payment_proof_url })}
+                variant="outline"
+                size="sm"
+                className="w-full border-blue-500 text-blue-600 hover:bg-blue-50 min-h-[44px]"
+              >
+                <ImageIcon className="w-4 h-4 mr-2" />
+                View Payment Proof
+              </Button>
+            )}
             <Button
               onClick={() => handleApproveManualDeposit(deposit)}
               disabled={approvingDeposit === deposit.id}
@@ -452,6 +487,19 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
               className="w-full bg-green-600 hover:bg-green-700 text-white min-h-[44px]"
             >
               {approvingDeposit === deposit.id ? 'Approving...' : 'Approve Deposit'}
+            </Button>
+          </div>
+        )}
+        {isManual && deposit.payment_proof_url && deposit.status !== 'pending' && (
+          <div className="pt-3 border-t border-gray-200">
+            <Button
+              onClick={() => setPaymentProofDialog({ open: true, imageUrl: deposit.payment_proof_url })}
+              variant="outline"
+              size="sm"
+              className="w-full border-blue-500 text-blue-600 hover:bg-blue-50 min-h-[44px]"
+            >
+              <ImageIcon className="w-4 h-4 mr-2" />
+              View Payment Proof
             </Button>
           </div>
         )}
@@ -700,6 +748,55 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
               {verifyingDeposit === manualRefDialog.deposit?.id ? 'Verifying...' : 'Verify with Reference'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Payment Proof Image Dialog */}
+      <Dialog open={paymentProofDialog.open} onOpenChange={(open) => {
+        if (!open) {
+          setPaymentProofDialog({ open: false, imageUrl: null });
+        }
+      }}>
+        <DialogContent className="sm:max-w-[90vw] max-w-[95vw] p-0">
+          <DialogHeader className="px-6 pt-6 pb-4">
+            <DialogTitle className="flex items-center gap-2">
+              <ImageIcon className="w-5 h-5 text-blue-600" />
+              Payment Proof Screenshot
+            </DialogTitle>
+          </DialogHeader>
+          <div className="px-6 pb-6">
+            {paymentProofDialog.imageUrl ? (
+              <div className="relative w-full flex items-center justify-center bg-gray-100 rounded-lg overflow-hidden">
+                <img
+                  src={paymentProofDialog.imageUrl}
+                  alt="Payment proof"
+                  className="max-w-full max-h-[70vh] object-contain"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    e.target.nextSibling.style.display = 'flex';
+                  }}
+                />
+                <div className="hidden items-center justify-center p-8 text-gray-500">
+                  <div className="text-center">
+                    <ImageIcon className="w-12 h-12 mx-auto mb-2 text-gray-400" />
+                    <p>Failed to load image</p>
+                    <a
+                      href={paymentProofDialog.imageUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline mt-2 inline-block"
+                    >
+                      Open in new tab
+                    </a>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center p-8 text-gray-500">
+                <p>No payment proof available</p>
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
