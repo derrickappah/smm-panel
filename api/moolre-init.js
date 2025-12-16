@@ -37,9 +37,9 @@ export default async function handler(req, res) {
     } = req.body;
 
     // Validate required fields
-    if (!amount || !payer || !reference || !channel || !accountnumber) {
+    if (!amount || !payer || !reference || !channel) {
       return res.status(400).json({
-        error: 'Missing required fields: amount, payer, reference, channel, and accountnumber are required'
+        error: 'Missing required fields: amount, payer, reference, and channel are required'
       });
     }
 
