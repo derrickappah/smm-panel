@@ -155,9 +155,35 @@ export default async function handler(req, res) {
       });
     }
 
+    // Helper function to recursively search for URLs/links in an object
+    const findLinkInObject = (obj, depth = 0, maxDepth = 5) => {
+      if (depth > maxDepth || !obj || typeof obj !== 'object') return null;
+      
+      // Check common link field names
+      const linkFields = ['link', 'url', 'payment_link', 'paymentUrl', 'pos_link', 'payment_url', 'checkout_url', 'redirect_url'];
+      for (const field of linkFields) {
+        if (obj[field] && typeof obj[field] === 'string' && (obj[field].startsWith('http://') || obj[field].startsWith('https://'))) {
+          return obj[field];
+        }
+      }
+      
+      // Recursively search in nested objects and arrays
+      for (const key in obj) {
+        if (obj.hasOwnProperty(key)) {
+          const value = obj[key];
+          if (typeof value === 'object' && value !== null) {
+            const found = findLinkInObject(value, depth + 1, maxDepth);
+            if (found) return found;
+          }
+        }
+      }
+      
+      return null;
+    };
+
     // Check if response contains a payment link - try multiple possible response structures
     // Also check in details object for POS09 responses
-    const paymentLink = moolreData.link || 
+    let paymentLink = moolreData.link || 
                        moolreData.data?.link || 
                        moolreData.details?.link ||
                        moolreData.url || 
@@ -173,22 +199,47 @@ export default async function handler(req, res) {
                        moolreData.data?.pos_link ||
                        moolreData.details?.pos_link;
 
+    // If not found in common locations, do a deep search
+    if (!paymentLink) {
+      console.log('Payment link not found in common locations, performing deep search...');
+      paymentLink = findLinkInObject(moolreData);
+      if (paymentLink) {
+        console.log('Found payment link via deep search:', paymentLink);
+      }
+    }
+
     if (!paymentLink) {
       // If POS09 code indicates success but no link found, log the full structure for debugging
       if (isSuccessCode) {
-        console.warn('POS09 success code but payment link not found in expected fields. Full response:', JSON.stringify(moolreData, null, 2));
-        // Try to extract from nested structures
-        const nestedLink = moolreData.details?.data?.link || 
-                         moolreData.details?.data?.url ||
-                         moolreData.details?.data?.payment_link ||
-                         moolreData.data?.details?.link ||
-                         moolreData.data?.details?.url;
+        console.warn('POS09 success code but payment link not found. Full response:', JSON.stringify(moolreData, null, 2));
+        // Log all string values that might be URLs
+        const allStrings = [];
+        const extractStrings = (obj, path = '') => {
+          if (!obj || typeof obj !== 'object') return;
+          for (const key in obj) {
+            if (obj.hasOwnProperty(key)) {
+              const value = obj[key];
+              const currentPath = path ? `${path}.${key}` : key;
+              if (typeof value === 'string') {
+                if (value.startsWith('http://') || value.startsWith('https://')) {
+                  allStrings.push({ path: currentPath, value });
+                }
+              } else if (typeof value === 'object' && value !== null) {
+                extractStrings(value, currentPath);
+              }
+            }
+          }
+        };
+        extractStrings(moolreData);
+        console.log('All URLs found in response:', allStrings);
         
-        if (nestedLink) {
-          console.log('Found payment link in nested structure:', nestedLink);
+        // If we found any URLs, use the first one (likely the payment link)
+        if (allStrings.length > 0) {
+          const foundUrl = allStrings[0].value;
+          console.log('Using first URL found as payment link:', foundUrl);
           return res.status(200).json({
             success: true,
-            payment_link: nestedLink,
+            payment_link: foundUrl,
             reference: externalref,
             code: moolreData.code,
             data: moolreData
