@@ -2027,9 +2027,20 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
         const otpData = await otpResponse.json();
 
+        // Debug: Log the response to understand its structure
+        console.log('OTP verification response:', otpData);
+
         // Check if OTP was verified successfully
-        // Handle code '200_OTP_SUCCESS' (with or without explicit otpVerified flag)
-        if (otpData.code === '200_OTP_SUCCESS') {
+        // Handle multiple possible success indicators:
+        // 1. code === '200_OTP_SUCCESS'
+        // 2. success === true with otpVerified === true
+        // 3. success === true with message containing "Verification Successful"
+        const isOtpSuccess = 
+          otpData.code === '200_OTP_SUCCESS' ||
+          (otpData.success === true && otpData.otpVerified === true) ||
+          (otpData.success === true && otpData.message && otpData.message.toLowerCase().includes('verification successful'));
+
+        if (isOtpSuccess) {
           // OTP verified successfully
           setMoolreOtpVerifying(false);
           setMoolreOtpVerified(true);
@@ -2097,7 +2108,75 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           toast.error('Invalid OTP code. Please check and try again.');
           return;
         } else {
-          throw new Error(otpData.error || otpData.message || 'OTP verification failed');
+          // Check if this is actually a success response that we missed
+          // Sometimes the API might return success in different formats
+          if (otpData.success === true || 
+              (otpData.message && otpData.message.toLowerCase().includes('verification successful'))) {
+            // Treat as success even if code doesn't match
+            console.log('Treating response as success based on success flag or message');
+            // OTP verified successfully
+            setMoolreOtpVerifying(false);
+            setMoolreOtpVerified(true);
+            
+            // Small delay to show success message
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            // Now initiate payment
+            setMoolreOtpVerifying(true);
+            setMoolreOtpVerified(false);
+
+            const paymentResponse = await fetch('/api/moolre-init', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                amount: moolreOtpTransaction.amount,
+                currency: 'GHS',
+                payer: moolreOtpTransaction.phoneNumber,
+                reference: moolreOtpTransaction.moolreReference,
+                channel: moolreOtpTransaction.channel
+              })
+            });
+
+            const paymentData = await paymentResponse.json();
+            
+            if (!paymentResponse.ok || !paymentData.success) {
+              throw new Error(paymentData.error || 'Failed to initiate payment after OTP verification');
+            }
+
+            // Payment prompt sent
+            if (paymentData.code === '200_PAYMENT_REQ') {
+              // Update transaction with Moolre reference
+              const channelNames = { '13': 'MTN', '14': 'Vodafone', '15': 'AirtelTigo' };
+              await supabase
+                .from('transactions')
+                .update({
+                  moolre_reference: moolreOtpTransaction.moolreReference,
+                  moolre_status: 'pending',
+                  moolre_channel: channelNames[moolreOtpTransaction.channel] || 'MTN'
+                })
+                .eq('id', moolreOtpTransaction.id);
+
+              // Reset all states
+              setMoolreOtpVerifying(false);
+              setMoolreOtpVerified(false);
+              setMoolreOtpError(null);
+              toast.success('Payment prompt sent to your phone. Please approve the payment on your device.');
+              setPendingTransaction(moolreOtpTransaction);
+              setMoolreRequiresOtp(false);
+              setMoolreOtpCode('');
+              setMoolreOtpTransaction(null);
+              setDepositAmount('');
+              setMoolrePhoneNumber('');
+              setMoolreChannel('13');
+              setLoading(false);
+              return;
+            }
+          } else {
+            // Only throw error if it's actually an error
+            throw new Error(otpData.error || otpData.message || 'OTP verification failed');
+          }
         }
       } catch (error) {
         console.error('Error submitting OTP:', error);
