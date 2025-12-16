@@ -19,6 +19,8 @@ const DashboardDeposit = React.memo(({
   handleHubtelDeposit,
   handleKorapayDeposit,
   handleMoolreDeposit,
+  moolrePhoneNumber,
+  setMoolrePhoneNumber,
   loading,
   isPollingDeposit = false,
   pendingTransaction = null,
@@ -442,9 +444,24 @@ const DashboardDeposit = React.memo(({
               required
             />
           </div>
+          <div>
+            <Label htmlFor="moolre-phone" className="text-sm font-medium text-gray-700 mb-2 block">
+              Mobile Money Number <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              id="moolre-phone"
+              type="tel"
+              placeholder="e.g., 0209151872"
+              value={moolrePhoneNumber}
+              onChange={(e) => setMoolrePhoneNumber(e.target.value)}
+              className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              required
+            />
+            <p className="text-xs text-gray-500 mt-1">Enter your Mobile Money number (MTN, Vodafone, or AirtelTigo)</p>
+          </div>
           <Button
             type="submit"
-            disabled={loading || !depositAmount}
+            disabled={loading || !depositAmount || !moolrePhoneNumber}
             className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Processing...' : 'Pay with Moolre'}

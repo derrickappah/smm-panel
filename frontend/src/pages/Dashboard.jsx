@@ -33,6 +33,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     manualDepositDetails
   } = usePaymentMethods();
   const [depositAmount, setDepositAmount] = useState('');
+  const [moolrePhoneNumber, setMoolrePhoneNumber] = useState('');
   const [loading, setLoading] = useState(false);
   const [pendingTransaction, setPendingTransaction] = useState(null);
   const [orderForm, setOrderForm] = useState({
@@ -1987,11 +1988,26 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       return;
     }
 
+    // Validate phone number
+    const phoneNumber = moolrePhoneNumber || user?.phone_number || authUser?.user_metadata?.phone_number;
+    if (!phoneNumber || phoneNumber.trim() === '') {
+      toast.error('Please enter your Mobile Money number');
+      return;
+    }
+
     setLoading(true);
     let transaction = null;
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) throw new Error('Not authenticated');
+
+      // Get phone number
+      const phoneNumber = moolrePhoneNumber || user?.phone_number || authUser.user_metadata?.phone_number;
+      if (!phoneNumber || phoneNumber.trim() === '') {
+        toast.error('Please enter your Mobile Money number');
+        setLoading(false);
+        return;
+      }
 
       // Create transaction record for Moolre payment
       const { data: transactionData, error } = await supabase
@@ -2026,7 +2042,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           body: JSON.stringify({
             amount: amount,
             currency: 'GHS',
-            payer: user?.phone_number || authUser.user_metadata?.phone_number || '',
+            payer: phoneNumber,
             reference: moolreReference,
             channel: 'MTN' // Default to MTN, can be made selectable in UI
           })
@@ -2060,7 +2076,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             body: JSON.stringify({
               amount: amount,
               currency: 'GHS',
-              payer: user?.phone_number || authUser.user_metadata?.phone_number || '',
+              payer: phoneNumber,
               reference: moolreReference,
               channel: 'MTN'
             })
@@ -2087,6 +2103,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             toast.success('Payment prompt sent to your phone. Please approve the payment on your device.');
             setPendingTransaction(transaction);
             setDepositAmount('');
+            setMoolrePhoneNumber('');
             setLoading(false);
             
             // Start polling for payment status
@@ -2109,6 +2126,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           toast.success('Payment prompt sent to your phone. Please approve the payment on your device.');
           setPendingTransaction(transaction);
           setDepositAmount('');
+          setMoolrePhoneNumber('');
           setLoading(false);
           
           // Start polling for payment status
@@ -2166,7 +2184,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           });
       }
     }
-  }, [depositAmount, minDepositSettings.moolre_min, onUpdateUser, user]);
+  }, [depositAmount, moolrePhoneNumber, minDepositSettings.moolre_min, onUpdateUser, user]);
 
   const handleDeposit = useCallback(async (e) => {
     e.preventDefault();
@@ -2859,6 +2877,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             handleHubtelDeposit={handleHubtelDeposit}
             handleKorapayDeposit={handleKorapayDeposit}
             handleMoolreDeposit={handleMoolreDeposit}
+            moolrePhoneNumber={moolrePhoneNumber}
+            setMoolrePhoneNumber={setMoolrePhoneNumber}
             loading={loading || isPollingDeposit}
             isPollingDeposit={isPollingDeposit}
             pendingTransaction={pendingTransaction}
