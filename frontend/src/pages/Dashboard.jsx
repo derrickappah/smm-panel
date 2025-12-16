@@ -1387,9 +1387,11 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     }
   };
 
-  // Trigger Paystack payment when pendingTransaction is set
+  // Trigger Paystack payment when pendingTransaction is set (only for Paystack deposits)
   useEffect(() => {
-    if (pendingTransaction && user?.email) {
+    // Only initialize Paystack if this is a Paystack transaction
+    // Skip if deposit_method is not 'paystack' (could be 'moolre', 'korapay', 'hubtel', 'manual', etc.)
+    if (pendingTransaction && user?.email && pendingTransaction.deposit_method === 'paystack') {
       const initializePayment = async () => {
         try {
           if (!window.PaystackPop) {
