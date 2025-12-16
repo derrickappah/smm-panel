@@ -180,6 +180,16 @@ const AdminTransactions = memo(({ onRefresh, refreshing = false, getBalanceCheck
               {transaction.paystack_status}
             </span>
           )}
+          {transaction.type === 'deposit' && transaction.moolre_status && (
+            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+              transaction.moolre_status === 'success' ? 'bg-green-100 text-green-700' :
+              transaction.moolre_status === 'failed' ? 'bg-red-100 text-red-700' :
+              transaction.moolre_status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+              'bg-gray-100 text-gray-700'
+            }`}>
+              Moolre: {transaction.moolre_status}
+            </span>
+          )}
         </div>
         <div className="text-center">
           <p className={`font-semibold ${transaction.type === 'deposit' || transaction.type === 'refund' ? 'text-green-600' : 'text-red-600'}`}>
@@ -197,7 +207,13 @@ const AdminTransactions = memo(({ onRefresh, refreshing = false, getBalanceCheck
         <div className="text-center">
           <p className="text-xs text-gray-700 break-all">{transaction.id}</p>
           {transaction.paystack_reference && (
-            <p className="text-xs text-gray-500">Ref: {transaction.paystack_reference}</p>
+            <p className="text-xs text-gray-500">Paystack Ref: {transaction.paystack_reference}</p>
+          )}
+          {transaction.moolre_reference && (
+            <p className="text-xs text-gray-500">Moolre Ref: {transaction.moolre_reference}</p>
+          )}
+          {transaction.moolre_channel && (
+            <p className="text-xs text-gray-500">Network: {transaction.moolre_channel}</p>
           )}
           {transaction.order_id && (
             <p className="text-xs text-gray-500">Order: {transaction.order_id.slice(0, 8)}...</p>
@@ -288,7 +304,13 @@ const AdminTransactions = memo(({ onRefresh, refreshing = false, getBalanceCheck
             <p className="text-xs text-gray-500">Transaction ID</p>
             <p className="text-xs text-gray-700 break-all">{transaction.id}</p>
             {transaction.paystack_reference && (
-              <p className="text-xs text-gray-500 mt-1">Ref: {transaction.paystack_reference}</p>
+              <p className="text-xs text-gray-500 mt-1">Paystack Ref: {transaction.paystack_reference}</p>
+            )}
+            {transaction.moolre_reference && (
+              <p className="text-xs text-gray-500 mt-1">Moolre Ref: {transaction.moolre_reference}</p>
+            )}
+            {transaction.moolre_channel && (
+              <p className="text-xs text-gray-500 mt-1">Network: {transaction.moolre_channel}</p>
             )}
             {transaction.order_id && (
               <p className="text-xs text-gray-500 mt-1">Order: {transaction.order_id.slice(0, 12)}...</p>
@@ -308,6 +330,19 @@ const AdminTransactions = memo(({ onRefresh, refreshing = false, getBalanceCheck
                 'bg-gray-100 text-gray-700'
               }`}>
                 {transaction.paystack_status}
+              </span>
+            </div>
+          )}
+          {transaction.type === 'deposit' && transaction.moolre_status && (
+            <div>
+              <p className="text-xs text-gray-500">Moolre Status</p>
+              <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                transaction.moolre_status === 'success' ? 'bg-green-100 text-green-700' :
+                transaction.moolre_status === 'failed' ? 'bg-red-100 text-red-700' :
+                transaction.moolre_status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                'bg-gray-100 text-gray-700'
+              }`}>
+                {transaction.moolre_status}
               </span>
             </div>
           )}

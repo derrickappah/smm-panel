@@ -18,6 +18,7 @@ const DashboardDeposit = React.memo(({
   handleManualDeposit,
   handleHubtelDeposit,
   handleKorapayDeposit,
+  handleMoolreDeposit,
   loading,
   isPollingDeposit = false,
   pendingTransaction = null,
@@ -31,7 +32,8 @@ const DashboardDeposit = React.memo(({
     paymentMethodSettings.paystack_enabled && 'paystack',
     paymentMethodSettings.manual_enabled && 'manual',
     paymentMethodSettings.hubtel_enabled && 'hubtel',
-    paymentMethodSettings.korapay_enabled && 'korapay'
+    paymentMethodSettings.korapay_enabled && 'korapay',
+    paymentMethodSettings.moolre_enabled && 'moolre'
   ].filter(Boolean), [paymentMethodSettings]);
 
   const handleFileChange = useCallback((e) => {
@@ -53,7 +55,8 @@ const DashboardDeposit = React.memo(({
     !paymentMethodSettings.paystack_enabled && 
     !paymentMethodSettings.manual_enabled && 
     !paymentMethodSettings.hubtel_enabled && 
-    !paymentMethodSettings.korapay_enabled,
+    !paymentMethodSettings.korapay_enabled &&
+    !paymentMethodSettings.moolre_enabled,
     [paymentMethodSettings]
   );
 
@@ -172,6 +175,19 @@ const DashboardDeposit = React.memo(({
               }`}
             >
               Korapay
+            </button>
+          )}
+          {paymentMethodSettings.moolre_enabled && (
+            <button
+              type="button"
+              onClick={() => setDepositMethod('moolre')}
+              className={`flex-1 py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+                depositMethod === 'moolre'
+                  ? 'bg-white text-indigo-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+            >
+              Moolre
             </button>
           )}
         </div>
@@ -393,6 +409,48 @@ const DashboardDeposit = React.memo(({
           </Button>
           <p className="text-xs sm:text-sm text-gray-600 text-center">
             Secure payment via Korapay. Funds are added instantly after successful payment.
+          </p>
+          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-xs sm:text-sm text-blue-800 text-center">
+              <span className="font-semibold">Having issues with deposits?</span>
+              <br />
+              <span className="mt-1 block">Text us on WhatsApp: </span>
+              <a 
+                href="https://wa.me/233559272762" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+              >
+                0559272762
+              </a>
+            </p>
+          </div>
+        </form>
+      ) : depositMethod === 'moolre' && paymentMethodSettings.moolre_enabled ? (
+        <form onSubmit={handleMoolreDeposit} className="space-y-4">
+          <div>
+            <Label htmlFor="moolre-amount" className="text-sm font-medium text-gray-700 mb-2 block">Amount (GHS)</Label>
+            <Input
+              id="moolre-amount"
+              type="number"
+              step="0.01"
+              min="1"
+              placeholder="Enter amount"
+              value={depositAmount}
+              onChange={(e) => setDepositAmount(e.target.value)}
+              className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              required
+            />
+          </div>
+          <Button
+            type="submit"
+            disabled={loading || !depositAmount}
+            className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? 'Processing...' : 'Pay with Moolre'}
+          </Button>
+          <p className="text-xs sm:text-sm text-gray-600 text-center">
+            Secure payment via Moolre Mobile Money. A payment prompt will be sent to your phone. Please approve the payment on your device.
           </p>
           <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
             <p className="text-xs sm:text-sm text-blue-800 text-center">

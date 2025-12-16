@@ -11,7 +11,7 @@ const fetchTransactions = async ({ pageParam = 0 }) => {
 
   const { data, error, count } = await supabase
     .from('transactions')
-    .select('id, user_id, amount, type, status, created_at, paystack_status, paystack_reference, manual_reference, korapay_reference, order_id, profiles(email, name)', { count: 'exact' })
+    .select('id, user_id, amount, type, status, created_at, paystack_status, paystack_reference, manual_reference, korapay_reference, moolre_reference, moolre_status, moolre_channel, order_id, profiles(email, name)', { count: 'exact' })
     .order('created_at', { ascending: false })
     .range(from, to);
 
@@ -51,7 +51,7 @@ const fetchAllTransactions = async () => {
     
     const { data, error } = await supabase
       .from('transactions')
-      .select('id, user_id, amount, type, status, created_at, paystack_status, paystack_reference, manual_reference, korapay_reference, order_id, profiles(email, name)')
+      .select('id, user_id, amount, type, status, created_at, paystack_status, paystack_reference, manual_reference, korapay_reference, moolre_reference, moolre_status, moolre_channel, order_id, profiles(email, name)')
       .order('created_at', { ascending: false })
       .range(from, to);
 

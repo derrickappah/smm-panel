@@ -1974,6 +1974,200 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     }
   }, [depositAmount, minDepositSettings.korapay_min, onUpdateUser]);
 
+  const handleMoolreDeposit = useCallback(async (e) => {
+    e.preventDefault();
+    if (!depositAmount || parseFloat(depositAmount) <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
+    const amount = parseFloat(depositAmount);
+    if (amount < minDepositSettings.moolre_min) {
+      toast.error(`Minimum deposit amount is ₵${minDepositSettings.moolre_min}`);
+      return;
+    }
+
+    setLoading(true);
+    let transaction = null;
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) throw new Error('Not authenticated');
+
+      // Create transaction record for Moolre payment
+      const { data: transactionData, error } = await supabase
+        .from('transactions')
+        .insert({
+          user_id: authUser.id,
+          amount: amount,
+          type: 'deposit',
+          status: 'pending',
+          deposit_method: 'moolre'
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating Moolre deposit transaction:', error);
+        throw error;
+      }
+      
+      transaction = transactionData;
+
+      // Generate unique reference for this transaction
+      const moolreReference = `MOOLRE_${transaction.id}_${Date.now()}`;
+
+      // Initialize Moolre payment via serverless function
+      try {
+        const initResponse = await fetch('/api/moolre-init', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            amount: amount,
+            currency: 'GHS',
+            payer: user?.phone_number || authUser.user_metadata?.phone_number || '',
+            reference: moolreReference,
+            channel: 'MTN' // Default to MTN, can be made selectable in UI
+          })
+        });
+
+        if (!initResponse.ok) {
+          const errorData = await initResponse.json().catch(() => ({ error: 'Unknown error' }));
+          throw new Error(errorData.error || 'Failed to initialize Moolre payment');
+        }
+
+        const initData = await initResponse.json();
+
+        // Handle OTP requirement
+        if (initData.requiresOtp && initData.code === 'TP14') {
+          // OTP required - show OTP input UI
+          toast.info('OTP sent to your phone. Please enter the OTP code.');
+          // Store transaction and OTP state for resubmission
+          setPendingTransaction({ ...transaction, requiresOtp: true, moolreReference });
+          setLoading(false);
+          return;
+        }
+
+        // Handle OTP verification success
+        if (initData.otpVerified && initData.code === '200_OTP_SUCCESS') {
+          // OTP verified, now initiate payment
+          const paymentResponse = await fetch('/api/moolre-init', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              amount: amount,
+              currency: 'GHS',
+              payer: user?.phone_number || authUser.user_metadata?.phone_number || '',
+              reference: moolreReference,
+              channel: 'MTN'
+            })
+          });
+
+          const paymentData = await paymentResponse.json();
+          
+          if (!paymentResponse.ok || !paymentData.success) {
+            throw new Error(paymentData.error || 'Failed to initiate payment after OTP verification');
+          }
+
+          // Payment prompt sent
+          if (paymentData.code === '200_PAYMENT_REQ') {
+            // Update transaction with Moolre reference
+            await supabase
+              .from('transactions')
+              .update({
+                moolre_reference: moolreReference,
+                moolre_status: 'pending',
+                moolre_channel: 'MTN'
+              })
+              .eq('id', transaction.id);
+
+            toast.success('Payment prompt sent to your phone. Please approve the payment on your device.');
+            setPendingTransaction(transaction);
+            setDepositAmount('');
+            setLoading(false);
+            
+            // Start polling for payment status
+            return;
+          }
+        }
+
+        // Payment prompt sent successfully
+        if (initData.success && initData.code === '200_PAYMENT_REQ') {
+          // Update transaction with Moolre reference
+          await supabase
+            .from('transactions')
+            .update({
+              moolre_reference: moolreReference,
+              moolre_status: 'pending',
+              moolre_channel: 'MTN'
+            })
+            .eq('id', transaction.id);
+
+          toast.success('Payment prompt sent to your phone. Please approve the payment on your device.');
+          setPendingTransaction(transaction);
+          setDepositAmount('');
+          setLoading(false);
+          
+          // Start polling for payment status
+          return;
+        }
+
+        // If we get here, something unexpected happened
+        throw new Error(initData.error || initData.message || 'Failed to initialize payment');
+
+      } catch (initError) {
+        console.error('Error initializing Moolre payment:', initError);
+        toast.error(initError.message || 'Failed to initialize payment. Please try again or use another payment method.');
+        setLoading(false);
+        
+        // Update transaction to rejected
+        if (transaction?.id) {
+          supabase
+            .from('transactions')
+            .update({
+              status: 'rejected',
+              moolre_reference: moolreReference,
+              moolre_status: 'failed',
+              moolre_error: initError.message || 'Initialization failed'
+            })
+            .eq('id', transaction.id)
+            .then(() => {
+              // Update successful
+            })
+            .catch((updateError) => {
+              console.error('Error updating transaction:', updateError);
+            });
+        }
+      }
+
+    } catch (error) {
+      console.error('Moolre deposit error:', error);
+      toast.error(error.message || 'Failed to initialize Moolre payment. Please try again.');
+      setLoading(false);
+      
+      // Update transaction to rejected if it was created
+      if (transaction?.id) {
+        supabase
+          .from('transactions')
+          .update({
+            status: 'rejected',
+            moolre_status: 'failed',
+            moolre_error: error.message || 'Initialization failed'
+          })
+          .eq('id', transaction.id)
+          .then(() => {
+            // Update successful
+          })
+          .catch((updateError) => {
+            console.error('Error updating transaction:', updateError);
+          });
+      }
+    }
+  }, [depositAmount, minDepositSettings.moolre_min, onUpdateUser, user]);
+
   const handleDeposit = useCallback(async (e) => {
     e.preventDefault();
     if (!depositAmount || parseFloat(depositAmount) <= 0) {
@@ -2664,6 +2858,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             handleManualDeposit={handleManualDeposit}
             handleHubtelDeposit={handleHubtelDeposit}
             handleKorapayDeposit={handleKorapayDeposit}
+            handleMoolreDeposit={handleMoolreDeposit}
             loading={loading || isPollingDeposit}
             isPollingDeposit={isPollingDeposit}
             pendingTransaction={pendingTransaction}
