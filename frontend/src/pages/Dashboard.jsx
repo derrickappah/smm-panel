@@ -2022,7 +2022,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
       const { data, error } = await supabase
         .from('moolre_verified_phones')
-        .select('id, verified_at')
+        .select('id, verified_at, phone_number, channel')
         .eq('user_id', authUser.id)
         .eq('phone_number', normalizedPhone)
         .eq('channel', channel)
@@ -2030,11 +2030,45 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
       if (error) {
         console.error('Error checking Moolre verification:', error);
+        // Check if error is due to table not existing
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          console.error('⚠️ moolre_verified_phones table does not exist! Please run the database migration.');
+        }
+        // Check if error is due to RLS policy
+        if (error.code === '42501' || error.message?.includes('permission denied')) {
+          console.error('⚠️ RLS policy issue - user may not have permission to read moolre_verified_phones table');
+        }
         return false;
       }
 
       const isVerified = !!data;
-      console.log('Verification check result:', { isVerified, data });
+      console.log('Verification check result:', { 
+        isVerified, 
+        data,
+        queryParams: { normalizedPhone, channel, userId: authUser.id }
+      });
+      
+      // If not verified, check if there are any records for this user at all (for debugging)
+      if (!isVerified) {
+        const { data: allUserRecords, error: checkError } = await supabase
+          .from('moolre_verified_phones')
+          .select('id, phone_number, channel')
+          .eq('user_id', authUser.id)
+          .limit(5);
+        
+        if (!checkError && allUserRecords && allUserRecords.length > 0) {
+          console.log('Found other verified phones for this user:', allUserRecords);
+          console.log('Looking for match:', { normalizedPhone, channel });
+          console.log('Mismatch check:', {
+            phoneMatch: allUserRecords.some(r => r.phone_number === normalizedPhone),
+            channelMatch: allUserRecords.some(r => r.channel === channel),
+            exactMatch: allUserRecords.some(r => r.phone_number === normalizedPhone && r.channel === channel)
+          });
+        } else if (checkError) {
+          console.warn('Could not check for other records:', checkError);
+        }
+      }
+      
       return isVerified;
     } catch (error) {
       console.error('Error in checkMoolreVerification:', error);
