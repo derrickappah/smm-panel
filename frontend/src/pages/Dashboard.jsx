@@ -2084,12 +2084,30 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
             const paymentData = await paymentResponse.json();
             
-            if (!paymentResponse.ok || !paymentData.success) {
-              throw new Error(paymentData.error || 'Failed to initiate payment after OTP verification');
+            // Debug: Log the payment response to understand its structure
+            console.log('Payment initiation response after OTP:', paymentData);
+            
+            if (!paymentResponse.ok) {
+              const errorMsg = paymentData.error || paymentData.message || 'Failed to initiate payment after OTP verification';
+              console.error('Payment initiation failed - Response not OK:', {
+                status: paymentResponse.status,
+                statusText: paymentResponse.statusText,
+                data: paymentData
+              });
+              throw new Error(errorMsg);
+            }
+            
+            if (!paymentData.success) {
+              const errorMsg = paymentData.error || paymentData.message || 'Failed to initiate payment after OTP verification';
+              console.error('Payment initiation failed - success is false:', paymentData);
+              throw new Error(errorMsg);
             }
 
-            // Payment prompt sent
-            if (paymentData.code === '200_PAYMENT_REQ') {
+            // Payment prompt sent - handle multiple possible success codes
+            // After OTP verification, the API might return 200_PAYMENT_REQ or other success codes
+            // If success is true and no OTP is required, treat as payment initiated
+            if (paymentData.code === '200_PAYMENT_REQ' || 
+                (paymentData.success === true && !paymentData.requiresOtp && paymentData.code !== 'TP14')) {
               // Update transaction with Moolre reference
               const channelNames = { '13': 'MTN', '14': 'Vodafone', '15': 'AirtelTigo' };
               await supabase
@@ -2117,10 +2135,21 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               setLoading(false);
               return;
             } else {
-              throw new Error(paymentData.error || paymentData.message || 'Payment initiation did not complete successfully');
+              // Log the unexpected response for debugging
+              console.warn('Unexpected payment response after OTP:', {
+                code: paymentData.code,
+                success: paymentData.success,
+                message: paymentData.message,
+                data: paymentData.data
+              });
+              throw new Error(paymentData.error || paymentData.message || `Payment initiation did not complete successfully. Response code: ${paymentData.code || 'unknown'}`);
             }
           } catch (paymentError) {
             console.error('Error initiating payment after OTP verification:', paymentError);
+            // Log full error details for debugging
+            if (paymentError.response) {
+              console.error('Payment error response:', paymentError.response);
+            }
             throw paymentError;
           }
         } else if (otpData.code === '400_INVALID_OTP') {
@@ -2162,12 +2191,30 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
               const paymentData = await paymentResponse.json();
               
-              if (!paymentResponse.ok || !paymentData.success) {
-                throw new Error(paymentData.error || 'Failed to initiate payment after OTP verification');
+              // Debug: Log the payment response to understand its structure
+              console.log('Payment initiation response after OTP (fallback):', paymentData);
+              
+              if (!paymentResponse.ok) {
+                const errorMsg = paymentData.error || paymentData.message || 'Failed to initiate payment after OTP verification';
+                console.error('Payment initiation failed - Response not OK (fallback):', {
+                  status: paymentResponse.status,
+                  statusText: paymentResponse.statusText,
+                  data: paymentData
+                });
+                throw new Error(errorMsg);
+              }
+              
+              if (!paymentData.success) {
+                const errorMsg = paymentData.error || paymentData.message || 'Failed to initiate payment after OTP verification';
+                console.error('Payment initiation failed - success is false (fallback):', paymentData);
+                throw new Error(errorMsg);
               }
 
-              // Payment prompt sent
-              if (paymentData.code === '200_PAYMENT_REQ') {
+              // Payment prompt sent - handle multiple possible success codes
+              // After OTP verification, the API might return 200_PAYMENT_REQ or other success codes
+              // If success is true and no OTP is required, treat as payment initiated
+              if (paymentData.code === '200_PAYMENT_REQ' || 
+                  (paymentData.success === true && !paymentData.requiresOtp && paymentData.code !== 'TP14')) {
                 // Update transaction with Moolre reference
                 const channelNames = { '13': 'MTN', '14': 'Vodafone', '15': 'AirtelTigo' };
                 await supabase
@@ -2195,7 +2242,14 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                 setLoading(false);
                 return;
               } else {
-                throw new Error(paymentData.error || paymentData.message || 'Payment initiation did not complete successfully');
+                // Log the unexpected response for debugging
+                console.warn('Unexpected payment response after OTP (fallback):', {
+                  code: paymentData.code,
+                  success: paymentData.success,
+                  message: paymentData.message,
+                  data: paymentData.data
+                });
+                throw new Error(paymentData.error || paymentData.message || `Payment initiation did not complete successfully. Response code: ${paymentData.code || 'unknown'}`);
               }
             } catch (paymentError) {
               console.error('Error initiating payment after OTP verification:', paymentError);
