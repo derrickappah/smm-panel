@@ -2202,10 +2202,30 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       const initData = await initResponse.json();
       console.log('Moolre Web init response:', initData);
 
-      if (!initData.success || !initData.payment_link) {
+      // POS09 code indicates successful payment link generation even if success is false
+      const isSuccessCode = initData.code === 'POS09' || initData.success === true;
+      
+      // Try to extract payment link from various possible locations
+      const paymentLink = initData.payment_link || 
+                         initData.details?.link ||
+                         initData.details?.url ||
+                         initData.details?.payment_link ||
+                         initData.details?.data?.link ||
+                         initData.details?.data?.url ||
+                         initData.data?.link ||
+                         initData.data?.url;
+
+      if (!isSuccessCode || !paymentLink) {
         console.error('Moolre Web init failed - missing payment link:', initData);
+        // If POS09 but no link, provide more helpful error
+        if (initData.code === 'POS09' && !paymentLink) {
+          throw new Error('Payment link was generated but could not be extracted from the response. Please contact support.');
+        }
         throw new Error(initData.error || initData.message || 'Failed to get payment link from Moolre');
       }
+
+      // Use the extracted payment link
+      const finalPaymentLink = paymentLink;
 
       // Update transaction with reference
       await supabase
@@ -2216,7 +2236,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         .eq('id', transaction.id);
 
       // Redirect user to Moolre payment page
-      window.location.href = initData.payment_link;
+      window.location.href = finalPaymentLink;
 
     } catch (error) {
       console.error('Error in Moolre Web deposit:', error);

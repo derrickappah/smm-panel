@@ -129,8 +129,14 @@ export default async function handler(req, res) {
     console.log('Moolre API response status:', moolreResponse.status);
     console.log('Moolre API response data:', JSON.stringify(moolreData, null, 2));
 
+    // POS09 code indicates successful payment link generation
+    const isSuccessCode = moolreData.code === 'POS09' || 
+                         moolreData.code === '200' || 
+                         moolreData.code?.startsWith('200');
+
     // Check for Moolre error codes (similar to regular Moolre API)
-    if (moolreData.code && moolreData.code !== '200' && !moolreData.code.startsWith('200')) {
+    // But exclude POS09 which is actually a success code
+    if (moolreData.code && !isSuccessCode) {
       console.error('Moolre API error code:', moolreData.code, moolreData);
       return res.status(moolreResponse.status || 500).json({
         success: false,
@@ -140,7 +146,7 @@ export default async function handler(req, res) {
       });
     }
 
-    if (!moolreResponse.ok) {
+    if (!moolreResponse.ok && !isSuccessCode) {
       console.error('Moolre API HTTP error:', moolreData);
       return res.status(moolreResponse.status || 500).json({
         success: false,
@@ -150,20 +156,51 @@ export default async function handler(req, res) {
     }
 
     // Check if response contains a payment link - try multiple possible response structures
+    // Also check in details object for POS09 responses
     const paymentLink = moolreData.link || 
                        moolreData.data?.link || 
+                       moolreData.details?.link ||
                        moolreData.url || 
                        moolreData.data?.url ||
+                       moolreData.details?.url ||
                        moolreData.payment_link ||
                        moolreData.data?.payment_link ||
+                       moolreData.details?.payment_link ||
                        moolreData.paymentUrl ||
-                       moolreData.data?.paymentUrl;
+                       moolreData.data?.paymentUrl ||
+                       moolreData.details?.paymentUrl ||
+                       moolreData.pos_link ||
+                       moolreData.data?.pos_link ||
+                       moolreData.details?.pos_link;
 
     if (!paymentLink) {
+      // If POS09 code indicates success but no link found, log the full structure for debugging
+      if (isSuccessCode) {
+        console.warn('POS09 success code but payment link not found in expected fields. Full response:', JSON.stringify(moolreData, null, 2));
+        // Try to extract from nested structures
+        const nestedLink = moolreData.details?.data?.link || 
+                         moolreData.details?.data?.url ||
+                         moolreData.details?.data?.payment_link ||
+                         moolreData.data?.details?.link ||
+                         moolreData.data?.details?.url;
+        
+        if (nestedLink) {
+          console.log('Found payment link in nested structure:', nestedLink);
+          return res.status(200).json({
+            success: true,
+            payment_link: nestedLink,
+            reference: externalref,
+            code: moolreData.code,
+            data: moolreData
+          });
+        }
+      }
+      
       console.error('Moolre API response missing payment link. Full response:', JSON.stringify(moolreData, null, 2));
       return res.status(500).json({
         success: false,
-        error: 'Failed to get payment link from Moolre',
+        error: isSuccessCode ? 'Payment link generated but not found in response' : 'Failed to get payment link from Moolre',
+        code: moolreData.code,
         details: moolreData,
         message: 'The Moolre API response did not contain a payment link. Please check the API response structure.'
       });
@@ -174,6 +211,7 @@ export default async function handler(req, res) {
       success: true,
       payment_link: paymentLink,
       reference: externalref,
+      code: moolreData.code,
       data: moolreData
     });
 
