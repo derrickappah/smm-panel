@@ -8,14 +8,16 @@ export const usePaymentMethods = () => {
     manual_enabled: true,
     hubtel_enabled: true,
     korapay_enabled: true,
-    moolre_enabled: true
+    moolre_enabled: true,
+    moolre_web_enabled: true
   });
   const [minDepositSettings, setMinDepositSettings] = useState({
     paystack_min: 10,
     manual_min: 10,
     hubtel_min: 1,
     korapay_min: 1,
-    moolre_min: 1
+    moolre_min: 1,
+    moolre_web_min: 1
   });
   const [manualDepositDetails, setManualDepositDetails] = useState({
     phone_number: '0559272762',
@@ -34,11 +36,13 @@ export const usePaymentMethods = () => {
           'payment_method_hubtel_enabled', 
           'payment_method_korapay_enabled',
           'payment_method_moolre_enabled',
+          'payment_method_moolre_web_enabled',
           'payment_method_paystack_min_deposit',
           'payment_method_manual_min_deposit',
           'payment_method_hubtel_min_deposit',
           'payment_method_korapay_min_deposit',
           'payment_method_moolre_min_deposit',
+          'payment_method_moolre_web_min_deposit',
           'manual_deposit_phone_number',
           'manual_deposit_account_name',
           'manual_deposit_instructions'
@@ -54,7 +58,8 @@ export const usePaymentMethods = () => {
           manual_enabled: settings.payment_method_manual_enabled !== 'false',
           hubtel_enabled: settings.payment_method_hubtel_enabled !== 'false',
           korapay_enabled: settings.payment_method_korapay_enabled !== 'false',
-          moolre_enabled: settings.payment_method_moolre_enabled !== 'false'
+          moolre_enabled: settings.payment_method_moolre_enabled !== 'false',
+          moolre_web_enabled: settings.payment_method_moolre_web_enabled !== 'false'
         };
         setPaymentMethodSettings(newSettings);
         
@@ -64,7 +69,8 @@ export const usePaymentMethods = () => {
           manual_min: parseFloat(settings.payment_method_manual_min_deposit) || 10,
           hubtel_min: parseFloat(settings.payment_method_hubtel_min_deposit) || 1,
           korapay_min: parseFloat(settings.payment_method_korapay_min_deposit) || 1,
-          moolre_min: parseFloat(settings.payment_method_moolre_min_deposit) || 1
+          moolre_min: parseFloat(settings.payment_method_moolre_min_deposit) || 1,
+          moolre_web_min: parseFloat(settings.payment_method_moolre_web_min_deposit) || 1
         });
         
         // Set manual deposit details with fallback to defaults
@@ -75,19 +81,20 @@ export const usePaymentMethods = () => {
         });
         
         // Auto-select method based on what's enabled
-        if (!newSettings.paystack_enabled && newSettings.manual_enabled && !newSettings.hubtel_enabled && !newSettings.korapay_enabled && !newSettings.moolre_enabled) {
+        if (!newSettings.paystack_enabled && newSettings.manual_enabled && !newSettings.hubtel_enabled && !newSettings.korapay_enabled && !newSettings.moolre_enabled && !newSettings.moolre_web_enabled) {
           setDepositMethod('manual');
-        } else if (newSettings.paystack_enabled && !newSettings.manual_enabled && !newSettings.hubtel_enabled && !newSettings.korapay_enabled && !newSettings.moolre_enabled) {
+        } else if (newSettings.paystack_enabled && !newSettings.manual_enabled && !newSettings.hubtel_enabled && !newSettings.korapay_enabled && !newSettings.moolre_enabled && !newSettings.moolre_web_enabled) {
           setDepositMethod('paystack');
-        } else if (!newSettings.paystack_enabled && !newSettings.manual_enabled && newSettings.hubtel_enabled && !newSettings.korapay_enabled && !newSettings.moolre_enabled) {
+        } else if (!newSettings.paystack_enabled && !newSettings.manual_enabled && newSettings.hubtel_enabled && !newSettings.korapay_enabled && !newSettings.moolre_enabled && !newSettings.moolre_web_enabled) {
           setDepositMethod('hubtel');
-        } else if (newSettings.paystack_enabled || newSettings.manual_enabled || newSettings.hubtel_enabled || newSettings.korapay_enabled || newSettings.moolre_enabled) {
+        } else if (newSettings.paystack_enabled || newSettings.manual_enabled || newSettings.hubtel_enabled || newSettings.korapay_enabled || newSettings.moolre_enabled || newSettings.moolre_web_enabled) {
           // At least one enabled, default to paystack if available, else first available
           setDepositMethod(
             newSettings.paystack_enabled ? 'paystack' : 
             (newSettings.manual_enabled ? 'manual' : 
             (newSettings.hubtel_enabled ? 'hubtel' :
-            (newSettings.korapay_enabled ? 'korapay' : 'moolre')))
+            (newSettings.korapay_enabled ? 'korapay' : 
+            (newSettings.moolre_web_enabled ? 'moolre_web' : 'moolre'))))
           );
         } else {
           // All disabled

@@ -386,12 +386,12 @@ const DashboardDeposit = React.memo(({
               <br />
               <span className="mt-1 block">Text us on WhatsApp: </span>
               <a 
-                href="https://wa.me/233559272762" 
+                href="https://wa.me/233550069661" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
               >
-                0559272762
+                0550069661
               </a>
             </p>
           </div>
@@ -428,12 +428,12 @@ const DashboardDeposit = React.memo(({
               <br />
               <span className="mt-1 block">Text us on WhatsApp: </span>
               <a 
-                href="https://wa.me/233559272762" 
+                href="https://wa.me/233550069661" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
               >
-                0559272762
+                0550069661
               </a>
             </p>
           </div>
@@ -626,7 +626,7 @@ const DashboardDeposit = React.memo(({
                 <Input
                   id="moolre-phone"
                   type="tel"
-                  placeholder="e.g., 0209151872"
+                  placeholder="enter your momo number"
                   value={moolrePhoneNumber}
                   onChange={(e) => setMoolrePhoneNumber(e.target.value)}
                   className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
@@ -668,14 +668,39 @@ const DashboardDeposit = React.memo(({
               <br />
               <span className="mt-1 block">Text us on WhatsApp: </span>
               <a 
-                href="https://wa.me/233559272762" 
+                href="https://wa.me/233550069661" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
               >
-                0559272762
+                0550069661
               </a>
             </p>
+          </div>
+          <div className="mt-6">
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="tutorial" className="border border-gray-200 rounded-lg overflow-hidden">
+                <AccordionTrigger className="px-4 py-3 hover:no-underline focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-lg">
+                  <span className="text-sm font-semibold text-gray-900">📹 How to Deposit - Video Tutorial</span>
+                </AccordionTrigger>
+                <AccordionContent className="px-4 pb-4">
+                  <div className="rounded-lg overflow-hidden bg-gray-100">
+                    <video
+                      controls
+                      className="w-full h-auto"
+                      preload="metadata"
+                      style={{ maxHeight: '500px' }}
+                    >
+                      <source
+                        src="https://spihsvdchouynfbsotwq.supabase.co/storage/v1/object/public/storage/deposit%20tutorial%20moolre.MOV"
+                        type="video/quicktime"
+                      />
+                      Your browser does not support the video tag.
+                    </video>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
           </div>
         </form>
       ) : null}
