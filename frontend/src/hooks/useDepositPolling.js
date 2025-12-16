@@ -63,6 +63,50 @@ export function useDepositPolling(
   }, []);
 
   /**
+   * Mark transaction as rejected when polling times out
+   */
+  const markTransactionAsRejected = useCallback(async (transactionId, reason) => {
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) {
+        console.warn('No authenticated user found, cannot update transaction status');
+        return;
+      }
+
+      // Update transaction status to rejected
+      const { error: updateError } = await supabase
+        .from('transactions')
+        .update({
+          status: 'rejected'
+        })
+        .eq('id', transactionId)
+        .eq('status', 'pending'); // Only update if still pending
+
+      if (updateError) {
+        console.error('Error updating transaction status to rejected:', updateError);
+      } else {
+        console.log('Transaction marked as rejected:', { transactionId, reason });
+        
+        // Call status change callback if provided
+        if (onStatusChange) {
+          onStatusChange('rejected');
+        }
+        
+        // Clear pending transaction
+        setPendingTransaction(null);
+        
+        // Show error message to user
+        toast.error('Payment verification timed out. The transaction has been marked as rejected. Please try again.');
+        
+        // Refresh user data
+        onUpdateUser();
+      }
+    } catch (error) {
+      console.error('Error marking transaction as rejected:', error);
+    }
+  }, [onStatusChange, setPendingTransaction, onUpdateUser]);
+
+  /**
    * Verify balance was updated when transaction is approved (read-only check)
    * Note: Balance is already updated by the atomic database function, we just verify and refresh UI
    */
@@ -126,7 +170,8 @@ export function useDepositPolling(
 
     // Check if we've exceeded max attempts
     if (attemptsRef.current > maxAttempts) {
-      console.log('Max polling attempts reached, stopping...');
+      console.log('Max polling attempts reached, stopping and marking transaction as rejected...');
+      await markTransactionAsRejected(transactionId, 'Max polling attempts reached');
       stopPolling();
       return;
     }
@@ -135,7 +180,8 @@ export function useDepositPolling(
     if (startTimeRef.current) {
       const elapsed = Date.now() - startTimeRef.current;
       if (elapsed > maxDuration) {
-        console.log('Max polling duration reached, stopping...');
+        console.log('Max polling duration reached, stopping and marking transaction as rejected...');
+        await markTransactionAsRejected(transactionId, 'Max polling duration reached');
         stopPolling();
         return;
       }
@@ -199,9 +245,10 @@ export function useDepositPolling(
     } catch (error) {
       console.error('Error polling transaction:', error);
       
-      // If we've had too many consecutive errors, stop polling
+      // If we've had too many consecutive errors, stop polling and mark as rejected
       if (attemptsRef.current > 10 && attemptsRef.current % 5 === 0) {
-        console.warn('Multiple polling errors, stopping...');
+        console.warn('Multiple polling errors, stopping and marking transaction as rejected...');
+        await markTransactionAsRejected(transactionId, 'Multiple polling errors');
         stopPolling();
       }
     }
@@ -209,6 +256,7 @@ export function useDepositPolling(
     pendingTransaction,
     checkTransactionStatus,
     verifyBalanceForTransaction,
+    markTransactionAsRejected,
     setPendingTransaction,
     maxAttempts,
     maxDuration,
