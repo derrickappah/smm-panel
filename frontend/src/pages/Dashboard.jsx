@@ -110,7 +110,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       
       const { data: pendingTransactions, error } = await supabase
         .from('transactions')
-        .select('id, user_id, type, amount, status, payment_method, paystack_reference, korapay_reference, created_at')
+        .select('id, user_id, type, amount, status, deposit_method, paystack_reference, korapay_reference, created_at')
         .eq('user_id', authUser.id)
         .eq('type', 'deposit')
         .eq('status', 'pending')
@@ -471,7 +471,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       if (reference) {
         const { data: foundByReference, error: findRefError } = await supabase
           .from('transactions')
-          .select('id, user_id, type, amount, status, payment_method, paystack_reference, korapay_reference, created_at')
+          .select('id, user_id, type, amount, status, deposit_method, paystack_reference, korapay_reference, created_at')
           .eq('paystack_reference', reference)
           .maybeSingle();
         
@@ -485,7 +485,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       if (!transactionToUpdate && pendingTransaction) {
         const { data: foundById, error: findByIdError } = await supabase
           .from('transactions')
-          .select('id, user_id, type, amount, status, payment_method, paystack_reference, korapay_reference, created_at')
+          .select('id, user_id, type, amount, status, deposit_method, paystack_reference, korapay_reference, created_at')
           .eq('id', pendingTransaction.id)
           .maybeSingle();
         
@@ -525,7 +525,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       if (!transactionToUpdate) {
         const { data: pendingTransactions, error: findPendingError } = await supabase
           .from('transactions')
-          .select('id, user_id, type, amount, status, payment_method, paystack_reference, korapay_reference, created_at')
+          .select('id, user_id, type, amount, status, deposit_method, paystack_reference, korapay_reference, created_at')
           .eq('user_id', authUser.id)
           .eq('status', 'pending')
           .eq('type', 'deposit')
@@ -568,7 +568,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       if (!transactionToUpdate && reference) {
         const { data: approvedTransactions, error: findApprovedError } = await supabase
           .from('transactions')
-          .select('id, user_id, type, amount, status, payment_method, paystack_reference, korapay_reference, created_at')
+          .select('id, user_id, type, amount, status, deposit_method, paystack_reference, korapay_reference, created_at')
           .eq('user_id', authUser.id)
           .eq('type', 'deposit')
           .in('status', ['approved', 'pending'])
@@ -619,7 +619,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       if (!transactionToUpdate && reference) {
         const { data: anyTransaction, error: findAnyError } = await supabase
           .from('transactions')
-          .select('id, user_id, type, amount, status, payment_method, paystack_reference, korapay_reference, created_at')
+          .select('id, user_id, type, amount, status, deposit_method, paystack_reference, korapay_reference, created_at')
           .eq('paystack_reference', reference)
           .eq('user_id', authUser.id)
           .maybeSingle();
@@ -2028,7 +2028,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         const otpData = await otpResponse.json();
 
         // Check if OTP was verified successfully
-        if (otpData.otpVerified && otpData.code === '200_OTP_SUCCESS') {
+        // Handle code '200_OTP_SUCCESS' (with or without explicit otpVerified flag)
+        if (otpData.code === '200_OTP_SUCCESS') {
           // OTP verified successfully
           setMoolreOtpVerifying(false);
           setMoolreOtpVerified(true);

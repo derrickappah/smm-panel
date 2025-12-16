@@ -84,7 +84,7 @@ const PaymentCallback = ({ onUpdateUser }) => {
           // Find transaction by reference
           const { data: transactions, error: txError } = await supabase
             .from('transactions')
-            .select('id, user_id, type, amount, status, payment_method, korapay_reference, created_at')
+            .select('id, user_id, type, amount, status, deposit_method, korapay_reference, created_at')
             .eq('korapay_reference', reference)
             .eq('user_id', authUser.id)
             .order('created_at', { ascending: false })
