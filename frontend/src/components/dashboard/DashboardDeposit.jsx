@@ -27,6 +27,9 @@ const DashboardDeposit = React.memo(({
   moolreOtpCode,
   setMoolreOtpCode,
   moolreRequiresOtp,
+  moolreOtpVerifying = false,
+  moolreOtpVerified = false,
+  moolreOtpError = null,
   loading,
   isPollingDeposit = false,
   pendingTransaction = null,
@@ -446,6 +449,66 @@ const DashboardDeposit = React.memo(({
                   An OTP code has been sent to your phone. Please enter it below to continue with the payment.
                 </p>
               </div>
+
+              {/* OTP Verification Status Indicators */}
+              {moolreOtpVerifying && !moolreOtpVerified && (
+                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg animate-pulse">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-shrink-0">
+                      <div className="w-5 h-5 border-2 border-yellow-600 border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm text-yellow-800 font-medium">
+                        Verifying OTP...
+                      </p>
+                      <p className="text-xs text-yellow-700 mt-1">
+                        Please wait while we verify your OTP code.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {moolreOtpVerified && (
+                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-shrink-0">
+                      <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm text-green-800 font-medium">
+                        OTP Verified Successfully!
+                      </p>
+                      <p className="text-xs text-green-700 mt-1">
+                        Initiating payment request...
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {moolreOtpError && (
+                <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-shrink-0">
+                      <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm text-red-800 font-medium">
+                        Verification Failed
+                      </p>
+                      <p className="text-xs text-red-700 mt-1">
+                        {moolreOtpError}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <Label htmlFor="moolre-otp" className="text-sm font-medium text-gray-700 mb-2 block">
                   OTP Code <span className="text-red-500">*</span>
@@ -456,19 +519,29 @@ const DashboardDeposit = React.memo(({
                   placeholder="Enter 6-digit OTP"
                   value={moolreOtpCode}
                   onChange={(e) => setMoolreOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-center text-lg tracking-widest"
+                  className={`w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-center text-lg tracking-widest ${
+                    moolreOtpError ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : ''
+                  }`}
                   maxLength={6}
                   required
                   autoFocus
+                  disabled={moolreOtpVerifying}
                 />
                 <p className="text-xs text-gray-500 mt-1">Enter the 6-digit code sent to your phone</p>
               </div>
               <Button
                 type="submit"
-                disabled={loading || !moolreOtpCode || moolreOtpCode.length !== 6}
+                disabled={loading || moolreOtpVerifying || !moolreOtpCode || moolreOtpCode.length !== 6}
                 className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? 'Verifying OTP...' : 'Verify OTP & Continue Payment'}
+                {moolreOtpVerifying ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    {moolreOtpVerified ? 'Initiating Payment...' : 'Verifying OTP...'}
+                  </span>
+                ) : (
+                  'Verify OTP & Continue Payment'
+                )}
               </Button>
             </>
           ) : (

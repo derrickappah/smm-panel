@@ -38,6 +38,9 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
   const [moolreOtpCode, setMoolreOtpCode] = useState('');
   const [moolreRequiresOtp, setMoolreRequiresOtp] = useState(false);
   const [moolreOtpTransaction, setMoolreOtpTransaction] = useState(null);
+  const [moolreOtpVerifying, setMoolreOtpVerifying] = useState(false);
+  const [moolreOtpVerified, setMoolreOtpVerified] = useState(false);
+  const [moolreOtpError, setMoolreOtpError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [pendingTransaction, setPendingTransaction] = useState(null);
   const [orderForm, setOrderForm] = useState({
@@ -1991,7 +1994,12 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         return;
       }
 
+      // Reset previous states
+      setMoolreOtpVerified(false);
+      setMoolreOtpError(null);
+      setMoolreOtpVerifying(true);
       setLoading(true);
+
       try {
         const { data: { user: authUser } } = await supabase.auth.getUser();
         if (!authUser) throw new Error('Not authenticated');
@@ -2021,7 +2029,17 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
         // Check if OTP was verified successfully
         if (otpData.otpVerified && otpData.code === '200_OTP_SUCCESS') {
-          // OTP verified, now initiate payment
+          // OTP verified successfully
+          setMoolreOtpVerifying(false);
+          setMoolreOtpVerified(true);
+          
+          // Small delay to show success message
+          await new Promise(resolve => setTimeout(resolve, 1000));
+
+          // Now initiate payment
+          setMoolreOtpVerifying(true);
+          setMoolreOtpVerified(false);
+
           const paymentResponse = await fetch('/api/moolre-init', {
             method: 'POST',
             headers: {
@@ -2055,6 +2073,10 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               })
               .eq('id', moolreOtpTransaction.id);
 
+            // Reset all states
+            setMoolreOtpVerifying(false);
+            setMoolreOtpVerified(false);
+            setMoolreOtpError(null);
             toast.success('Payment prompt sent to your phone. Please approve the payment on your device.');
             setPendingTransaction(moolreOtpTransaction);
             setMoolreRequiresOtp(false);
@@ -2067,19 +2089,31 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             return;
           }
         } else if (otpData.code === '400_INVALID_OTP') {
-          toast.error('Invalid OTP code. Please check and try again.');
+          setMoolreOtpVerifying(false);
+          setMoolreOtpError('Invalid OTP code. Please check and try again.');
           setMoolreOtpCode('');
           setLoading(false);
+          toast.error('Invalid OTP code. Please check and try again.');
           return;
         } else {
           throw new Error(otpData.error || otpData.message || 'OTP verification failed');
         }
       } catch (error) {
         console.error('Error submitting OTP:', error);
-        toast.error(error.message || 'Failed to verify OTP. Please try again.');
+        setMoolreOtpVerifying(false);
+        setMoolreOtpError(error.message || 'Failed to verify OTP. Please try again.');
         setLoading(false);
+        toast.error(error.message || 'Failed to verify OTP. Please try again.');
       }
       return;
+    }
+
+    // Clear OTP error when user starts typing (handled in component)
+    // Reset OTP states when switching away from OTP flow
+    if (!moolreRequiresOtp) {
+      setMoolreOtpVerifying(false);
+      setMoolreOtpVerified(false);
+      setMoolreOtpError(null);
     }
 
     // Regular payment flow (first time, no OTP)
@@ -2941,8 +2975,17 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             moolreChannel={moolreChannel}
             setMoolreChannel={setMoolreChannel}
             moolreOtpCode={moolreOtpCode}
-            setMoolreOtpCode={setMoolreOtpCode}
+            setMoolreOtpCode={(value) => {
+              setMoolreOtpCode(value);
+              // Clear error when user starts typing
+              if (moolreOtpError) {
+                setMoolreOtpError(null);
+              }
+            }}
             moolreRequiresOtp={moolreRequiresOtp}
+            moolreOtpVerifying={moolreOtpVerifying}
+            moolreOtpVerified={moolreOtpVerified}
+            moolreOtpError={moolreOtpError}
             loading={loading || isPollingDeposit}
             isPollingDeposit={isPollingDeposit}
             pendingTransaction={pendingTransaction}
