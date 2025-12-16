@@ -35,6 +35,9 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
   const [depositAmount, setDepositAmount] = useState('');
   const [moolrePhoneNumber, setMoolrePhoneNumber] = useState('');
   const [moolreChannel, setMoolreChannel] = useState('13'); // Default to MTN (13)
+  const [moolreOtpCode, setMoolreOtpCode] = useState('');
+  const [moolreRequiresOtp, setMoolreRequiresOtp] = useState(false);
+  const [moolreOtpTransaction, setMoolreOtpTransaction] = useState(null);
   const [loading, setLoading] = useState(false);
   const [pendingTransaction, setPendingTransaction] = useState(null);
   const [orderForm, setOrderForm] = useState({
@@ -1980,6 +1983,106 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
   const handleMoolreDeposit = useCallback(async (e) => {
     e.preventDefault();
+    
+    // If OTP is required, handle OTP submission
+    if (moolreRequiresOtp && moolreOtpTransaction) {
+      if (!moolreOtpCode || moolreOtpCode.trim() === '') {
+        toast.error('Please enter the OTP code sent to your phone');
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (!authUser) throw new Error('Not authenticated');
+
+        // Resubmit with OTP code
+        const otpResponse = await fetch('/api/moolre-init', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            amount: moolreOtpTransaction.amount,
+            currency: 'GHS',
+            payer: moolreOtpTransaction.phoneNumber,
+            reference: moolreOtpTransaction.moolreReference,
+            channel: moolreOtpTransaction.channel,
+            otpcode: moolreOtpCode.trim()
+          })
+        });
+
+        if (!otpResponse.ok) {
+          const errorData = await otpResponse.json().catch(() => ({ error: 'Unknown error' }));
+          throw new Error(errorData.error || 'Failed to verify OTP');
+        }
+
+        const otpData = await otpResponse.json();
+
+        // Check if OTP was verified successfully
+        if (otpData.otpVerified && otpData.code === '200_OTP_SUCCESS') {
+          // OTP verified, now initiate payment
+          const paymentResponse = await fetch('/api/moolre-init', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              amount: moolreOtpTransaction.amount,
+              currency: 'GHS',
+              payer: moolreOtpTransaction.phoneNumber,
+              reference: moolreOtpTransaction.moolreReference,
+              channel: moolreOtpTransaction.channel
+            })
+          });
+
+          const paymentData = await paymentResponse.json();
+          
+          if (!paymentResponse.ok || !paymentData.success) {
+            throw new Error(paymentData.error || 'Failed to initiate payment after OTP verification');
+          }
+
+          // Payment prompt sent
+          if (paymentData.code === '200_PAYMENT_REQ') {
+            // Update transaction with Moolre reference
+            const channelNames = { '13': 'MTN', '14': 'Vodafone', '15': 'AirtelTigo' };
+            await supabase
+              .from('transactions')
+              .update({
+                moolre_reference: moolreOtpTransaction.moolreReference,
+                moolre_status: 'pending',
+                moolre_channel: channelNames[moolreOtpTransaction.channel] || 'MTN'
+              })
+              .eq('id', moolreOtpTransaction.id);
+
+            toast.success('Payment prompt sent to your phone. Please approve the payment on your device.');
+            setPendingTransaction(moolreOtpTransaction);
+            setMoolreRequiresOtp(false);
+            setMoolreOtpCode('');
+            setMoolreOtpTransaction(null);
+            setDepositAmount('');
+            setMoolrePhoneNumber('');
+            setMoolreChannel('13');
+            setLoading(false);
+            return;
+          }
+        } else if (otpData.code === '400_INVALID_OTP') {
+          toast.error('Invalid OTP code. Please check and try again.');
+          setMoolreOtpCode('');
+          setLoading(false);
+          return;
+        } else {
+          throw new Error(otpData.error || otpData.message || 'OTP verification failed');
+        }
+      } catch (error) {
+        console.error('Error submitting OTP:', error);
+        toast.error(error.message || 'Failed to verify OTP. Please try again.');
+        setLoading(false);
+      }
+      return;
+    }
+
+    // Regular payment flow (first time, no OTP)
     if (!depositAmount || parseFloat(depositAmount) <= 0) {
       toast.error('Please enter a valid amount');
       return;
@@ -2004,13 +2107,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) throw new Error('Not authenticated');
 
-      // Get phone number
+      // Phone number already validated above, use it
       const phoneNumber = moolrePhoneNumber || user?.phone_number || authUser.user_metadata?.phone_number;
-      if (!phoneNumber || phoneNumber.trim() === '') {
-        toast.error('Please enter your Mobile Money number');
-        setLoading(false);
-        return;
-      }
 
       // Create transaction record for Moolre payment
       const { data: transactionData, error } = await supabase
@@ -2063,58 +2161,12 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           // OTP required - show OTP input UI
           toast.info('OTP sent to your phone. Please enter the OTP code.');
           // Store transaction and OTP state for resubmission
-          setPendingTransaction({ ...transaction, requiresOtp: true, moolreReference });
+          setMoolreRequiresOtp(true);
+          setMoolreOtpTransaction({ ...transaction, moolreReference, amount, phoneNumber, channel: moolreChannel });
           setLoading(false);
           return;
         }
 
-        // Handle OTP verification success
-        if (initData.otpVerified && initData.code === '200_OTP_SUCCESS') {
-          // OTP verified, now initiate payment
-          const paymentResponse = await fetch('/api/moolre-init', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              amount: amount,
-              currency: 'GHS',
-              payer: phoneNumber,
-              reference: moolreReference,
-              channel: moolreChannel
-            })
-          });
-
-          const paymentData = await paymentResponse.json();
-          
-          if (!paymentResponse.ok || !paymentData.success) {
-            throw new Error(paymentData.error || 'Failed to initiate payment after OTP verification');
-          }
-
-          // Payment prompt sent
-          if (paymentData.code === '200_PAYMENT_REQ') {
-            // Update transaction with Moolre reference
-            const channelNames = { '13': 'MTN', '14': 'Vodafone', '15': 'AirtelTigo' };
-            await supabase
-              .from('transactions')
-              .update({
-                moolre_reference: moolreReference,
-                moolre_status: 'pending',
-                moolre_channel: channelNames[moolreChannel] || 'MTN'
-              })
-              .eq('id', transaction.id);
-
-            toast.success('Payment prompt sent to your phone. Please approve the payment on your device.');
-            setPendingTransaction(transaction);
-            setDepositAmount('');
-            setMoolrePhoneNumber('');
-            setMoolreChannel('13'); // Reset to default
-            setLoading(false);
-            
-            // Start polling for payment status
-            return;
-          }
-        }
 
         // Payment prompt sent successfully
         if (initData.success && initData.code === '200_PAYMENT_REQ') {
@@ -2191,7 +2243,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           });
       }
     }
-  }, [depositAmount, moolrePhoneNumber, moolreChannel, minDepositSettings.moolre_min, onUpdateUser, user]);
+  }, [depositAmount, moolrePhoneNumber, moolreChannel, moolreOtpCode, moolreRequiresOtp, moolreOtpTransaction, minDepositSettings.moolre_min, onUpdateUser, user]);
 
   const handleDeposit = useCallback(async (e) => {
     e.preventDefault();
@@ -2888,6 +2940,9 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             setMoolrePhoneNumber={setMoolrePhoneNumber}
             moolreChannel={moolreChannel}
             setMoolreChannel={setMoolreChannel}
+            moolreOtpCode={moolreOtpCode}
+            setMoolreOtpCode={setMoolreOtpCode}
+            moolreRequiresOtp={moolreRequiresOtp}
             loading={loading || isPollingDeposit}
             isPollingDeposit={isPollingDeposit}
             pendingTransaction={pendingTransaction}

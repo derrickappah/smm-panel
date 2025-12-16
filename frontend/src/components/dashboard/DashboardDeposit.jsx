@@ -24,6 +24,9 @@ const DashboardDeposit = React.memo(({
   setMoolrePhoneNumber,
   moolreChannel,
   setMoolreChannel,
+  moolreOtpCode,
+  setMoolreOtpCode,
+  moolreRequiresOtp,
   loading,
   isPollingDeposit = false,
   pendingTransaction = null,
@@ -433,58 +436,97 @@ const DashboardDeposit = React.memo(({
         </form>
       ) : depositMethod === 'moolre' && paymentMethodSettings.moolre_enabled ? (
         <form onSubmit={handleMoolreDeposit} className="space-y-4">
-          <div>
-            <Label htmlFor="moolre-amount" className="text-sm font-medium text-gray-700 mb-2 block">Amount (GHS)</Label>
-            <Input
-              id="moolre-amount"
-              type="number"
-              step="0.01"
-              min="1"
-              placeholder="Enter amount"
-              value={depositAmount}
-              onChange={(e) => setDepositAmount(e.target.value)}
-              className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              required
-            />
-          </div>
-          <div>
-            <Label htmlFor="moolre-phone" className="text-sm font-medium text-gray-700 mb-2 block">
-              Mobile Money Number <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="moolre-phone"
-              type="tel"
-              placeholder="e.g., 0209151872"
-              value={moolrePhoneNumber}
-              onChange={(e) => setMoolrePhoneNumber(e.target.value)}
-              className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              required
-            />
-            <p className="text-xs text-gray-500 mt-1">Enter your Mobile Money number</p>
-          </div>
-          <div>
-            <Label htmlFor="moolre-channel" className="text-sm font-medium text-gray-700 mb-2 block">
-              Network <span className="text-red-500">*</span>
-            </Label>
-            <Select value={moolreChannel} onValueChange={setMoolreChannel}>
-              <SelectTrigger id="moolre-channel" className="w-full h-11">
-                <SelectValue placeholder="Select network" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="13">MTN</SelectItem>
-                <SelectItem value="14">Vodafone</SelectItem>
-                <SelectItem value="15">AirtelTigo</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-gray-500 mt-1">Select your Mobile Money network</p>
-          </div>
-          <Button
-            type="submit"
-            disabled={loading || !depositAmount || !moolrePhoneNumber || !moolreChannel}
-            className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? 'Processing...' : 'Pay with Moolre'}
-          </Button>
+          {moolreRequiresOtp ? (
+            <>
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800 font-medium mb-2">
+                  OTP Verification Required
+                </p>
+                <p className="text-xs text-blue-700">
+                  An OTP code has been sent to your phone. Please enter it below to continue with the payment.
+                </p>
+              </div>
+              <div>
+                <Label htmlFor="moolre-otp" className="text-sm font-medium text-gray-700 mb-2 block">
+                  OTP Code <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="moolre-otp"
+                  type="text"
+                  placeholder="Enter 6-digit OTP"
+                  value={moolreOtpCode}
+                  onChange={(e) => setMoolreOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-center text-lg tracking-widest"
+                  maxLength={6}
+                  required
+                  autoFocus
+                />
+                <p className="text-xs text-gray-500 mt-1">Enter the 6-digit code sent to your phone</p>
+              </div>
+              <Button
+                type="submit"
+                disabled={loading || !moolreOtpCode || moolreOtpCode.length !== 6}
+                className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Verifying OTP...' : 'Verify OTP & Continue Payment'}
+              </Button>
+            </>
+          ) : (
+            <>
+              <div>
+                <Label htmlFor="moolre-amount" className="text-sm font-medium text-gray-700 mb-2 block">Amount (GHS)</Label>
+                <Input
+                  id="moolre-amount"
+                  type="number"
+                  step="0.01"
+                  min="1"
+                  placeholder="Enter amount"
+                  value={depositAmount}
+                  onChange={(e) => setDepositAmount(e.target.value)}
+                  className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="moolre-phone" className="text-sm font-medium text-gray-700 mb-2 block">
+                  Mobile Money Number <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="moolre-phone"
+                  type="tel"
+                  placeholder="e.g., 0209151872"
+                  value={moolrePhoneNumber}
+                  onChange={(e) => setMoolrePhoneNumber(e.target.value)}
+                  className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">Enter your Mobile Money number</p>
+              </div>
+              <div>
+                <Label htmlFor="moolre-channel" className="text-sm font-medium text-gray-700 mb-2 block">
+                  Network <span className="text-red-500">*</span>
+                </Label>
+                <Select value={moolreChannel} onValueChange={setMoolreChannel}>
+                  <SelectTrigger id="moolre-channel" className="w-full h-11">
+                    <SelectValue placeholder="Select network" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="13">MTN</SelectItem>
+                    <SelectItem value="14">Vodafone</SelectItem>
+                    <SelectItem value="15">AirtelTigo</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-500 mt-1">Select your Mobile Money network</p>
+              </div>
+              <Button
+                type="submit"
+                disabled={loading || !depositAmount || !moolrePhoneNumber || !moolreChannel}
+                className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Processing...' : 'Pay with Moolre'}
+              </Button>
+            </>
+          )}
           <p className="text-xs sm:text-sm text-gray-600 text-center">
             Secure payment via Moolre Mobile Money. A payment prompt will be sent to your phone. Please approve the payment on your device.
           </p>
