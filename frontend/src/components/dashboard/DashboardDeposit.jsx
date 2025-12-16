@@ -30,6 +30,7 @@ const DashboardDeposit = React.memo(({
   moolreOtpVerifying = false,
   moolreOtpVerified = false,
   moolreOtpError = null,
+  moolrePaymentStatus = null, // 'waiting' | 'success' | 'failed' | null
   loading,
   isPollingDeposit = false,
   pendingTransaction = null,
@@ -439,7 +440,65 @@ const DashboardDeposit = React.memo(({
         </form>
       ) : depositMethod === 'moolre' && paymentMethodSettings.moolre_enabled ? (
         <form onSubmit={handleMoolreDeposit} className="space-y-4">
-          {moolreRequiresOtp ? (
+          {/* Circle Loader for Payment Approval Status */}
+          {moolrePaymentStatus && pendingTransaction?.deposit_method === 'moolre' ? (
+            <div className="flex flex-col items-center justify-center py-12 px-4">
+              {moolrePaymentStatus === 'waiting' && (
+                <div className="text-center">
+                  <div className="relative w-32 h-32 mx-auto mb-6">
+                    <div className="absolute inset-0 border-4 border-blue-200 rounded-full"></div>
+                    <div className="absolute inset-0 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">Complete on your phone</h3>
+                  <p className="text-sm text-gray-600 max-w-md">
+                    A payment prompt has been sent to your phone. Please approve the payment on your device.
+                  </p>
+                </div>
+              )}
+              
+              {moolrePaymentStatus === 'success' && (
+                <div className="text-center">
+                  <div className="relative w-32 h-32 mx-auto mb-6">
+                    <div className="absolute inset-0 bg-green-100 rounded-full flex items-center justify-center">
+                      <svg className="w-16 h-16 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">Payment Successful!</h3>
+                  <p className="text-sm text-gray-600 max-w-md">
+                    Your payment has been approved and your balance has been updated.
+                  </p>
+                </div>
+              )}
+              
+              {moolrePaymentStatus === 'failed' && (
+                <div className="text-center">
+                  <div className="relative w-32 h-32 mx-auto mb-6">
+                    <div className="absolute inset-0 bg-red-100 rounded-full flex items-center justify-center">
+                      <svg className="w-16 h-16 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </div>
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">Payment Failed</h3>
+                  <p className="text-sm text-gray-600 max-w-md mb-4">
+                    The payment was not approved. Please try again.
+                  </p>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      // Reset form to allow retry
+                      window.location.reload();
+                    }}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg px-6 py-2"
+                  >
+                    Try Again
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : moolreRequiresOtp ? (
             <>
               <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
                 <p className="text-sm text-blue-800 font-medium mb-2">

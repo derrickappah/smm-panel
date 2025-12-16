@@ -14,6 +14,7 @@ import { toast } from 'sonner';
  * @param {number} options.interval - Polling interval in milliseconds (default: 2000)
  * @param {number} options.maxDuration - Maximum polling duration in milliseconds (default: 180000 = 3 minutes)
  * @param {number} options.maxAttempts - Maximum number of polling attempts (default: 90)
+ * @param {Function} options.onStatusChange - Optional callback when transaction status changes (receives new status)
  * 
  * @returns {Object} - { isPolling, stopPolling }
  */
@@ -27,7 +28,8 @@ export function useDepositPolling(
   const {
     interval = 2000, // 2 seconds
     maxDuration = 180000, // 3 minutes
-    maxAttempts = 90 // 90 attempts * 2 seconds = 3 minutes
+    maxAttempts = 90, // 90 attempts * 2 seconds = 3 minutes
+    onStatusChange
   } = options;
 
   const intervalRef = useRef(null);
@@ -144,6 +146,11 @@ export function useDepositPolling(
       const statusData = await checkTransactionStatus(transactionId);
 
       if (statusData.status === 'approved') {
+        // Call status change callback if provided
+        if (onStatusChange) {
+          onStatusChange('approved');
+        }
+        
         // Transaction is approved - verify balance and refresh UI if not already processed
         if (!processedTransactionIdsRef.current.has(transactionId)) {
           console.log('Transaction approved, verifying balance and refreshing UI...', {
@@ -175,6 +182,11 @@ export function useDepositPolling(
           stopPolling();
         }
       } else if (statusData.status === 'rejected' || statusData.status === 'failed') {
+        // Call status change callback if provided
+        if (onStatusChange) {
+          onStatusChange(statusData.status);
+        }
+        
         // Transaction was rejected/failed
         console.log('Transaction rejected/failed, stopping polling');
         setPendingTransaction(null);
@@ -199,7 +211,8 @@ export function useDepositPolling(
     verifyBalanceForTransaction,
     setPendingTransaction,
     maxAttempts,
-    maxDuration
+    maxDuration,
+    onStatusChange
   ]);
 
   /**
