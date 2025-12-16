@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 
 const DashboardDeposit = React.memo(({
@@ -21,6 +22,8 @@ const DashboardDeposit = React.memo(({
   handleMoolreDeposit,
   moolrePhoneNumber,
   setMoolrePhoneNumber,
+  moolreChannel,
+  setMoolreChannel,
   loading,
   isPollingDeposit = false,
   pendingTransaction = null,
@@ -457,11 +460,27 @@ const DashboardDeposit = React.memo(({
               className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               required
             />
-            <p className="text-xs text-gray-500 mt-1">Enter your Mobile Money number (MTN, Vodafone, or AirtelTigo)</p>
+            <p className="text-xs text-gray-500 mt-1">Enter your Mobile Money number</p>
+          </div>
+          <div>
+            <Label htmlFor="moolre-channel" className="text-sm font-medium text-gray-700 mb-2 block">
+              Network <span className="text-red-500">*</span>
+            </Label>
+            <Select value={moolreChannel} onValueChange={setMoolreChannel}>
+              <SelectTrigger id="moolre-channel" className="w-full h-11">
+                <SelectValue placeholder="Select network" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="13">MTN</SelectItem>
+                <SelectItem value="14">Vodafone</SelectItem>
+                <SelectItem value="15">AirtelTigo</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-gray-500 mt-1">Select your Mobile Money network</p>
           </div>
           <Button
             type="submit"
-            disabled={loading || !depositAmount || !moolrePhoneNumber}
+            disabled={loading || !depositAmount || !moolrePhoneNumber || !moolreChannel}
             className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Processing...' : 'Pay with Moolre'}

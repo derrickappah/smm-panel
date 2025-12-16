@@ -34,6 +34,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
   } = usePaymentMethods();
   const [depositAmount, setDepositAmount] = useState('');
   const [moolrePhoneNumber, setMoolrePhoneNumber] = useState('');
+  const [moolreChannel, setMoolreChannel] = useState('13'); // Default to MTN (13)
   const [loading, setLoading] = useState(false);
   const [pendingTransaction, setPendingTransaction] = useState(null);
   const [orderForm, setOrderForm] = useState({
@@ -2044,7 +2045,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             currency: 'GHS',
             payer: phoneNumber,
             reference: moolreReference,
-            channel: 'MTN' // Default to MTN, can be made selectable in UI
+            channel: moolreChannel // Channel code: 13=MTN, 14=Vodafone, 15=AirtelTigo
           })
         });
 
@@ -2078,7 +2079,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               currency: 'GHS',
               payer: phoneNumber,
               reference: moolreReference,
-              channel: 'MTN'
+              channel: moolreChannel
             })
           });
 
@@ -2091,12 +2092,13 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           // Payment prompt sent
           if (paymentData.code === '200_PAYMENT_REQ') {
             // Update transaction with Moolre reference
+            const channelNames = { '13': 'MTN', '14': 'Vodafone', '15': 'AirtelTigo' };
             await supabase
               .from('transactions')
               .update({
                 moolre_reference: moolreReference,
                 moolre_status: 'pending',
-                moolre_channel: 'MTN'
+                moolre_channel: channelNames[moolreChannel] || 'MTN'
               })
               .eq('id', transaction.id);
 
@@ -2104,6 +2106,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             setPendingTransaction(transaction);
             setDepositAmount('');
             setMoolrePhoneNumber('');
+            setMoolreChannel('13'); // Reset to default
             setLoading(false);
             
             // Start polling for payment status
@@ -2114,12 +2117,13 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         // Payment prompt sent successfully
         if (initData.success && initData.code === '200_PAYMENT_REQ') {
           // Update transaction with Moolre reference
+          const channelNames = { '13': 'MTN', '14': 'Vodafone', '15': 'AirtelTigo' };
           await supabase
             .from('transactions')
             .update({
               moolre_reference: moolreReference,
               moolre_status: 'pending',
-              moolre_channel: 'MTN'
+              moolre_channel: channelNames[moolreChannel] || 'MTN'
             })
             .eq('id', transaction.id);
 
@@ -2127,6 +2131,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           setPendingTransaction(transaction);
           setDepositAmount('');
           setMoolrePhoneNumber('');
+          setMoolreChannel('13'); // Reset to default
           setLoading(false);
           
           // Start polling for payment status
@@ -2184,7 +2189,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           });
       }
     }
-  }, [depositAmount, moolrePhoneNumber, minDepositSettings.moolre_min, onUpdateUser, user]);
+  }, [depositAmount, moolrePhoneNumber, moolreChannel, minDepositSettings.moolre_min, onUpdateUser, user]);
 
   const handleDeposit = useCallback(async (e) => {
     e.preventDefault();
@@ -2879,6 +2884,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             handleMoolreDeposit={handleMoolreDeposit}
             moolrePhoneNumber={moolrePhoneNumber}
             setMoolrePhoneNumber={setMoolrePhoneNumber}
+            moolreChannel={moolreChannel}
+            setMoolreChannel={setMoolreChannel}
             loading={loading || isPollingDeposit}
             isPollingDeposit={isPollingDeposit}
             pendingTransaction={pendingTransaction}
