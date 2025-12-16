@@ -72,37 +72,100 @@ export default async function handler(req, res) {
       metadata: metadata
     };
 
-    // Make request to Moolre embed/link API
-    const moolreResponse = await fetch('https://api.moolre.com/embed/link', {
-      method: 'POST',
-      headers: {
-        'X-API-USER': moolreApiUser,
-        'X-API-PUBKEY': moolreApiPubkey,
-        'Content-Type': 'application/json'
+    console.log('Sending request to Moolre API:', {
+      url: 'https://api.moolre.com/embed/link',
+      request: {
+        ...moolreRequest,
+        accountnumber: moolreAccountNumber ? '***' : undefined
       },
-      body: JSON.stringify(moolreRequest)
+      headers: {
+        'X-API-USER': moolreApiUser ? '***' : undefined,
+        'X-API-PUBKEY': moolreApiPubkey ? '***' : undefined
+      }
     });
 
-    const moolreData = await moolreResponse.json();
+    // Make request to Moolre embed/link API
+    let moolreResponse;
+    try {
+      moolreResponse = await fetch('https://api.moolre.com/embed/link', {
+        method: 'POST',
+        headers: {
+          'X-API-USER': moolreApiUser,
+          'X-API-PUBKEY': moolreApiPubkey,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(moolreRequest)
+      });
+    } catch (fetchError) {
+      console.error('Network error calling Moolre API:', fetchError);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to connect to Moolre API',
+        message: fetchError.message
+      });
+    }
 
-    if (!moolreResponse.ok) {
-      console.error('Moolre API error:', moolreData);
+    let moolreData;
+    try {
+      const responseText = await moolreResponse.text();
+      console.log('Raw Moolre API response text:', responseText);
+      
+      if (!responseText || responseText.trim() === '') {
+        throw new Error('Empty response from Moolre API');
+      }
+      
+      moolreData = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('Failed to parse Moolre API response:', parseError);
+      return res.status(500).json({
+        success: false,
+        error: 'Invalid response from Moolre API',
+        message: parseError.message,
+        status: moolreResponse.status,
+        statusText: moolreResponse.statusText
+      });
+    }
+
+    console.log('Moolre API response status:', moolreResponse.status);
+    console.log('Moolre API response data:', JSON.stringify(moolreData, null, 2));
+
+    // Check for Moolre error codes (similar to regular Moolre API)
+    if (moolreData.code && moolreData.code !== '200' && !moolreData.code.startsWith('200')) {
+      console.error('Moolre API error code:', moolreData.code, moolreData);
       return res.status(moolreResponse.status || 500).json({
         success: false,
-        error: moolreData.message || moolreData.error || 'Failed to initialize Moolre Web payment',
+        error: moolreData.message || moolreData.error || moolreData.msg || 'Failed to initialize Moolre Web payment',
+        code: moolreData.code,
         details: moolreData
       });
     }
 
-    // Check if response contains a payment link
-    const paymentLink = moolreData.link || moolreData.data?.link || moolreData.url || moolreData.data?.url;
+    if (!moolreResponse.ok) {
+      console.error('Moolre API HTTP error:', moolreData);
+      return res.status(moolreResponse.status || 500).json({
+        success: false,
+        error: moolreData.message || moolreData.error || moolreData.msg || 'Failed to initialize Moolre Web payment',
+        details: moolreData
+      });
+    }
+
+    // Check if response contains a payment link - try multiple possible response structures
+    const paymentLink = moolreData.link || 
+                       moolreData.data?.link || 
+                       moolreData.url || 
+                       moolreData.data?.url ||
+                       moolreData.payment_link ||
+                       moolreData.data?.payment_link ||
+                       moolreData.paymentUrl ||
+                       moolreData.data?.paymentUrl;
 
     if (!paymentLink) {
-      console.error('Moolre API response missing payment link:', moolreData);
+      console.error('Moolre API response missing payment link. Full response:', JSON.stringify(moolreData, null, 2));
       return res.status(500).json({
         success: false,
         error: 'Failed to get payment link from Moolre',
-        details: moolreData
+        details: moolreData,
+        message: 'The Moolre API response did not contain a payment link. Please check the API response structure.'
       });
     }
 

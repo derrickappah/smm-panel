@@ -2187,14 +2187,24 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       });
 
       if (!initResponse.ok) {
-        const errorData = await initResponse.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || 'Failed to initialize Moolre Web payment');
+        let errorData;
+        try {
+          errorData = await initResponse.json();
+        } catch (parseError) {
+          const text = await initResponse.text();
+          console.error('Failed to parse error response:', text);
+          throw new Error(`Server error (${initResponse.status}): ${text || 'Unknown error'}`);
+        }
+        console.error('Moolre Web init error:', errorData);
+        throw new Error(errorData.error || errorData.message || 'Failed to initialize Moolre Web payment');
       }
 
       const initData = await initResponse.json();
+      console.log('Moolre Web init response:', initData);
 
       if (!initData.success || !initData.payment_link) {
-        throw new Error(initData.error || 'Failed to get payment link from Moolre');
+        console.error('Moolre Web init failed - missing payment link:', initData);
+        throw new Error(initData.error || initData.message || 'Failed to get payment link from Moolre');
       }
 
       // Update transaction with reference
