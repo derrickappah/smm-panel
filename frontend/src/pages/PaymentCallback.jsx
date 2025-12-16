@@ -180,6 +180,127 @@ const PaymentCallback = ({ onUpdateUser }) => {
             // Check again after 5 seconds
             setTimeout(() => verifyPayment(), 5000);
           }
+        } else if (paymentMethod === 'moolre_web') {
+          // Verify via serverless function (using same endpoint as moolre)
+          const verifyResponse = await fetch('/api/moolre-verify', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ reference })
+          });
+
+          if (!verifyResponse.ok) {
+            const errorData = await verifyResponse.json().catch(() => ({ error: 'Verification failed' }));
+            throw new Error(errorData.error || 'Payment verification failed');
+          }
+
+          const verifyData = await verifyResponse.json();
+
+          if (!verifyData.success) {
+            throw new Error(verifyData.error || 'Payment verification failed');
+          }
+
+          // Find transaction by reference
+          const { data: transactions, error: txError } = await supabase
+            .from('transactions')
+            .select('id, user_id, type, amount, status, deposit_method, moolre_web_reference, moolre_web_status, created_at')
+            .eq('moolre_web_reference', reference)
+            .eq('user_id', authUser.id)
+            .order('created_at', { ascending: false })
+            .limit(1);
+
+          if (txError || !transactions || transactions.length === 0) {
+            throw new Error('Transaction not found');
+          }
+
+          const transaction = transactions[0];
+
+          // Check payment status
+          const paymentStatus = verifyData.status;
+          const txstatus = verifyData.txstatus; // 1=Success, 0=Pending, 2=Failed
+          const isSuccessful = paymentStatus === 'success' || txstatus === 1;
+
+          if (isSuccessful && transaction.status !== 'approved') {
+            // Update transaction to approved
+            const { error: updateError } = await supabase
+              .from('transactions')
+              .update({
+                status: 'approved',
+                moolre_web_status: 'success',
+                moolre_web_reference: reference
+              })
+              .eq('id', transaction.id);
+
+            if (updateError) {
+              console.error('Error updating transaction:', updateError);
+              throw new Error('Payment verified but failed to update transaction. Please contact support.');
+            }
+
+            // Update user balance
+            const { data: profile, error: profileError } = await supabase
+              .from('profiles')
+              .select('balance')
+              .eq('id', authUser.id)
+              .single();
+
+            if (profileError) {
+              console.error('Error fetching profile:', profileError);
+              throw new Error('Payment verified but failed to fetch profile. Please contact support.');
+            }
+
+            const currentBalance = parseFloat(profile.balance || 0);
+            const newBalance = currentBalance + parseFloat(transaction.amount);
+
+            const { error: balanceError } = await supabase
+              .from('profiles')
+              .update({ balance: newBalance })
+              .eq('id', authUser.id);
+
+            if (balanceError) {
+              console.error('Error updating balance:', balanceError);
+              throw new Error('Payment verified but failed to update balance. Please contact support.');
+            }
+
+            // Refresh user data
+            if (onUpdateUser) {
+              const { data: updatedProfile } = await supabase
+                .from('profiles')
+                .select('id, email, name, balance, role, phone_number')
+                .eq('id', authUser.id)
+                .single();
+              if (updatedProfile) {
+                onUpdateUser(updatedProfile);
+              }
+            }
+
+            setStatus('success');
+            setMessage(`Payment successful! ₵${parseFloat(transaction.amount).toFixed(2)} has been added to your account.`);
+            toast.success(`Payment successful! ₵${parseFloat(transaction.amount).toFixed(2)} added to your balance.`);
+            
+            setTimeout(() => navigate('/dashboard'), 3000);
+          } else if (paymentStatus === 'failed' || txstatus === 2) {
+            // Update transaction to rejected
+            await supabase
+              .from('transactions')
+              .update({
+                status: 'rejected',
+                moolre_web_status: 'failed',
+                moolre_web_error: 'Payment failed or was cancelled'
+              })
+              .eq('id', transaction.id);
+
+            setStatus('failed');
+            setMessage('Payment was cancelled or failed. Please try again.');
+            toast.error('Payment was cancelled or failed.');
+            setTimeout(() => navigate('/dashboard'), 3000);
+          } else {
+            // Payment is still pending
+            setStatus('verifying');
+            setMessage('Payment is still being processed. Please wait...');
+            // Check again after 5 seconds
+            setTimeout(() => verifyPayment(), 5000);
+          }
         } else if (paymentMethod === 'moolre') {
           // Verify via serverless function
           const verifyResponse = await fetch('/api/moolre-verify', {

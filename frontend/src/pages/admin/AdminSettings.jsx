@@ -15,14 +15,16 @@ const AdminSettings = memo(() => {
     manual_enabled: true,
     hubtel_enabled: true,
     korapay_enabled: true,
-    moolre_enabled: true
+    moolre_enabled: true,
+    moolre_web_enabled: true
   });
   const [minDepositSettings, setMinDepositSettings] = useState({
     paystack_min: 10,
     manual_min: 10,
     hubtel_min: 1,
     korapay_min: 1,
-    moolre_min: 1
+    moolre_min: 1,
+    moolre_web_min: 1
   });
   const [manualDepositDetails, setManualDepositDetails] = useState({
     phone_number: '0559272762',
@@ -43,11 +45,13 @@ const AdminSettings = memo(() => {
           'payment_method_hubtel_enabled',
           'payment_method_korapay_enabled',
           'payment_method_moolre_enabled',
+          'payment_method_moolre_web_enabled',
           'payment_method_paystack_min_deposit',
           'payment_method_manual_min_deposit',
           'payment_method_hubtel_min_deposit',
           'payment_method_korapay_min_deposit',
           'payment_method_moolre_min_deposit',
+          'payment_method_moolre_web_min_deposit',
           'manual_deposit_phone_number',
           'manual_deposit_account_name',
           'manual_deposit_instructions'
@@ -87,6 +91,7 @@ const AdminSettings = memo(() => {
         hubtel_enabled: settingsData.hubtel_enabled ?? prev.hubtel_enabled,
         korapay_enabled: settingsData.korapay_enabled ?? prev.korapay_enabled,
         moolre_enabled: settingsData.moolre_enabled ?? prev.moolre_enabled,
+        moolre_web_enabled: settingsData.moolre_web_enabled ?? prev.moolre_web_enabled,
       }));
       setMinDepositSettings(prev => ({
         ...prev,
@@ -95,6 +100,7 @@ const AdminSettings = memo(() => {
         hubtel_min: settingsData.hubtel_min ?? prev.hubtel_min,
         korapay_min: settingsData.korapay_min ?? prev.korapay_min,
         moolre_min: settingsData.moolre_min ?? prev.moolre_min,
+        moolre_web_min: settingsData.moolre_web_min ?? prev.moolre_web_min,
       }));
       setManualDepositDetails(prev => ({
         phone_number: settingsData.manual_deposit_phone_number ?? prev.phone_number,
@@ -133,6 +139,11 @@ const AdminSettings = memo(() => {
         description = 'Enable/disable Moolre payment method';
         stateKey = 'moolre_enabled';
         displayName = 'Moolre';
+      } else if (method === 'moolre_web') {
+        settingKey = 'payment_method_moolre_web_enabled';
+        description = 'Enable/disable Moolre Web payment method';
+        stateKey = 'moolre_web_enabled';
+        displayName = 'Moolre Web';
       } else {
         throw new Error('Unknown payment method');
       }
@@ -198,6 +209,11 @@ const AdminSettings = memo(() => {
         description = 'Minimum deposit amount for Moolre payment method';
         stateKey = 'moolre_min';
         displayName = 'Moolre';
+      } else if (method === 'moolre_web') {
+        settingKey = 'payment_method_moolre_web_min_deposit';
+        description = 'Minimum deposit amount for Moolre Web payment method';
+        stateKey = 'moolre_web_min';
+        displayName = 'Moolre Web';
       } else {
         throw new Error('Unknown payment method');
       }
@@ -666,6 +682,63 @@ const AdminSettings = memo(() => {
                 className={paymentMethodSettings.moolre_enabled ? "bg-green-600 hover:bg-green-700" : ""}
               >
                 {paymentMethodSettings.moolre_enabled ? (
+                  <>
+                    <Power className="w-4 h-4 mr-2" />
+                    Enabled
+                  </>
+                ) : (
+                  <>
+                    <PowerOff className="w-4 h-4 mr-2" />
+                    Disabled
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+          
+          {/* Moolre Web */}
+          <div className="flex items-center justify-between p-4 bg-white/50 rounded-xl border-2 border-gray-200">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center">
+                <CheckCircle className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <p className="font-semibold text-gray-900">Moolre Web</p>
+                <p className="text-sm text-gray-600">Moolre Web Portal payment</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Label htmlFor="moolre-web-min" className="text-sm text-gray-700 whitespace-nowrap">Min: ₵</Label>
+                <Input
+                  id="moolre-web-min"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={minDepositSettings.moolre_web_min}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === '' || parseFloat(value) >= 0) {
+                      setMinDepositSettings(prev => ({ ...prev, moolre_web_min: value }));
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const value = parseFloat(e.target.value);
+                    if (!isNaN(value) && value > 0) {
+                      handleUpdateMinDeposit('moolre_web', value);
+                    }
+                  }}
+                  className="w-20 h-9 text-sm"
+                />
+              </div>
+              <Button
+                onClick={() => handleTogglePaymentMethod('moolre_web', !paymentMethodSettings.moolre_web_enabled)}
+                variant={paymentMethodSettings.moolre_web_enabled ? "default" : "outline"}
+                size="sm"
+                disabled={togglePaymentMethod.isPending}
+                className={paymentMethodSettings.moolre_web_enabled ? "bg-green-600 hover:bg-green-700" : ""}
+              >
+                {paymentMethodSettings.moolre_web_enabled ? (
                   <>
                     <Power className="w-4 h-4 mr-2" />
                     Enabled

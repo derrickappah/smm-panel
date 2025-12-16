@@ -542,14 +542,14 @@ export default async function handler(req, res) {
           // Check if transaction was already approved (idempotent)
           if (result.message && result.message.includes('already approved')) {
             console.log('[MANUAL-VERIFY] Transaction already approved via atomic function');
-            balanceUpdated = true;
-            updateResult = {
-              success: true,
+          balanceUpdated = true;
+      updateResult = {
+        success: true,
               message: 'Transaction already approved',
-              oldStatus: transaction.status,
-              newStatus: 'approved',
+        oldStatus: transaction.status,
+        newStatus: 'approved',
               balanceUpdated: true
-            };
+      };
           } else {
             return res.status(400).json({ 
               error: result.message || 'Transaction approval failed',
