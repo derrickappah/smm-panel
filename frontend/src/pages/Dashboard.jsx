@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { placeSMMGenOrder } from '@/lib/smmgen';
 import { saveOrderStatusHistory } from '@/lib/orderStatusHistory';
+import { normalizePhoneNumber } from '@/utils/phoneUtils';
 import Navbar from '@/components/Navbar';
 import SEO from '@/components/SEO';
 import ReferralSection from '@/components/ReferralSection';
@@ -2002,6 +2003,75 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     }
   }, [depositAmount, minDepositSettings.korapay_min, onUpdateUser]);
 
+  // Helper function to check if a phone number + channel is already verified
+  const checkMoolreVerification = useCallback(async (phoneNumber, channel) => {
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) return false;
+
+      const normalizedPhone = normalizePhoneNumber(phoneNumber);
+      if (!normalizedPhone) return false;
+
+      const { data, error } = await supabase
+        .from('moolre_verified_phones')
+        .select('id')
+        .eq('user_id', authUser.id)
+        .eq('phone_number', normalizedPhone)
+        .eq('channel', channel)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error checking Moolre verification:', error);
+        return false;
+      }
+
+      return !!data;
+    } catch (error) {
+      console.error('Error in checkMoolreVerification:', error);
+      return false;
+    }
+  }, []);
+
+  // Helper function to store verified phone number + channel
+  const storeMoolreVerification = useCallback(async (phoneNumber, channel) => {
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) {
+        console.error('Not authenticated, cannot store verification');
+        return false;
+      }
+
+      const normalizedPhone = normalizePhoneNumber(phoneNumber);
+      if (!normalizedPhone) {
+        console.error('Invalid phone number, cannot store verification');
+        return false;
+      }
+
+      // Insert or update (using upsert with ON CONFLICT)
+      const { error } = await supabase
+        .from('moolre_verified_phones')
+        .upsert({
+          user_id: authUser.id,
+          phone_number: normalizedPhone,
+          channel: channel,
+          verified_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id,phone_number,channel'
+        });
+
+      if (error) {
+        console.error('Error storing Moolre verification:', error);
+        return false;
+      }
+
+      console.log('Moolre verification stored successfully:', { phoneNumber: normalizedPhone, channel });
+      return true;
+    } catch (error) {
+      console.error('Error in storeMoolreVerification:', error);
+      return false;
+    }
+  }, []);
+
   const handleMoolreDeposit = useCallback(async (e) => {
     e.preventDefault();
     
@@ -2059,6 +2129,9 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           (otpData.success === true && otpData.message && otpData.message.toLowerCase().includes('verification successful'));
 
         if (isOtpSuccess) {
+          // OTP verified successfully - store verification in database for future transactions
+          await storeMoolreVerification(moolreOtpTransaction.phoneNumber, moolreOtpTransaction.channel);
+          
           // OTP verified successfully - automatically initiate payment
           setMoolreOtpVerifying(false);
           setMoolreOtpVerified(true);
@@ -2166,6 +2239,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               (otpData.message && otpData.message.toLowerCase().includes('verification successful'))) {
             // Treat as success even if code doesn't match
             console.log('Treating response as success based on success flag or message');
+            // OTP verified successfully - store verification in database for future transactions
+            await storeMoolreVerification(moolreOtpTransaction.phoneNumber, moolreOtpTransaction.channel);
             // OTP verified successfully - automatically initiate payment
             setMoolreOtpVerifying(false);
             setMoolreOtpVerified(true);
@@ -2310,6 +2385,14 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
       // Phone number already validated above, use it
       const phoneNumber = moolrePhoneNumber || user?.phone_number || authUser.user_metadata?.phone_number;
+      
+      // Check if phone number + channel is already verified
+      const normalizedPhone = normalizePhoneNumber(phoneNumber);
+      const isPhoneVerified = await checkMoolreVerification(normalizedPhone, moolreChannel);
+      
+      if (isPhoneVerified) {
+        console.log('Phone number already verified, proceeding with payment');
+      }
 
       // Create transaction record for Moolre payment
       const { data: transactionData, error } = await supabase
@@ -2358,10 +2441,21 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         const initData = await initResponse.json();
 
         // Handle OTP requirement
-        if (initData.requiresOtp && initData.code === 'TP14') {
-          // OTP required - show OTP input UI
+        // Only show OTP input if phone is not already verified in our database
+        // If phone is verified but Moolre still requires OTP, we'll handle it automatically
+        if (initData.requiresOtp && initData.code === 'TP14' && !isPhoneVerified) {
+          // OTP required and phone not verified - show OTP input UI
           toast.info('OTP sent to your phone. Please enter the OTP code.');
           // Store transaction and OTP state for resubmission
+          setMoolreRequiresOtp(true);
+          setMoolreOtpTransaction({ ...transaction, moolreReference, amount, phoneNumber, channel: moolreChannel });
+          setLoading(false);
+          return;
+        } else if (initData.requiresOtp && initData.code === 'TP14' && isPhoneVerified) {
+          // Phone is verified in our DB but Moolre still requires OTP
+          // This shouldn't happen often, but if it does, we'll still need to handle OTP
+          console.warn('Phone verified in DB but Moolre still requires OTP');
+          toast.info('OTP sent to your phone. Please enter the OTP code.');
           setMoolreRequiresOtp(true);
           setMoolreOtpTransaction({ ...transaction, moolreReference, amount, phoneNumber, channel: moolreChannel });
           setLoading(false);
