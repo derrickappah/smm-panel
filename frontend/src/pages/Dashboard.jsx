@@ -2122,6 +2122,108 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     }
   }, []);
 
+  const handleMoolreWebDeposit = useCallback(async (e) => {
+    e.preventDefault();
+    if (!depositAmount || parseFloat(depositAmount) <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
+    const amount = parseFloat(depositAmount);
+    if (amount < minDepositSettings.moolre_web_min) {
+      toast.error(`Minimum deposit amount is ₵${minDepositSettings.moolre_web_min}`);
+      return;
+    }
+
+    setLoading(true);
+    let transaction = null;
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) throw new Error('Not authenticated');
+
+      // Get user email
+      const userEmail = user?.email || authUser.email;
+      if (!userEmail) {
+        throw new Error('Email is required for Moolre Web payment');
+      }
+
+      // Create transaction record for Moolre Web payment
+      const { data: transactionData, error } = await supabase
+        .from('transactions')
+        .insert({
+          user_id: authUser.id,
+          amount: amount,
+          type: 'deposit',
+          status: 'pending',
+          deposit_method: 'moolre_web'
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating Moolre Web deposit transaction:', error);
+        throw error;
+      }
+
+      transaction = transactionData;
+
+      // Generate unique reference for this transaction
+      const moolreWebReference = `MOOLRE_WEB_${transaction.id}_${Date.now()}`;
+
+      // Initialize Moolre Web payment via serverless function
+      const initResponse = await fetch('/api/moolre-web-init', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          amount: amount,
+          currency: 'GHS',
+          email: userEmail,
+          externalref: moolreWebReference,
+          callback: `${window.location.origin}/payment-callback?method=moolre_web&ref=${moolreWebReference}`,
+          redirect: `${window.location.origin}/payment-callback?method=moolre_web&ref=${moolreWebReference}`
+        })
+      });
+
+      if (!initResponse.ok) {
+        const errorData = await initResponse.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || 'Failed to initialize Moolre Web payment');
+      }
+
+      const initData = await initResponse.json();
+
+      if (!initData.success || !initData.payment_link) {
+        throw new Error(initData.error || 'Failed to get payment link from Moolre');
+      }
+
+      // Update transaction with reference
+      await supabase
+        .from('transactions')
+        .update({
+          moolre_web_reference: moolreWebReference
+        })
+        .eq('id', transaction.id);
+
+      // Redirect user to Moolre payment page
+      window.location.href = initData.payment_link;
+
+    } catch (error) {
+      console.error('Error in Moolre Web deposit:', error);
+      toast.error(error.message || 'Failed to initialize payment. Please try again.');
+      
+      // Delete transaction if it was created but payment initialization failed
+      if (transaction) {
+        await supabase
+          .from('transactions')
+          .delete()
+          .eq('id', transaction.id);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [depositAmount, minDepositSettings, user]);
+
   const handleMoolreDeposit = useCallback(async (e) => {
     e.preventDefault();
     
@@ -3323,6 +3425,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             handleHubtelDeposit={handleHubtelDeposit}
             handleKorapayDeposit={handleKorapayDeposit}
             handleMoolreDeposit={handleMoolreDeposit}
+            handleMoolreWebDeposit={handleMoolreWebDeposit}
             moolrePhoneNumber={moolrePhoneNumber}
             setMoolrePhoneNumber={setMoolrePhoneNumber}
             moolreChannel={moolreChannel}
