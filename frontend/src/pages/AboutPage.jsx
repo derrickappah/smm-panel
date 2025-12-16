@@ -56,9 +56,31 @@ const AboutPage = ({ user, onLogout }) => {
           <h2 className="text-2xl sm:text-3xl font-bold text-center text-gray-900 mb-8">
             Our Mission
           </h2>
-          <p className="text-lg text-gray-600 text-center leading-relaxed">
-            At BoostUp GH, our mission is to provide reliable, affordable, and high-quality social media marketing services to help businesses and individuals grow their online presence. We believe that everyone deserves access to professional SMM services, regardless of their budget or experience level.
-          </p>
+          <div className="space-y-6">
+            <p className="text-lg text-gray-600 text-center leading-relaxed">
+              At BoostUp GH, our mission is to provide reliable, affordable, and high-quality social media marketing services to help businesses and individuals grow their online presence. We believe that everyone deserves access to professional SMM services, regardless of their budget or experience level.
+            </p>
+            <div className="bg-indigo-50 border-l-4 border-indigo-600 p-6 rounded-r-lg">
+              <h3 className="text-xl font-semibold text-gray-900 mb-3">Empowering Digital Growth</h3>
+              <p className="text-gray-700 leading-relaxed">
+                We are committed to democratizing social media marketing by making premium services accessible to everyone. Our mission extends beyond just providing services—we aim to empower entrepreneurs, content creators, and businesses across Ghana and beyond to achieve their digital marketing goals without breaking the bank.
+              </p>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-6 mt-8">
+              <div className="bg-gray-50 p-6 rounded-lg">
+                <h4 className="font-semibold text-gray-900 mb-2">Our Vision</h4>
+                <p className="text-gray-600 text-sm leading-relaxed">
+                  To become the most trusted and innovative SMM panel in Africa, setting new standards for quality, reliability, and customer satisfaction in the social media marketing industry.
+                </p>
+              </div>
+              <div className="bg-gray-50 p-6 rounded-lg">
+                <h4 className="font-semibold text-gray-900 mb-2">Our Commitment</h4>
+                <p className="text-gray-600 text-sm leading-relaxed">
+                  We are dedicated to continuous improvement, staying ahead of industry trends, and providing exceptional value to our customers while maintaining the highest standards of service quality and ethical practices.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 

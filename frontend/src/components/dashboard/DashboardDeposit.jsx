@@ -386,12 +386,12 @@ const DashboardDeposit = React.memo(({
               <br />
               <span className="mt-1 block">Text us on WhatsApp: </span>
               <a 
-                href="https://wa.me/233559272762" 
+                href="https://wa.me/233550069661" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
               >
-                0559272762
+                0550069661
               </a>
             </p>
           </div>
@@ -428,12 +428,12 @@ const DashboardDeposit = React.memo(({
               <br />
               <span className="mt-1 block">Text us on WhatsApp: </span>
               <a 
-                href="https://wa.me/233559272762" 
+                href="https://wa.me/233550069661" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
               >
-                0559272762
+                0550069661
               </a>
             </p>
           </div>
@@ -626,7 +626,7 @@ const DashboardDeposit = React.memo(({
                 <Input
                   id="moolre-phone"
                   type="tel"
-                  placeholder="e.g., 0209151872"
+                  placeholder="enter your momo number"
                   value={moolrePhoneNumber}
                   onChange={(e) => setMoolrePhoneNumber(e.target.value)}
                   className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
@@ -668,12 +668,12 @@ const DashboardDeposit = React.memo(({
               <br />
               <span className="mt-1 block">Text us on WhatsApp: </span>
               <a 
-                href="https://wa.me/233559272762" 
+                href="https://wa.me/233550069661" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
               >
-                0559272762
+                0550069661
               </a>
             </p>
           </div>
