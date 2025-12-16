@@ -2007,14 +2007,22 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
   const checkMoolreVerification = useCallback(async (phoneNumber, channel) => {
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (!authUser) return false;
+      if (!authUser) {
+        console.log('checkMoolreVerification: No auth user');
+        return false;
+      }
 
       const normalizedPhone = normalizePhoneNumber(phoneNumber);
-      if (!normalizedPhone) return false;
+      if (!normalizedPhone) {
+        console.log('checkMoolreVerification: Invalid phone number', phoneNumber);
+        return false;
+      }
+
+      console.log('Checking verification for:', { normalizedPhone, channel, userId: authUser.id });
 
       const { data, error } = await supabase
         .from('moolre_verified_phones')
-        .select('id')
+        .select('id, verified_at')
         .eq('user_id', authUser.id)
         .eq('phone_number', normalizedPhone)
         .eq('channel', channel)
@@ -2025,7 +2033,9 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         return false;
       }
 
-      return !!data;
+      const isVerified = !!data;
+      console.log('Verification check result:', { isVerified, data });
+      return isVerified;
     } catch (error) {
       console.error('Error in checkMoolreVerification:', error);
       return false;
@@ -2048,7 +2058,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       }
 
       // Insert or update (using upsert with ON CONFLICT)
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('moolre_verified_phones')
         .upsert({
           user_id: authUser.id,
@@ -2057,14 +2067,20 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           verified_at: new Date().toISOString()
         }, {
           onConflict: 'user_id,phone_number,channel'
-        });
+        })
+        .select();
 
       if (error) {
         console.error('Error storing Moolre verification:', error);
         return false;
       }
 
-      console.log('Moolre verification stored successfully:', { phoneNumber: normalizedPhone, channel });
+      console.log('Moolre verification stored successfully:', { 
+        phoneNumber: normalizedPhone, 
+        channel, 
+        userId: authUser.id,
+        storedData: data 
+      });
       return true;
     } catch (error) {
       console.error('Error in storeMoolreVerification:', error);
@@ -2390,8 +2406,15 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       const normalizedPhone = normalizePhoneNumber(phoneNumber);
       const isPhoneVerified = await checkMoolreVerification(normalizedPhone, moolreChannel);
       
+      console.log('Moolre verification check:', {
+        phoneNumber,
+        normalizedPhone,
+        channel: moolreChannel,
+        isPhoneVerified
+      });
+      
       if (isPhoneVerified) {
-        console.log('Phone number already verified, proceeding with payment');
+        console.log('Phone number already verified, will skip OTP UI if Moolre requires it');
       }
 
       // Create transaction record for Moolre payment
@@ -2440,26 +2463,60 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
         const initData = await initResponse.json();
 
+        console.log('Moolre API response:', {
+          code: initData.code,
+          requiresOtp: initData.requiresOtp,
+          success: initData.success,
+          isPhoneVerified,
+          normalizedPhone,
+          channel: moolreChannel
+        });
+
         // Handle OTP requirement
-        // Only show OTP input if phone is not already verified in our database
-        // If phone is verified but Moolre still requires OTP, we'll handle it automatically
-        if (initData.requiresOtp && initData.code === 'TP14' && !isPhoneVerified) {
-          // OTP required and phone not verified - show OTP input UI
-          toast.info('OTP sent to your phone. Please enter the OTP code.');
-          // Store transaction and OTP state for resubmission
-          setMoolreRequiresOtp(true);
-          setMoolreOtpTransaction({ ...transaction, moolreReference, amount, phoneNumber, channel: moolreChannel });
-          setLoading(false);
-          return;
-        } else if (initData.requiresOtp && initData.code === 'TP14' && isPhoneVerified) {
-          // Phone is verified in our DB but Moolre still requires OTP
-          // This shouldn't happen often, but if it does, we'll still need to handle OTP
-          console.warn('Phone verified in DB but Moolre still requires OTP');
-          toast.info('OTP sent to your phone. Please enter the OTP code.');
-          setMoolreRequiresOtp(true);
-          setMoolreOtpTransaction({ ...transaction, moolreReference, amount, phoneNumber, channel: moolreChannel });
-          setLoading(false);
-          return;
+        // IMPORTANT: Even if phone is verified in our DB, Moolre's API may still return TP14
+        // This is because Moolre has its own verification system that's independent of ours
+        // However, if phone is verified in our DB, we should still show OTP but log it as unexpected
+        if (initData.requiresOtp && initData.code === 'TP14') {
+          if (isPhoneVerified) {
+            // Phone is verified in our DB but Moolre still requires OTP
+            // This can happen if:
+            // 1. Moolre's verification expired or was reset
+            // 2. There's a mismatch in phone number format
+            // 3. Moolre requires OTP for every transaction regardless of previous verification
+            console.warn('⚠️ Phone verified in our DB but Moolre still requires OTP');
+            console.warn('This may indicate:', {
+              reason: 'Moolre has its own verification system that may require OTP each time',
+              ourVerification: { normalizedPhone, channel: moolreChannel },
+              suggestion: 'User will need to enter OTP again, but we will not store duplicate verification'
+            });
+            toast.info('OTP sent to your phone. Please enter the OTP code.');
+            setMoolreRequiresOtp(true);
+            setMoolreOtpTransaction({ 
+              ...transaction, 
+              moolreReference, 
+              amount, 
+              phoneNumber: normalizedPhone, // Store normalized phone for consistency
+              channel: moolreChannel 
+            });
+            setLoading(false);
+            return;
+          } else {
+            // OTP required and phone not verified - show OTP input UI
+            console.log('OTP required for unverified phone - this is expected');
+            toast.info('OTP sent to your phone. Please enter the OTP code.');
+            // Store transaction and OTP state for resubmission
+            // Store normalized phone to ensure consistency when storing verification
+            setMoolreRequiresOtp(true);
+            setMoolreOtpTransaction({ 
+              ...transaction, 
+              moolreReference, 
+              amount, 
+              phoneNumber: normalizedPhone, // Store normalized phone for consistency
+              channel: moolreChannel 
+            });
+            setLoading(false);
+            return;
+          }
         }
 
 
