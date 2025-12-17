@@ -243,16 +243,87 @@ const PaymentCallback = ({ onUpdateUser }) => {
           }
 
           // Find transaction by reference
-          const { data: transactions, error: txError } = await supabase
-            .from('transactions')
-            .select('id, user_id, type, amount, status, deposit_method, moolre_web_reference, moolre_web_status, created_at')
-            .eq('moolre_web_reference', reference)
-            .eq('user_id', authUser.id)
-            .order('created_at', { ascending: false })
-            .limit(1);
+          // Reference format: MOOLRE_WEB_{transaction_id}_{timestamp}
+          // Try to extract transaction ID from reference
+          let transactionIdFromRef = null;
+          if (reference && reference.startsWith('MOOLRE_WEB_')) {
+            const parts = reference.replace('MOOLRE_WEB_', '').split('_');
+            // The transaction ID is everything except the last part (timestamp)
+            if (parts.length >= 2) {
+              // UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (36 chars)
+              // Try to find UUID pattern in the reference
+              const uuidPattern = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
+              const match = reference.match(uuidPattern);
+              if (match) {
+                transactionIdFromRef = match[1];
+              }
+            }
+          }
+
+          let transactions = null;
+          let txError = null;
+
+          // First, try to find by moolre_web_reference
+          // Note: If column doesn't exist, this will fail gracefully and we'll try other methods
+          let txByRef = null;
+          let refError = null;
+          try {
+            const result = await supabase
+              .from('transactions')
+              .select('id, user_id, type, amount, status, deposit_method, moolre_web_reference, moolre_web_status, created_at')
+              .eq('moolre_web_reference', reference)
+              .eq('user_id', authUser.id)
+              .order('created_at', { ascending: false })
+              .limit(1);
+            txByRef = result.data;
+            refError = result.error;
+          } catch (err) {
+            // Column might not exist, continue to fallback methods
+            console.warn('Query by moolre_web_reference failed, trying fallback methods:', err);
+            refError = err;
+          }
+
+          if (!refError && txByRef && txByRef.length > 0) {
+            transactions = txByRef;
+          } else if (transactionIdFromRef) {
+            // If not found by reference, try by transaction ID extracted from reference
+            const { data: txById, error: idError } = await supabase
+              .from('transactions')
+              .select('id, user_id, type, amount, status, deposit_method, moolre_web_reference, moolre_web_status, created_at')
+              .eq('id', transactionIdFromRef)
+              .eq('user_id', authUser.id)
+              .eq('deposit_method', 'moolre_web')
+              .order('created_at', { ascending: false })
+              .limit(1);
+
+            if (!idError && txById && txById.length > 0) {
+              transactions = txById;
+            } else {
+              // Last resort: find most recent pending moolre_web transaction for this user
+              const { data: txByUser, error: userError } = await supabase
+                .from('transactions')
+                .select('id, user_id, type, amount, status, deposit_method, moolre_web_reference, moolre_web_status, created_at')
+                .eq('user_id', authUser.id)
+                .eq('deposit_method', 'moolre_web')
+                .in('status', ['pending', 'approved'])
+                .order('created_at', { ascending: false })
+                .limit(1);
+
+              if (!userError && txByUser && txByUser.length > 0) {
+                transactions = txByUser;
+              } else {
+                txError = userError || new Error('Transaction not found');
+              }
+            }
+          } else {
+            txError = refError || new Error('Transaction not found');
+          }
 
           if (txError || !transactions || transactions.length === 0) {
-            throw new Error('Transaction not found');
+            console.error('Transaction lookup error:', txError);
+            console.error('Reference used:', reference);
+            console.error('Extracted transaction ID:', transactionIdFromRef);
+            throw new Error('Transaction not found. Please check your dashboard.');
           }
 
           const transaction = transactions[0];
