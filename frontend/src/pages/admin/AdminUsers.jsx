@@ -4,10 +4,11 @@ import { useDebounce } from '@/hooks/useDebounce';
 import VirtualizedList from '@/components/VirtualizedList';
 import ResponsiveTable from '@/components/admin/ResponsiveTable';
 import UserEditForm from '@/components/admin/UserEditForm';
+import UserDetailsDialog from '@/components/admin/UserDetailsDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, RefreshCw, Edit, Download } from 'lucide-react';
+import { Search, RefreshCw, Edit, Download, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 
 const ITEMS_PER_PAGE = 50;
@@ -19,6 +20,8 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
   const [page, setPage] = useState(1);
   const [editingUser, setEditingUser] = useState(null);
   const [exportFormat, setExportFormat] = useState('name-phone');
+  const [selectedUserId, setSelectedUserId] = useState(null);
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
 
   const debouncedSearch = useDebounce(searchTerm, 300);
 
@@ -122,6 +125,16 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
     }
   }, [updateUserMutation, onRefresh]);
 
+  const handleViewUserDetails = useCallback((user) => {
+    setSelectedUserId(user.id);
+    setIsDetailsDialogOpen(true);
+  }, []);
+
+  const handleCloseDetailsDialog = useCallback(() => {
+    setIsDetailsDialogOpen(false);
+    setSelectedUserId(null);
+  }, []);
+
   const handleExportCSV = useCallback(() => {
     let headers, rows;
     
@@ -165,7 +178,7 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
       <div className="col-span-1 min-w-[80px]">Role</div>
       <div className="col-span-1 min-w-[100px]">Balance</div>
       <div className="col-span-2 min-w-[150px]">Joined Date</div>
-      <div className="col-span-1 min-w-[100px]">Actions</div>
+      <div className="col-span-1 min-w-[150px]">Actions</div>
     </div>
   ), []);
 
@@ -183,7 +196,15 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
     }
 
     return (
-      <div className="grid grid-cols-12 gap-4 p-4 items-center bg-white hover:bg-gray-50 transition-colors border-b border-gray-200 min-w-[1200px]">
+      <div 
+        className="grid grid-cols-12 gap-4 p-4 items-center bg-white hover:bg-gray-50 transition-colors border-b border-gray-200 min-w-[1200px] cursor-pointer"
+        onClick={(e) => {
+          // Don't trigger if clicking on buttons
+          if (!e.target.closest('button')) {
+            handleViewUserDetails(user);
+          }
+        }}
+      >
         <div className="col-span-2 min-w-[150px]">
           <p className="font-medium text-gray-900 break-words">{user.name}</p>
         </div>
@@ -207,20 +228,36 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
           <p className="text-sm text-gray-700 whitespace-nowrap">{new Date(user.created_at).toLocaleDateString()}</p>
           <p className="text-xs text-gray-500 whitespace-nowrap">{new Date(user.created_at).toLocaleTimeString()}</p>
         </div>
-        <div className="col-span-1 min-w-[100px]">
+        <div className="col-span-1 min-w-[100px] flex gap-2">
           <Button
-            onClick={() => setEditingUser(user)}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleViewUserDetails(user);
+            }}
             variant="outline"
             size="sm"
             className="text-xs whitespace-nowrap min-h-[44px]"
+            title="View Details"
           >
-            <Edit className="w-4 h-4 mr-1" />
-            Edit
+            <Eye className="w-4 h-4 mr-1" />
+            View
+          </Button>
+          <Button
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditingUser(user);
+            }}
+            variant="outline"
+            size="sm"
+            className="text-xs whitespace-nowrap min-h-[44px]"
+            title="Edit User"
+          >
+            <Edit className="w-4 h-4" />
           </Button>
         </div>
       </div>
     );
-  }, [editingUser, handleUpdateUser]);
+  }, [editingUser, handleUpdateUser, handleViewUserDetails]);
 
   const renderMobileCard = useCallback((user, index) => {
     if (editingUser?.id === user.id) {
@@ -261,20 +298,29 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
             <p className="text-sm text-gray-700">{new Date(user.created_at).toLocaleDateString()}</p>
           </div>
         </div>
-        <div className="pt-2 border-t border-gray-200">
+        <div className="pt-2 border-t border-gray-200 flex gap-2">
+          <Button
+            onClick={() => handleViewUserDetails(user)}
+            variant="outline"
+            size="sm"
+            className="flex-1 min-h-[44px]"
+          >
+            <Eye className="w-4 h-4 mr-2" />
+            View Details
+          </Button>
           <Button
             onClick={() => setEditingUser(user)}
             variant="outline"
             size="sm"
-            className="w-full min-h-[44px]"
+            className="flex-1 min-h-[44px]"
           >
             <Edit className="w-4 h-4 mr-2" />
-            Edit User
+            Edit
           </Button>
         </div>
       </div>
     );
-  }, [editingUser, handleUpdateUser]);
+  }, [editingUser, handleUpdateUser, handleViewUserDetails]);
 
   if (isLoading) {
     return (
@@ -431,6 +477,13 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
           </div>
         </>
       )}
+
+      {/* User Details Dialog */}
+      <UserDetailsDialog
+        userId={selectedUserId}
+        open={isDetailsDialogOpen}
+        onOpenChange={setIsDetailsDialogOpen}
+      />
     </div>
   );
 });
