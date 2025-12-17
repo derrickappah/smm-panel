@@ -115,44 +115,36 @@ const PaymentCallback = ({ onUpdateUser }) => {
           const isSuccessful = paymentStatus === 'success' || paymentStatus === 'successful' || paymentStatus === 'completed';
 
           if (isSuccessful && transaction.status !== 'approved') {
-            // Update transaction to approved
-            const { error: updateError } = await supabase
-              .from('transactions')
-              .update({
-                status: 'approved',
-                korapay_status: 'success',
-                korapay_reference: reference
+            // Use atomic API endpoint to approve transaction and update balance
+            // This prevents race conditions and ensures consistency
+            const approveResponse = await fetch('/api/approve-deposit-universal', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                transaction_id: transaction.id,
+                payment_method: 'korapay',
+                payment_status: 'success',
+                payment_reference: reference
               })
-              .eq('id', transaction.id);
+            });
 
-            if (updateError) {
-              console.error('Error updating transaction:', updateError);
-              throw new Error('Payment verified but failed to update transaction. Please contact support.');
+            if (!approveResponse.ok) {
+              const errorData = await approveResponse.json().catch(() => ({ error: 'Unknown error' }));
+              console.error('Error approving transaction:', errorData);
+              throw new Error(`Payment verified but failed to approve transaction: ${errorData.error || 'Unknown error'}. Please contact support.`);
             }
 
-            // Update user balance
-            const { data: profile, error: profileError } = await supabase
-              .from('profiles')
-              .select('balance')
-              .eq('id', authUser.id)
-              .single();
+            const approveResult = await approveResponse.json();
 
-            if (profileError) {
-              console.error('Error fetching profile:', profileError);
-              throw new Error('Payment verified but failed to fetch profile. Please contact support.');
-            }
-
-            const currentBalance = parseFloat(profile.balance || 0);
-            const newBalance = currentBalance + parseFloat(transaction.amount);
-
-            const { error: balanceError } = await supabase
-              .from('profiles')
-              .update({ balance: newBalance })
-              .eq('id', authUser.id);
-
-            if (balanceError) {
-              console.error('Error updating balance:', balanceError);
-              throw new Error('Payment verified but failed to update balance. Please contact support.');
+            if (!approveResult.success) {
+              // Check if transaction was already approved (idempotent)
+              if (approveResult.message && approveResult.message.includes('already approved')) {
+                console.log('Transaction already approved, proceeding...');
+              } else {
+                throw new Error(`Transaction approval failed: ${approveResult.message || 'Unknown error'}. Please contact support.`);
+              }
             }
 
             // Refresh user data
@@ -323,42 +315,36 @@ const PaymentCallback = ({ onUpdateUser }) => {
           }
 
           if (isSuccessful && transaction.status !== 'approved') {
-            // Update transaction to approved
-            const { error: updateError } = await supabase
-              .from('transactions')
-              .update({
-                status: 'approved'
+            // Use atomic API endpoint to approve transaction and update balance
+            // This prevents race conditions and ensures consistency
+            const approveResponse = await fetch('/api/approve-deposit-universal', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                transaction_id: transaction.id,
+                payment_method: 'moolre_web',
+                payment_status: 'success',
+                payment_reference: reference
               })
-              .eq('id', transaction.id);
+            });
 
-            if (updateError) {
-              console.error('Error updating transaction:', updateError);
-              throw new Error('Payment verified but failed to update transaction. Please contact support.');
+            if (!approveResponse.ok) {
+              const errorData = await approveResponse.json().catch(() => ({ error: 'Unknown error' }));
+              console.error('Error approving transaction:', errorData);
+              throw new Error(`Payment verified but failed to approve transaction: ${errorData.error || 'Unknown error'}. Please contact support.`);
             }
 
-            // Update user balance
-            const { data: profile, error: profileError } = await supabase
-              .from('profiles')
-              .select('balance')
-              .eq('id', authUser.id)
-              .single();
+            const approveResult = await approveResponse.json();
 
-            if (profileError) {
-              console.error('Error fetching profile:', profileError);
-              throw new Error('Payment verified but failed to fetch profile. Please contact support.');
-            }
-
-            const currentBalance = parseFloat(profile.balance || 0);
-            const newBalance = currentBalance + parseFloat(transaction.amount);
-
-            const { error: balanceError } = await supabase
-              .from('profiles')
-              .update({ balance: newBalance })
-              .eq('id', authUser.id);
-
-            if (balanceError) {
-              console.error('Error updating balance:', balanceError);
-              throw new Error('Payment verified but failed to update balance. Please contact support.');
+            if (!approveResult.success) {
+              // Check if transaction was already approved (idempotent)
+              if (approveResult.message && approveResult.message.includes('already approved')) {
+                console.log('Transaction already approved, proceeding...');
+              } else {
+                throw new Error(`Transaction approval failed: ${approveResult.message || 'Unknown error'}. Please contact support.`);
+              }
             }
 
             // Refresh user data
@@ -449,44 +435,36 @@ const PaymentCallback = ({ onUpdateUser }) => {
           const isSuccessful = paymentStatus === 'success' || txstatus === 1;
 
           if (isSuccessful && transaction.status !== 'approved') {
-            // Update transaction to approved
-            const { error: updateError } = await supabase
-              .from('transactions')
-              .update({
-                status: 'approved',
-                moolre_status: 'success',
-                moolre_reference: reference
+            // Use atomic API endpoint to approve transaction and update balance
+            // This prevents race conditions and ensures consistency
+            const approveResponse = await fetch('/api/approve-deposit-universal', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                transaction_id: transaction.id,
+                payment_method: 'moolre',
+                payment_status: 'success',
+                payment_reference: reference
               })
-              .eq('id', transaction.id);
+            });
 
-            if (updateError) {
-              console.error('Error updating transaction:', updateError);
-              throw new Error('Payment verified but failed to update transaction. Please contact support.');
+            if (!approveResponse.ok) {
+              const errorData = await approveResponse.json().catch(() => ({ error: 'Unknown error' }));
+              console.error('Error approving transaction:', errorData);
+              throw new Error(`Payment verified but failed to approve transaction: ${errorData.error || 'Unknown error'}. Please contact support.`);
             }
 
-            // Update user balance
-            const { data: profile, error: profileError } = await supabase
-              .from('profiles')
-              .select('balance')
-              .eq('id', authUser.id)
-              .single();
+            const approveResult = await approveResponse.json();
 
-            if (profileError) {
-              console.error('Error fetching profile:', profileError);
-              throw new Error('Payment verified but failed to fetch profile. Please contact support.');
-            }
-
-            const currentBalance = parseFloat(profile.balance || 0);
-            const newBalance = currentBalance + parseFloat(transaction.amount);
-
-            const { error: balanceError } = await supabase
-              .from('profiles')
-              .update({ balance: newBalance })
-              .eq('id', authUser.id);
-
-            if (balanceError) {
-              console.error('Error updating balance:', balanceError);
-              throw new Error('Payment verified but failed to update balance. Please contact support.');
+            if (!approveResult.success) {
+              // Check if transaction was already approved (idempotent)
+              if (approveResult.message && approveResult.message.includes('already approved')) {
+                console.log('Transaction already approved, proceeding...');
+              } else {
+                throw new Error(`Transaction approval failed: ${approveResult.message || 'Unknown error'}. Please contact support.`);
+              }
             }
 
             // Refresh user data

@@ -158,57 +158,56 @@ export default async function handler(req, res) {
     if (isSuccessful && transaction.status !== 'approved') {
       console.log('[MOOLRE WEB CALLBACK] Processing successful payment for transaction:', transaction.id);
 
-      // Update transaction to approved
-      const { error: updateError } = await supabase
-        .from('transactions')
-        .update({
-          status: 'approved',
-          moolre_web_status: 'success',
-          moolre_web_reference: reference
-        })
-        .eq('id', transaction.id);
+      // Use atomic database function to approve transaction and update balance
+      // This prevents race conditions and ensures consistency
+      const { data: result, error: rpcError } = await supabase.rpc('approve_deposit_transaction_universal', {
+        p_transaction_id: transaction.id,
+        p_payment_method: 'moolre_web',
+        p_payment_status: 'success',
+        p_payment_reference: reference
+      });
 
-      if (updateError) {
-        console.error('[MOOLRE WEB CALLBACK] Error updating transaction:', updateError);
+      if (rpcError) {
+        console.error('[MOOLRE WEB CALLBACK] Database function error:', rpcError);
         return res.status(500).json({
-          error: 'Payment verified but failed to update transaction'
+          error: 'Payment verified but failed to approve transaction',
+          details: rpcError.message || rpcError.code
         });
       }
 
-      // Update user balance
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('balance')
-        .eq('id', transaction.user_id)
-        .single();
+      const approvalResult = result && result.length > 0 ? result[0] : null;
 
-      if (profileError) {
-        console.error('[MOOLRE WEB CALLBACK] Error fetching profile:', profileError);
+      if (!approvalResult) {
+        console.error('[MOOLRE WEB CALLBACK] Database function returned no result');
         return res.status(500).json({
-          error: 'Payment verified but failed to fetch profile'
+          error: 'Payment verified but database function returned no result'
         });
       }
 
-      const currentBalance = parseFloat(profile.balance || 0);
-      const newBalance = currentBalance + parseFloat(transaction.amount);
-
-      const { error: balanceError } = await supabase
-        .from('profiles')
-        .update({ balance: newBalance })
-        .eq('id', transaction.user_id);
-
-      if (balanceError) {
-        console.error('[MOOLRE WEB CALLBACK] Error updating balance:', balanceError);
-        return res.status(500).json({
-          error: 'Payment verified but failed to update balance'
-        });
+      if (!approvalResult.success) {
+        // Check if already approved (idempotent)
+        if (approvalResult.message && approvalResult.message.includes('already approved')) {
+          console.log('[MOOLRE WEB CALLBACK] Transaction already approved');
+          return res.status(200).json({
+            success: true,
+            message: 'Payment already processed',
+            transactionId: transaction.id,
+            status: 'approved'
+          });
+        } else {
+          console.error('[MOOLRE WEB CALLBACK] Approval failed:', approvalResult.message);
+          return res.status(500).json({
+            error: `Transaction approval failed: ${approvalResult.message}`
+          });
+        }
       }
 
       console.log('[MOOLRE WEB CALLBACK] Successfully processed payment:', {
         transactionId: transaction.id,
         userId: transaction.user_id,
         amount: transaction.amount,
-        newBalance
+        oldBalance: approvalResult.old_balance,
+        newBalance: approvalResult.new_balance
       });
 
       // Return success response
@@ -216,7 +215,9 @@ export default async function handler(req, res) {
         success: true,
         message: 'Payment processed successfully',
         transactionId: transaction.id,
-        status: 'approved'
+        status: 'approved',
+        oldBalance: approvalResult.old_balance,
+        newBalance: approvalResult.new_balance
       });
     }
 
