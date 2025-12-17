@@ -2170,6 +2170,20 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       // Generate unique reference for this transaction
       const moolreWebReference = `MOOLRE_WEB_${transaction.id}_${Date.now()}`;
 
+      // Ensure we have a proper origin (handle cases where window.location.origin might not be available)
+      const origin = window.location.origin || 
+                     `${window.location.protocol}//${window.location.host}`;
+      
+      // Construct callback and redirect URLs - ensure they're absolute and properly formatted
+      const callbackUrl = `${origin}/payment-callback?method=moolre_web&ref=${encodeURIComponent(moolreWebReference)}`;
+      const redirectUrl = `${origin}/payment-callback?method=moolre_web&ref=${encodeURIComponent(moolreWebReference)}`;
+
+      console.log('Initializing Moolre Web payment with:', {
+        reference: moolreWebReference,
+        callbackUrl,
+        redirectUrl
+      });
+
       // Initialize Moolre Web payment via serverless function
       const initResponse = await fetch('/api/moolre-web-init', {
         method: 'POST',
@@ -2181,8 +2195,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           currency: 'GHS',
           email: userEmail,
           externalref: moolreWebReference,
-          callback: `${window.location.origin}/payment-callback?method=moolre_web&ref=${moolreWebReference}`,
-          redirect: `${window.location.origin}/payment-callback?method=moolre_web&ref=${moolreWebReference}`
+          callback: callbackUrl,
+          redirect: redirectUrl
         })
       });
 

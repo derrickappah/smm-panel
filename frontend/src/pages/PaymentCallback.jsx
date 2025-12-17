@@ -20,16 +20,22 @@ const PaymentCallback = ({ onUpdateUser }) => {
     const verifyPayment = async () => {
       try {
         // Get reference from URL params (Korapay may use different param names)
+        // For Moolre, also check for externalref parameter
         const reference = searchParams.get('reference') || 
                          searchParams.get('ref') || 
                          searchParams.get('trxref') ||
-                         searchParams.get('reference_id');
+                         searchParams.get('reference_id') ||
+                         searchParams.get('externalref') ||
+                         searchParams.get('external_ref');
         const paymentMethod = searchParams.get('method') || 'korapay'; // Default to korapay
 
         if (!reference) {
           // Try to get reference from URL hash or other locations
           const hashParams = new URLSearchParams(window.location.hash.substring(1));
-          const hashReference = hashParams.get('reference') || hashParams.get('ref');
+          const hashReference = hashParams.get('reference') || 
+                               hashParams.get('ref') ||
+                               hashParams.get('externalref') ||
+                               hashParams.get('external_ref');
           
           if (hashReference) {
             // Use hash reference and continue
@@ -42,6 +48,36 @@ const PaymentCallback = ({ onUpdateUser }) => {
             };
             verifyWithHash();
             return;
+          }
+          
+          // For moolre_web, try to find the most recent pending transaction if reference is missing
+          if (paymentMethod === 'moolre_web') {
+            try {
+              const { data: { user: authUser } } = await supabase.auth.getUser();
+              if (authUser) {
+                const { data: transactions, error: txError } = await supabase
+                  .from('transactions')
+                  .select('id, moolre_web_reference, status, deposit_method')
+                  .eq('user_id', authUser.id)
+                  .eq('deposit_method', 'moolre_web')
+                  .eq('status', 'pending')
+                  .order('created_at', { ascending: false })
+                  .limit(1);
+                
+                if (!txError && transactions && transactions.length > 0 && transactions[0].moolre_web_reference) {
+                  // Found a pending transaction, use its reference
+                  const foundRef = transactions[0].moolre_web_reference;
+                  const newSearchParams = new URLSearchParams(searchParams);
+                  newSearchParams.set('ref', foundRef);
+                  window.history.replaceState({}, '', `${window.location.pathname}?${newSearchParams.toString()}`);
+                  // Retry with found reference
+                  setTimeout(() => verifyPayment(), 100);
+                  return;
+                }
+              }
+            } catch (fallbackError) {
+              console.error('Error in fallback reference lookup:', fallbackError);
+            }
           }
           
           setStatus('failed');

@@ -59,13 +59,26 @@ export default async function handler(req, res) {
     }
 
     // Prepare the request to Moolre embed/link API
+    // Ensure redirect URL is properly formatted (absolute URL)
+    let redirectUrl = redirect || '';
+    if (redirectUrl && !redirectUrl.startsWith('http://') && !redirectUrl.startsWith('https://')) {
+      // If relative URL, make it absolute (this shouldn't happen but handle it)
+      redirectUrl = `https://${redirectUrl}`;
+    }
+    
+    // Ensure callback URL is properly formatted
+    let callbackUrl = callback || '';
+    if (callbackUrl && !callbackUrl.startsWith('http://') && !callbackUrl.startsWith('https://')) {
+      callbackUrl = `https://${callbackUrl}`;
+    }
+    
     const moolreRequest = {
       type: 1,
       amount: amount.toString(),
       email: email,
       externalref: externalref,
-      callback: callback || '',
-      redirect: redirect || '',
+      callback: callbackUrl,
+      redirect: redirectUrl,
       reusable: reusable,
       currency: currency,
       accountnumber: moolreAccountNumber,
@@ -88,14 +101,14 @@ export default async function handler(req, res) {
     let moolreResponse;
     try {
       moolreResponse = await fetch('https://api.moolre.com/embed/link', {
-        method: 'POST',
-        headers: {
-          'X-API-USER': moolreApiUser,
-          'X-API-PUBKEY': moolreApiPubkey,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(moolreRequest)
-      });
+      method: 'POST',
+      headers: {
+        'X-API-USER': moolreApiUser,
+        'X-API-PUBKEY': moolreApiPubkey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(moolreRequest)
+    });
     } catch (fetchError) {
       console.error('Network error calling Moolre API:', fetchError);
       return res.status(500).json({

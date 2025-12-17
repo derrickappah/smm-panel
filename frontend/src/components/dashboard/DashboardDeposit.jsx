@@ -708,7 +708,7 @@ const DashboardDeposit = React.memo(({
                       style={{ maxHeight: '500px' }}
                     >
                       <source
-                        src="https://spihsvdchouynfbsotwq.supabase.co/storage/v1/object/public/storage/deposit%20tutorial%20moolre.MOV"
+                        src="https://spihsvdchouynfbsotwq.supabase.co/storage/v1/object/public/storage/tutorial.MOV"
                         type="video/quicktime"
                       />
                       Your browser does not support the video tag.
