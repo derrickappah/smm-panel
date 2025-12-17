@@ -64,9 +64,10 @@ const TransactionsPage = ({ user, onLogout }) => {
         setTransactions(transactionsData || []);
       } else {
         // For admins: fetch all transactions with user profiles in one query (using join)
+        // Use explicit relationship name to avoid ambiguity with admin_id foreign key
         const { data: transactionsData, error: transactionsError } = await supabase
           .from('transactions')
-          .select('*, profiles(email, name, balance)')
+          .select('*, profiles!transactions_user_id_fkey(email, name, balance)')
           .order('created_at', { ascending: false });
 
         if (transactionsError) {

@@ -12,7 +12,7 @@ const fetchDeposits = async ({ pageParam = 0 }) => {
 
   const { data, error, count } = await supabase
     .from('transactions')
-    .select('id, user_id, amount, type, status, created_at, paystack_status, paystack_reference, manual_reference, korapay_reference, deposit_method, payment_proof_url, profiles(email, name, phone_number)', { count: 'exact' })
+    .select('id, user_id, amount, type, status, created_at, paystack_status, paystack_reference, manual_reference, korapay_reference, deposit_method, payment_proof_url, profiles!transactions_user_id_fkey(email, name, phone_number)', { count: 'exact' })
     .eq('type', 'deposit')
     .order('created_at', { ascending: false })
     .range(from, to);
@@ -54,7 +54,7 @@ const fetchAllDeposits = async () => {
     
     const { data, error } = await supabase
       .from('transactions')
-      .select('id, user_id, amount, type, status, created_at, paystack_status, paystack_reference, manual_reference, korapay_reference, order_id, payment_proof_url, profiles(email, name, phone_number)')
+      .select('id, user_id, amount, type, status, created_at, paystack_status, paystack_reference, manual_reference, korapay_reference, order_id, payment_proof_url, profiles!transactions_user_id_fkey(email, name, phone_number)')
       .eq('type', 'deposit')
       .order('created_at', { ascending: false })
       .range(from, to);
