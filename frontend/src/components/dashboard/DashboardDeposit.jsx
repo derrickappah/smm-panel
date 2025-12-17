@@ -760,6 +760,31 @@ const DashboardDeposit = React.memo(({
               </a>
             </p>
           </div>
+          <div className="mt-6">
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="tutorial" className="border border-gray-200 rounded-lg overflow-hidden">
+                <AccordionTrigger className="px-4 py-3 hover:no-underline focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-lg">
+                  <span className="text-sm font-semibold text-gray-900">📹 How to Deposit - Video Tutorial</span>
+                </AccordionTrigger>
+                <AccordionContent className="px-4 pb-4">
+                  <div className="rounded-lg overflow-hidden bg-gray-100">
+                    <video
+                      controls
+                      className="w-full h-auto"
+                      preload="metadata"
+                      style={{ maxHeight: '500px' }}
+                    >
+                      <source
+                        src="https://spihsvdchouynfbsotwq.supabase.co/storage/v1/object/public/storage/WhatsApp%20Video%202025-12-17%20at%207.29.00%20PM.mp4"
+                        type="video/mp4"
+                      />
+                      Your browser does not support the video tag.
+                    </video>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </div>
         </form>
       ) : null}
     </div>

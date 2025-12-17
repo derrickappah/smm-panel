@@ -48,7 +48,14 @@ export const usePaymentMethods = () => {
           'manual_deposit_instructions'
         ]);
       
-      if (!error && data) {
+      if (error) {
+        console.warn('Error fetching payment method settings:', error);
+        // On error, use default settings and set default method
+        setDepositMethod('paystack');
+        return;
+      }
+
+      if (data && data.length > 0) {
         const settings = {};
         data.forEach(setting => {
           settings[setting.key] = setting.value;
@@ -100,10 +107,15 @@ export const usePaymentMethods = () => {
           // All disabled
           setDepositMethod(null);
         }
+      } else {
+        // No data returned, use defaults
+        console.warn('No payment method settings found, using defaults');
+        setDepositMethod('paystack');
       }
     } catch (error) {
-      console.warn('Error fetching payment method settings:', error);
-      // Default to both enabled if settings can't be fetched
+      console.error('Error fetching payment method settings:', error);
+      // Default to paystack if settings can't be fetched
+      setDepositMethod('paystack');
     }
   }, []);
 
