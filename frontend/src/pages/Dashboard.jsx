@@ -2243,13 +2243,9 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       // Use the extracted payment link
       const finalPaymentLink = paymentLink;
 
-      // Update transaction with reference
-      await supabase
-        .from('transactions')
-        .update({
-          moolre_web_reference: moolreWebReference
-        })
-        .eq('id', transaction.id);
+      // Note: moolre_web_reference column doesn't exist in database
+      // Transaction ID is embedded in the reference format: MOOLRE_WEB_{transaction_id}_{timestamp}
+      // So we can extract it later if needed
 
       // Redirect user to Moolre payment page
       window.location.href = finalPaymentLink;

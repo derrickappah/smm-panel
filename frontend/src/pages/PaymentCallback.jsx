@@ -55,35 +55,8 @@ const PaymentCallback = ({ onUpdateUser }) => {
             return;
           }
           
-          // For moolre_web, try to find the most recent pending transaction if reference is missing
-          if (paymentMethod === 'moolre_web') {
-            try {
-              const { data: { user: authUser } } = await supabase.auth.getUser();
-              if (authUser) {
-                const { data: transactions, error: txError } = await supabase
-                  .from('transactions')
-                  .select('id, moolre_web_reference, status, deposit_method')
-                  .eq('user_id', authUser.id)
-                  .eq('deposit_method', 'moolre_web')
-                  .eq('status', 'pending')
-                  .order('created_at', { ascending: false })
-                  .limit(1);
-                
-                if (!txError && transactions && transactions.length > 0 && transactions[0].moolre_web_reference) {
-                  // Found a pending transaction, use its reference
-                  const foundRef = transactions[0].moolre_web_reference;
-                  const newSearchParams = new URLSearchParams(searchParams);
-                  newSearchParams.set('ref', foundRef);
-                  window.history.replaceState({}, '', `${window.location.pathname}?${newSearchParams.toString()}`);
-                  // Retry with found reference
-                  setTimeout(() => verifyPayment(), 100);
-                  return;
-                }
-              }
-            } catch (fallbackError) {
-              console.error('Error in fallback reference lookup:', fallbackError);
-            }
-          }
+          // For moolre_web, if reference is missing, we can't look it up since the column doesn't exist
+          // The reference should always be in the URL from Moolre redirect
           
           setStatus('failed');
           setMessage('No payment reference found. Please contact support.');
@@ -263,33 +236,13 @@ const PaymentCallback = ({ onUpdateUser }) => {
           let transactions = null;
           let txError = null;
 
-          // First, try to find by moolre_web_reference
-          // Note: If column doesn't exist, this will fail gracefully and we'll try other methods
-          let txByRef = null;
-          let refError = null;
-          try {
-            const result = await supabase
-              .from('transactions')
-              .select('id, user_id, type, amount, status, deposit_method, moolre_web_reference, moolre_web_status, created_at')
-              .eq('moolre_web_reference', reference)
-              .eq('user_id', authUser.id)
-              .order('created_at', { ascending: false })
-              .limit(1);
-            txByRef = result.data;
-            refError = result.error;
-          } catch (err) {
-            // Column might not exist, continue to fallback methods
-            console.warn('Query by moolre_web_reference failed, trying fallback methods:', err);
-            refError = err;
-          }
-
-          if (!refError && txByRef && txByRef.length > 0) {
-            transactions = txByRef;
-          } else if (transactionIdFromRef) {
-            // If not found by reference, try by transaction ID extracted from reference
+          // Since moolre_web_reference column doesn't exist, skip that query
+          // Go directly to finding by transaction ID extracted from reference
+          if (transactionIdFromRef) {
+            // Find by transaction ID extracted from reference
             const { data: txById, error: idError } = await supabase
               .from('transactions')
-              .select('id, user_id, type, amount, status, deposit_method, moolre_web_reference, moolre_web_status, created_at')
+              .select('id, user_id, type, amount, status, deposit_method, created_at')
               .eq('id', transactionIdFromRef)
               .eq('user_id', authUser.id)
               .eq('deposit_method', 'moolre_web')
@@ -302,7 +255,7 @@ const PaymentCallback = ({ onUpdateUser }) => {
               // Last resort: find most recent pending moolre_web transaction for this user
               const { data: txByUser, error: userError } = await supabase
                 .from('transactions')
-                .select('id, user_id, type, amount, status, deposit_method, moolre_web_reference, moolre_web_status, created_at')
+                .select('id, user_id, type, amount, status, deposit_method, created_at')
                 .eq('user_id', authUser.id)
                 .eq('deposit_method', 'moolre_web')
                 .in('status', ['pending', 'approved'])
@@ -312,11 +265,25 @@ const PaymentCallback = ({ onUpdateUser }) => {
               if (!userError && txByUser && txByUser.length > 0) {
                 transactions = txByUser;
               } else {
-                txError = userError || new Error('Transaction not found');
+                txError = userError || idError || new Error('Transaction not found');
               }
             }
           } else {
-            txError = refError || new Error('Transaction not found');
+            // If we can't extract transaction ID, try to find most recent pending transaction
+            const { data: txByUser, error: userError } = await supabase
+              .from('transactions')
+              .select('id, user_id, type, amount, status, deposit_method, created_at')
+              .eq('user_id', authUser.id)
+              .eq('deposit_method', 'moolre_web')
+              .in('status', ['pending', 'approved'])
+              .order('created_at', { ascending: false })
+              .limit(1);
+
+            if (!userError && txByUser && txByUser.length > 0) {
+              transactions = txByUser;
+            } else {
+              txError = userError || new Error('Transaction not found');
+            }
           }
 
           if (txError || !transactions || transactions.length === 0) {
@@ -360,9 +327,7 @@ const PaymentCallback = ({ onUpdateUser }) => {
             const { error: updateError } = await supabase
               .from('transactions')
               .update({
-                status: 'approved',
-                moolre_web_status: 'success',
-                moolre_web_reference: reference
+                status: 'approved'
               })
               .eq('id', transaction.id);
 
@@ -418,9 +383,7 @@ const PaymentCallback = ({ onUpdateUser }) => {
             await supabase
               .from('transactions')
               .update({
-                status: 'rejected',
-                moolre_web_status: 'failed',
-                moolre_web_error: 'Payment failed or was cancelled'
+                status: 'rejected'
               })
               .eq('id', transaction.id);
 
