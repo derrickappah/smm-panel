@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { supabase, isConfigured } from '@/lib/supabase';
 import SEO from '@/components/SEO';
@@ -120,6 +121,7 @@ const AuthPage = () => {
   const [phoneError, setPhoneError] = useState('');
   const [referralCode, setReferralCode] = useState('');
   const [manualReferralCode, setManualReferralCode] = useState('');
+  const [showReferralCode, setShowReferralCode] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -134,13 +136,18 @@ const AuthPage = () => {
       const trimmedRef = ref.trim();
       setReferralCode(trimmedRef);
       setManualReferralCode(trimmedRef); // Pre-fill the input field
+      setShowReferralCode(true); // Enable the referral toggle when URL has ref
       // Automatically switch to signup form when referral code is present
       setIsLogin(false);
     }
   }, [searchParams]);
 
   // Get the active referral code (manual input takes precedence over URL param)
+  // Only returns a code if the toggle is enabled
   const getActiveReferralCode = () => {
+    if (!showReferralCode) {
+      return '';
+    }
     return manualReferralCode.trim() || referralCode.trim();
   };
 
@@ -525,17 +532,38 @@ const AuthPage = () => {
 
             {!isLogin && (
               <div>
-                <Label htmlFor="referral_code" className="text-sm font-medium text-gray-700 mb-2 block">
-                  Referral Code <span className="text-gray-400 font-normal">(Optional)</span>
-                </Label>
-                <Input
-                  id="referral_code"
-                  type="text"
-                  placeholder="Enter referral code (e.g., REFABC123)"
-                  value={manualReferralCode}
-                  onChange={(e) => setManualReferralCode(e.target.value.toUpperCase().trim())}
-                  className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono"
-                />
+                <div className="flex items-center justify-between mb-3">
+                  <Label htmlFor="referral_toggle" className="text-sm font-medium text-gray-700 cursor-pointer">
+                    I have a referral code
+                  </Label>
+                  <Switch
+                    id="referral_toggle"
+                    checked={showReferralCode}
+                    onCheckedChange={(checked) => {
+                      setShowReferralCode(checked);
+                      if (!checked) {
+                        // Clear referral code when toggle is turned off
+                        setManualReferralCode('');
+                        setReferralCode('');
+                      }
+                    }}
+                  />
+                </div>
+                {showReferralCode && (
+                  <div className="mt-2">
+                    <Label htmlFor="referral_code" className="text-sm font-medium text-gray-700 mb-2 block">
+                      Referral Code
+                    </Label>
+                    <Input
+                      id="referral_code"
+                      type="text"
+                      placeholder="Enter referral code (e.g., REFABC123)"
+                      value={manualReferralCode}
+                      onChange={(e) => setManualReferralCode(e.target.value.toUpperCase().trim())}
+                      className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono"
+                    />
+                  </div>
+                )}
               </div>
             )}
 
