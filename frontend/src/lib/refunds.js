@@ -105,7 +105,8 @@ export const processAutomaticRefund = async (order) => {
         amount: refundAmount,
         type: 'refund',
         status: 'approved',
-        order_id: order.id // Link to the order being refunded
+        order_id: order.id, // Link to the order being refunded
+        description: `Refund for cancelled order ${order.id}`
       })
       .select()
       .single();
@@ -479,7 +480,8 @@ export const processManualRefund = async (order) => {
           amount: refundAmount,
           type: 'refund',
           status: 'approved',
-          order_id: order.id // Link to the order being refunded
+          order_id: order.id, // Link to the order being refunded
+          description: `Refund for cancelled order ${order.id}`
         })
         .select()
         .single();

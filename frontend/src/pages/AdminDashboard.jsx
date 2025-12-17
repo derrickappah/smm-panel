@@ -187,6 +187,15 @@ const AdminDashboard = memo(({ user, onLogout }) => {
 
       if (updateError) throw updateError;
 
+      // Create transaction record for manual adjustment
+      const { createManualAdjustmentTransaction } = await import('@/lib/transactionHelpers');
+      await createManualAdjustmentTransaction(
+        transaction.user_id,
+        creditAmount,
+        user?.id || null,
+        `Manual balance credit for deposit transaction ${transaction.id}`
+      );
+
       // Mark transaction as balance updated
       setBalanceCheckResults(prev => ({
         ...prev,
@@ -202,7 +211,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     } finally {
       setManuallyCrediting(null);
     }
-  }, [queryClient]);
+  }, [queryClient, user]);
 
   // Refresh handler
   const handleRefresh = useCallback(async () => {

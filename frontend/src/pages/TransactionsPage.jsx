@@ -424,6 +424,15 @@ const TransactionsPage = ({ user, onLogout }) => {
         return;
       }
 
+      // Create transaction record for manual adjustment
+      const { createManualAdjustmentTransaction } = await import('@/lib/transactionHelpers');
+      await createManualAdjustmentTransaction(
+        transaction.user_id,
+        depositAmount,
+        user?.id || null,
+        `Manual balance credit for deposit transaction ${transaction.id}`
+      );
+
       toast.success(`Balance credited successfully! ₵${depositAmount.toFixed(2)} added to user's account.`);
       
       // Mark this transaction as verified since we just manually credited it
@@ -494,6 +503,24 @@ const TransactionsPage = ({ user, onLogout }) => {
           label: 'Refund', 
           color: 'bg-green-100 text-green-700 border-green-200', 
           icon: RefreshCw 
+        };
+      case 'referral_bonus':
+        return { 
+          label: 'Referral Bonus', 
+          color: 'bg-emerald-100 text-emerald-700 border-emerald-200', 
+          icon: TrendingUp 
+        };
+      case 'manual_adjustment':
+        return { 
+          label: 'Manual Adjustment', 
+          color: 'bg-indigo-100 text-indigo-700 border-indigo-200', 
+          icon: DollarSign 
+        };
+      case 'unknown':
+        return { 
+          label: 'Unknown', 
+          color: 'bg-yellow-100 text-yellow-700 border-yellow-200', 
+          icon: AlertCircle 
         };
       default:
         return { 
@@ -672,6 +699,9 @@ const TransactionsPage = ({ user, onLogout }) => {
                 <SelectItem value="deposit">Deposits</SelectItem>
                 <SelectItem value="order">Orders</SelectItem>
                 <SelectItem value="refund">Refunds</SelectItem>
+                <SelectItem value="referral_bonus">Referral Bonuses</SelectItem>
+                <SelectItem value="manual_adjustment">Manual Adjustments</SelectItem>
+                <SelectItem value="unknown">Unknown</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -728,11 +758,16 @@ const TransactionsPage = ({ user, onLogout }) => {
                         <div key={transaction.id} className="bg-white hover:bg-gray-50 transition-colors">
                           <div className={`grid gap-4 p-4 items-center ${isAdmin ? 'grid-cols-[1.5fr_1.5fr_1.5fr_1.5fr_2fr_2fr_1fr_1fr]' : 'grid-cols-[1.5fr_1.5fr_1.5fr_1.5fr_2fr_1fr_1fr]'}`}>
                             {/* Type */}
-                            <div className="flex justify-center">
+                            <div className="flex flex-col items-center gap-1">
                               <span className={`px-2.5 py-1 rounded border text-xs font-medium flex items-center gap-1.5 ${typeConfig.color}`}>
                                 <TypeIcon className="w-3 h-3" />
                                 {typeConfig.label}
                               </span>
+                              {transaction.auto_classified && (
+                                <span className="px-1.5 py-0.5 rounded text-xs bg-amber-50 text-amber-700 border border-amber-200">
+                                  Auto
+                                </span>
+                              )}
                             </div>
                             {/* Status */}
                             <div className="flex flex-col items-center gap-1">
@@ -834,6 +869,23 @@ const TransactionsPage = ({ user, onLogout }) => {
                               )}
                             </div>
                           </div>
+                          {/* Description and Admin Info Row */}
+                          {(transaction.description || transaction.admin_id) && (
+                            <div className="px-4 pb-2 border-t border-gray-100">
+                              <div className="flex flex-col gap-1 pt-2">
+                                {transaction.description && (
+                                  <p className="text-xs text-gray-600">
+                                    <span className="font-medium">Description:</span> {transaction.description}
+                                  </p>
+                                )}
+                                {transaction.admin_id && isAdmin && (
+                                  <p className="text-xs text-gray-500">
+                                    <span className="font-medium">Admin:</span> {transaction.admin_id.slice(0, 8)}...
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })}

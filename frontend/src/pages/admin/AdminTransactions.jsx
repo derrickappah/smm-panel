@@ -144,21 +144,35 @@ const AdminTransactions = memo(({ onRefresh, refreshing = false, getBalanceCheck
 
     return (
       <div className="grid grid-cols-[1.5fr_1.5fr_1.5fr_1.5fr_2fr_2fr_1fr_1fr] gap-4 p-4 items-center bg-white hover:bg-gray-50 transition-colors border-b border-gray-200 min-w-[1200px]">
-        <div className="flex justify-center">
+        <div className="flex flex-col items-center gap-1">
           <span className={`px-3 py-1.5 rounded-full text-xs font-medium ${
             transaction.type === 'deposit' 
-              ? 'bg-green-100 text-green-700' 
+              ? 'bg-blue-100 text-blue-700' 
               : transaction.type === 'refund'
               ? 'bg-green-100 text-green-700'
               : transaction.type === 'order'
-              ? 'bg-blue-100 text-blue-700'
+              ? 'bg-purple-100 text-purple-700'
+              : transaction.type === 'referral_bonus'
+              ? 'bg-emerald-100 text-emerald-700'
+              : transaction.type === 'manual_adjustment'
+              ? 'bg-indigo-100 text-indigo-700'
+              : transaction.type === 'unknown'
+              ? 'bg-yellow-100 text-yellow-700'
               : 'bg-gray-100 text-gray-700'
           }`}>
             {transaction.type === 'deposit' ? 'Deposit' : 
              transaction.type === 'refund' ? 'Refund' :
-             transaction.type === 'order' ? 'Order' : 
+             transaction.type === 'order' ? 'Order' :
+             transaction.type === 'referral_bonus' ? 'Referral Bonus' :
+             transaction.type === 'manual_adjustment' ? 'Manual Adjustment' :
+             transaction.type === 'unknown' ? 'Unknown' :
              transaction.type}
           </span>
+          {transaction.auto_classified && (
+            <span className="px-1.5 py-0.5 rounded text-xs bg-amber-50 text-amber-700 border border-amber-200">
+              Auto
+            </span>
+          )}
         </div>
         <div className="flex flex-col items-center gap-1">
           <span className={`px-3 py-1.5 rounded-full text-xs font-medium ${
@@ -251,7 +265,40 @@ const AdminTransactions = memo(({ onRefresh, refreshing = false, getBalanceCheck
               {manuallyCrediting === transaction.id ? 'Crediting...' : 'Credit'}
             </Button>
           )}
+          {(transaction.description || transaction.admin_id) && (
+            <div className="pt-2 border-t border-gray-200 space-y-1">
+              {transaction.description && (
+                <div>
+                  <p className="text-xs text-gray-500">Description</p>
+                  <p className="text-xs text-gray-700">{transaction.description}</p>
+                </div>
+              )}
+              {transaction.admin_id && (
+                <div>
+                  <p className="text-xs text-gray-500">Admin</p>
+                  <p className="text-xs text-gray-700">{transaction.admin_id.slice(0, 8)}...</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
+        {/* Description and Admin Info Row */}
+        {(transaction.description || transaction.admin_id) && (
+          <div className="col-span-8 px-4 pb-2 border-t border-gray-100">
+            <div className="flex flex-col gap-1 pt-2">
+              {transaction.description && (
+                <p className="text-xs text-gray-600">
+                  <span className="font-medium">Description:</span> {transaction.description}
+                </p>
+              )}
+              {transaction.admin_id && (
+                <p className="text-xs text-gray-500">
+                  <span className="font-medium">Admin:</span> {transaction.admin_id.slice(0, 8)}...
+                </p>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     );
   }, [getBalanceCheckResult, handleManualCredit, manuallyCrediting]);
@@ -266,18 +313,32 @@ const AdminTransactions = memo(({ onRefresh, refreshing = false, getBalanceCheck
             <div className="flex items-center gap-2 mb-2">
               <span className={`px-3 py-1.5 rounded-full text-xs font-medium ${
                 transaction.type === 'deposit' 
-                  ? 'bg-green-100 text-green-700' 
+                  ? 'bg-blue-100 text-blue-700' 
                   : transaction.type === 'refund'
                   ? 'bg-green-100 text-green-700'
                   : transaction.type === 'order'
-                  ? 'bg-blue-100 text-blue-700'
+                  ? 'bg-purple-100 text-purple-700'
+                  : transaction.type === 'referral_bonus'
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : transaction.type === 'manual_adjustment'
+                  ? 'bg-indigo-100 text-indigo-700'
+                  : transaction.type === 'unknown'
+                  ? 'bg-yellow-100 text-yellow-700'
                   : 'bg-gray-100 text-gray-700'
               }`}>
                 {transaction.type === 'deposit' ? 'Deposit' : 
                  transaction.type === 'refund' ? 'Refund' :
-                 transaction.type === 'order' ? 'Order' : 
+                 transaction.type === 'order' ? 'Order' :
+                 transaction.type === 'referral_bonus' ? 'Referral Bonus' :
+                 transaction.type === 'manual_adjustment' ? 'Manual Adjustment' :
+                 transaction.type === 'unknown' ? 'Unknown' :
                  transaction.type}
               </span>
+              {transaction.auto_classified && (
+                <span className="px-1.5 py-0.5 rounded text-xs bg-amber-50 text-amber-700 border border-amber-200">
+                  Auto
+                </span>
+              )}
               <span className={`px-3 py-1.5 rounded-full text-xs font-medium ${
                 transaction.status === 'approved' 
                   ? 'bg-green-100 text-green-700'
@@ -381,6 +442,22 @@ const AdminTransactions = memo(({ onRefresh, refreshing = false, getBalanceCheck
             </Button>
           </div>
         )}
+        {(transaction.description || transaction.admin_id) && (
+          <div className="pt-2 border-t border-gray-200 space-y-1">
+            {transaction.description && (
+              <div>
+                <p className="text-xs text-gray-500">Description</p>
+                <p className="text-xs text-gray-700">{transaction.description}</p>
+              </div>
+            )}
+            {transaction.admin_id && (
+              <div>
+                <p className="text-xs text-gray-500">Admin</p>
+                <p className="text-xs text-gray-700">{transaction.admin_id.slice(0, 8)}...</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   }, [getBalanceCheckResult, handleManualCredit, manuallyCrediting]);
@@ -457,6 +534,9 @@ const AdminTransactions = memo(({ onRefresh, refreshing = false, getBalanceCheck
                 <SelectItem value="deposit">Deposit</SelectItem>
                 <SelectItem value="order">Order</SelectItem>
                 <SelectItem value="refund">Refund</SelectItem>
+                <SelectItem value="referral_bonus">Referral Bonus</SelectItem>
+                <SelectItem value="manual_adjustment">Manual Adjustment</SelectItem>
+                <SelectItem value="unknown">Unknown</SelectItem>
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>

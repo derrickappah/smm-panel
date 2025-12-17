@@ -252,14 +252,13 @@ BEGIN
     WHERE id = v_referral_record.id;
 
     -- Create transaction record for the bonus
-    -- Note: description column may not exist, so we'll insert without it
-    INSERT INTO transactions (user_id, amount, type, status, deposit_method)
+    INSERT INTO transactions (user_id, amount, type, status, description)
     VALUES (
         v_referral_record.referrer_id,
         v_bonus_amount,
-        'deposit',
+        'referral_bonus',
         'approved',
-        'ref_bonus'
+        'Referral bonus for first deposit'
     );
 
     -- Return success result
@@ -356,14 +355,13 @@ BEGIN
     WHERE id = referral_record.id;
 
     -- Create transaction record for the bonus
-    -- Note: description column may not exist, so we'll insert without it
-    INSERT INTO transactions (user_id, amount, type, status, deposit_method)
+    INSERT INTO transactions (user_id, amount, type, status, description)
     VALUES (
         referral_record.referrer_id,
         bonus_amount,
-        'deposit',
+        'referral_bonus',
         'approved',
-        'ref_bonus'
+        'Referral bonus for first deposit'
     );
 
     RETURN NEW;

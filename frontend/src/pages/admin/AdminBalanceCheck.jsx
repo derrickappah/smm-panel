@@ -62,6 +62,7 @@ const AdminBalanceCheck = memo(() => {
       }
 
       const amount = parseFloat(balanceAdjustment.amount);
+      const adjustmentAmount = balanceAdjustment.type === 'add' ? amount : -amount;
       const newBalance = balanceAdjustment.type === 'add' 
         ? user.balance + amount 
         : user.balance - amount;
@@ -71,18 +72,27 @@ const AdminBalanceCheck = memo(() => {
         return;
       }
 
+      // Get current admin user ID
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const adminId = authUser?.id || null;
+
       await updateUser.mutateAsync({
         userId: balanceAdjustment.userId,
         updates: { balance: newBalance }
       });
       
       // Create transaction record for balance adjustment
-      await supabase.from('transactions').insert({
-        user_id: balanceAdjustment.userId,
-        amount: amount,
-        type: balanceAdjustment.type === 'add' ? 'deposit' : 'order',
-        status: 'approved'
-      });
+      const { createManualAdjustmentTransaction } = await import('@/lib/transactionHelpers');
+      const reason = balanceAdjustment.type === 'add' 
+        ? `Manual balance credit of ₵${amount.toFixed(2)}`
+        : `Manual balance debit of ₵${amount.toFixed(2)}`;
+      
+      await createManualAdjustmentTransaction(
+        balanceAdjustment.userId,
+        adjustmentAmount,
+        adminId,
+        reason
+      );
 
       setBalanceAdjustment({ userId: '', amount: '', type: 'add' });
       setBalanceUserSearch('');

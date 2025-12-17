@@ -156,8 +156,9 @@ export const useAwardReferralBonus = () => {
         .insert({
           user_id: referral.referrer_id,
           amount: bonusAmount,
-          type: 'deposit',
-          status: 'approved'
+          type: 'referral_bonus',
+          status: 'approved',
+          description: 'Referral bonus for first deposit'
         });
 
       return { success: true, bonus_amount: bonusAmount };

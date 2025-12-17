@@ -210,6 +210,19 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
 
       if (balanceError) throw balanceError;
 
+      // Get current admin user ID
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      
+      // Create transaction record for manual adjustment (if deposit was already a transaction, this is just for tracking)
+      // Note: The deposit itself is already a transaction, so we don't need to create another one
+      // But we could update the existing transaction with admin_id if needed
+      if (authUser?.id) {
+        await supabase
+          .from('transactions')
+          .update({ admin_id: authUser.id })
+          .eq('id', deposit.id);
+      }
+
       toast.success('Deposit approved successfully');
       if (onRefresh) onRefresh();
     } catch (error) {
