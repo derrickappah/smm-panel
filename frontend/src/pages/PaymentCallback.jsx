@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -15,8 +15,13 @@ const PaymentCallback = ({ onUpdateUser }) => {
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState('verifying'); // 'verifying', 'success', 'failed'
   const [message, setMessage] = useState('Verifying payment...');
+  const retryCountRef = useRef(0);
+  const MAX_RETRIES = 12; // Maximum 12 retries (1 minute total)
 
   useEffect(() => {
+    // Reset retry count for new payment verification
+    retryCountRef.current = 0;
+    
     const verifyPayment = async () => {
       try {
         // Get reference from URL params (Korapay may use different param names)
@@ -257,6 +262,28 @@ const PaymentCallback = ({ onUpdateUser }) => {
           const txstatus = verifyData.txstatus; // 1=Success, 0=Pending, 2=Failed
           const isSuccessful = paymentStatus === 'success' || txstatus === 1;
 
+          // If transaction is already approved (by callback handler), just show success
+          if (transaction.status === 'approved') {
+            // Refresh user data
+            if (onUpdateUser) {
+              const { data: updatedProfile } = await supabase
+                .from('profiles')
+                .select('id, email, name, balance, role, phone_number')
+                .eq('id', authUser.id)
+                .single();
+              if (updatedProfile) {
+                onUpdateUser(updatedProfile);
+              }
+            }
+
+            setStatus('success');
+            setMessage(`Payment successful! ₵${parseFloat(transaction.amount).toFixed(2)} has been added to your account.`);
+            toast.success(`Payment successful! ₵${parseFloat(transaction.amount).toFixed(2)} added to your balance.`);
+            
+            setTimeout(() => navigate('/dashboard'), 3000);
+            return;
+          }
+
           if (isSuccessful && transaction.status !== 'approved') {
             // Update transaction to approved
             const { error: updateError } = await supabase
@@ -332,8 +359,17 @@ const PaymentCallback = ({ onUpdateUser }) => {
             setTimeout(() => navigate('/dashboard'), 3000);
           } else {
             // Payment is still pending
+            retryCountRef.current += 1;
+            if (retryCountRef.current >= MAX_RETRIES) {
+              setStatus('failed');
+              setMessage('Payment verification is taking longer than expected. Please check your dashboard or contact support.');
+              toast.error('Payment verification timeout. Please check your dashboard.');
+              setTimeout(() => navigate('/dashboard'), 5000);
+              return;
+            }
+            
             setStatus('verifying');
-            setMessage('Payment is still being processed. Please wait...');
+            setMessage(`Payment is still being processed. Please wait... (${retryCountRef.current}/${MAX_RETRIES})`);
             // Check again after 5 seconds
             setTimeout(() => verifyPayment(), 5000);
           }
