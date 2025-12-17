@@ -557,6 +557,12 @@ function App() {
                 }
               />
               <Route
+                path="/payment-callback"
+                element={
+                  <PaymentCallback onUpdateUser={() => user && loadUserProfile(user.id)} />
+                }
+              />
+              <Route
                 path="/blog"
                 element={<BlogListPage user={user} onLogout={logout} />}
               />

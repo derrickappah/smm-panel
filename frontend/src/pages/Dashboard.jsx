@@ -2177,8 +2177,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       // Construct callback and redirect URLs - ensure they're absolute and properly formatted
       // Callback URL is for server-to-server webhook notifications from Moolre
       const callbackUrl = `${origin}/api/moolre-web-callback?ref=${encodeURIComponent(moolreWebReference)}`;
-      // Redirect URL is for browser redirect after payment completion
-      const redirectUrl = `${origin}/payment-callback?method=moolre_web&ref=${encodeURIComponent(moolreWebReference)}`;
+      // Redirect URL is for browser redirect after payment completion (must match route in App.js)
+      const redirectUrl = `${origin}/payment/callback?method=moolre_web&ref=${encodeURIComponent(moolreWebReference)}`;
 
       console.log('Initializing Moolre Web payment with:', {
         reference: moolreWebReference,
