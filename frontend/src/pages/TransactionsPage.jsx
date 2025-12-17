@@ -790,9 +790,19 @@ const TransactionsPage = ({ user, onLogout }) => {
                             </div>
                             {/* Amount */}
                             <div className="text-center">
-                              <p className={`font-semibold text-gray-900 ${transaction.type === 'deposit' || transaction.type === 'refund' ? 'text-green-600' : 'text-red-600'}`}>
-                                {transaction.type === 'deposit' || transaction.type === 'refund' ? '+' : '-'}₵{parseFloat(transaction.amount || 0).toFixed(2)}
-                              </p>
+                              {(() => {
+                                const isCredit = transaction.type === 'deposit' || 
+                                                transaction.type === 'refund' || 
+                                                transaction.type === 'referral_bonus' ||
+                                                (transaction.type === 'manual_adjustment' && transaction.description?.toLowerCase().includes('credit'));
+                                const isDebit = transaction.type === 'order' ||
+                                               (transaction.type === 'manual_adjustment' && transaction.description?.toLowerCase().includes('debit'));
+                                return (
+                                  <p className={`font-semibold text-gray-900 ${isCredit ? 'text-green-600' : isDebit ? 'text-red-600' : 'text-gray-600'}`}>
+                                    {isCredit ? '+' : isDebit ? '-' : ''}₵{parseFloat(transaction.amount || 0).toFixed(2)}
+                                  </p>
+                                );
+                              })()}
                             </div>
                             {/* Time */}
                             <div className="text-center">

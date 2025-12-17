@@ -206,9 +206,19 @@ const AdminTransactions = memo(({ onRefresh, refreshing = false, getBalanceCheck
           )}
         </div>
         <div className="text-center">
-          <p className={`font-semibold ${transaction.type === 'deposit' || transaction.type === 'refund' ? 'text-green-600' : 'text-red-600'}`}>
-            {transaction.type === 'deposit' || transaction.type === 'refund' ? '+' : '-'}₵{transaction.amount?.toFixed(2) || '0.00'}
-          </p>
+          {(() => {
+            const isCredit = transaction.type === 'deposit' || 
+                            transaction.type === 'refund' || 
+                            transaction.type === 'referral_bonus' ||
+                            (transaction.type === 'manual_adjustment' && transaction.description?.toLowerCase().includes('credit'));
+            const isDebit = transaction.type === 'order' ||
+                           (transaction.type === 'manual_adjustment' && transaction.description?.toLowerCase().includes('debit'));
+            return (
+              <p className={`font-semibold ${isCredit ? 'text-green-600' : isDebit ? 'text-red-600' : 'text-gray-600'}`}>
+                {isCredit ? '+' : isDebit ? '-' : ''}₵{transaction.amount?.toFixed(2) || '0.00'}
+              </p>
+            );
+          })()}
         </div>
         <div className="text-center">
           <p className="text-sm text-gray-700">{new Date(transaction.created_at).toLocaleDateString()}</p>
@@ -353,11 +363,19 @@ const AdminTransactions = memo(({ onRefresh, refreshing = false, getBalanceCheck
             <p className="text-xs text-gray-600 break-all">{transaction.profiles?.email || transaction.user_id?.slice(0, 8)}</p>
           </div>
           <div className="text-right">
-            <p className={`font-semibold text-lg ${
-              transaction.type === 'deposit' || transaction.type === 'refund' ? 'text-green-600' : 'text-red-600'
-            }`}>
-              {transaction.type === 'deposit' || transaction.type === 'refund' ? '+' : '-'}₵{transaction.amount?.toFixed(2) || '0.00'}
-            </p>
+            {(() => {
+              const isCredit = transaction.type === 'deposit' || 
+                              transaction.type === 'refund' || 
+                              transaction.type === 'referral_bonus' ||
+                              (transaction.type === 'manual_adjustment' && transaction.description?.toLowerCase().includes('credit'));
+              const isDebit = transaction.type === 'order' ||
+                             (transaction.type === 'manual_adjustment' && transaction.description?.toLowerCase().includes('debit'));
+              return (
+                <p className={`font-semibold text-lg ${isCredit ? 'text-green-600' : isDebit ? 'text-red-600' : 'text-gray-600'}`}>
+                  {isCredit ? '+' : isDebit ? '-' : ''}₵{transaction.amount?.toFixed(2) || '0.00'}
+                </p>
+              );
+            })()}
           </div>
         </div>
         <div className="pt-2 border-t border-gray-200 space-y-2">

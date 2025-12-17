@@ -76,23 +76,31 @@ const AdminBalanceCheck = memo(() => {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       const adminId = authUser?.id || null;
 
-      await updateUser.mutateAsync({
-        userId: balanceAdjustment.userId,
-        updates: { balance: newBalance }
-      });
-      
-      // Create transaction record for balance adjustment
+      // Create transaction record FIRST (before balance update)
+      // This ensures the balance_audit_log trigger can find and link to it
       const { createManualAdjustmentTransaction } = await import('@/lib/transactionHelpers');
       const reason = balanceAdjustment.type === 'add' 
         ? `Manual balance credit of ₵${amount.toFixed(2)}`
         : `Manual balance debit of ₵${amount.toFixed(2)}`;
       
-      await createManualAdjustmentTransaction(
+      const transactionResult = await createManualAdjustmentTransaction(
         balanceAdjustment.userId,
         adjustmentAmount,
         adminId,
         reason
       );
+
+      if (!transactionResult.success) {
+        console.error('Failed to create transaction record:', transactionResult.error);
+        toast.error('Failed to create transaction record. Balance not updated.');
+        return;
+      }
+
+      // Now update the balance - the trigger will find the existing transaction
+      await updateUser.mutateAsync({
+        userId: balanceAdjustment.userId,
+        updates: { balance: newBalance }
+      });
 
       setBalanceAdjustment({ userId: '', amount: '', type: 'add' });
       setBalanceUserSearch('');

@@ -17,15 +17,20 @@ BEGIN
     
     -- Check if a transaction already exists for this balance change
     -- Look for transactions created around the same time with matching amount
+    -- Check both before and after the audit log entry to catch transactions created before balance update
+    -- Prioritize manual_adjustment transactions for admin actions
     SELECT id INTO v_existing_transaction_id
     FROM transactions
     WHERE user_id = NEW.user_id
     AND amount = ABS(NEW.change_amount)
-    AND created_at BETWEEN NEW.created_at - INTERVAL '5 seconds' AND NEW.created_at + INTERVAL '5 seconds'
+    AND created_at BETWEEN NEW.created_at - INTERVAL '10 seconds' AND NEW.created_at + INTERVAL '2 seconds'
     AND (
         (NEW.change_amount > 0 AND type IN ('deposit', 'refund', 'referral_bonus', 'manual_adjustment'))
-        OR (NEW.change_amount < 0 AND type = 'order')
+        OR (NEW.change_amount < 0 AND type IN ('order', 'manual_adjustment'))
     )
+    ORDER BY 
+        CASE WHEN type = 'manual_adjustment' THEN 1 ELSE 2 END, -- Prioritize manual_adjustment
+        created_at DESC
     LIMIT 1;
     
     -- If transaction already exists, link it
@@ -43,7 +48,7 @@ BEGIN
         p_order_id := NULL, -- We don't have order context in audit log
         p_payment_method := NULL, -- We don't have payment method in audit log
         p_payment_reference := NULL,
-        p_is_admin_action := (NEW.change_reason LIKE '%admin%' OR NEW.change_reason LIKE '%manual%')
+        p_is_admin_action := (NEW.change_reason LIKE '%admin%' OR NEW.change_reason LIKE '%manual%' OR NEW.change_reason LIKE '%Balance update%')
     );
     
     -- Create transaction record
