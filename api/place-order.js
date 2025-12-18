@@ -113,23 +113,24 @@ export default async function handler(req, res) {
     // Log the parameters being sent to the database function
     console.log('Calling place_order_with_balance_deduction with:', {
       p_user_id: user.id,
-      p_service_id: service_id || null,
-      p_package_id: package_id || null,
       p_link: link.trim(),
       p_quantity: quantityNum,
       p_total_cost: totalCostNum,
+      p_service_id: service_id || null,
+      p_package_id: package_id || null,
       p_smmgen_order_id: smmgenOrderIdString,
       smmgen_order_id_type: typeof smmgenOrderIdString
     });
 
     // Call the atomic database function to place order and deduct balance
+    // Note: Parameters are ordered with required params first, then optional params with defaults
     const { data: result, error: rpcError } = await supabase.rpc('place_order_with_balance_deduction', {
       p_user_id: user.id,
-      p_service_id: service_id || null,
-      p_package_id: package_id || null,
       p_link: link.trim(),
       p_quantity: quantityNum,
       p_total_cost: totalCostNum,
+      p_service_id: service_id || null,
+      p_package_id: package_id || null,
       p_smmgen_order_id: smmgenOrderIdString
     });
 

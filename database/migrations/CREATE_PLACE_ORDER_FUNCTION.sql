@@ -5,16 +5,16 @@
 -- Run this in your Supabase SQL Editor
 
 -- Drop existing function if it exists
-DROP FUNCTION IF EXISTS place_order_with_balance_deduction(UUID, UUID, UUID, TEXT, INTEGER, NUMERIC, TEXT);
+DROP FUNCTION IF EXISTS place_order_with_balance_deduction(UUID, TEXT, INTEGER, NUMERIC, UUID, UUID, TEXT);
 
 -- Create function to atomically place order and deduct balance
 CREATE OR REPLACE FUNCTION place_order_with_balance_deduction(
     p_user_id UUID,
-    p_service_id UUID DEFAULT NULL,
-    p_package_id UUID DEFAULT NULL,
     p_link TEXT,
     p_quantity INTEGER,
     p_total_cost NUMERIC,
+    p_service_id UUID DEFAULT NULL,
+    p_package_id UUID DEFAULT NULL,
     p_smmgen_order_id TEXT DEFAULT NULL
 )
 RETURNS TABLE(
@@ -195,7 +195,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Grant execute permission to service_role and authenticated users
-GRANT EXECUTE ON FUNCTION place_order_with_balance_deduction(UUID, UUID, UUID, TEXT, INTEGER, NUMERIC, TEXT) TO service_role, authenticated;
+GRANT EXECUTE ON FUNCTION place_order_with_balance_deduction(UUID, TEXT, INTEGER, NUMERIC, UUID, UUID, TEXT) TO service_role, authenticated;
 
 -- Add comment
 COMMENT ON FUNCTION place_order_with_balance_deduction IS 'Atomically places an order, deducts balance, and creates a transaction record. Prevents race conditions by using row-level locking and atomic balance updates.';
