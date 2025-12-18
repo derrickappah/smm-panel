@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { verifyAdmin } from './utils/auth.js';
+import { verifyTransactionOwner } from './utils/auth.js';
 
 export default async function handler(req, res) {
   // Enable CORS
@@ -18,30 +18,9 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Authenticate admin user
-    try {
-      await verifyAdmin(req);
-    } catch (authError) {
-      if (authError.message === 'Missing or invalid authorization header' ||
-        authError.message === 'Missing authentication token' ||
-        authError.message === 'Invalid or expired token') {
-        return res.status(401).json({
-          error: 'Authentication required',
-          message: authError.message
-        });
-      }
-
-      if (authError.message === 'Admin access required') {
-        return res.status(403).json({
-          error: 'Admin access required for deposit approval'
-        });
-      }
-
-      throw authError;
-    }
     const { transaction_id, payment_method, payment_status, payment_reference } = req.body;
 
-    // Validate required fields
+    // Validate transaction_id first before authentication
     if (!transaction_id) {
       return res.status(400).json({
         error: 'Missing required field: transaction_id',
@@ -56,6 +35,57 @@ export default async function handler(req, res) {
     if (!uuidRegex.test(transaction_id)) {
       return res.status(400).json({
         error: 'Invalid transaction_id format. Must be a valid UUID.',
+        transaction_id: transaction_id,
+        payment_method: payment_method || null,
+        payment_reference: payment_reference || null
+      });
+    }
+
+    // Authenticate user and verify transaction ownership (users can approve their own, admins can approve any)
+    let transaction;
+    let isAdmin;
+    try {
+      const authResult = await verifyTransactionOwner(req, transaction_id);
+      transaction = authResult.transaction;
+      isAdmin = authResult.isAdmin;
+    } catch (authError) {
+      // Handle authentication errors
+      if (authError.message === 'Missing or invalid authorization header' ||
+        authError.message === 'Missing authentication token' ||
+        authError.message === 'Invalid or expired token') {
+        return res.status(401).json({
+          error: 'Authentication required',
+          message: authError.message
+        });
+      }
+      
+      // Handle authorization errors
+      if (authError.message.includes('Access denied') || 
+          authError.message === 'Transaction not found') {
+        return res.status(403).json({
+          error: authError.message,
+          transaction_id: transaction_id
+        });
+      }
+      
+      throw authError;
+    }
+
+    // Additional check: Only allow approval of pending deposits
+    if (transaction.type !== 'deposit') {
+      return res.status(400).json({
+        error: 'Transaction is not a deposit',
+        transaction_id: transaction_id,
+        payment_method: payment_method || null,
+        payment_reference: payment_reference || null
+      });
+    }
+
+    // Only allow users to approve their own pending deposits (admins can approve any)
+    if (!isAdmin && transaction.status !== 'pending') {
+      return res.status(400).json({
+        error: 'Can only approve pending deposits',
+        current_status: transaction.status,
         transaction_id: transaction_id,
         payment_method: payment_method || null,
         payment_reference: payment_reference || null
