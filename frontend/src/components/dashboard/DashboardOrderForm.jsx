@@ -355,6 +355,15 @@ const DashboardOrderForm = React.memo(({
           {loading ? 'Processing...' : 'Place Order'}
         </Button>
       </form>
+      
+      {(selectedService?.description || selectedPackage?.description) && (
+        <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+          <p className="text-sm font-medium text-gray-900 mb-2">Description</p>
+          <p className="text-sm text-gray-700 leading-relaxed">
+            {selectedService?.description || selectedPackage?.description}
+          </p>
+        </div>
+      )}
     </div>
   );
 });
