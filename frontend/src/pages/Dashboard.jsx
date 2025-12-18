@@ -3085,6 +3085,11 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           throw new Error('Not authenticated - no session token');
         }
 
+        // Convert SMMGen order ID to string if it's a number (database expects TEXT)
+        const smmgenOrderIdString = smmgenOrderId !== null && smmgenOrderId !== undefined 
+          ? String(smmgenOrderId) 
+          : null;
+
         // Place order via secure API endpoint
         const orderResponse = await fetch('/api/place-order', {
           method: 'POST',
@@ -3097,7 +3102,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             link: orderForm.link,
             quantity: quantity,
             total_cost: totalCost,
-            smmgen_order_id: smmgenOrderId || null
+            smmgen_order_id: smmgenOrderIdString
           })
         });
 
@@ -3405,6 +3410,11 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         throw new Error('Not authenticated - no session token');
       }
 
+      // Convert SMMGen order ID to string if it's a number (database expects TEXT)
+      const smmgenOrderIdString = smmgenOrderId !== null && smmgenOrderId !== undefined 
+        ? String(smmgenOrderId) 
+        : null;
+
       // Place order via secure API endpoint
       const orderResponse = await fetch('/api/place-order', {
         method: 'POST',
@@ -3417,7 +3427,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           link: orderForm.link,
           quantity: quantity,
           total_cost: totalCost,
-          smmgen_order_id: smmgenOrderId || null
+          smmgen_order_id: smmgenOrderIdString
         })
       });
 
