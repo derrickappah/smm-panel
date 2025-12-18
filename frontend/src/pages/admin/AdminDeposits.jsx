@@ -159,30 +159,71 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
 
   const handleApproveDeposit = useCallback(async (deposit) => {
     setApprovingDeposit(deposit.id);
+    
+    // Optimistically update the UI immediately
+    queryClient.setQueryData(['admin', 'deposits'], (oldData) => {
+      if (!oldData?.pages) return oldData;
+      
+      return {
+        ...oldData,
+        pages: oldData.pages.map(page => ({
+          ...page,
+          data: page.data?.map(tx => 
+            tx.id === deposit.id 
+              ? { ...tx, status: 'approved' }
+              : tx
+          ) || []
+        }))
+      };
+    });
+    
     try {
       await approveDepositMutation.mutateAsync({
         transactionId: deposit.id,
         userId: deposit.user_id,
         amount: deposit.amount
       });
+      // Mutation's onSuccess will handle refetch and invalidation
       if (onRefresh) onRefresh();
     } catch (error) {
       console.error('Failed to approve deposit:', error);
+      // Revert optimistic update on error by invalidating
+      queryClient.invalidateQueries({ queryKey: ['admin', 'deposits'] });
     } finally {
       setApprovingDeposit(null);
     }
-  }, [approveDepositMutation, onRefresh]);
+  }, [approveDepositMutation, onRefresh, queryClient]);
 
   const handleRejectDeposit = useCallback(async (depositId) => {
     if (!confirm('Are you sure you want to reject this deposit?')) return;
     
+    // Optimistically update the UI immediately
+    queryClient.setQueryData(['admin', 'deposits'], (oldData) => {
+      if (!oldData?.pages) return oldData;
+      
+      return {
+        ...oldData,
+        pages: oldData.pages.map(page => ({
+          ...page,
+          data: page.data?.map(tx => 
+            tx.id === depositId 
+              ? { ...tx, status: 'rejected' }
+              : tx
+          ) || []
+        }))
+      };
+    });
+    
     try {
       await rejectDepositMutation.mutateAsync(depositId);
+      // Mutation's onSuccess will handle refetch and invalidation
       if (onRefresh) onRefresh();
     } catch (error) {
       console.error('Failed to reject deposit:', error);
+      // Revert optimistic update on error by invalidating
+      queryClient.invalidateQueries({ queryKey: ['admin', 'deposits'] });
     }
-  }, [rejectDepositMutation, onRefresh]);
+  }, [rejectDepositMutation, onRefresh, queryClient]);
 
   const handleApproveManualDeposit = useCallback(async (deposit) => {
     setApprovingDeposit(deposit.id);
@@ -602,9 +643,10 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
           <p className="text-xs text-gray-500">{new Date(deposit.created_at).toLocaleTimeString()}</p>
         </div>
         <div className="col-span-3">
-          {deposit.status === 'pending' && isManual ? (
+          {deposit.status === 'pending' ? (
             <div className="flex flex-col gap-2">
-              {deposit.payment_proof_url && (
+              {/* Payment proof button for manual deposits */}
+              {isManual && deposit.payment_proof_url && (
                 <Button
                   onClick={() => setPaymentProofDialog({ open: true, imageUrl: deposit.payment_proof_url, deposit })}
                   variant="outline"
@@ -615,15 +657,63 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
                   View Proof
                 </Button>
               )}
-              <Button
-                onClick={() => handleApproveManualDeposit(deposit)}
-                disabled={approvingDeposit === deposit.id}
-                variant="default"
-                size="sm"
-                className="bg-green-600 hover:bg-green-700 text-white text-xs min-h-[44px]"
-              >
-                {approvingDeposit === deposit.id ? 'Approving...' : 'Approve'}
-              </Button>
+              
+              {/* Verify buttons for specific payment methods */}
+              {isPaystack && (
+                <Button
+                  onClick={() => handleVerifyPaystackDeposit(deposit)}
+                  disabled={verifyingDeposit === deposit.id}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs min-h-[36px] border-blue-500 text-blue-600 hover:bg-blue-50"
+                >
+                  {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with Paystack'}
+                </Button>
+              )}
+              {isMoolre && (
+                <Button
+                  onClick={() => handleVerifyMoolreDeposit(deposit)}
+                  disabled={verifyingDeposit === deposit.id}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs min-h-[36px] border-teal-500 text-teal-600 hover:bg-teal-50"
+                >
+                  {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with Moolre'}
+                </Button>
+              )}
+              {isMoolreWeb && (
+                <Button
+                  onClick={() => handleVerifyMoolreWebDeposit(deposit)}
+                  disabled={verifyingDeposit === deposit.id}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs min-h-[36px] border-cyan-500 text-cyan-600 hover:bg-cyan-50"
+                >
+                  {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with Moolre Web'}
+                </Button>
+              )}
+              
+              {/* Manual approve/reject buttons for all pending deposits */}
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => handleApproveDeposit(deposit)}
+                  disabled={approvingDeposit === deposit.id || verifyingDeposit === deposit.id}
+                  variant="default"
+                  size="sm"
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs min-h-[36px]"
+                >
+                  {approvingDeposit === deposit.id ? 'Approving...' : 'Approve'}
+                </Button>
+                <Button
+                  onClick={() => handleRejectDeposit(deposit.id)}
+                  disabled={approvingDeposit === deposit.id || verifyingDeposit === deposit.id}
+                  variant="destructive"
+                  size="sm"
+                  className="flex-1 text-xs min-h-[36px]"
+                >
+                  Reject
+                </Button>
+              </div>
             </div>
           ) : isManual && deposit.payment_proof_url ? (
             <Button
@@ -635,38 +725,6 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
               <ImageIcon className="w-4 h-4 mr-1" />
               View Proof
             </Button>
-          ) : deposit.status === 'pending' && isPaystack ? (
-            <Button
-              onClick={() => handleVerifyPaystackDeposit(deposit)}
-              disabled={verifyingDeposit === deposit.id}
-              variant="outline"
-              size="sm"
-              className="text-xs min-h-[44px] border-blue-500 text-blue-600 hover:bg-blue-50"
-            >
-              {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with Paystack'}
-            </Button>
-          ) : deposit.status === 'pending' && isMoolre ? (
-            <Button
-              onClick={() => handleVerifyMoolreDeposit(deposit)}
-              disabled={verifyingDeposit === deposit.id}
-              variant="outline"
-              size="sm"
-              className="text-xs min-h-[44px] border-teal-500 text-teal-600 hover:bg-teal-50"
-            >
-              {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with Moolre'}
-            </Button>
-          ) : deposit.status === 'pending' && isMoolreWeb ? (
-            <Button
-              onClick={() => handleVerifyMoolreWebDeposit(deposit)}
-              disabled={verifyingDeposit === deposit.id}
-              variant="outline"
-              size="sm"
-              className="text-xs min-h-[44px] border-cyan-500 text-cyan-600 hover:bg-cyan-50"
-            >
-              {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with Moolre Web'}
-            </Button>
-          ) : deposit.status === 'pending' && (isHubtel || isKorapay) ? (
-            <span className="text-xs text-gray-500">Auto-verify</span>
           ) : deposit.status === 'approved' ? (
             <span className="text-xs text-green-600 flex items-center gap-1">
               <CheckCircle className="w-4 h-4" />
@@ -681,7 +739,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
         </div>
       </div>
     );
-  }, [handleApproveManualDeposit, handleVerifyPaystackDeposit, handleVerifyMoolreDeposit, handleVerifyMoolreWebDeposit, approvingDeposit, verifyingDeposit, formatPaymentMethod, getPaymentMethodColors]);
+  }, [handleApproveDeposit, handleRejectDeposit, handleApproveManualDeposit, handleVerifyPaystackDeposit, handleVerifyMoolreDeposit, handleVerifyMoolreWebDeposit, approvingDeposit, verifyingDeposit, formatPaymentMethod, getPaymentMethodColors]);
 
   const renderMobileCard = useCallback((deposit, index) => {
     const depositMethod = deposit.deposit_method || deposit.payment_method;
@@ -734,9 +792,10 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
             <p className="text-sm text-gray-700">{new Date(deposit.created_at).toLocaleDateString()} {new Date(deposit.created_at).toLocaleTimeString()}</p>
           </div>
         </div>
-        {deposit.status === 'pending' && isManual && (
+        {deposit.status === 'pending' && (
           <div className="pt-3 border-t border-gray-200 space-y-2">
-            {deposit.payment_proof_url && (
+            {/* Payment proof button for manual deposits */}
+            {isManual && deposit.payment_proof_url && (
               <Button
                 onClick={() => setPaymentProofDialog({ open: true, imageUrl: deposit.payment_proof_url, deposit })}
                 variant="outline"
@@ -747,15 +806,63 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
                 View Payment Proof
               </Button>
             )}
-            <Button
-              onClick={() => handleApproveManualDeposit(deposit)}
-              disabled={approvingDeposit === deposit.id}
-              variant="default"
-              size="sm"
-              className="w-full bg-green-600 hover:bg-green-700 text-white min-h-[44px]"
-            >
-              {approvingDeposit === deposit.id ? 'Approving...' : 'Approve Deposit'}
-            </Button>
+            
+            {/* Verify buttons for specific payment methods */}
+            {isPaystack && (
+              <Button
+                onClick={() => handleVerifyPaystackDeposit(deposit)}
+                disabled={verifyingDeposit === deposit.id}
+                variant="outline"
+                size="sm"
+                className="w-full border-blue-500 text-blue-600 hover:bg-blue-50 min-h-[44px]"
+              >
+                {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with Paystack'}
+              </Button>
+            )}
+            {isMoolre && (
+              <Button
+                onClick={() => handleVerifyMoolreDeposit(deposit)}
+                disabled={verifyingDeposit === deposit.id}
+                variant="outline"
+                size="sm"
+                className="w-full border-teal-500 text-teal-600 hover:bg-teal-50 min-h-[44px]"
+              >
+                {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with Moolre'}
+              </Button>
+            )}
+            {isMoolreWeb && (
+              <Button
+                onClick={() => handleVerifyMoolreWebDeposit(deposit)}
+                disabled={verifyingDeposit === deposit.id}
+                variant="outline"
+                size="sm"
+                className="w-full border-cyan-500 text-cyan-600 hover:bg-cyan-50 min-h-[44px]"
+              >
+                {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with Moolre Web'}
+              </Button>
+            )}
+            
+            {/* Manual approve/reject buttons for all pending deposits */}
+            <div className="flex gap-2">
+              <Button
+                onClick={() => handleApproveDeposit(deposit)}
+                disabled={approvingDeposit === deposit.id || verifyingDeposit === deposit.id}
+                variant="default"
+                size="sm"
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white min-h-[44px]"
+              >
+                {approvingDeposit === deposit.id ? 'Approving...' : 'Approve'}
+              </Button>
+              <Button
+                onClick={() => handleRejectDeposit(deposit.id)}
+                disabled={approvingDeposit === deposit.id || verifyingDeposit === deposit.id}
+                variant="destructive"
+                size="sm"
+                className="flex-1 min-h-[44px]"
+              >
+                Reject
+              </Button>
+            </div>
           </div>
         )}
         {isManual && deposit.payment_proof_url && deposit.status !== 'pending' && (
@@ -771,48 +878,9 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
             </Button>
           </div>
         )}
-        {deposit.status === 'pending' && isPaystack && (
-          <div className="pt-3 border-t border-gray-200">
-            <Button
-              onClick={() => handleVerifyPaystackDeposit(deposit)}
-              disabled={verifyingDeposit === deposit.id}
-              variant="outline"
-              size="sm"
-              className="w-full border-blue-500 text-blue-600 hover:bg-blue-50 min-h-[44px]"
-            >
-              {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with Paystack'}
-            </Button>
-          </div>
-        )}
-        {deposit.status === 'pending' && isMoolre && (
-          <div className="pt-3 border-t border-gray-200">
-            <Button
-              onClick={() => handleVerifyMoolreDeposit(deposit)}
-              disabled={verifyingDeposit === deposit.id}
-              variant="outline"
-              size="sm"
-              className="w-full border-teal-500 text-teal-600 hover:bg-teal-50 min-h-[44px]"
-            >
-              {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with Moolre'}
-            </Button>
-          </div>
-        )}
-        {deposit.status === 'pending' && isMoolreWeb && (
-          <div className="pt-3 border-t border-gray-200">
-            <Button
-              onClick={() => handleVerifyMoolreWebDeposit(deposit)}
-              disabled={verifyingDeposit === deposit.id}
-              variant="outline"
-              size="sm"
-              className="w-full border-cyan-500 text-cyan-600 hover:bg-cyan-50 min-h-[44px]"
-            >
-              {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with Moolre Web'}
-            </Button>
-          </div>
-        )}
       </div>
     );
-  }, [handleApproveManualDeposit, handleVerifyPaystackDeposit, handleVerifyMoolreDeposit, handleVerifyMoolreWebDeposit, approvingDeposit, verifyingDeposit, formatPaymentMethod, getPaymentMethodColors]);
+  }, [handleApproveDeposit, handleRejectDeposit, handleApproveManualDeposit, handleVerifyPaystackDeposit, handleVerifyMoolreDeposit, handleVerifyMoolreWebDeposit, approvingDeposit, verifyingDeposit, formatPaymentMethod, getPaymentMethodColors]);
 
   if (isLoading) {
     return (

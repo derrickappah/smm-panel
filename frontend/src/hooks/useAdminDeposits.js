@@ -277,10 +277,13 @@ export const useApproveDeposit = () => {
 
       return { transactionId, userId, amount };
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'deposits'] });
-      queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
-      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+    onSuccess: async () => {
+      // Invalidate and refetch queries
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'deposits'] });
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+      // Trigger refetch for infinite queries
+      await queryClient.refetchQueries({ queryKey: ['admin', 'deposits'] });
       toast.success('Deposit approved successfully');
     },
     onError: (error) => {
@@ -302,9 +305,12 @@ export const useRejectDeposit = () => {
 
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'deposits'] });
-      queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
+    onSuccess: async () => {
+      // Invalidate and refetch queries
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'deposits'] });
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
+      // Trigger refetch for infinite queries
+      await queryClient.refetchQueries({ queryKey: ['admin', 'deposits'] });
       toast.success('Deposit rejected');
     },
     onError: (error) => {
