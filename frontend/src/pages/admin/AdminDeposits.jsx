@@ -274,7 +274,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
       }
 
       // Close dialog if open
-      if (manualRefDialog.open && manualRefDialog.paymentMethod === 'moolre') {
+      if (manualRefDialog.open && manualRefDialog.paymentMethod === 'paystack') {
         setManualRefDialog({ open: false, deposit: null, error: null, paymentMethod: null });
         setManualReference('');
       }
@@ -316,24 +316,6 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
       setVerifyingDeposit(null);
     }
   }, [onRefresh, manualRefDialog.open, queryClient, refetch]);
-
-  const handleManualReferenceSubmit = useCallback(async () => {
-    if (!manualRefDialog.deposit || !manualReference.trim()) {
-      const methodName = manualRefDialog.paymentMethod === 'moolre' ? 'Moolre' : 
-                        manualRefDialog.paymentMethod === 'moolre_web' ? 'Moolre Web' : 'Paystack';
-      toast.error(`Please enter a ${methodName} reference`);
-      return;
-    }
-
-    const paymentMethod = manualRefDialog.paymentMethod || 'paystack';
-    if (paymentMethod === 'moolre') {
-      await handleVerifyMoolreDeposit(manualRefDialog.deposit, manualReference.trim());
-    } else if (paymentMethod === 'moolre_web') {
-      await handleVerifyMoolreWebDeposit(manualRefDialog.deposit, manualReference.trim());
-    } else {
-      await handleVerifyPaystackDeposit(manualRefDialog.deposit, manualReference.trim());
-    }
-  }, [manualRefDialog.deposit, manualRefDialog.paymentMethod, manualReference, handleVerifyPaystackDeposit, handleVerifyMoolreDeposit, handleVerifyMoolreWebDeposit]);
 
   const handleVerifyMoolreDeposit = useCallback(async (deposit, manualRef = null) => {
     setVerifyingDeposit(deposit.id);
@@ -508,6 +490,24 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
       setVerifyingDeposit(null);
     }
   }, [onRefresh, manualRefDialog.open, queryClient, refetch]);
+
+  const handleManualReferenceSubmit = useCallback(async () => {
+    if (!manualRefDialog.deposit || !manualReference.trim()) {
+      const methodName = manualRefDialog.paymentMethod === 'moolre' ? 'Moolre' : 
+                        manualRefDialog.paymentMethod === 'moolre_web' ? 'Moolre Web' : 'Paystack';
+      toast.error(`Please enter a ${methodName} reference`);
+      return;
+    }
+
+    const paymentMethod = manualRefDialog.paymentMethod || 'paystack';
+    if (paymentMethod === 'moolre') {
+      await handleVerifyMoolreDeposit(manualRefDialog.deposit, manualReference.trim());
+    } else if (paymentMethod === 'moolre_web') {
+      await handleVerifyMoolreWebDeposit(manualRefDialog.deposit, manualReference.trim());
+    } else {
+      await handleVerifyPaystackDeposit(manualRefDialog.deposit, manualReference.trim());
+    }
+  }, [manualRefDialog.deposit, manualRefDialog.paymentMethod, manualReference, handleVerifyPaystackDeposit, handleVerifyMoolreDeposit, handleVerifyMoolreWebDeposit]);
 
   // Helper function to format payment method name
   const formatPaymentMethod = useCallback((method) => {
