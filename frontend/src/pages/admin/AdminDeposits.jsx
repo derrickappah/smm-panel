@@ -325,6 +325,150 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
     await handleVerifyPaystackDeposit(manualRefDialog.deposit, manualReference.trim());
   }, [manualRefDialog.deposit, manualReference, handleVerifyPaystackDeposit]);
 
+  const handleVerifyMoolreDeposit = useCallback(async (deposit) => {
+    setVerifyingDeposit(deposit.id);
+    try {
+      // Get JWT token for API authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('No session token available. Please log in again.');
+      }
+
+      const response = await fetch('/api/manual-verify-moolre-deposit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ 
+          transactionId: deposit.id
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to verify deposit');
+      }
+
+      if (data.updateResult?.newStatus === 'approved') {
+        toast.success('Deposit verified and approved successfully');
+      } else if (data.updateResult?.newStatus === 'rejected') {
+        toast.warning('Deposit verified and rejected (payment failed)');
+      } else {
+        toast.info(`Moolre status updated: ${data.moolreStatus}`);
+      }
+
+      // Optimistically update the transaction in cache for immediate UI update
+      queryClient.setQueryData(['admin', 'deposits'], (oldData) => {
+        if (!oldData?.pages) return oldData;
+        
+        return {
+          ...oldData,
+          pages: oldData.pages.map(page => ({
+            ...page,
+            data: page.data?.map(tx => 
+              tx.id === deposit.id 
+                ? { 
+                    ...tx, 
+                    status: data.updateResult?.newStatus || tx.status,
+                    moolre_reference: data.reference || tx.moolre_reference,
+                    moolre_status: data.moolreStatus || tx.moolre_status
+                  }
+                : tx
+            ) || []
+          }))
+        };
+      });
+
+      // Invalidate and refetch to ensure data is in sync with server
+      queryClient.invalidateQueries({ queryKey: ['admin', 'deposits'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
+      
+      // Refetch in background to sync with server
+      refetch();
+
+      if (onRefresh) onRefresh();
+    } catch (error) {
+      console.error('Failed to verify Moolre deposit:', error);
+      toast.error(error.message || 'Failed to verify deposit');
+    } finally {
+      setVerifyingDeposit(null);
+    }
+  }, [onRefresh, queryClient, refetch]);
+
+  const handleVerifyMoolreWebDeposit = useCallback(async (deposit) => {
+    setVerifyingDeposit(deposit.id);
+    try {
+      // Get JWT token for API authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('No session token available. Please log in again.');
+      }
+
+      const response = await fetch('/api/manual-verify-moolre-web-deposit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ 
+          transactionId: deposit.id
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to verify deposit');
+      }
+
+      if (data.updateResult?.newStatus === 'approved') {
+        toast.success('Deposit verified and approved successfully');
+      } else if (data.updateResult?.newStatus === 'rejected') {
+        toast.warning('Deposit verified and rejected (payment failed)');
+      } else {
+        toast.info(`Moolre Web status updated: ${data.moolreStatus}`);
+      }
+
+      // Optimistically update the transaction in cache for immediate UI update
+      queryClient.setQueryData(['admin', 'deposits'], (oldData) => {
+        if (!oldData?.pages) return oldData;
+        
+        return {
+          ...oldData,
+          pages: oldData.pages.map(page => ({
+            ...page,
+            data: page.data?.map(tx => 
+              tx.id === deposit.id 
+                ? { 
+                    ...tx, 
+                    status: data.updateResult?.newStatus || tx.status,
+                    moolre_reference: data.reference || tx.moolre_reference,
+                    moolre_status: data.moolreStatus || tx.moolre_status
+                  }
+                : tx
+            ) || []
+          }))
+        };
+      });
+
+      // Invalidate and refetch to ensure data is in sync with server
+      queryClient.invalidateQueries({ queryKey: ['admin', 'deposits'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
+      
+      // Refetch in background to sync with server
+      refetch();
+
+      if (onRefresh) onRefresh();
+    } catch (error) {
+      console.error('Failed to verify Moolre Web deposit:', error);
+      toast.error(error.message || 'Failed to verify deposit');
+    } finally {
+      setVerifyingDeposit(null);
+    }
+  }, [onRefresh, queryClient, refetch]);
+
   // Helper function to format payment method name
   const formatPaymentMethod = useCallback((method) => {
     if (!method) return 'N/A';
@@ -334,6 +478,8 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
       'momo': 'Mobile Money',
       'hubtel': 'Hubtel',
       'korapay': 'Korapay',
+      'moolre': 'Moolre',
+      'moolre_web': 'Moolre Web',
       'ref_bonus': 'Referral Bonus'
     };
     return methodMap[method.toLowerCase()] || method.charAt(0).toUpperCase() + method.slice(1);
@@ -349,6 +495,8 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
       'momo': 'bg-blue-100 text-blue-700 border-blue-200',
       'hubtel': 'bg-orange-100 text-orange-700 border-orange-200',
       'korapay': 'bg-indigo-100 text-indigo-700 border-indigo-200',
+      'moolre': 'bg-teal-100 text-teal-700 border-teal-200',
+      'moolre_web': 'bg-cyan-100 text-cyan-700 border-cyan-200',
       'ref_bonus': 'bg-pink-100 text-pink-700 border-pink-200'
     };
     return colorMap[methodLower] || 'bg-gray-100 text-gray-700 border-gray-200';
@@ -371,6 +519,8 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
     const isPaystack = depositMethod === 'paystack';
     const isHubtel = depositMethod === 'hubtel';
     const isKorapay = depositMethod === 'korapay';
+    const isMoolre = depositMethod === 'moolre';
+    const isMoolreWeb = depositMethod === 'moolre_web';
 
     return (
       <div className="grid grid-cols-12 gap-4 p-4 items-center bg-white hover:bg-gray-50 transition-colors border-b border-gray-200 min-w-[1200px]">
@@ -402,6 +552,9 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
           )}
           {deposit.korapay_reference && (
             <p className="text-xs text-gray-500 mt-1">Ref: {deposit.korapay_reference}</p>
+          )}
+          {deposit.moolre_reference && (
+            <p className="text-xs text-gray-500 mt-1">Ref: {deposit.moolre_reference}</p>
           )}
         </div>
         <div className="col-span-2">
@@ -452,6 +605,26 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
             >
               {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with Paystack'}
             </Button>
+          ) : deposit.status === 'pending' && isMoolre ? (
+            <Button
+              onClick={() => handleVerifyMoolreDeposit(deposit)}
+              disabled={verifyingDeposit === deposit.id}
+              variant="outline"
+              size="sm"
+              className="text-xs min-h-[44px] border-teal-500 text-teal-600 hover:bg-teal-50"
+            >
+              {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with Moolre'}
+            </Button>
+          ) : deposit.status === 'pending' && isMoolreWeb ? (
+            <Button
+              onClick={() => handleVerifyMoolreWebDeposit(deposit)}
+              disabled={verifyingDeposit === deposit.id}
+              variant="outline"
+              size="sm"
+              className="text-xs min-h-[44px] border-cyan-500 text-cyan-600 hover:bg-cyan-50"
+            >
+              {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with Moolre Web'}
+            </Button>
           ) : deposit.status === 'pending' && (isHubtel || isKorapay) ? (
             <span className="text-xs text-gray-500">Auto-verify</span>
           ) : deposit.status === 'approved' ? (
@@ -468,7 +641,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
         </div>
       </div>
     );
-  }, [handleApproveManualDeposit, handleVerifyPaystackDeposit, approvingDeposit, verifyingDeposit, formatPaymentMethod, getPaymentMethodColors]);
+  }, [handleApproveManualDeposit, handleVerifyPaystackDeposit, handleVerifyMoolreDeposit, handleVerifyMoolreWebDeposit, approvingDeposit, verifyingDeposit, formatPaymentMethod, getPaymentMethodColors]);
 
   const renderMobileCard = useCallback((deposit, index) => {
     const depositMethod = deposit.deposit_method || deposit.payment_method;
@@ -476,6 +649,8 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
     const isPaystack = depositMethod === 'paystack';
     const isHubtel = depositMethod === 'hubtel';
     const isKorapay = depositMethod === 'korapay';
+    const isMoolre = depositMethod === 'moolre';
+    const isMoolreWeb = depositMethod === 'moolre_web';
 
     return (
       <div className="bg-white p-4 space-y-3">
@@ -509,6 +684,9 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
             )}
             {deposit.korapay_reference && (
               <p className="text-xs text-gray-500 mt-1">Ref: {deposit.korapay_reference}</p>
+            )}
+            {deposit.moolre_reference && (
+              <p className="text-xs text-gray-500 mt-1">Ref: {deposit.moolre_reference}</p>
             )}
           </div>
           <div>
@@ -566,9 +744,35 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
             </Button>
           </div>
         )}
+        {deposit.status === 'pending' && isMoolre && (
+          <div className="pt-3 border-t border-gray-200">
+            <Button
+              onClick={() => handleVerifyMoolreDeposit(deposit)}
+              disabled={verifyingDeposit === deposit.id}
+              variant="outline"
+              size="sm"
+              className="w-full border-teal-500 text-teal-600 hover:bg-teal-50 min-h-[44px]"
+            >
+              {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with Moolre'}
+            </Button>
+          </div>
+        )}
+        {deposit.status === 'pending' && isMoolreWeb && (
+          <div className="pt-3 border-t border-gray-200">
+            <Button
+              onClick={() => handleVerifyMoolreWebDeposit(deposit)}
+              disabled={verifyingDeposit === deposit.id}
+              variant="outline"
+              size="sm"
+              className="w-full border-cyan-500 text-cyan-600 hover:bg-cyan-50 min-h-[44px]"
+            >
+              {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with Moolre Web'}
+            </Button>
+          </div>
+        )}
       </div>
     );
-  }, [handleApproveManualDeposit, handleVerifyPaystackDeposit, approvingDeposit, verifyingDeposit, formatPaymentMethod, getPaymentMethodColors]);
+  }, [handleApproveManualDeposit, handleVerifyPaystackDeposit, handleVerifyMoolreDeposit, handleVerifyMoolreWebDeposit, approvingDeposit, verifyingDeposit, formatPaymentMethod, getPaymentMethodColors]);
 
   if (isLoading) {
     return (
