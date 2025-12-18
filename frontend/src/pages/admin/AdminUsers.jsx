@@ -1,4 +1,4 @@
-import React, { memo, useState, useMemo, useCallback, useEffect } from 'react';
+import React, { memo, useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useAdminUsers, useUpdateUser } from '@/hooks/useAdminUsers';
 import { useDebounce } from '@/hooks/useDebounce';
 import VirtualizedList from '@/components/VirtualizedList';
@@ -8,7 +8,7 @@ import UserDetailsDialog from '@/components/admin/UserDetailsDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, RefreshCw, Edit, Download, Eye } from 'lucide-react';
+import { Search, RefreshCw, Edit, Download, Eye, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { toast } from 'sonner';
 
 const ITEMS_PER_PAGE = 50;
@@ -22,6 +22,9 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
   const [exportFormat, setExportFormat] = useState('name-phone');
   const [selectedUserId, setSelectedUserId] = useState(null);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
+  const [sortField, setSortField] = useState('none'); // 'none', 'name', or 'balance'
+  const [sortDirection, setSortDirection] = useState('asc'); // 'asc' or 'desc'
+  const tableContainerRef = useRef(null);
 
   const debouncedSearch = useDebounce(searchTerm, 300);
 
@@ -51,7 +54,7 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
     return data?.pages?.[0]?.total || allUsers.length;
   }, [data, allUsers.length]);
 
-  // Filter users
+  // Filter and sort users
   const filteredUsers = useMemo(() => {
     let filtered = [...allUsers];
 
@@ -79,8 +82,41 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
       });
     }
 
+    // Sort users (only if sortField is not 'none')
+    if (sortField !== 'none') {
+      filtered.sort((a, b) => {
+        let aValue, bValue;
+        
+        if (sortField === 'name') {
+          aValue = (a.name || '').toLowerCase();
+          bValue = (b.name || '').toLowerCase();
+        } else if (sortField === 'balance') {
+          aValue = parseFloat(a.balance) || 0;
+          bValue = parseFloat(b.balance) || 0;
+        } else {
+          return 0;
+        }
+
+        if (sortField === 'name') {
+          // String comparison
+          if (sortDirection === 'asc') {
+            return aValue.localeCompare(bValue);
+          } else {
+            return bValue.localeCompare(aValue);
+          }
+        } else {
+          // Numeric comparison
+          if (sortDirection === 'asc') {
+            return aValue - bValue;
+          } else {
+            return bValue - aValue;
+          }
+        }
+      });
+    }
+
     return filtered;
-  }, [allUsers, debouncedSearch, dateFilter]);
+  }, [allUsers, debouncedSearch, dateFilter, sortField, sortDirection]);
 
   // Paginate filtered results
   const paginatedUsers = useMemo(() => {
@@ -91,6 +127,43 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
 
   const totalPages = Math.ceil(filteredUsers.length / ITEMS_PER_PAGE);
   const displayTotal = filteredUsers.length;
+
+  // Scroll table content to top when page changes
+  useEffect(() => {
+    const scrollToTop = () => {
+      if (tableContainerRef.current) {
+        // Find the scrollable container - try multiple methods
+        let scrollableContainer = null;
+        
+        // Method 1: Query by class name
+        const divs = tableContainerRef.current.getElementsByClassName('overflow-y-auto');
+        if (divs.length > 0) {
+          scrollableContainer = divs[0];
+        }
+        
+        // Method 2: If not found, search by attribute
+        if (!scrollableContainer) {
+          const allDivs = tableContainerRef.current.querySelectorAll('div');
+          for (let div of allDivs) {
+            if (div.className && div.className.includes('overflow-y-auto')) {
+              scrollableContainer = div;
+              break;
+            }
+          }
+        }
+        
+        if (scrollableContainer) {
+          scrollableContainer.scrollTop = 0;
+        }
+      }
+    };
+
+    // Try immediately and also with a small delay
+    scrollToTop();
+    const timer = setTimeout(scrollToTop, 50);
+
+    return () => clearTimeout(timer);
+  }, [page]);
 
   // Load all pages when there are no filters (to show accurate total count)
   useEffect(() => {
@@ -170,17 +243,61 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
     toast.success('Users exported successfully');
   }, [filteredUsers, exportFormat]);
 
-  const renderTableHeader = useCallback(() => (
-    <div className="grid grid-cols-12 gap-4 p-4 font-semibold text-sm min-w-[1200px]">
-      <div className="col-span-2 min-w-[150px]">Name</div>
-      <div className="col-span-3 min-w-[200px]">Email</div>
-      <div className="col-span-2 min-w-[120px]">Phone</div>
-      <div className="col-span-1 min-w-[80px]">Role</div>
-      <div className="col-span-1 min-w-[100px]">Balance</div>
-      <div className="col-span-2 min-w-[150px]">Joined Date</div>
-      <div className="col-span-1 min-w-[150px]">Actions</div>
-    </div>
-  ), []);
+  const renderTableHeader = useCallback(() => {
+    const SortIcon = ({ field }) => {
+      if (sortField === 'none') {
+        return null;
+      }
+      if (sortField !== field) {
+        return <ArrowUpDown className="w-4 h-4 ml-1 text-gray-400" />;
+      }
+      return sortDirection === 'asc' ? (
+        <ArrowUp className="w-4 h-4 ml-1 text-indigo-600" />
+      ) : (
+        <ArrowDown className="w-4 h-4 ml-1 text-indigo-600" />
+      );
+    };
+
+    return (
+      <div className="grid grid-cols-12 gap-4 p-4 font-semibold text-sm min-w-[1200px]">
+        <div 
+          className="col-span-2 min-w-[150px] flex items-center cursor-pointer hover:text-indigo-600 transition-colors"
+          onClick={() => {
+            if (sortField === 'name') {
+              setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+            } else {
+              setSortField('name');
+              setSortDirection('asc');
+            }
+            setPage(1);
+          }}
+        >
+          Name
+          <SortIcon field="name" />
+        </div>
+        <div className="col-span-3 min-w-[200px]">Email</div>
+        <div className="col-span-2 min-w-[120px]">Phone</div>
+        <div className="col-span-1 min-w-[80px]">Role</div>
+        <div 
+          className="col-span-1 min-w-[100px] flex items-center cursor-pointer hover:text-indigo-600 transition-colors"
+          onClick={() => {
+            if (sortField === 'balance') {
+              setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+            } else {
+              setSortField('balance');
+              setSortDirection('asc');
+            }
+            setPage(1);
+          }}
+        >
+          Balance
+          <SortIcon field="balance" />
+        </div>
+        <div className="col-span-2 min-w-[150px]">Joined Date</div>
+        <div className="col-span-1 min-w-[150px]">Actions</div>
+      </div>
+    );
+  }, [sortField, sortDirection]);
 
   const renderTableRow = useCallback((user, index) => {
     if (editingUser?.id === user.id) {
@@ -383,7 +500,7 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
             </div>
           </div>
         </div>
-        {/* Search and Date Filter */}
+        {/* Search, Date Filter, and Sort */}
         <div className="flex flex-col gap-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -394,7 +511,7 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
               className="pl-11 h-12 text-base"
             />
           </div>
-          <div>
+          <div className="flex flex-col sm:flex-row gap-3">
             <Input
               type="date"
               placeholder="Filter by date"
@@ -403,8 +520,46 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
                 setDateFilter(e.target.value);
                 setPage(1);
               }}
-              className="w-full h-12 text-base"
+              className="w-full sm:flex-1 h-12 text-base"
             />
+            <div className="flex gap-2">
+              <Select 
+                value={sortField} 
+                onValueChange={(value) => {
+                  setSortField(value);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger className="w-full sm:w-[140px] h-12 text-base">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No Sort</SelectItem>
+                  <SelectItem value="name">Name</SelectItem>
+                  <SelectItem value="balance">Balance</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                onClick={() => {
+                  setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                  setPage(1);
+                }}
+                variant="outline"
+                size="sm"
+                className="h-12 px-3 flex items-center gap-2"
+                title={sortDirection === 'asc' ? 'Ascending' : 'Descending'}
+                disabled={sortField === 'none'}
+              >
+                {sortDirection === 'asc' ? (
+                  <ArrowUp className="w-4 h-4" />
+                ) : (
+                  <ArrowDown className="w-4 h-4" />
+                )}
+                <span className="hidden sm:inline">
+                  {sortDirection === 'asc' ? 'Asc' : 'Desc'}
+                </span>
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -413,15 +568,17 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
         <p className="text-gray-600 text-center py-8">No users found</p>
       ) : (
         <>
-          <ResponsiveTable
-            items={paginatedUsers}
-            renderTableHeader={renderTableHeader}
-            renderTableRow={renderTableRow}
-            renderCard={renderMobileCard}
-            useVirtualScroll={useVirtualScroll}
-            emptyMessage="No users found"
-            minTableWidth="1200px"
-          />
+          <div ref={tableContainerRef}>
+            <ResponsiveTable
+              items={paginatedUsers}
+              renderTableHeader={renderTableHeader}
+              renderTableRow={renderTableRow}
+              renderCard={renderMobileCard}
+              useVirtualScroll={useVirtualScroll}
+              emptyMessage="No users found"
+              minTableWidth="1200px"
+            />
+          </div>
 
           {/* Pagination Controls */}
           <div className="flex items-center justify-between mt-4">

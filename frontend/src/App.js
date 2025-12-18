@@ -389,6 +389,14 @@ function App() {
                 element={<PlatformLandingPage user={user} onLogout={logout} />}
               />
               <Route
+                path="/whatsapp-services"
+                element={<PlatformLandingPage user={user} onLogout={logout} />}
+              />
+              <Route
+                path="/telegram-services"
+                element={<PlatformLandingPage user={user} onLogout={logout} />}
+              />
+              <Route
                 path="/orders"
                 element={user ? <OrderHistory user={user} onLogout={logout} /> : <Navigate to="/auth" />}
               />

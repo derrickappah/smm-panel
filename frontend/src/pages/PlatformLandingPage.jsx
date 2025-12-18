@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import SEO from '@/components/SEO';
 import { generateBreadcrumbSchema } from '@/utils/schema';
 import { generatePlatformMetaTags } from '@/utils/metaTags';
-import { ArrowRight, Instagram, Youtube, Facebook, Twitter, Music, TrendingUp, Shield, Clock, DollarSign, Users, Heart, Eye, MessageCircle } from 'lucide-react';
+import { ArrowRight, Instagram, Youtube, Facebook, Twitter, Music, TrendingUp, Shield, Clock, DollarSign, Users, Heart, Eye, MessageCircle, Send } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 
 const PlatformLandingPage = ({ user, onLogout }) => {
@@ -24,7 +24,9 @@ const PlatformLandingPage = ({ user, onLogout }) => {
     tiktok: Music,
     youtube: Youtube,
     facebook: Facebook,
-    twitter: Twitter
+    twitter: Twitter,
+    whatsapp: MessageCircle,
+    telegram: Send
   };
 
   const PlatformIcon = platformIcons[platformName] || TrendingUp;

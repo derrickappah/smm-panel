@@ -7,9 +7,11 @@ const SITE_URL = 'https://boostupgh.com';
 const serviceTypes = {
   instagram: ['followers', 'likes', 'views', 'comments', 'story_views'],
   tiktok: ['followers', 'likes', 'views', 'shares'],
-  youtube: ['subscribers', 'views', 'likes', 'comments'],
+  youtube: ['subscribers', 'views', 'likes', 'comments', 'watch_hours', 'shares', 'live_stream_viewers'],
   facebook: ['page_likes', 'post_likes', 'followers', 'shares'],
-  twitter: ['followers', 'retweets', 'likes', 'views']
+  twitter: ['followers', 'retweets', 'likes', 'views'],
+  whatsapp: ['members', 'views', 'subscribers', 'reactions'],
+  telegram: ['members', 'subscribers', 'views', 'reactions']
 };
 
 // Static pages
@@ -27,7 +29,9 @@ const platformPages = [
   { platform: 'tiktok', priority: '0.9', changefreq: 'weekly' },
   { platform: 'youtube', priority: '0.9', changefreq: 'weekly' },
   { platform: 'facebook', priority: '0.9', changefreq: 'weekly' },
-  { platform: 'twitter', priority: '0.9', changefreq: 'weekly' }
+  { platform: 'twitter', priority: '0.9', changefreq: 'weekly' },
+  { platform: 'whatsapp', priority: '0.9', changefreq: 'weekly' },
+  { platform: 'telegram', priority: '0.9', changefreq: 'weekly' }
 ];
 
 // Blog posts

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, Zap, Shield, TrendingUp, Instagram, Youtube, Facebook, Twitter, Music, Users, Heart, Eye, MessageCircle, Clock, DollarSign, ArrowUp } from 'lucide-react';
+import { ArrowRight, Zap, Shield, TrendingUp, Instagram, Youtube, Facebook, Twitter, Music, Users, Heart, Eye, MessageCircle, Clock, DollarSign, ArrowUp, Send } from 'lucide-react';
 import SEO from '@/components/SEO';
 import { supabase } from '@/lib/supabase';
 import { useQuery } from '@tanstack/react-query';
@@ -137,6 +137,8 @@ const LandingPage = () => {
     { name: 'YouTube', icon: Youtube, color: 'text-red-600' },
     { name: 'Facebook', icon: Facebook, color: 'text-blue-600' },
     { name: 'Twitter', icon: Twitter, color: 'text-sky-500' },
+    { name: 'WhatsApp', icon: MessageCircle, color: 'text-green-600' },
+    { name: 'Telegram', icon: Send, color: 'text-blue-500' },
   ];
 
   const features = [

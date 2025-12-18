@@ -66,6 +66,26 @@ export const primaryKeywords = {
     'Twitter likes',
     'Twitter views',
     'Twitter engagement'
+  ],
+  whatsapp: [
+    'WhatsApp group members',
+    'buy WhatsApp members',
+    'WhatsApp channel subscribers',
+    'buy WhatsApp subscribers',
+    'WhatsApp channel views',
+    'buy WhatsApp views',
+    'WhatsApp status reactions',
+    'WhatsApp engagement'
+  ],
+  telegram: [
+    'Telegram group members',
+    'buy Telegram members',
+    'Telegram channel subscribers',
+    'buy Telegram subscribers',
+    'Telegram channel views',
+    'buy Telegram views',
+    'Telegram reactions',
+    'Telegram engagement'
   ]
 };
 
@@ -114,6 +134,20 @@ export const longTailKeywords = {
     'Twitter engagement service',
     'buy Twitter followers cheap',
     'grow Twitter account'
+  ],
+  whatsapp: [
+    'WhatsApp group growth',
+    'increase WhatsApp members',
+    'WhatsApp channel growth',
+    'buy WhatsApp subscribers cheap',
+    'grow WhatsApp channel'
+  ],
+  telegram: [
+    'Telegram group growth',
+    'increase Telegram members',
+    'Telegram channel growth',
+    'buy Telegram subscribers cheap',
+    'grow Telegram channel'
   ]
 };
 
@@ -147,7 +181,11 @@ export const serviceTypeKeywords = {
   views: ['views', 'watches', 'impressions', 'buy views', 'get views'],
   comments: ['comments', 'replies', 'buy comments', 'get comments'],
   shares: ['shares', 'retweets', 'reposts', 'buy shares'],
-  subscribers: ['subscribers', 'subs', 'buy subscribers', 'get subscribers']
+  subscribers: ['subscribers', 'subs', 'buy subscribers', 'get subscribers'],
+  members: ['members', 'group members', 'buy members', 'get members'],
+  reactions: ['reactions', 'status reactions', 'buy reactions', 'get reactions'],
+  watch_hours: ['watch hours', 'YouTube watch hours', 'buy watch hours', 'get watch hours'],
+  live_stream_viewers: ['live viewers', 'stream viewers', 'buy live viewers', 'get live viewers']
 };
 
 // Generate keywords for a specific platform and service type

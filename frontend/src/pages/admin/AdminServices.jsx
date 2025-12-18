@@ -224,6 +224,8 @@ const AdminServices = memo(() => {
                   <SelectItem value="youtube">YouTube</SelectItem>
                   <SelectItem value="facebook">Facebook</SelectItem>
                   <SelectItem value="twitter">Twitter</SelectItem>
+                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                  <SelectItem value="telegram">Telegram</SelectItem>
                 </SelectContent>
               </Select>
             </div>

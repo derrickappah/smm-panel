@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
 // SMMGen import removed - only using Supabase services
 import Navbar from '@/components/Navbar';
-import { Instagram, Youtube, Facebook, Twitter, ArrowRight, Tag } from 'lucide-react';
+import { Instagram, Youtube, Facebook, Twitter, ArrowRight, Tag, MessageCircle, Send } from 'lucide-react';
 import SEO from '@/components/SEO';
 import { generateServiceListSchema } from '@/utils/schema';
 import { generatePlatformMetaTags } from '@/utils/metaTags';
@@ -23,7 +23,7 @@ const ServicesPage = ({ user, onLogout }) => {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const platformParam = params.get('platform');
-    if (platformParam && ['instagram', 'tiktok', 'youtube', 'facebook', 'twitter'].includes(platformParam.toLowerCase())) {
+    if (platformParam && ['instagram', 'tiktok', 'youtube', 'facebook', 'twitter', 'whatsapp', 'telegram'].includes(platformParam.toLowerCase())) {
       setSelectedPlatform(platformParam.toLowerCase());
     }
   }, [location.search]);
@@ -35,6 +35,8 @@ const ServicesPage = ({ user, onLogout }) => {
     { id: 'youtube', name: 'YouTube', icon: Youtube, color: 'from-red-500 to-red-600' },
     { id: 'facebook', name: 'Facebook', icon: Facebook, color: 'from-blue-500 to-blue-600' },
     { id: 'twitter', name: 'Twitter', icon: Twitter, color: 'from-sky-400 to-sky-600' },
+    { id: 'whatsapp', name: 'WhatsApp', icon: MessageCircle, color: 'from-green-500 to-green-600' },
+    { id: 'telegram', name: 'Telegram', icon: Send, color: 'from-blue-400 to-blue-500' },
   ];
 
   useEffect(() => {
@@ -233,6 +235,10 @@ const ServicesPage = ({ user, onLogout }) => {
                   return 'bg-sky-500 text-white border-sky-500';
                 case 'tiktok':
                   return 'bg-gray-800 text-white border-gray-800';
+                case 'whatsapp':
+                  return 'bg-green-600 text-white border-green-600';
+                case 'telegram':
+                  return 'bg-blue-500 text-white border-blue-500';
                 default:
                   return 'bg-indigo-600 text-white border-indigo-600';
               }
@@ -337,6 +343,10 @@ const ServicesPage = ({ user, onLogout }) => {
                     return 'bg-sky-100 text-sky-700 border-sky-200';
                   case 'tiktok':
                     return 'bg-gray-100 text-gray-700 border-gray-200';
+                  case 'whatsapp':
+                    return 'bg-green-100 text-green-700 border-green-200';
+                  case 'telegram':
+                    return 'bg-blue-100 text-blue-700 border-blue-200';
                   default:
                     return 'bg-indigo-100 text-indigo-700 border-indigo-200';
                 }
