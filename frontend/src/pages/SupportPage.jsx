@@ -62,6 +62,11 @@ const SupportPage = ({ user, onLogout }) => {
 
   const faqs = [
     {
+      id: 11,
+      question: 'How do I delete and restore a TikTok video to keep my purchased likes?',
+      answer: 'HOW TO DELETE A TIKTOK VIDEO\n1. Open TikTok\n2. Go to Profile\n3. Tap the video you want to remove\n4. Tap the three dots (⋯) or Share arrow\n5. Tap Delete\n6. Confirm Delete\n\n👉 The video goes to Recently Deleted (not gone permanently).\n\n⸻\n\nHOW TO RESTORE A DELETED TIKTOK VIDEO\n1. Open TikTok\n2. Go to Profile\n3. Tap the three lines (☰) top-right\n4. Tap Settings and Privacy\n5. Tap Activity Center\n6. Tap Recently Deleted\n7. Select the video\n8. Tap Restore\n9. Confirm Restore\n\n👉 The video returns with its likes.\n\n⸻\n\nDELETE & RESTORE — HOW IT WORKS\n(Make Likes Permanent)\n\n• TikTok usually removes the likes you buy around the 5th or 6th day of buying\n• The goal is to remove the video before TikTok starts removing the likes.\n\nExample timeline:\n1. Monday — I buy likes on my video.\n2. Friday evening — I delete the video.\n   → This removes it before TikTok\'s system deletes my likes\n3. Wait at least 48 hours\n   → Do nothing during this time.\n4. Monday evening — You will restore the video back\n\nResult:\nThe likes stay and do not reduce again.'
+    },
+    {
       id: 1,
       question: 'How do I place an order?',
       answer: 'To place an order, go to your Dashboard and fill out the order form. Select a service, enter your profile link, specify the quantity, and click "Place Order". Make sure you have sufficient balance in your account.'
