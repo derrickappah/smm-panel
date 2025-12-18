@@ -1,20 +1,10 @@
-/**
- * Moolre Web Payment Initialization Serverless Function
- * 
- * This function initializes Moolre Web payments by creating a payment link
- * that redirects users to the Moolre web portal for payment completion.
- * 
- * Environment Variables Required:
- * - MOOLRE_API_USER: Your Moolre username
- * - MOOLRE_API_PUBKEY: Your Moolre public API key
- * - MOOLRE_ACCOUNT_NUMBER: Your Moolre account number
- */
+import { verifyAuth } from './utils/auth.js';
 
 export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
@@ -27,6 +17,15 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Authenticate user
+    try {
+      await verifyAuth(req);
+    } catch (authError) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: authError.message
+      });
+    }
     const {
       amount,
       currency = 'GHS',
@@ -50,7 +49,7 @@ export default async function handler(req, res) {
     const moolreApiUser = process.env.MOOLRE_API_USER;
     const moolreApiPubkey = process.env.MOOLRE_API_PUBKEY;
     const moolreAccountNumber = accountnumber || process.env.MOOLRE_ACCOUNT_NUMBER;
-    
+
     if (!moolreApiUser || !moolreApiPubkey || !moolreAccountNumber) {
       console.error('Moolre credentials are not configured');
       return res.status(500).json({
@@ -65,13 +64,13 @@ export default async function handler(req, res) {
       // If relative URL, make it absolute (this shouldn't happen but handle it)
       redirectUrl = `https://${redirectUrl}`;
     }
-    
+
     // Ensure callback URL is properly formatted
     let callbackUrl = callback || '';
     if (callbackUrl && !callbackUrl.startsWith('http://') && !callbackUrl.startsWith('https://')) {
       callbackUrl = `https://${callbackUrl}`;
     }
-    
+
     const moolreRequest = {
       type: 1,
       amount: amount.toString(),
@@ -101,14 +100,14 @@ export default async function handler(req, res) {
     let moolreResponse;
     try {
       moolreResponse = await fetch('https://api.moolre.com/embed/link', {
-      method: 'POST',
-      headers: {
-        'X-API-USER': moolreApiUser,
-        'X-API-PUBKEY': moolreApiPubkey,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(moolreRequest)
-    });
+        method: 'POST',
+        headers: {
+          'X-API-USER': moolreApiUser,
+          'X-API-PUBKEY': moolreApiPubkey,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(moolreRequest)
+      });
     } catch (fetchError) {
       console.error('Network error calling Moolre API:', fetchError);
       return res.status(500).json({
@@ -122,11 +121,11 @@ export default async function handler(req, res) {
     try {
       const responseText = await moolreResponse.text();
       console.log('Raw Moolre API response text:', responseText);
-      
+
       if (!responseText || responseText.trim() === '') {
         throw new Error('Empty response from Moolre API');
       }
-      
+
       moolreData = JSON.parse(responseText);
     } catch (parseError) {
       console.error('Failed to parse Moolre API response:', parseError);
@@ -143,9 +142,9 @@ export default async function handler(req, res) {
     console.log('Moolre API response data:', JSON.stringify(moolreData, null, 2));
 
     // POS09 code indicates successful payment link generation
-    const isSuccessCode = moolreData.code === 'POS09' || 
-                         moolreData.code === '200' || 
-                         moolreData.code?.startsWith('200');
+    const isSuccessCode = moolreData.code === 'POS09' ||
+      moolreData.code === '200' ||
+      moolreData.code?.startsWith('200');
 
     // Check for Moolre error codes (similar to regular Moolre API)
     // But exclude POS09 which is actually a success code
@@ -171,7 +170,7 @@ export default async function handler(req, res) {
     // Helper function to recursively search for URLs/links in an object
     const findLinkInObject = (obj, depth = 0, maxDepth = 5) => {
       if (depth > maxDepth || !obj || typeof obj !== 'object') return null;
-      
+
       // Check common link field names
       const linkFields = ['link', 'url', 'payment_link', 'paymentUrl', 'pos_link', 'payment_url', 'checkout_url', 'redirect_url'];
       for (const field of linkFields) {
@@ -179,7 +178,7 @@ export default async function handler(req, res) {
           return obj[field];
         }
       }
-      
+
       // Recursively search in nested objects and arrays
       for (const key in obj) {
         if (obj.hasOwnProperty(key)) {
@@ -190,27 +189,27 @@ export default async function handler(req, res) {
           }
         }
       }
-      
+
       return null;
     };
 
     // Check if response contains a payment link - try multiple possible response structures
     // Also check in details object for POS09 responses
-    let paymentLink = moolreData.link || 
-                       moolreData.data?.link || 
-                       moolreData.details?.link ||
-                       moolreData.url || 
-                       moolreData.data?.url ||
-                       moolreData.details?.url ||
-                       moolreData.payment_link ||
-                       moolreData.data?.payment_link ||
-                       moolreData.details?.payment_link ||
-                       moolreData.paymentUrl ||
-                       moolreData.data?.paymentUrl ||
-                       moolreData.details?.paymentUrl ||
-                       moolreData.pos_link ||
-                       moolreData.data?.pos_link ||
-                       moolreData.details?.pos_link;
+    let paymentLink = moolreData.link ||
+      moolreData.data?.link ||
+      moolreData.details?.link ||
+      moolreData.url ||
+      moolreData.data?.url ||
+      moolreData.details?.url ||
+      moolreData.payment_link ||
+      moolreData.data?.payment_link ||
+      moolreData.details?.payment_link ||
+      moolreData.paymentUrl ||
+      moolreData.data?.paymentUrl ||
+      moolreData.details?.paymentUrl ||
+      moolreData.pos_link ||
+      moolreData.data?.pos_link ||
+      moolreData.details?.pos_link;
 
     // If not found in common locations, do a deep search
     if (!paymentLink) {
@@ -245,7 +244,7 @@ export default async function handler(req, res) {
         };
         extractStrings(moolreData);
         console.log('All URLs found in response:', allStrings);
-        
+
         // If we found any URLs, use the first one (likely the payment link)
         if (allStrings.length > 0) {
           const foundUrl = allStrings[0].value;
@@ -259,7 +258,7 @@ export default async function handler(req, res) {
           });
         }
       }
-      
+
       console.error('Moolre API response missing payment link. Full response:', JSON.stringify(moolreData, null, 2));
       return res.status(500).json({
         success: false,

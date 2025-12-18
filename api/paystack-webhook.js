@@ -109,15 +109,15 @@ export default async function handler(req, res) {
 
     if (!PAYSTACK_SECRET_KEY) {
       console.error('PAYSTACK_SECRET_KEY is not configured');
-      return res.status(500).json({ 
-        error: 'Paystack secret key not configured' 
+      return res.status(500).json({
+        error: 'Paystack secret key not configured'
       });
     }
 
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       console.error('Supabase credentials not configured');
-      return res.status(500).json({ 
-        error: 'Supabase credentials not configured' 
+      return res.status(500).json({
+        error: 'Supabase credentials not configured'
       });
     }
 
@@ -126,7 +126,7 @@ export default async function handler(req, res) {
     // Try to get as Buffer first to preserve exact bytes
     let rawBodyBuffer = await getRawBody(req);
     let rawBody;
-    
+
     // If we couldn't get raw body (Vercel already parsed it), we have a problem
     // In this case, we'll try to reconstruct it, but signature verification may fail
     if (!rawBodyBuffer) {
@@ -154,29 +154,18 @@ export default async function handler(req, res) {
 
     // Get signature from header
     const signature = req.headers['x-paystack-signature'];
-    
+
     // Verify webhook signature
     // Note: Due to Vercel automatically parsing JSON bodies, we may not be able to get the exact raw body
     // This can cause signature mismatches even with the correct secret key
     const signatureValid = hash === signature;
 
     if (!signatureValid) {
-      // Additional security: Check if request is from Paystack IP addresses
-      // Paystack IPs: 52.31.139.75, 52.49.173.169, 52.214.14.220
-      const clientIP = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 
-                       req.headers['x-real-ip'] || 
-                       req.connection?.remoteAddress;
-      
-      const paystackIPs = ['52.31.139.75', '52.49.173.169', '52.214.14.220'];
-      const isFromPaystackIP = clientIP && paystackIPs.includes(clientIP);
-
-      console.error('Invalid webhook signature', {
+      console.error('SECURITY WARNING: Invalid webhook signature', {
         computedHash: hash.substring(0, 20) + '...',
         receivedSignature: signature ? signature.substring(0, 20) + '...' : 'missing',
         bodyType: typeof req.body,
         rawBodyLength: rawBody ? rawBody.length : 0,
-        clientIP: clientIP,
-        isFromPaystackIP: isFromPaystackIP,
         note: 'If bodyType is object, Vercel parsed the body - signature verification may fail due to JSON formatting differences'
       });
 
@@ -190,9 +179,10 @@ export default async function handler(req, res) {
       }
 
       // If signature fails, try fallback verification through Paystack API
-      if (isFromPaystackIP && eventForVerification.data && eventForVerification.data.reference) {
+      // SECURITY: Only allow if API verification succeeds - IP whitelist is not sufficient
+      if (eventForVerification.data && eventForVerification.data.reference) {
         console.log('Attempting fallback verification through Paystack API for reference:', eventForVerification.data.reference);
-        
+
         try {
           // Verify payment through Paystack API
           const verifyResponse = await fetch(`https://api.paystack.co/transaction/verify/${eventForVerification.data.reference}`, {
@@ -208,7 +198,7 @@ export default async function handler(req, res) {
             // Check if payment exists and is valid
             if (verifyData.status && verifyData.data) {
               console.log('Fallback verification successful - payment verified through Paystack API');
-              console.warn('WARNING: Signature verification failed but payment verified through API');
+              console.warn('SECURITY WARNING: Signature verification failed but payment verified through API - this may indicate a body parsing issue');
               // Continue processing - payment is legitimate
             } else {
               console.error('Fallback verification failed - payment not found or invalid');
@@ -216,20 +206,16 @@ export default async function handler(req, res) {
             }
           } else {
             console.error('Fallback verification failed - Paystack API error:', verifyResponse.status);
-            console.warn('WARNING: Signature verification failed and API verification failed, but allowing due to Paystack IP');
+            return res.status(401).json({ error: 'Invalid signature and API verification failed' });
           }
         } catch (apiError) {
           console.error('Error during fallback API verification:', apiError);
-          console.warn('WARNING: Signature verification failed and API verification error, but allowing due to Paystack IP');
+          return res.status(401).json({ error: 'Invalid signature and API verification error' });
         }
-      } else if (!isFromPaystackIP) {
-        // Not from Paystack IP and signature invalid - reject
-        console.error('Rejecting webhook: Invalid signature and not from Paystack IP');
-        return res.status(401).json({ error: 'Invalid signature' });
       } else {
-        // From Paystack IP but no reference for API verification
-        console.warn('WARNING: Signature verification failed but allowing due to Paystack IP whitelist');
-        console.warn('This is a security risk - consider fixing raw body access or using Edge Functions');
+        // No reference for API verification - reject
+        console.error('Rejecting webhook: Invalid signature and no reference for API verification');
+        return res.status(401).json({ error: 'Invalid signature' });
       }
     } else {
       console.log('Signature verification passed');
@@ -260,9 +246,9 @@ export default async function handler(req, res) {
   } catch (error) {
     console.error('Error processing Paystack webhook:', error);
     // Still return 200 to prevent Paystack from retrying
-    return res.status(200).json({ 
-      received: true, 
-      error: error.message 
+    return res.status(200).json({
+      received: true,
+      error: error.message
     });
   }
 }
@@ -399,7 +385,7 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
     if (!transaction && amount) {
       const twoHoursAgo = new Date(paidAt.getTime() - 2 * 60 * 60 * 1000).toISOString();
       const twoHoursLater = new Date(paidAt.getTime() + 2 * 60 * 60 * 1000).toISOString();
-      
+
       const { data: txByAmount, error: amountError } = await supabase
         .from('transactions')
         .select('*')
@@ -446,7 +432,7 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
     // Check if already processed
     if (transaction.status === 'approved') {
       console.log('Transaction already approved, verifying balance:', transaction.id);
-      
+
       // Verify balance was updated (safety check)
       const { data: profile } = await supabase
         .from('profiles')
@@ -458,7 +444,7 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
         // Check if balance needs to be updated (idempotent check)
         const currentBalance = parseFloat(profile.balance || 0);
         const expectedBalance = currentBalance; // Balance should already include this transaction
-        
+
         // If balance seems incorrect, log it but don't update (to avoid double crediting)
         console.log('Balance verification for already-approved transaction:', {
           transactionId: transaction.id,
@@ -467,7 +453,7 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
           note: 'Balance should already include this transaction amount'
         });
       }
-      
+
       return;
     }
 
@@ -485,13 +471,14 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       metrics.statusUpdateAttempts = attempt;
       metrics.balanceUpdateAttempts = attempt;
-      
+
       try {
         // Call the atomic database function
-        const { data: result, error: rpcError } = await supabase.rpc('approve_deposit_transaction', {
+        const { data: result, error: rpcError } = await supabase.rpc('approve_deposit_transaction_universal', {
           p_transaction_id: transaction.id,
-          p_paystack_status: 'success',
-          p_paystack_reference: reference || transaction.paystack_reference || null
+          p_payment_method: 'paystack',
+          p_payment_status: 'success',
+          p_payment_reference: reference || transaction.paystack_reference || null
         });
 
         if (rpcError) {
@@ -578,7 +565,7 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
 
     // Balance was already updated by the database function, so we're done
     console.log('[WEBHOOK] Transaction approved and balance updated successfully via atomic function');
-    
+
     // Verify balance was updated (safety check)
     const { data: verifyProfile } = await supabase
       .from('profiles')
@@ -606,22 +593,22 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
     (async () => {
       try {
         console.log('[WEBHOOK] Running automatic verification for transaction:', transaction.id);
-        
+
         // Make internal call to verification endpoint
         // Use VERCEL_URL if available (production), otherwise localhost for development
-        const baseUrl = process.env.VERCEL_URL 
-          ? `https://${process.env.VERCEL_URL}` 
-          : (process.env.NEXT_PUBLIC_VERCEL_URL 
+        const baseUrl = process.env.VERCEL_URL
+          ? `https://${process.env.VERCEL_URL}`
+          : (process.env.NEXT_PUBLIC_VERCEL_URL
             ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
             : 'http://localhost:3000');
-        
+
         const verifyResponse = await fetch(`${baseUrl}/api/manual-verify-paystack-deposit`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ 
-            transactionId: transaction.id 
+          body: JSON.stringify({
+            transactionId: transaction.id
           })
         });
 
@@ -816,13 +803,13 @@ async function handleFailedPayment(paymentData, supabaseUrl, supabaseServiceKey)
                 .select('status')
                 .eq('id', transaction.id)
                 .single();
-              
+
               if (currentTx?.status !== 'pending') {
                 console.log('Transaction status already changed, skipping update:', transaction.id);
                 break;
               }
             }
-            
+
             console.error(`Attempt ${attempt} error updating failed transaction:`, updateError);
             if (attempt < maxRetries) {
               await new Promise(resolve => setTimeout(resolve, 1000 * attempt));

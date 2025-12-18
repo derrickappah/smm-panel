@@ -1,18 +1,10 @@
-/**
- * Korapay Payment Initialization Serverless Function
- * 
- * This function acts as a proxy to initialize Korapay payments,
- * bypassing CORS restrictions by making the API call from the server.
- * 
- * Environment Variables Required:
- * - KORAPAY_SECRET_KEY: Your Korapay secret key (starts with sk_)
- */
+import { verifyAuth } from './utils/auth.js';
 
 export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
@@ -25,6 +17,15 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Authenticate user
+    try {
+      await verifyAuth(req);
+    } catch (authError) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: authError.message
+      });
+    }
     const {
       amount,
       currency = 'GHS',
@@ -43,7 +44,7 @@ export default async function handler(req, res) {
 
     // Get Korapay secret key from environment variables
     const korapaySecretKey = process.env.KORAPAY_SECRET_KEY;
-    
+
     if (!korapaySecretKey) {
       console.error('KORAPAY_SECRET_KEY is not configured');
       return res.status(500).json({

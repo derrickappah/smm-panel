@@ -1,31 +1,11 @@
-/**
- * Universal API Endpoint for Atomic Deposit Approval
- * 
- * This endpoint uses the approve_deposit_transaction_universal database function to atomically
- * approve deposit transactions and update user balance for any payment method, preventing race conditions.
- * 
- * Supports: Paystack, Korapay, Moolre, Moolre Web
- * 
- * Environment Variables Required:
- * - SUPABASE_URL: Your Supabase project URL
- * - SUPABASE_SERVICE_ROLE_KEY: Your Supabase service role key (for server-side operations)
- * 
- * Request Body:
- * {
- *   "transaction_id": "uuid-of-transaction",
- *   "payment_method": "paystack" | "korapay" | "moolre" | "moolre_web",
- *   "payment_status": "success" (optional, defaults to "success"),
- *   "payment_reference": "reference-string" (optional, will be stored if provided)
- * }
- */
-
 import { createClient } from '@supabase/supabase-js';
+import { verifyAdmin } from './utils/auth.js';
 
 export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
@@ -38,6 +18,27 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Authenticate admin user
+    try {
+      await verifyAdmin(req);
+    } catch (authError) {
+      if (authError.message === 'Missing or invalid authorization header' ||
+        authError.message === 'Missing authentication token' ||
+        authError.message === 'Invalid or expired token') {
+        return res.status(401).json({
+          error: 'Authentication required',
+          message: authError.message
+        });
+      }
+
+      if (authError.message === 'Admin access required') {
+        return res.status(403).json({
+          error: 'Admin access required for deposit approval'
+        });
+      }
+
+      throw authError;
+    }
     const { transaction_id, payment_method, payment_status, payment_reference } = req.body;
 
     // Validate required fields

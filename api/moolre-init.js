@@ -1,20 +1,10 @@
-/**
- * Moolre Payment Initialization Serverless Function
- * 
- * This function acts as a proxy to initialize Moolre payments,
- * bypassing CORS restrictions by making the API call from the server.
- * 
- * Environment Variables Required:
- * - MOOLRE_API_USER: Your Moolre username
- * - MOOLRE_API_PUBKEY: Your Moolre public API key
- * - MOOLRE_ACCOUNT_NUMBER: Your Moolre account number
- */
+import { verifyAuth } from './utils/auth.js';
 
 export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
@@ -27,6 +17,15 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Authenticate user
+    try {
+      await verifyAuth(req);
+    } catch (authError) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: authError.message
+      });
+    }
     const {
       amount,
       currency = 'GHS',
@@ -47,7 +46,7 @@ export default async function handler(req, res) {
     const moolreApiUser = process.env.MOOLRE_API_USER;
     const moolreApiPubkey = process.env.MOOLRE_API_PUBKEY;
     const moolreAccountNumber = process.env.MOOLRE_ACCOUNT_NUMBER;
-    
+
     if (!moolreApiUser || !moolreApiPubkey || !moolreAccountNumber) {
       console.error('Moolre credentials are not configured');
       return res.status(500).json({

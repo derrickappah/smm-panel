@@ -1,6 +1,8 @@
 /**
  * Manual Paystack Deposit Verification Endpoint
  * 
+ * SECURITY: Requires admin authentication for manual verification.
+ * 
  * This endpoint allows admins to manually verify and update Paystack deposit statuses.
  * It verifies the payment with Paystack API and updates the transaction status accordingly.
  * 
@@ -8,13 +10,15 @@
  * - PAYSTACK_SECRET_KEY: Your Paystack secret key
  * - SUPABASE_URL: Your Supabase project URL
  * - SUPABASE_SERVICE_ROLE_KEY: Your Supabase service role key
+ * - SUPABASE_ANON_KEY: Your Supabase anon key (for JWT verification)
  * 
  * Usage:
  * POST /api/manual-verify-paystack-deposit
+ * Headers: Authorization: Bearer <supabase_jwt_token>
  * Body: { transactionId: "uuid" } or { reference: "paystack_reference" }
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { verifyAdmin, getServiceRoleClient } from './utils/auth.js';
 
 export default async function handler(req, res) {
   // Enable CORS
@@ -33,6 +37,28 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Authenticate admin user
+    try {
+      await verifyAdmin(req);
+    } catch (authError) {
+      if (authError.message === 'Missing or invalid authorization header' ||
+          authError.message === 'Missing authentication token' ||
+          authError.message === 'Invalid or expired token') {
+        return res.status(401).json({
+          error: 'Authentication required',
+          message: authError.message
+        });
+      }
+      
+      if (authError.message === 'Admin access required') {
+        return res.status(403).json({
+          error: 'Admin access required for manual verification'
+        });
+      }
+      
+      throw authError;
+    }
+
     const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
     const SUPABASE_URL = process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL;
     const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -58,12 +84,7 @@ export default async function handler(req, res) {
     }
 
     // Initialize Supabase client with service role key
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    });
+    const supabase = getServiceRoleClient();
 
     // Find transaction
     let transaction = null;
@@ -331,51 +352,72 @@ export default async function handler(req, res) {
           return a.timeDiff - b.timeDiff;
             });
 
-        // Only proceed if we have a high-confidence match (score >= 80)
-        // This ensures we don't match wrong transactions when multiple exist with same amount
+        // Only proceed if we have a high-confidence match
+        // SECURITY: Only score 100 (exact metadata match) is automatically processed
+        // Scores 90-99 require admin approval (which we have since this is an admin endpoint)
+        // Lower scores require manual reference input
         const bestMatch = scoredMatches[0];
         
-        if (bestMatch && bestMatch.score >= 80) {
+        if (bestMatch && bestMatch.score === 100) {
+          // Exact match via metadata.transaction_id - highest confidence, safe to auto-process
           const matchingTx = bestMatch.tx;
 
-            if (matchingTx && matchingTx.reference) {
-              paystackReference = matchingTx.reference;
-            console.log(`[MANUAL-VERIFY] Found high-confidence matching Paystack transaction:`, {
+          if (matchingTx && matchingTx.reference) {
+            paystackReference = matchingTx.reference;
+            console.log(`[MANUAL-VERIFY] Found exact match (score 100) via metadata:`, {
               reference: paystackReference,
               score: bestMatch.score,
               reasons: bestMatch.reasons.join(', '),
               transactionId: transaction.id,
-              paystackMetadataId: matchingTx.metadata?.transaction_id,
-              totalCandidates: scoredMatches.length,
-              candidatesWithSameScore: scoredMatches.filter(m => m.score === bestMatch.score).length
+              paystackMetadataId: matchingTx.metadata?.transaction_id
             });
-
-            // Warn if multiple high-scoring matches exist
-            const highScoreMatches = scoredMatches.filter(m => m.score >= 80);
-            if (highScoreMatches.length > 1) {
-              console.warn(`[MANUAL-VERIFY] WARNING: Multiple high-confidence matches found (${highScoreMatches.length}). Using best match.`, {
-                allMatches: highScoreMatches.map(m => ({
-                  reference: m.tx.reference,
-                  score: m.score,
-                  reasons: m.reasons,
-                  metadataId: m.tx.metadata?.transaction_id
-                }))
-              });
-            }
               
-              // Store the reference
-              await supabase
-                .from('transactions')
-                .update({ paystack_reference: paystackReference })
-                .eq('id', transaction.id);
-            }
+            // Store the reference
+            await supabase
+              .from('transactions')
+              .update({ paystack_reference: paystackReference })
+              .eq('id', transaction.id);
+          }
+        } else if (bestMatch && bestMatch.score >= 90) {
+          // High confidence match (90-99) - admin can approve, but log warning
+          const matchingTx = bestMatch.tx;
+          const highScoreMatches = scoredMatches.filter(m => m.score >= 90);
+          
+          console.warn(`[MANUAL-VERIFY] Found high-confidence match (score: ${bestMatch.score}), but not exact metadata match. Admin approval required.`, {
+            reference: bestMatch.tx.reference,
+            score: bestMatch.score,
+            reasons: bestMatch.reasons.join(', '),
+            transactionId: transaction.id,
+            totalCandidates: scoredMatches.length,
+            highScoreMatches: highScoreMatches.length,
+            warning: 'Multiple high-scoring matches may indicate collision risk'
+          });
+
+          // Warn if multiple high-scoring matches exist
+          if (highScoreMatches.length > 1) {
+            console.warn(`[MANUAL-VERIFY] SECURITY WARNING: Multiple high-confidence matches found (${highScoreMatches.length}). Manual verification recommended.`, {
+              allMatches: highScoreMatches.map(m => ({
+                reference: m.tx.reference,
+                score: m.score,
+                reasons: m.reasons,
+                metadataId: m.tx.metadata?.transaction_id
+              }))
+            });
+          }
+
+          // Since this is an admin endpoint, allow processing but log the risk
+          if (matchingTx && matchingTx.reference) {
+            paystackReference = matchingTx.reference;
+            console.log(`[MANUAL-VERIFY] Admin-approved high-confidence match (score ${bestMatch.score})`);
+          }
         } else if (bestMatch && bestMatch.score >= 40) {
-          // Medium confidence match - log but don't use automatically
-          console.warn(`[MANUAL-VERIFY] Found medium-confidence match (score: ${bestMatch.score}), but requires manual verification:`, {
+          // Medium confidence match - require manual reference input
+          console.warn(`[MANUAL-VERIFY] Found medium-confidence match (score: ${bestMatch.score}), requires manual reference input:`, {
             reference: bestMatch.tx.reference,
             reasons: bestMatch.reasons.join(', '),
             transactionId: transaction.id,
-            totalCandidates: scoredMatches.length
+            totalCandidates: scoredMatches.length,
+            recommendation: 'Provide reference manually in request body for exact matching'
           });
         } else {
           // No good match found
@@ -398,7 +440,7 @@ export default async function handler(req, res) {
     
     if (!paystackReference) {
       // Check if we found candidates but they were low confidence
-      const foundLowConfidenceMatches = scoredMatches && scoredMatches.length > 0 && scoredMatches[0].score < 80;
+      const foundLowConfidenceMatches = scoredMatches && scoredMatches.length > 0 && scoredMatches[0].score < 90;
       
       return res.status(400).json({ 
         error: 'No Paystack reference found for this transaction and could not retrieve it from Paystack',
@@ -407,7 +449,7 @@ export default async function handler(req, res) {
         transactionDate: transaction.created_at,
         depositMethod: transaction.deposit_method,
         reason: foundLowConfidenceMatches 
-          ? 'Found potential matches but confidence was too low to automatically verify. Multiple transactions with same amount may exist.'
+          ? 'Found potential matches but confidence was too low (< 90) to automatically verify. Only exact metadata matches (score 100) are auto-processed. Provide reference manually for exact matching.'
           : 'No matching Paystack transaction found in the search window.',
         suggestions: [
           'The payment may not have been initiated with Paystack',
@@ -630,6 +672,22 @@ export default async function handler(req, res) {
       updateResult
     });
   } catch (error) {
+    // Handle authentication errors
+    if (error.message === 'Missing or invalid authorization header' ||
+        error.message === 'Missing authentication token' ||
+        error.message === 'Invalid or expired token') {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: error.message
+      });
+    }
+
+    if (error.message === 'Admin access required') {
+      return res.status(403).json({
+        error: 'Admin access required for manual verification'
+      });
+    }
+
     console.error('[MANUAL-VERIFY] Error in manual verification:', error);
     return res.status(500).json({ 
       error: 'Failed to verify deposit',

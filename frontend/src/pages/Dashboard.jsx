@@ -155,10 +155,18 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         // Verify Paystack transactions
         if (transaction.paystack_reference && transaction.deposit_method === 'paystack') {
           try {
+            // Get JWT token for API authentication
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.access_token) {
+              console.warn('No session token available for payment verification');
+              continue;
+            }
+
             const verifyResponse = await fetch('/api/verify-paystack-payment', {
               method: 'POST',
               headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session.access_token}`
               },
               body: JSON.stringify({
                 reference: transaction.paystack_reference
@@ -169,31 +177,48 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               const verifyData = await verifyResponse.json();
               
               if (verifyData.success && verifyData.status === 'success') {
-                // Payment was successful, update transaction
+                // Payment was successful, approve transaction via secure API
                 console.log('Found successful payment for pending transaction:', transaction.id);
                 
-                // Update transaction status and store Paystack status and reference
-                // Payment was confirmed, so status must be approved
-                const { error: updateError } = await supabase
-                  .from('transactions')
-                  .update({ 
-                    status: 'approved',
-                    paystack_status: verifyData.status, // Store Paystack status
-                    paystack_reference: verifyData.reference || transaction.paystack_reference // Always store reference from verification
-                  })
-                  .eq('id', transaction.id);
+                // Get JWT token for API authentication
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session?.access_token) {
+                  console.warn('No session token available for transaction approval');
+                  continue;
+                }
 
-                // If update failed, try again without status check
-                if (updateError) {
-                  console.warn('First update attempt failed, retrying without status condition:', updateError);
-                  await supabase
-                    .from('transactions')
-                    .update({ 
-                      status: 'approved',
-                      paystack_status: verifyData.status,
-                      paystack_reference: verifyData.reference || transaction.paystack_reference
+                // Approve transaction via secure API endpoint
+                try {
+                  const approveResponse = await fetch('/api/approve-paystack-deposit', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${session.access_token}`
+                    },
+                    body: JSON.stringify({
+                      transaction_id: transaction.id,
+                      reference: verifyData.reference || transaction.paystack_reference,
+                      paystack_status: verifyData.status
                     })
-                    .eq('id', transaction.id);
+                  });
+
+                  if (approveResponse.ok) {
+                    const approveResult = await approveResponse.json();
+                    if (approveResult.success) {
+                      console.log('Transaction approved successfully via API:', approveResult);
+                      // Update user balance if approval was successful
+                      if (approveResult.new_balance !== undefined) {
+                        await onUpdateUser();
+                      }
+                    } else {
+                      console.warn('Transaction approval failed:', approveResult.message);
+                    }
+                  } else {
+                    const errorData = await approveResponse.json().catch(() => ({ error: 'Unknown error' }));
+                    console.warn('Failed to approve transaction via API:', errorData.error);
+                  }
+                } catch (approveError) {
+                  console.error('Error approving transaction via API:', approveError);
                 }
 
                 // Verify status was updated
@@ -3047,74 +3072,43 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           smmgenOrderId = "order not placed at smm gen";
         }
 
-        // Create order record
-        const { data: orderData, error: orderError } = await supabase.from('orders').insert({
-          user_id: authUser.id,
-          service_id: null, // No service_id for package orders
-          promotion_package_id: pkg.id,
-          link: orderForm.link,
-          quantity: quantity,
-          total_cost: totalCost,
-          status: 'pending',
-          smmgen_order_id: smmgenOrderId
-        }).select('*').single();
-
-        if (orderError) {
-          console.error('Error creating order:', orderError);
-          throw orderError;
+        // Get JWT token for API authentication
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) {
+          throw new Error('Not authenticated - no session token');
         }
+
+        // Place order via secure API endpoint
+        const orderResponse = await fetch('/api/place-order', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({
+            package_id: pkg.id,
+            link: orderForm.link,
+            quantity: quantity,
+            total_cost: totalCost,
+            smmgen_order_id: smmgenOrderId || null
+          })
+        });
+
+        if (!orderResponse.ok) {
+          const errorData = await orderResponse.json().catch(() => ({ error: 'Unknown error' }));
+          throw new Error(errorData.error || 'Failed to place order');
+        }
+
+        const orderResult = await orderResponse.json();
         
-        console.log('Package order created successfully:', orderData);
+        if (!orderResult.success) {
+          throw new Error(orderResult.message || 'Order placement failed');
+        }
 
-        // Deduct balance (use displayUser to reflect optimistic balance)
-        const newBalanceAfterOrder = displayUser.balance - totalCost;
-        const { error: balanceError } = await supabase
-          .from('profiles')
-          .update({ balance: newBalanceAfterOrder })
-          .eq('id', authUser.id);
-
-        if (balanceError) throw balanceError;
+        console.log('Package order placed successfully via API:', orderResult);
         
         // Update optimistic balance immediately
-        setOptimisticBalance(newBalanceAfterOrder);
-
-        // Record transaction
-        const { data: transactionData, error: transactionError } = await supabase
-          .from('transactions')
-          .insert({
-            user_id: authUser.id,
-            amount: totalCost,
-            type: 'order',
-            status: 'approved',
-            order_id: orderData.id
-          })
-          .select()
-          .single();
-
-        if (transactionError) {
-          console.warn('Failed to create transaction record for package order:', transactionError);
-        } else if (transactionData) {
-          // Link the transaction_id to the balance_audit_log entry
-          // This prevents the create_transaction_from_audit_trigger from creating a duplicate transaction
-          const { data: auditLogEntry } = await supabase
-            .from('balance_audit_log')
-            .select('id')
-            .eq('user_id', authUser.id)
-            .is('transaction_id', null)
-            .eq('change_amount', -totalCost) // Negative for orders
-            .gte('created_at', new Date(Date.now() - 5000).toISOString()) // Last 5 seconds
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          
-          if (auditLogEntry) {
-            // Link the transaction to the audit log entry
-            await supabase
-              .from('balance_audit_log')
-              .update({ transaction_id: transactionData.id })
-              .eq('id', auditLogEntry.id);
-          }
-        }
+        setOptimisticBalance(orderResult.new_balance);
 
         // Show success immediately
         toast.success('Package order placed successfully!');
@@ -3391,74 +3385,43 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       console.log('SMMGen ID type:', typeof smmgenOrderId);
       console.log('SMMGen ID value before insert:', JSON.stringify(smmgenOrderId));
       
-      const { data: orderData, error: orderError } = await supabase.from('orders').insert({
-        user_id: authUser.id,
-        service_id: orderForm.service_id,
-        link: orderForm.link,
-        quantity: quantity,
-        total_cost: totalCost,
-        status: 'pending',
-        smmgen_order_id: smmgenOrderId // Store SMMGen order ID for tracking
-      }).select('*').single();
-
-      if (orderError) {
-        console.error('Error creating order:', orderError);
-        throw orderError;
+      // Get JWT token for API authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Not authenticated - no session token');
       }
+
+      // Place order via secure API endpoint
+      const orderResponse = await fetch('/api/place-order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          service_id: orderForm.service_id,
+          link: orderForm.link,
+          quantity: quantity,
+          total_cost: totalCost,
+          smmgen_order_id: smmgenOrderId || null
+        })
+      });
+
+      if (!orderResponse.ok) {
+        const errorData = await orderResponse.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || 'Failed to place order');
+      }
+
+      const orderResult = await orderResponse.json();
       
-      console.log('Order created successfully:', orderData);
-      console.log('Order SMMGen ID in database:', orderData.smmgen_order_id);
+      if (!orderResult.success) {
+        throw new Error(orderResult.message || 'Order placement failed');
+      }
 
-      // Deduct balance (use displayUser to reflect optimistic balance)
-      const newBalanceAfterOrder = displayUser.balance - totalCost;
-      const { error: balanceError } = await supabase
-        .from('profiles')
-        .update({ balance: newBalanceAfterOrder })
-        .eq('id', authUser.id);
-
-      if (balanceError) throw balanceError;
+      console.log('Order placed successfully via API:', orderResult);
       
       // Update optimistic balance immediately
-      setOptimisticBalance(newBalanceAfterOrder);
-
-      // Record transaction for order (balance subtraction)
-      const { data: transactionData, error: transactionError } = await supabase
-        .from('transactions')
-        .insert({
-          user_id: authUser.id,
-          amount: totalCost,
-          type: 'order',
-          status: 'approved', // Order transactions are immediately approved when balance is deducted
-          order_id: orderData.id
-        })
-        .select()
-        .single();
-
-      if (transactionError) {
-        console.warn('Failed to create transaction record for order:', transactionError);
-        // Don't fail the order if transaction record fails, but log it
-      } else if (transactionData) {
-        // Link the transaction_id to the balance_audit_log entry
-        // This prevents the create_transaction_from_audit_trigger from creating a duplicate transaction
-        const { data: auditLogEntry } = await supabase
-          .from('balance_audit_log')
-          .select('id')
-          .eq('user_id', authUser.id)
-          .is('transaction_id', null)
-          .eq('change_amount', -totalCost) // Negative for orders
-          .gte('created_at', new Date(Date.now() - 5000).toISOString()) // Last 5 seconds
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        
-        if (auditLogEntry) {
-          // Link the transaction to the audit log entry
-          await supabase
-            .from('balance_audit_log')
-            .update({ transaction_id: transactionData.id })
-            .eq('id', auditLogEntry.id);
-        }
-      }
+      setOptimisticBalance(orderResult.new_balance);
 
       toast.success('Order placed successfully!');
       setOrderForm({ service_id: '', package_id: '', link: '', quantity: '' });
