@@ -3044,13 +3044,20 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             if (smmgenResponse === null) {
               console.warn('SMMGen returned null - backend unavailable or not configured');
             } else if (smmgenResponse) {
-              smmgenOrderId = smmgenResponse.order || 
-                             smmgenResponse.order_id || 
-                             smmgenResponse.orderId || 
-                             smmgenResponse.id || 
-                             null;
-              console.log('SMMGen order response for package:', smmgenResponse);
-              console.log('SMMGen order ID extracted:', smmgenOrderId);
+              // Check if SMMGen returned an error response
+              if (smmgenResponse.error) {
+                console.warn('SMMGen returned error for package:', smmgenResponse.error);
+                // Don't extract order ID from error responses
+                smmgenOrderId = null;
+              } else {
+                smmgenOrderId = smmgenResponse.order || 
+                               smmgenResponse.order_id || 
+                               smmgenResponse.orderId || 
+                               smmgenResponse.id || 
+                               null;
+                console.log('SMMGen order response for package:', smmgenResponse);
+                console.log('SMMGen order ID extracted:', smmgenOrderId);
+              }
             }
           } catch (smmgenError) {
             console.error('SMMGen order error caught for package:', smmgenError);
@@ -3338,15 +3345,22 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             console.warn('SMMGen returned null - backend unavailable or not configured');
             // Mark as failure since we attempted but couldn't place the order
           } else if (smmgenResponse) {
-            // SMMGen API might return order ID in different fields
-            // Common formats: { order: "12345" }, { id: "12345" }, { order_id: "12345" }, { orderId: "12345" }
-            smmgenOrderId = smmgenResponse.order || 
-                           smmgenResponse.order_id || 
-                           smmgenResponse.orderId || 
-                           smmgenResponse.id || 
-                           null;
-            console.log('SMMGen order response:', smmgenResponse);
-            console.log('SMMGen order ID extracted:', smmgenOrderId);
+            // Check if SMMGen returned an error response
+            if (smmgenResponse.error) {
+              console.warn('SMMGen returned error:', smmgenResponse.error);
+              // Don't extract order ID from error responses
+              smmgenOrderId = null;
+            } else {
+              // SMMGen API might return order ID in different fields
+              // Common formats: { order: "12345" }, { id: "12345" }, { order_id: "12345" }, { orderId: "12345" }
+              smmgenOrderId = smmgenResponse.order || 
+                             smmgenResponse.order_id || 
+                             smmgenResponse.orderId || 
+                             smmgenResponse.id || 
+                             null;
+              console.log('SMMGen order response:', smmgenResponse);
+              console.log('SMMGen order ID extracted:', smmgenOrderId);
+            }
           }
         } catch (smmgenError) {
           console.error('SMMGen order error caught:', smmgenError);

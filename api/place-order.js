@@ -117,10 +117,17 @@ export default async function handler(req, res) {
     });
 
     if (rpcError) {
-      console.error('Database function error:', rpcError);
+      console.error('Database function error:', {
+        error: rpcError,
+        message: rpcError.message,
+        code: rpcError.code,
+        details: rpcError.details,
+        hint: rpcError.hint,
+        body: req.body
+      });
       return res.status(500).json({
         error: 'Failed to place order',
-        details: rpcError.message || rpcError.code
+        details: rpcError.message || rpcError.code || 'Unknown database error'
       });
     }
 
@@ -128,8 +135,14 @@ export default async function handler(req, res) {
     const orderResult = result && result.length > 0 ? result[0] : null;
 
     if (!orderResult) {
+      console.error('Database function returned no result:', {
+        result,
+        resultLength: result?.length,
+        body: req.body
+      });
       return res.status(500).json({
-        error: 'Database function returned no result'
+        error: 'Database function returned no result',
+        details: 'The order placement function did not return a result'
       });
     }
 
@@ -175,13 +188,11 @@ export default async function handler(req, res) {
       });
     }
 
-    // Log full error for debugging
     console.error('Error in place-order:', {
       message: error.message,
       stack: error.stack,
-      name: error.name
+      body: req.body
     });
-    
     return res.status(500).json({
       error: error.message || 'Internal server error',
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined
