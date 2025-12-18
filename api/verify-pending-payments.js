@@ -247,6 +247,7 @@ export default async function handler(req, res) {
       verified: 0,
       updated: 0,
       matchedFromPaystack: 0,
+      moolreWebProcessed: 0,
       errors: [],
       transactionMetrics: []
     };
@@ -288,6 +289,7 @@ export default async function handler(req, res) {
     let updated = 0;
     let errors = [];
     let matchedFromPaystack = 0;
+    let moolreWebProcessed = 0;
     const unmatchedPaystackTxs = [];
 
     // Separate transactions with and without references
@@ -760,7 +762,8 @@ export default async function handler(req, res) {
                 }
               } else if (paymentStatus === 'failed' || paymentStatus === 'abandoned') {
                 // Payment failed, mark as rejected
-                await supabase
+                // First attempt with pending check
+                let { error: updateError } = await supabase
                   .from('transactions')
                   .update({ 
                     status: 'rejected',
@@ -768,12 +771,32 @@ export default async function handler(req, res) {
                   })
                   .eq('id', transaction.id)
                   .eq('status', 'pending');
+
+                // If that fails, retry without pending check (only if still pending)
+                if (updateError && (updateError.code === 'PGRST116' || updateError.message?.includes('No rows'))) {
+                  const { data: currentTx } = await supabase
+                    .from('transactions')
+                    .select('status')
+                    .eq('id', transaction.id)
+                    .single();
+                  
+                  if (currentTx?.status === 'pending') {
+                    await supabase
+                      .from('transactions')
+                      .update({ 
+                        status: 'rejected',
+                        paystack_status: paymentStatus
+                      })
+                      .eq('id', transaction.id);
+                  }
+                }
                 
                 updated++;
                 console.log(`Transaction ${transaction.id} marked as rejected`);
               } else if (transactionAge > oneHour && paymentStatus !== 'success') {
                 // Transaction is old and still not successful, mark as rejected
-                await supabase
+                // First attempt with pending check
+                let { error: updateError } = await supabase
                   .from('transactions')
                   .update({ 
                     status: 'rejected',
@@ -781,6 +804,25 @@ export default async function handler(req, res) {
                   })
                   .eq('id', transaction.id)
                   .eq('status', 'pending');
+
+                // If that fails, retry without pending check (only if still pending)
+                if (updateError && (updateError.code === 'PGRST116' || updateError.message?.includes('No rows'))) {
+                  const { data: currentTx } = await supabase
+                    .from('transactions')
+                    .select('status')
+                    .eq('id', transaction.id)
+                    .single();
+                  
+                  if (currentTx?.status === 'pending') {
+                    await supabase
+                      .from('transactions')
+                      .update({ 
+                        status: 'rejected',
+                        paystack_status: 'timeout'
+                      })
+                      .eq('id', transaction.id);
+                  }
+                }
                 
                 updated++;
                 console.log(`Transaction ${transaction.id} timed out and marked as rejected`);
@@ -798,7 +840,8 @@ export default async function handler(req, res) {
             } else {
               // Verification request failed
               if (transactionAge > oneHour) {
-                await supabase
+                // First attempt with pending check
+                let { error: updateError } = await supabase
                   .from('transactions')
                   .update({ 
                     status: 'rejected',
@@ -806,6 +849,25 @@ export default async function handler(req, res) {
                   })
                   .eq('id', transaction.id)
                   .eq('status', 'pending');
+
+                // If that fails, retry without pending check (only if still pending)
+                if (updateError && (updateError.code === 'PGRST116' || updateError.message?.includes('No rows'))) {
+                  const { data: currentTx } = await supabase
+                    .from('transactions')
+                    .select('status')
+                    .eq('id', transaction.id)
+                    .single();
+                  
+                  if (currentTx?.status === 'pending') {
+                    await supabase
+                      .from('transactions')
+                      .update({ 
+                        status: 'rejected',
+                        paystack_status: 'verification_failed'
+                      })
+                      .eq('id', transaction.id);
+                  }
+                }
                 
                 updated++;
               }
@@ -814,7 +876,8 @@ export default async function handler(req, res) {
           } catch (verifyError) {
             console.error(`Error verifying transaction ${transaction.id}:`, verifyError);
             if (transactionAge > oneHour) {
-              await supabase
+              // First attempt with pending check
+              let { error: updateError } = await supabase
                 .from('transactions')
                 .update({ 
                   status: 'rejected',
@@ -822,6 +885,25 @@ export default async function handler(req, res) {
                 })
                 .eq('id', transaction.id)
                 .eq('status', 'pending');
+
+              // If that fails, retry without pending check (only if still pending)
+              if (updateError && (updateError.code === 'PGRST116' || updateError.message?.includes('No rows'))) {
+                const { data: currentTx } = await supabase
+                  .from('transactions')
+                  .select('status')
+                  .eq('id', transaction.id)
+                  .single();
+                
+                if (currentTx?.status === 'pending') {
+                  await supabase
+                    .from('transactions')
+                    .update({ 
+                      status: 'rejected',
+                      paystack_status: 'verification_error'
+                    })
+                    .eq('id', transaction.id);
+                }
+              }
               
               updated++;
             }
@@ -832,7 +914,8 @@ export default async function handler(req, res) {
           // Only mark as rejected if it's very old (24 hours) and still no reference
           const oneDay = 24 * 60 * 60 * 1000;
           if (transactionAge > oneDay) {
-            await supabase
+            // First attempt with pending check
+            let { error: updateError } = await supabase
               .from('transactions')
               .update({ 
                 status: 'rejected',
@@ -840,11 +923,365 @@ export default async function handler(req, res) {
               })
               .eq('id', transaction.id)
               .eq('status', 'pending');
+
+            // If that fails, retry without pending check (only if still pending)
+            if (updateError && (updateError.code === 'PGRST116' || updateError.message?.includes('No rows'))) {
+              const { data: currentTx } = await supabase
+                .from('transactions')
+                .select('status')
+                .eq('id', transaction.id)
+                .single();
+              
+              if (currentTx?.status === 'pending') {
+                await supabase
+                  .from('transactions')
+                  .update({ 
+                    status: 'rejected',
+                    paystack_status: 'no_reference'
+                  })
+                  .eq('id', transaction.id);
+              }
+            }
             
             updated++;
             console.log(`Transaction ${transaction.id} marked as rejected (no reference after 24 hours)`);
           } else {
             console.log(`Transaction ${transaction.id} still pending without reference (age: ${Math.round(transactionAge / 60000)} minutes)`);
+          }
+        } else if (transaction.deposit_method === 'moolre_web') {
+          // Verify Moolre Web transactions
+          if (transaction.moolre_reference) {
+            try {
+              // Get Moolre credentials
+              const MOOLRE_API_USER = process.env.MOOLRE_API_USER;
+              const MOOLRE_API_PUBKEY = process.env.MOOLRE_API_PUBKEY;
+              const MOOLRE_ACCOUNT_NUMBER = process.env.MOOLRE_ACCOUNT_NUMBER;
+
+              if (!MOOLRE_API_USER || !MOOLRE_API_PUBKEY || !MOOLRE_ACCOUNT_NUMBER) {
+                console.warn(`[VERIFY] Moolre credentials not configured, skipping transaction ${transaction.id}`);
+                errors.push(`Moolre credentials not configured for transaction ${transaction.id}`);
+                continue;
+              }
+
+              // Verify payment with Moolre API
+              const moolreResponse = await fetch('https://api.moolre.com/open/transact/status', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-API-USER': MOOLRE_API_USER,
+                  'X-API-PUBKEY': MOOLRE_API_PUBKEY
+                },
+                body: JSON.stringify({
+                  type: 1,
+                  idtype: 1, // 1 = Unique externalref
+                  id: transaction.moolre_reference,
+                  accountnumber: MOOLRE_ACCOUNT_NUMBER
+                })
+              });
+
+              if (moolreResponse.ok) {
+                const moolreData = await moolreResponse.json();
+                
+                if (moolreData.status === 0) {
+                  // Moolre API error
+                  console.error(`[VERIFY] Moolre API error for transaction ${transaction.id}:`, moolreData);
+                  if (transactionAge > oneHour) {
+                    // Mark as rejected if old
+                    let { error: updateError } = await supabase
+                      .from('transactions')
+                      .update({ 
+                        status: 'rejected',
+                        moolre_status: 'verification_failed'
+                      })
+                      .eq('id', transaction.id)
+                      .eq('status', 'pending');
+
+                    if (updateError && (updateError.code === 'PGRST116' || updateError.message?.includes('No rows'))) {
+                      const { data: currentTx } = await supabase
+                        .from('transactions')
+                        .select('status')
+                        .eq('id', transaction.id)
+                        .single();
+                      
+                      if (currentTx?.status === 'pending') {
+                        await supabase
+                          .from('transactions')
+                          .update({ 
+                            status: 'rejected',
+                            moolre_status: 'verification_failed'
+                          })
+                          .eq('id', transaction.id);
+                      }
+                    }
+                    updated++;
+                  }
+                  errors.push(`Moolre API error for transaction ${transaction.id}: ${moolreData.message || 'Unknown error'}`);
+                  continue;
+                }
+
+                // Parse transaction status
+                // txstatus: 1=Success, 0=Pending, 2=Failed
+                const txstatus = moolreData.data?.txstatus;
+                const paymentStatus = txstatus === 1 ? 'success' : txstatus === 2 ? 'failed' : 'pending';
+
+                if (paymentStatus === 'success') {
+                  // Payment was successful, approve transaction
+                  let approvalSuccess = false;
+                  let approvalError = null;
+                  const maxRetries = 3;
+
+                  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                    try {
+                      const { data: result, error: rpcError } = await supabase.rpc('approve_deposit_transaction_universal', {
+                        p_transaction_id: transaction.id,
+                        p_payment_method: 'moolre_web',
+                        p_payment_status: 'success',
+                        p_payment_reference: transaction.moolre_reference
+                      });
+
+                      if (rpcError) {
+                        approvalError = rpcError;
+                        if (attempt < maxRetries) {
+                          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                          continue;
+                        }
+                        break;
+                      }
+
+                      const approvalResult = result && result.length > 0 ? result[0] : null;
+
+                      if (!approvalResult) {
+                        approvalError = new Error('Database function returned no result');
+                        if (attempt < maxRetries) {
+                          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                          continue;
+                        }
+                        break;
+                      }
+
+                      if (approvalResult.success) {
+                        approvalSuccess = true;
+                        console.log(`[VERIFY] Moolre Web transaction ${transaction.id} successfully approved (attempt ${attempt})`);
+                        break;
+                      } else {
+                        // Check if already approved (idempotent)
+                        if (approvalResult.message && approvalResult.message.includes('already approved')) {
+                          approvalSuccess = true;
+                          console.log(`[VERIFY] Moolre Web transaction ${transaction.id} already approved (attempt ${attempt})`);
+                          break;
+                        } else {
+                          approvalError = new Error(approvalResult.message);
+                          if (attempt < maxRetries) {
+                            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                            continue;
+                          }
+                        }
+                      }
+                    } catch (retryError) {
+                      approvalError = retryError;
+                      if (attempt < maxRetries) {
+                        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                      }
+                    }
+                  }
+
+                  if (approvalSuccess) {
+                    updated++;
+                    verified++;
+                    moolreWebProcessed++;
+                    console.log(`[VERIFY] Moolre Web transaction ${transaction.id} successfully updated to approved with balance`);
+                  } else {
+                    const errorMsg = `Moolre Web transaction ${transaction.id}: approval failed - ${approvalError?.message || 'Unknown error'}`;
+                    errors.push(errorMsg);
+                    console.error('[VERIFY] CRITICAL:', errorMsg, {
+                      error: approvalError,
+                      transactionId: transaction.id,
+                      moolreReference: transaction.moolre_reference
+                    });
+                  }
+                } else if (paymentStatus === 'failed') {
+                  // Payment failed, mark as rejected
+                  let { error: updateError } = await supabase
+                    .from('transactions')
+                    .update({ 
+                      status: 'rejected',
+                      moolre_status: 'failed'
+                    })
+                    .eq('id', transaction.id)
+                    .eq('status', 'pending');
+
+                  // If that fails, retry without pending check (only if still pending)
+                  if (updateError && (updateError.code === 'PGRST116' || updateError.message?.includes('No rows'))) {
+                    const { data: currentTx } = await supabase
+                      .from('transactions')
+                      .select('status')
+                      .eq('id', transaction.id)
+                      .single();
+                    
+                    if (currentTx?.status === 'pending') {
+                      await supabase
+                        .from('transactions')
+                        .update({ 
+                          status: 'rejected',
+                          moolre_status: 'failed'
+                        })
+                        .eq('id', transaction.id);
+                    }
+                  }
+                  
+                  updated++;
+                  moolreWebProcessed++;
+                  console.log(`[VERIFY] Moolre Web transaction ${transaction.id} marked as rejected`);
+                } else if (transactionAge > oneHour && paymentStatus === 'pending') {
+                  // Transaction is old and still pending, mark as rejected
+                  let { error: updateError } = await supabase
+                    .from('transactions')
+                    .update({ 
+                      status: 'rejected',
+                      moolre_status: 'timeout'
+                    })
+                    .eq('id', transaction.id)
+                    .eq('status', 'pending');
+
+                  // If that fails, retry without pending check (only if still pending)
+                  if (updateError && (updateError.code === 'PGRST116' || updateError.message?.includes('No rows'))) {
+                    const { data: currentTx } = await supabase
+                      .from('transactions')
+                      .select('status')
+                      .eq('id', transaction.id)
+                      .single();
+                    
+                    if (currentTx?.status === 'pending') {
+                      await supabase
+                        .from('transactions')
+                        .update({ 
+                          status: 'rejected',
+                          moolre_status: 'timeout'
+                        })
+                        .eq('id', transaction.id);
+                    }
+                  }
+                  
+                  updated++;
+                  moolreWebProcessed++;
+                  console.log(`[VERIFY] Moolre Web transaction ${transaction.id} timed out and marked as rejected`);
+                } else {
+                  // Still pending, just update Moolre status
+                  await supabase
+                    .from('transactions')
+                    .update({ 
+                      moolre_status: 'pending'
+                    })
+                    .eq('id', transaction.id);
+                }
+
+                verified++;
+              } else {
+                // Verification request failed
+                console.error(`[VERIFY] Moolre API request failed for transaction ${transaction.id}:`, moolreResponse.status);
+                if (transactionAge > oneHour) {
+                  let { error: updateError } = await supabase
+                    .from('transactions')
+                    .update({ 
+                      status: 'rejected',
+                      moolre_status: 'verification_failed'
+                    })
+                    .eq('id', transaction.id)
+                    .eq('status', 'pending');
+
+                  if (updateError && (updateError.code === 'PGRST116' || updateError.message?.includes('No rows'))) {
+                    const { data: currentTx } = await supabase
+                      .from('transactions')
+                      .select('status')
+                      .eq('id', transaction.id)
+                      .single();
+                    
+                    if (currentTx?.status === 'pending') {
+                      await supabase
+                        .from('transactions')
+                        .update({ 
+                          status: 'rejected',
+                          moolre_status: 'verification_failed'
+                        })
+                        .eq('id', transaction.id);
+                    }
+                  }
+                  
+                  updated++;
+                }
+                errors.push(`Moolre verification failed for transaction ${transaction.id}`);
+              }
+            } catch (moolreError) {
+              console.error(`[VERIFY] Error verifying Moolre Web transaction ${transaction.id}:`, moolreError);
+              if (transactionAge > oneHour) {
+                let { error: updateError } = await supabase
+                  .from('transactions')
+                  .update({ 
+                    status: 'rejected',
+                    moolre_status: 'verification_error'
+                  })
+                  .eq('id', transaction.id)
+                  .eq('status', 'pending');
+
+                if (updateError && (updateError.code === 'PGRST116' || updateError.message?.includes('No rows'))) {
+                  const { data: currentTx } = await supabase
+                    .from('transactions')
+                    .select('status')
+                    .eq('id', transaction.id)
+                    .single();
+                  
+                  if (currentTx?.status === 'pending') {
+                    await supabase
+                      .from('transactions')
+                      .update({ 
+                        status: 'rejected',
+                        moolre_status: 'verification_error'
+                      })
+                      .eq('id', transaction.id);
+                  }
+                }
+                
+                updated++;
+              }
+              errors.push(`Error verifying Moolre Web transaction ${transaction.id}: ${moolreError.message}`);
+            }
+          } else {
+            // Moolre Web transaction without reference
+            // Only mark as rejected if it's very old (24 hours) and still no reference
+            const oneDay = 24 * 60 * 60 * 1000;
+            if (transactionAge > oneDay) {
+              let { error: updateError } = await supabase
+                .from('transactions')
+                .update({ 
+                  status: 'rejected',
+                  moolre_status: 'no_reference'
+                })
+                .eq('id', transaction.id)
+                .eq('status', 'pending');
+
+              if (updateError && (updateError.code === 'PGRST116' || updateError.message?.includes('No rows'))) {
+                const { data: currentTx } = await supabase
+                  .from('transactions')
+                  .select('status')
+                  .eq('id', transaction.id)
+                  .single();
+                
+                if (currentTx?.status === 'pending') {
+                  await supabase
+                    .from('transactions')
+                    .update({ 
+                      status: 'rejected',
+                      moolre_status: 'no_reference'
+                    })
+                    .eq('id', transaction.id);
+                }
+              }
+              
+              updated++;
+              console.log(`[VERIFY] Moolre Web transaction ${transaction.id} marked as rejected (no reference after 24 hours)`);
+            } else {
+              console.log(`[VERIFY] Moolre Web transaction ${transaction.id} still pending without reference (age: ${Math.round(transactionAge / 60000)} minutes)`);
+            }
           }
         }
       } catch (error) {
@@ -857,6 +1294,7 @@ export default async function handler(req, res) {
     sessionMetrics.verified = verified;
     sessionMetrics.updated = updated;
     sessionMetrics.matchedFromPaystack = matchedFromPaystack;
+    sessionMetrics.moolreWebProcessed = moolreWebProcessed;
     sessionMetrics.errors = errors;
     sessionMetrics.endTime = new Date().toISOString();
     sessionMetrics.totalTime = totalTime;
@@ -866,6 +1304,7 @@ export default async function handler(req, res) {
       verified,
       updated,
       matchedFromPaystack,
+      moolreWebProcessed,
       errors: errors.length,
       totalTime: `${totalTime}ms`
     });
@@ -876,12 +1315,14 @@ export default async function handler(req, res) {
       verified,
       updated,
       matchedFromPaystack,
+      moolreWebProcessed,
       unmatchedPaystackTransactions: unmatchedPaystackTxs.length > 0 ? unmatchedPaystackTxs.slice(0, 10) : undefined, // Limit to first 10 for response size
       errors: errors.length > 0 ? errors : undefined,
       metrics: {
         totalTime: `${totalTime}ms`,
         transactionsProcessed: sessionMetrics.transactionMetrics.length,
-        successRate: pendingTransactions.length > 0 ? ((updated / pendingTransactions.length) * 100).toFixed(2) + '%' : '0%'
+        successRate: pendingTransactions.length > 0 ? ((updated / pendingTransactions.length) * 100).toFixed(2) + '%' : '0%',
+        moolreWebProcessed
       }
     });
   } catch (error) {

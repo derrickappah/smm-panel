@@ -124,8 +124,8 @@ export default async function handler(req, res) {
     // Find transaction by reference
     const { data: transactions, error: txError } = await supabase
       .from('transactions')
-      .select('id, user_id, type, amount, status, deposit_method, moolre_web_reference, moolre_web_status, created_at')
-      .eq('moolre_web_reference', reference)
+      .select('id, user_id, type, amount, status, deposit_method, moolre_reference, moolre_status, created_at')
+      .eq('moolre_reference', reference)
       .order('created_at', { ascending: false })
       .limit(1);
 
@@ -138,16 +138,16 @@ export default async function handler(req, res) {
 
     const transaction = transactions[0];
 
-    // Check payment status
-    const paymentStatus = verifyData.status;
+    // Check payment status (paymentStatus already declared above, reuse verifyData.status)
+    const currentPaymentStatus = verifyData.status;
     const txstatus = verifyData.txstatus; // 1=Success, 0=Pending, 2=Failed
-    const isSuccessful = paymentStatus === 'success' || txstatus === 1;
-    const isFailed = paymentStatus === 'failed' || txstatus === 2;
+    const isSuccessful = currentPaymentStatus === 'success' || txstatus === 1;
+    const isFailed = currentPaymentStatus === 'failed' || txstatus === 2;
 
     console.log('[MOOLRE WEB CALLBACK] Payment status:', {
       reference,
       transactionId: transaction.id,
-      paymentStatus,
+      paymentStatus: currentPaymentStatus,
       txstatus,
       isSuccessful,
       isFailed,
@@ -225,14 +225,42 @@ export default async function handler(req, res) {
     if (isFailed && transaction.status !== 'rejected') {
       console.log('[MOOLRE WEB CALLBACK] Processing failed payment for transaction:', transaction.id);
 
-      const { error: updateError } = await supabase
+      // First attempt with pending check
+      let { error: updateError } = await supabase
         .from('transactions')
         .update({
           status: 'rejected',
-          moolre_web_status: 'failed',
-          moolre_web_reference: reference
+          moolre_status: 'failed',
+          moolre_reference: reference
         })
-        .eq('id', transaction.id);
+        .eq('id', transaction.id)
+        .eq('status', 'pending');
+
+      // If that fails, retry without pending check (only if still pending)
+      if (updateError && (updateError.code === 'PGRST116' || updateError.message?.includes('No rows'))) {
+        const { data: currentTx } = await supabase
+          .from('transactions')
+          .select('status')
+          .eq('id', transaction.id)
+          .single();
+        
+        if (currentTx?.status === 'pending') {
+          const { error: retryError } = await supabase
+            .from('transactions')
+            .update({
+              status: 'rejected',
+              moolre_status: 'failed',
+              moolre_reference: reference
+            })
+            .eq('id', transaction.id);
+          
+          if (retryError) {
+            updateError = retryError;
+          } else {
+            updateError = null;
+          }
+        }
+      }
 
       if (updateError) {
         console.error('[MOOLRE WEB CALLBACK] Error updating failed transaction:', updateError);

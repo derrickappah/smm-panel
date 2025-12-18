@@ -254,7 +254,8 @@ export default async function handler(req, res) {
               });
             } else if (txstatus === 2) {
               // Payment failed
-              const { error: updateError } = await supabase
+              // First attempt with pending check
+              let { error: updateError } = await supabase
                 .from('transactions')
                 .update({
                   status: 'rejected',
@@ -262,6 +263,29 @@ export default async function handler(req, res) {
                 })
                 .eq('id', transaction.id)
                 .eq('status', 'pending');
+
+              // If that fails, retry without pending check (only if still pending)
+              if (updateError && (updateError.code === 'PGRST116' || updateError.message?.includes('No rows'))) {
+                const { data: currentTx } = await supabase
+                  .from('transactions')
+                  .select('status')
+                  .eq('id', transaction.id)
+                  .single();
+                
+                if (currentTx?.status === 'pending') {
+                  const { error: retryError } = await supabase
+                    .from('transactions')
+                    .update({
+                      status: 'rejected',
+                      moolre_status: 'failed'
+                    })
+                    .eq('id', transaction.id);
+                  
+                  if (!retryError) {
+                    updateError = null;
+                  }
+                }
+              }
 
               if (!updateError) {
                 return res.status(200).json({
