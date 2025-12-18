@@ -115,12 +115,19 @@ const PaymentCallback = ({ onUpdateUser }) => {
           const isSuccessful = paymentStatus === 'success' || paymentStatus === 'successful' || paymentStatus === 'completed';
 
           if (isSuccessful && transaction.status !== 'approved') {
+            // Get JWT token for API authentication
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.access_token) {
+              throw new Error('No session token available. Please log in again.');
+            }
+
             // Use atomic API endpoint to approve transaction and update balance
             // This prevents race conditions and ensures consistency
             const approveResponse = await fetch('/api/approve-deposit-universal', {
               method: 'POST',
               headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session.access_token}`
               },
               body: JSON.stringify({
                 transaction_id: transaction.id,
@@ -315,12 +322,19 @@ const PaymentCallback = ({ onUpdateUser }) => {
           }
 
           if (isSuccessful && transaction.status !== 'approved') {
+            // Get JWT token for API authentication
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.access_token) {
+              throw new Error('No session token available. Please log in again.');
+            }
+
             // Use atomic API endpoint to approve transaction and update balance
             // This prevents race conditions and ensures consistency
             const approveResponse = await fetch('/api/approve-deposit-universal', {
               method: 'POST',
               headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session.access_token}`
               },
               body: JSON.stringify({
                 transaction_id: transaction.id,
@@ -435,12 +449,19 @@ const PaymentCallback = ({ onUpdateUser }) => {
           const isSuccessful = paymentStatus === 'success' || txstatus === 1;
 
           if (isSuccessful && transaction.status !== 'approved') {
+            // Get JWT token for API authentication
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.access_token) {
+              throw new Error('No session token available. Please log in again.');
+            }
+
             // Use atomic API endpoint to approve transaction and update balance
             // This prevents race conditions and ensures consistency
             const approveResponse = await fetch('/api/approve-deposit-universal', {
               method: 'POST',
               headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session.access_token}`
               },
               body: JSON.stringify({
                 transaction_id: transaction.id,
