@@ -175,9 +175,16 @@ export default async function handler(req, res) {
       });
     }
 
-    console.error('Error in place-order:', error);
+    // Log full error for debugging
+    console.error('Error in place-order:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    
     return res.status(500).json({
-      error: error.message || 'Internal server error'
+      error: error.message || 'Internal server error',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 }

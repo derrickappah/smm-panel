@@ -26,10 +26,12 @@ export async function verifyAuth(req) {
   }
 
   const supabaseUrl = process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL;
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Supabase credentials not configured');
+    const errorMsg = `Missing Supabase credentials. Required: SUPABASE_URL (or REACT_APP_SUPABASE_URL) and SUPABASE_ANON_KEY (or REACT_APP_SUPABASE_ANON_KEY). Found env vars: ${Object.keys(process.env).filter(k => k.includes('SUPABASE')).join(', ') || 'none'}`;
+    console.error(errorMsg);
+    throw new Error(errorMsg);
   }
 
   // Create Supabase client with user's JWT token
