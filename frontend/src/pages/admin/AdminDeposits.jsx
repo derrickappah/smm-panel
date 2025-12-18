@@ -23,7 +23,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
   const [page, setPage] = useState(1);
   const [approvingDeposit, setApprovingDeposit] = useState(null);
   const [verifyingDeposit, setVerifyingDeposit] = useState(null);
-  const [manualRefDialog, setManualRefDialog] = useState({ open: false, deposit: null, error: null });
+  const [manualRefDialog, setManualRefDialog] = useState({ open: false, deposit: null, error: null, paymentMethod: null });
   const [manualReference, setManualReference] = useState('');
   const [paymentProofDialog, setPaymentProofDialog] = useState({ open: false, imageUrl: null, deposit: null });
 
@@ -256,7 +256,8 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
             deposit, 
             error: data.error,
             suggestions: data.suggestions || [],
-            help: data.help
+            help: data.help,
+            paymentMethod: 'paystack'
           });
           setVerifyingDeposit(null);
           return;
@@ -273,8 +274,8 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
       }
 
       // Close dialog if open
-      if (manualRefDialog.open) {
-        setManualRefDialog({ open: false, deposit: null, error: null });
+      if (manualRefDialog.open && manualRefDialog.paymentMethod === 'moolre') {
+        setManualRefDialog({ open: false, deposit: null, error: null, paymentMethod: null });
         setManualReference('');
       }
 
@@ -318,14 +319,23 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
 
   const handleManualReferenceSubmit = useCallback(async () => {
     if (!manualRefDialog.deposit || !manualReference.trim()) {
-      toast.error('Please enter a Paystack reference');
+      const methodName = manualRefDialog.paymentMethod === 'moolre' ? 'Moolre' : 
+                        manualRefDialog.paymentMethod === 'moolre_web' ? 'Moolre Web' : 'Paystack';
+      toast.error(`Please enter a ${methodName} reference`);
       return;
     }
 
-    await handleVerifyPaystackDeposit(manualRefDialog.deposit, manualReference.trim());
-  }, [manualRefDialog.deposit, manualReference, handleVerifyPaystackDeposit]);
+    const paymentMethod = manualRefDialog.paymentMethod || 'paystack';
+    if (paymentMethod === 'moolre') {
+      await handleVerifyMoolreDeposit(manualRefDialog.deposit, manualReference.trim());
+    } else if (paymentMethod === 'moolre_web') {
+      await handleVerifyMoolreWebDeposit(manualRefDialog.deposit, manualReference.trim());
+    } else {
+      await handleVerifyPaystackDeposit(manualRefDialog.deposit, manualReference.trim());
+    }
+  }, [manualRefDialog.deposit, manualRefDialog.paymentMethod, manualReference, handleVerifyPaystackDeposit, handleVerifyMoolreDeposit, handleVerifyMoolreWebDeposit]);
 
-  const handleVerifyMoolreDeposit = useCallback(async (deposit) => {
+  const handleVerifyMoolreDeposit = useCallback(async (deposit, manualRef = null) => {
     setVerifyingDeposit(deposit.id);
     try {
       // Get JWT token for API authentication
@@ -341,13 +351,25 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
           'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify({ 
-          transactionId: deposit.id
+          transactionId: deposit.id,
+          ...(manualRef && { reference: manualRef })
         })
       });
 
       const data = await response.json();
 
       if (!response.ok) {
+        // If error suggests manual reference and we don't have one, show dialog
+        if (data.error && data.error.includes('No Moolre reference') && !manualRef) {
+          setManualRefDialog({ 
+            open: true, 
+            deposit, 
+            error: data.error,
+            paymentMethod: 'moolre'
+          });
+          setVerifyingDeposit(null);
+          return;
+        }
         throw new Error(data.error || 'Failed to verify deposit');
       }
 
@@ -395,9 +417,9 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
     } finally {
       setVerifyingDeposit(null);
     }
-  }, [onRefresh, queryClient, refetch]);
+  }, [onRefresh, manualRefDialog.open, queryClient, refetch]);
 
-  const handleVerifyMoolreWebDeposit = useCallback(async (deposit) => {
+  const handleVerifyMoolreWebDeposit = useCallback(async (deposit, manualRef = null) => {
     setVerifyingDeposit(deposit.id);
     try {
       // Get JWT token for API authentication
@@ -413,13 +435,25 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
           'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify({ 
-          transactionId: deposit.id
+          transactionId: deposit.id,
+          ...(manualRef && { reference: manualRef })
         })
       });
 
       const data = await response.json();
 
       if (!response.ok) {
+        // If error suggests manual reference and we don't have one, show dialog
+        if (data.error && data.error.includes('No Moolre reference') && !manualRef) {
+          setManualRefDialog({ 
+            open: true, 
+            deposit, 
+            error: data.error,
+            paymentMethod: 'moolre_web'
+          });
+          setVerifyingDeposit(null);
+          return;
+        }
         throw new Error(data.error || 'Failed to verify deposit');
       }
 
@@ -453,6 +487,12 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
         };
       });
 
+      // Close dialog if open
+      if (manualRefDialog.open && manualRefDialog.paymentMethod === 'moolre_web') {
+        setManualRefDialog({ open: false, deposit: null, error: null, paymentMethod: null });
+        setManualReference('');
+      }
+
       // Invalidate and refetch to ensure data is in sync with server
       queryClient.invalidateQueries({ queryKey: ['admin', 'deposits'] });
       queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
@@ -467,7 +507,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
     } finally {
       setVerifyingDeposit(null);
     }
-  }, [onRefresh, queryClient, refetch]);
+  }, [onRefresh, manualRefDialog.open, queryClient, refetch]);
 
   // Helper function to format payment method name
   const formatPaymentMethod = useCallback((method) => {
@@ -924,7 +964,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
       {/* Manual Reference Input Dialog */}
       <Dialog open={manualRefDialog.open} onOpenChange={(open) => {
         if (!open) {
-          setManualRefDialog({ open: false, deposit: null, error: null });
+          setManualRefDialog({ open: false, deposit: null, error: null, paymentMethod: null });
           setManualReference('');
         }
       }}>
@@ -932,11 +972,26 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertCircle className="w-5 h-5 text-yellow-600" />
-              Manual Paystack Reference Required
+              Manual {(() => {
+                const method = manualRefDialog.paymentMethod || 'paystack';
+                if (method === 'moolre') return 'Moolre';
+                if (method === 'moolre_web') return 'Moolre Web';
+                return 'Paystack';
+              })()} Reference Required
             </DialogTitle>
             <DialogDescription>
-              The system couldn't automatically find the Paystack reference for this transaction.
-              Please enter the Paystack reference manually to verify the deposit.
+              The system couldn't automatically find the {(() => {
+                const method = manualRefDialog.paymentMethod || 'paystack';
+                if (method === 'moolre') return 'Moolre';
+                if (method === 'moolre_web') return 'Moolre Web';
+                return 'Paystack';
+              })()} reference for this transaction.
+              Please enter the {(() => {
+                const method = manualRefDialog.paymentMethod || 'paystack';
+                if (method === 'moolre') return 'Moolre';
+                if (method === 'moolre_web') return 'Moolre Web';
+                return 'Paystack';
+              })()} reference manually to verify the deposit.
             </DialogDescription>
           </DialogHeader>
           
@@ -950,11 +1005,20 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
 
               <div className="space-y-2">
                 <label htmlFor="manual-ref" className="text-sm font-medium">
-                  Paystack Reference
+                  {(() => {
+                    const method = manualRefDialog.paymentMethod || 'paystack';
+                    if (method === 'moolre') return 'Moolre Reference';
+                    if (method === 'moolre_web') return 'Moolre Web Reference';
+                    return 'Paystack Reference';
+                  })()}
                 </label>
                 <Input
                   id="manual-ref"
-                  placeholder="e.g., ref_abc123xyz"
+                  placeholder={(() => {
+                    const method = manualRefDialog.paymentMethod || 'paystack';
+                    if (method === 'moolre' || method === 'moolre_web') return 'e.g., MOOLRE_WEB_abc123_1234567890';
+                    return 'e.g., ref_abc123xyz';
+                  })()}
                   value={manualReference}
                   onChange={(e) => setManualReference(e.target.value)}
                   onKeyDown={(e) => {
@@ -966,7 +1030,12 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
                   autoFocus
                 />
                 <p className="text-xs text-gray-500">
-                  Enter the Paystack transaction reference from your Paystack dashboard
+                  Enter the {(() => {
+                    const method = manualRefDialog.paymentMethod || 'paystack';
+                    if (method === 'moolre') return 'Moolre';
+                    if (method === 'moolre_web') return 'Moolre Web';
+                    return 'Paystack';
+                  })()} transaction reference
                 </p>
               </div>
 
@@ -987,7 +1056,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
             <Button
               variant="outline"
               onClick={() => {
-                setManualRefDialog({ open: false, deposit: null, error: null });
+                setManualRefDialog({ open: false, deposit: null, error: null, paymentMethod: null });
                 setManualReference('');
               }}
               disabled={verifyingDeposit === manualRefDialog.deposit?.id}
