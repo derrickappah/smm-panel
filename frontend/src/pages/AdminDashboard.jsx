@@ -81,10 +81,12 @@ const AdminDashboard = memo(({ user, onLogout }) => {
 
   // Fetch payment method settings
   const { data: paymentMethodSettings = {
-    paystack_enabled: true,
-    manual_enabled: true,
-    hubtel_enabled: true,
-    korapay_enabled: true
+    paystack_enabled: false,
+    manual_enabled: false,
+    hubtel_enabled: false,
+    korapay_enabled: false,
+    moolre_enabled: false,
+    moolre_web_enabled: false
   }, isLoading: isLoadingSettings } = useQuery({
     queryKey: ['admin', 'payment-settings'],
     queryFn: async () => {
@@ -95,7 +97,9 @@ const AdminDashboard = memo(({ user, onLogout }) => {
           'payment_method_paystack_enabled',
           'payment_method_manual_enabled',
           'payment_method_hubtel_enabled',
-          'payment_method_korapay_enabled'
+          'payment_method_korapay_enabled',
+          'payment_method_moolre_enabled',
+          'payment_method_moolre_web_enabled'
         ]);
 
       if (error && error.code !== '42P01') {
@@ -103,22 +107,28 @@ const AdminDashboard = memo(({ user, onLogout }) => {
       }
 
       const settings = {
-        paystack_enabled: true,
-        manual_enabled: true,
-        hubtel_enabled: true,
-        korapay_enabled: true
+        paystack_enabled: false,
+        manual_enabled: false,
+        hubtel_enabled: false,
+        korapay_enabled: false,
+        moolre_enabled: false,
+        moolre_web_enabled: false
       };
 
       if (data) {
         data.forEach(setting => {
           if (setting.key === 'payment_method_paystack_enabled') {
-            settings.paystack_enabled = setting.value !== 'false';
+            settings.paystack_enabled = setting.value === 'true';
           } else if (setting.key === 'payment_method_manual_enabled') {
-            settings.manual_enabled = setting.value !== 'false';
+            settings.manual_enabled = setting.value === 'true';
           } else if (setting.key === 'payment_method_hubtel_enabled') {
-            settings.hubtel_enabled = setting.value !== 'false';
+            settings.hubtel_enabled = setting.value === 'true';
           } else if (setting.key === 'payment_method_korapay_enabled') {
-            settings.korapay_enabled = setting.value !== 'false';
+            settings.korapay_enabled = setting.value === 'true';
+          } else if (setting.key === 'payment_method_moolre_enabled') {
+            settings.moolre_enabled = setting.value === 'true';
+          } else if (setting.key === 'payment_method_moolre_web_enabled') {
+            settings.moolre_web_enabled = setting.value === 'true';
           }
         });
       }
