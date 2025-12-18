@@ -105,6 +105,23 @@ export default async function handler(req, res) {
     // Get service role client for RPC call
     const supabase = getServiceRoleClient();
 
+    // Ensure smmgen_order_id is a string (database expects TEXT)
+    const smmgenOrderIdString = smmgen_order_id 
+      ? String(smmgen_order_id) 
+      : null;
+
+    // Log the parameters being sent to the database function
+    console.log('Calling place_order_with_balance_deduction with:', {
+      p_user_id: user.id,
+      p_service_id: service_id || null,
+      p_package_id: package_id || null,
+      p_link: link.trim(),
+      p_quantity: quantityNum,
+      p_total_cost: totalCostNum,
+      p_smmgen_order_id: smmgenOrderIdString,
+      smmgen_order_id_type: typeof smmgenOrderIdString
+    });
+
     // Call the atomic database function to place order and deduct balance
     const { data: result, error: rpcError } = await supabase.rpc('place_order_with_balance_deduction', {
       p_user_id: user.id,
@@ -113,7 +130,7 @@ export default async function handler(req, res) {
       p_link: link.trim(),
       p_quantity: quantityNum,
       p_total_cost: totalCostNum,
-      p_smmgen_order_id: smmgen_order_id || null
+      p_smmgen_order_id: smmgenOrderIdString
     });
 
     if (rpcError) {
