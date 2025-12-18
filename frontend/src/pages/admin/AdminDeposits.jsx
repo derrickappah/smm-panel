@@ -382,8 +382,8 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
       const data = await response.json();
 
       if (!response.ok) {
-        // If error suggests manual reference and we don't have one, show dialog
-        if (data.error && data.error.includes('No Moolre reference') && !manualRef) {
+        // If error suggests manual Moolre ID and we don't have one, show dialog
+        if (data.error && data.error.includes('No Moolre ID') && !manualRef) {
           setManualRefDialog({ 
             open: true, 
             deposit, 
@@ -466,8 +466,8 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
       const data = await response.json();
 
       if (!response.ok) {
-        // If error suggests manual reference and we don't have one, show dialog
-        if (data.error && data.error.includes('No Moolre reference') && !manualRef) {
+        // If error suggests manual Moolre ID and we don't have one, show dialog
+        if (data.error && data.error.includes('No Moolre ID') && !manualRef) {
           setManualRefDialog({ 
             open: true, 
             deposit, 
@@ -536,7 +536,9 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
     if (!manualRefDialog.deposit || !manualReference.trim()) {
       const methodName = manualRefDialog.paymentMethod === 'moolre' ? 'Moolre' : 
                         manualRefDialog.paymentMethod === 'moolre_web' ? 'Moolre Web' : 'Paystack';
-      toast.error(`Please enter a ${methodName} reference`);
+      const fieldName = (manualRefDialog.paymentMethod === 'moolre' || manualRefDialog.paymentMethod === 'moolre_web') 
+                        ? 'Moolre ID' : 'reference';
+      toast.error(`Please enter a ${methodName} ${fieldName}`);
       return;
     }
 
@@ -1075,7 +1077,8 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
                 <label htmlFor="manual-ref" className="text-sm font-medium">
                   {(() => {
                     const method = manualRefDialog.paymentMethod || 'paystack';
-                    if (method === 'moolre') return 'Moolre Reference';
+                    if (method === 'moolre') return 'Moolre ID';
+                    if (method === 'moolre_web') return 'Moolre ID';
                     if (method === 'moolre_web') return 'Moolre Web Reference';
                     return 'Paystack Reference';
                   })()}

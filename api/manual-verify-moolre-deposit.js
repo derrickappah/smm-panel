@@ -16,7 +16,7 @@
  * Usage:
  * POST /api/manual-verify-moolre-deposit
  * Headers: Authorization: Bearer <supabase_jwt_token>
- * Body: { transactionId: "uuid" } or { reference: "moolre_reference" }
+ * Body: { transactionId: "uuid" } or { reference: "moolre_id" }
  */
 
 import { verifyAdmin, getServiceRoleClient } from './utils/auth.js';
@@ -149,22 +149,22 @@ export default async function handler(req, res) {
       });
     }
 
-    // Get Moolre reference
-    const moolreReference = transaction.moolre_reference || reference;
+    // Get Moolre ID (preferred) or fallback to reference
+    const moolreId = transaction.moolre_id || reference;
 
-    if (!moolreReference) {
+    if (!moolreId) {
       return res.status(400).json({
-        error: 'No Moolre reference found for this transaction. Please provide a reference.',
+        error: 'No Moolre ID found for this transaction. Please provide a Moolre ID.',
         transactionId: transaction.id
       });
     }
 
     console.log(`[MANUAL-VERIFY-MOOLRE] Verifying Moolre payment:`, {
       transactionId: transaction.id,
-      reference: moolreReference
+      moolreId: moolreId
     });
 
-    // Verify payment with Moolre API
+    // Verify payment with Moolre API using Moolre ID
     const moolreResponse = await fetch('https://api.moolre.com/open/transact/status', {
       method: 'POST',
       headers: {
@@ -174,8 +174,8 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         type: 1,
-        idtype: 1, // 1 = Unique externalref
-        id: moolreReference,
+        idtype: 2, // 2 = Moolre Generated ID
+        id: moolreId,
         accountnumber: MOOLRE_ACCOUNT_NUMBER
       })
     });
@@ -204,7 +204,7 @@ export default async function handler(req, res) {
 
     console.log(`[MANUAL-VERIFY-MOOLRE] Moolre verification result:`, {
       transactionId: transaction.id,
-      reference: moolreReference,
+      moolreId: moolreId,
       paymentStatus,
       txstatus
     });
@@ -233,7 +233,7 @@ export default async function handler(req, res) {
           p_transaction_id: transaction.id,
           p_payment_method: 'moolre',
           p_payment_status: 'success',
-          p_payment_reference: moolreReference
+          p_payment_reference: moolreId
         });
 
         if (rpcError) {
@@ -309,17 +309,27 @@ export default async function handler(req, res) {
       };
     }
 
-    // Update moolre_reference if it wasn't set
-    if (!transaction.moolre_reference && moolreReference) {
+    // Update moolre_id if it wasn't set (from API response)
+    const moolreIdFromResponse = moolreData.data?.id;
+    if (moolreIdFromResponse && !transaction.moolre_id) {
       await supabase
         .from('transactions')
-        .update({ moolre_reference: moolreReference })
+        .update({ moolre_id: moolreIdFromResponse })
+        .eq('id', transaction.id);
+    }
+
+    // Also update moolre_reference if available and not set
+    const moolreReferenceFromResponse = moolreData.data?.externalref;
+    if (moolreReferenceFromResponse && !transaction.moolre_reference) {
+      await supabase
+        .from('transactions')
+        .update({ moolre_reference: moolreReferenceFromResponse })
         .eq('id', transaction.id);
     }
 
     return res.status(200).json({
       success: true,
-      reference: moolreReference,
+      moolreId: moolreId,
       moolreStatus: paymentStatus,
       txstatus: txstatus,
       updateResult: updateResult,
