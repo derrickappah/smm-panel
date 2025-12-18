@@ -3079,7 +3079,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         setOptimisticBalance(newBalanceAfterOrder);
 
         // Record transaction
-        const { error: transactionError } = await supabase
+        const { data: transactionData, error: transactionError } = await supabase
           .from('transactions')
           .insert({
             user_id: authUser.id,
@@ -3087,10 +3087,33 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             type: 'order',
             status: 'approved',
             order_id: orderData.id
-          });
+          })
+          .select()
+          .single();
 
         if (transactionError) {
           console.warn('Failed to create transaction record for package order:', transactionError);
+        } else if (transactionData) {
+          // Link the transaction_id to the balance_audit_log entry
+          // This prevents the create_transaction_from_audit_trigger from creating a duplicate transaction
+          const { data: auditLogEntry } = await supabase
+            .from('balance_audit_log')
+            .select('id')
+            .eq('user_id', authUser.id)
+            .is('transaction_id', null)
+            .eq('change_amount', -totalCost) // Negative for orders
+            .gte('created_at', new Date(Date.now() - 5000).toISOString()) // Last 5 seconds
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          
+          if (auditLogEntry) {
+            // Link the transaction to the audit log entry
+            await supabase
+              .from('balance_audit_log')
+              .update({ transaction_id: transactionData.id })
+              .eq('id', auditLogEntry.id);
+          }
         }
 
         // Show success immediately
@@ -3242,7 +3265,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
         // Record transaction for combo order (balance subtraction)
         // Create one transaction record for the total cost
-        const { error: transactionError } = await supabase
+        const { data: transactionData, error: transactionError } = await supabase
           .from('transactions')
           .insert({
             user_id: authUser.id,
@@ -3250,11 +3273,34 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             type: 'order',
             status: 'approved', // Order transactions are immediately approved when balance is deducted
             order_id: orderResults[0]?.data?.id || null // Link to first order in combo
-          });
+          })
+          .select()
+          .single();
 
         if (transactionError) {
           console.warn('Failed to create transaction record for combo order:', transactionError);
           // Don't fail the order if transaction record fails, but log it
+        } else if (transactionData) {
+          // Link the transaction_id to the balance_audit_log entry
+          // This prevents the create_transaction_from_audit_trigger from creating a duplicate transaction
+          const { data: auditLogEntry } = await supabase
+            .from('balance_audit_log')
+            .select('id')
+            .eq('user_id', authUser.id)
+            .is('transaction_id', null)
+            .eq('change_amount', -totalCost) // Negative for orders
+            .gte('created_at', new Date(Date.now() - 5000).toISOString()) // Last 5 seconds
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          
+          if (auditLogEntry) {
+            // Link the transaction to the audit log entry
+            await supabase
+              .from('balance_audit_log')
+              .update({ transaction_id: transactionData.id })
+              .eq('id', auditLogEntry.id);
+          }
         }
 
         toast.success(`Combo order placed successfully! ${componentServices.length} orders created.`);
@@ -3376,7 +3422,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       setOptimisticBalance(newBalanceAfterOrder);
 
       // Record transaction for order (balance subtraction)
-      const { error: transactionError } = await supabase
+      const { data: transactionData, error: transactionError } = await supabase
         .from('transactions')
         .insert({
           user_id: authUser.id,
@@ -3384,11 +3430,34 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           type: 'order',
           status: 'approved', // Order transactions are immediately approved when balance is deducted
           order_id: orderData.id
-        });
+        })
+        .select()
+        .single();
 
       if (transactionError) {
         console.warn('Failed to create transaction record for order:', transactionError);
         // Don't fail the order if transaction record fails, but log it
+      } else if (transactionData) {
+        // Link the transaction_id to the balance_audit_log entry
+        // This prevents the create_transaction_from_audit_trigger from creating a duplicate transaction
+        const { data: auditLogEntry } = await supabase
+          .from('balance_audit_log')
+          .select('id')
+          .eq('user_id', authUser.id)
+          .is('transaction_id', null)
+          .eq('change_amount', -totalCost) // Negative for orders
+          .gte('created_at', new Date(Date.now() - 5000).toISOString()) // Last 5 seconds
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        
+        if (auditLogEntry) {
+          // Link the transaction to the audit log entry
+          await supabase
+            .from('balance_audit_log')
+            .update({ transaction_id: transactionData.id })
+            .eq('id', auditLogEntry.id);
+        }
       }
 
       toast.success('Order placed successfully!');

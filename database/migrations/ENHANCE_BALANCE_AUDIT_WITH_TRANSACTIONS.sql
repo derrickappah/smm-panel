@@ -16,22 +16,66 @@ BEGIN
     END IF;
     
     -- Check if a transaction already exists for this balance change
-    -- Look for transactions created around the same time with matching amount
-    -- Check both before and after the audit log entry to catch transactions created before balance update
-    -- Prioritize manual_adjustment transactions for admin actions
-    SELECT id INTO v_existing_transaction_id
-    FROM transactions
-    WHERE user_id = NEW.user_id
-    AND amount = ABS(NEW.change_amount)
-    AND created_at BETWEEN NEW.created_at - INTERVAL '10 seconds' AND NEW.created_at + INTERVAL '2 seconds'
-    AND (
-        (NEW.change_amount > 0 AND type IN ('deposit', 'refund', 'referral_bonus', 'manual_adjustment'))
-        OR (NEW.change_amount < 0 AND type IN ('order', 'manual_adjustment'))
-    )
-    ORDER BY 
-        CASE WHEN type = 'manual_adjustment' THEN 1 ELSE 2 END, -- Prioritize manual_adjustment
-        created_at DESC
-    LIMIT 1;
+    -- For deposits (positive change_amount), look for approved deposit transactions
+    -- Deposits can be created hours before they're approved, so we need a wider time window
+    IF NEW.change_amount > 0 THEN
+        -- Look for approved deposit transactions with matching amount
+        -- Check transactions created up to 24 hours before the balance change
+        -- This accounts for deposits that are created when payment is initiated but approved later
+        SELECT id INTO v_existing_transaction_id
+        FROM transactions
+        WHERE user_id = NEW.user_id
+          AND type = 'deposit'
+          AND status = 'approved'
+          AND ABS(amount - ABS(NEW.change_amount)) < 0.01  -- Allow small floating point differences
+          AND created_at <= NEW.created_at  -- Transaction must exist before balance change
+          AND created_at >= NEW.created_at - INTERVAL '24 hours'  -- But not too old
+        ORDER BY 
+            ABS(amount - ABS(NEW.change_amount)) ASC,  -- Prefer exact matches
+            created_at DESC  -- Prefer recent transactions
+        LIMIT 1;
+        
+        -- If no deposit found, also check for refunds and referral bonuses (within shorter window)
+        IF v_existing_transaction_id IS NULL THEN
+            SELECT id INTO v_existing_transaction_id
+            FROM transactions
+            WHERE user_id = NEW.user_id
+              AND amount = ABS(NEW.change_amount)
+              AND type IN ('refund', 'referral_bonus')
+              AND status = 'approved'
+              AND created_at BETWEEN NEW.created_at - INTERVAL '10 seconds' AND NEW.created_at + INTERVAL '2 seconds'
+            ORDER BY created_at DESC
+            LIMIT 1;
+        END IF;
+    ELSE
+        -- For negative balance changes (orders, debits)
+        -- Orders are created AFTER balance update, so we need to check both before and after
+        -- Expand time window to account for frontend delays
+        SELECT id INTO v_existing_transaction_id
+        FROM transactions
+        WHERE user_id = NEW.user_id
+          AND type = 'order'
+          AND status = 'approved'
+          AND ABS(amount - ABS(NEW.change_amount)) < 0.01  -- Allow small floating point differences
+          AND created_at BETWEEN NEW.created_at - INTERVAL '10 seconds' AND NEW.created_at + INTERVAL '30 seconds'
+        ORDER BY 
+            ABS(amount - ABS(NEW.change_amount)) ASC,  -- Prefer exact matches
+            created_at DESC  -- Prefer recent transactions
+        LIMIT 1;
+        
+        -- If no order found, also check for manual_adjustment (within shorter window)
+        IF v_existing_transaction_id IS NULL THEN
+            SELECT id INTO v_existing_transaction_id
+            FROM transactions
+            WHERE user_id = NEW.user_id
+              AND amount = ABS(NEW.change_amount)
+              AND type = 'manual_adjustment'
+              AND status = 'approved'
+              AND created_at BETWEEN NEW.created_at - INTERVAL '10 seconds' AND NEW.created_at + INTERVAL '2 seconds'
+            ORDER BY created_at DESC
+            LIMIT 1;
+        END IF;
+    END IF;
     
     -- If transaction already exists, link it
     IF v_existing_transaction_id IS NOT NULL THEN

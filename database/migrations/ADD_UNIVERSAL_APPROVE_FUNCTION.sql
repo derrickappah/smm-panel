@@ -182,6 +182,22 @@ BEGIN
         RETURN;
     END IF;
 
+    -- Link the transaction_id to the balance_audit_log entry
+    -- This prevents the create_transaction_from_audit_trigger from creating a duplicate transaction
+    -- The balance_audit_log entry is created by the balance_change_trigger when balance is updated
+    UPDATE balance_audit_log
+    SET transaction_id = p_transaction_id
+    WHERE id = (
+        SELECT id
+        FROM balance_audit_log
+        WHERE user_id = v_transaction.user_id
+          AND transaction_id IS NULL
+          AND change_amount = COALESCE(v_transaction.amount, 0)
+          AND created_at >= NOW() - INTERVAL '2 seconds'
+        ORDER BY created_at DESC
+        LIMIT 1
+    );
+
     -- Success
     RETURN QUERY SELECT 
         TRUE, 
