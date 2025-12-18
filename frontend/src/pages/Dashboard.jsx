@@ -2211,11 +2211,18 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         redirectUrl
       });
 
+      // Get JWT token for API authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('No session token available. Please log in again.');
+      }
+
       // Initialize Moolre Web payment via serverless function
       const initResponse = await fetch('/api/moolre-web-init', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify({
           amount: amount,
@@ -2643,12 +2650,19 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       // Generate unique reference for this transaction
       const moolreReference = `MOOLRE_${transaction.id}_${Date.now()}`;
 
+      // Get JWT token for API authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('No session token available. Please log in again.');
+      }
+
       // Initialize Moolre payment via serverless function
       try {
         const initResponse = await fetch('/api/moolre-init', {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
           },
           body: JSON.stringify({
             amount: amount,
