@@ -130,6 +130,88 @@ const DashboardOrderForm = React.memo(({
     setOrderForm(prev => ({ ...prev, quantity: e.target.value }));
   }, [setOrderForm]);
 
+  // Helper function to parse markdown-style formatting (bold and italic)
+  const formatDescription = useCallback((text) => {
+    if (!text) return null;
+    
+    // Split by line breaks first to preserve them
+    const lines = text.split('\n');
+    
+    return lines.map((line, lineIndex) => {
+      if (!line.trim()) {
+        return <br key={`line-${lineIndex}`} />;
+      }
+      
+      const parts = [];
+      let currentIndex = 0;
+      let keyCounter = 0;
+      
+      // Process bold (**text**) and italic (*text*) formatting
+      while (currentIndex < line.length) {
+        // Check for bold (**text**)
+        const boldMatch = line.substring(currentIndex).match(/^\*\*([^*]+)\*\*/);
+        if (boldMatch) {
+          parts.push(
+            <strong key={`part-${lineIndex}-${keyCounter++}`} className="font-semibold">
+              {boldMatch[1]}
+            </strong>
+          );
+          currentIndex += boldMatch[0].length;
+          continue;
+        }
+        
+        // Check for italic (*text*) - but not if it's part of bold
+        const italicMatch = line.substring(currentIndex).match(/^\*([^*]+)\*/);
+        if (italicMatch) {
+          parts.push(
+            <em key={`part-${lineIndex}-${keyCounter++}`} className="italic">
+              {italicMatch[1]}
+            </em>
+          );
+          currentIndex += italicMatch[0].length;
+          continue;
+        }
+        
+        // Find the next formatting marker
+        const nextBold = line.indexOf('**', currentIndex);
+        const nextItalic = line.indexOf('*', currentIndex);
+        
+        let nextMarker = -1;
+        if (nextBold !== -1 && nextItalic !== -1) {
+          nextMarker = Math.min(nextBold, nextItalic);
+        } else if (nextBold !== -1) {
+          nextMarker = nextBold;
+        } else if (nextItalic !== -1) {
+          nextMarker = nextItalic;
+        }
+        
+        if (nextMarker !== -1) {
+          parts.push(
+            <span key={`part-${lineIndex}-${keyCounter++}`}>
+              {line.substring(currentIndex, nextMarker)}
+            </span>
+          );
+          currentIndex = nextMarker;
+        } else {
+          // No more formatting, add the rest of the line
+          parts.push(
+            <span key={`part-${lineIndex}-${keyCounter++}`}>
+              {line.substring(currentIndex)}
+            </span>
+          );
+          break;
+        }
+      }
+      
+      return (
+        <React.Fragment key={`line-${lineIndex}`}>
+          {parts}
+          {lineIndex < lines.length - 1 && <br />}
+        </React.Fragment>
+      );
+    });
+  }, []);
+
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-6 sm:p-8 shadow-sm animate-slideUp" id="order-form-section">
       <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">Place New Order</h2>
@@ -359,9 +441,9 @@ const DashboardOrderForm = React.memo(({
       {(selectedService?.description || selectedPackage?.description) && (
         <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
           <p className="text-sm font-medium text-gray-900 mb-2">Description</p>
-          <p className="text-sm text-gray-700 leading-relaxed">
-            {selectedService?.description || selectedPackage?.description}
-          </p>
+          <div className="text-sm text-gray-700 leading-relaxed">
+            {formatDescription(selectedService?.description || selectedPackage?.description)}
+          </div>
         </div>
       )}
     </div>
