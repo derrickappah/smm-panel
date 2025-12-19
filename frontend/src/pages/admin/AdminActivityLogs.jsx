@@ -291,6 +291,39 @@ const AdminActivityLogs = memo(({ onRefresh, refreshing = false }) => {
     );
   }
 
+  // Show helpful message if no logs found
+  if (!isLoading && allLogs.length === 0 && totalCount === 0) {
+    return (
+      <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
+        <div className="text-center py-12">
+          <p className="text-lg font-medium text-gray-900 mb-2">No activity logs found</p>
+          <p className="text-sm text-gray-600 mb-4">
+            Activity logs will appear here once actions are performed in the system.
+          </p>
+          <div className="text-xs text-gray-500 space-y-1">
+            <p>Make sure you have:</p>
+            <ul className="list-disc list-inside space-y-1">
+              <li>Run the database migrations in Supabase SQL Editor</li>
+              <li>Performed some actions (login, place order, etc.)</li>
+              <li>Checked that you have admin permissions</li>
+            </ul>
+          </div>
+          <Button
+            onClick={() => {
+              refetch();
+              if (onRefresh) onRefresh();
+            }}
+            variant="outline"
+            className="mt-4"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Refresh
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm w-full max-w-full overflow-hidden">
       {/* Header */}

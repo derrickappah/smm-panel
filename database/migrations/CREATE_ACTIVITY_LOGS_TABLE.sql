@@ -45,6 +45,7 @@ CREATE POLICY "Users can view own activity logs"
     USING (auth.uid() = user_id);
 
 -- Policy for admins to view all activity logs
+-- Use is_admin() function if it exists, otherwise use direct check
 CREATE POLICY "Admins can view all activity logs"
     ON activity_logs FOR SELECT
     USING (

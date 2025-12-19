@@ -23,7 +23,7 @@ const fetchActivityLogs = async ({ pageParam = 0, filters = {} }) => {
       ip_address,
       user_agent,
       created_at,
-      profiles!activity_logs_user_id_fkey (
+      profiles (
         id,
         email,
         name
@@ -58,6 +58,25 @@ const fetchActivityLogs = async ({ pageParam = 0, filters = {} }) => {
   const { data, error, count } = await query;
 
   if (error) {
+    if (error.code === '42501' || error.message?.includes('permission') || error.message?.includes('policy')) {
+      console.error('RLS Policy Error:', error);
+      // Return empty result instead of throwing to prevent UI crash
+      return {
+        data: [],
+        nextPage: undefined,
+        total: 0,
+      };
+    }
+    if (error.code === '42P01') {
+      // Table doesn't exist - migrations not run
+      console.error('Table does not exist. Please run database migrations.');
+      return {
+        data: [],
+        nextPage: undefined,
+        total: 0,
+      };
+    }
+    console.error('Error fetching activity logs:', error);
     throw error;
   }
 
