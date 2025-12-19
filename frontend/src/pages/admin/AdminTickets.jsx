@@ -642,7 +642,10 @@ const AdminTickets = memo(() => {
                             {ticket.assigned_to ? (
                               <div className="text-xs">
                                 <p className="text-gray-700 font-medium line-clamp-1">
-                                  {ticket.assigned_admin?.name || ticket.assigned_admin?.email || 'Unknown'}
+                                  {(() => {
+                                    const assignedAdmin = adminUsers.find(u => u.id === ticket.assigned_to);
+                                    return assignedAdmin?.name || assignedAdmin?.email || 'Unknown';
+                                  })()}
                                 </p>
                               </div>
                             ) : (

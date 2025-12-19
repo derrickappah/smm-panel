@@ -12,7 +12,7 @@ const fetchTickets = async ({ pageParam = 0 }) => {
 
   const { data, error, count } = await supabase
     .from('support_tickets')
-    .select('id, user_id, name, email, order_id, message, status, subject, category, priority, assigned_to, sla_deadline, sla_breached, created_at, updated_at, admin_response, profiles(name, email), assigned_admin:profiles!assigned_to(name, email)', { count: 'exact' })
+    .select('id, user_id, name, email, order_id, message, status, subject, category, priority, assigned_to, sla_deadline, sla_breached, created_at, updated_at, admin_response, profiles!support_tickets_user_id_fkey(name, email)', { count: 'exact' })
     .order('created_at', { ascending: false })
     .range(from, to);
 
@@ -21,6 +21,7 @@ const fetchTickets = async ({ pageParam = 0 }) => {
       console.warn('Support tickets table may not exist. Run CREATE_SUPPORT_TICKETS.sql migration.');
       return { data: [], nextPage: undefined, total: 0 };
     }
+    console.error('Error fetching tickets:', error);
     throw error;
   }
 
@@ -43,13 +44,14 @@ const fetchAllTickets = async () => {
     .from('support_tickets')
     .select('*', { count: 'exact', head: true });
   
-  if (countError) {
-    if (countError.code === '42P01') {
-      console.warn('Support tickets table may not exist. Run CREATE_SUPPORT_TICKETS.sql migration.');
-      return [];
+    if (countError) {
+      if (countError.code === '42P01') {
+        console.warn('Support tickets table may not exist. Run CREATE_SUPPORT_TICKETS.sql migration.');
+        return [];
+      }
+      console.error('Error counting tickets:', countError);
+      throw countError;
     }
-    throw countError;
-  }
 
   // Fetch all batches - optimized sequential fetching for large datasets
   while (hasMore) {
@@ -57,7 +59,7 @@ const fetchAllTickets = async () => {
     
     const { data, error } = await supabase
       .from('support_tickets')
-      .select('id, user_id, name, email, order_id, message, status, subject, category, priority, assigned_to, sla_deadline, sla_breached, created_at, updated_at, admin_response, profiles(name, email), assigned_admin:profiles!assigned_to(name, email)')
+      .select('id, user_id, name, email, order_id, message, status, subject, category, priority, assigned_to, sla_deadline, sla_breached, created_at, updated_at, admin_response, profiles!support_tickets_user_id_fkey(name, email)')
       .order('created_at', { ascending: false })
       .range(from, to);
 
@@ -66,6 +68,7 @@ const fetchAllTickets = async () => {
         console.warn('Support tickets table may not exist. Run CREATE_SUPPORT_TICKETS.sql migration.');
         return [];
       }
+      console.error('Error fetching tickets batch:', error);
       throw error;
     }
 
@@ -121,7 +124,7 @@ export const useUpdateTicket = () => {
         .from('support_tickets')
         .update(updates)
         .eq('id', ticketId)
-        .select('*, profiles(name, email), assigned_admin:profiles!assigned_to(name, email)')
+        .select('*, profiles!support_tickets_user_id_fkey(name, email)')
         .single();
 
       if (error) throw error;
