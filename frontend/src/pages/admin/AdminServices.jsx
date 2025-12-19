@@ -5,6 +5,7 @@ import ServiceEditForm from '@/components/admin/ServiceEditForm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, RefreshCw, Edit, Trash2, Power, PowerOff, Layers, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -283,10 +284,12 @@ const AdminServices = memo(() => {
           </div>
           <div>
             <Label>Description</Label>
-            <Input
+            <Textarea
               placeholder="Service description"
               value={serviceForm.description}
               onChange={(e) => setServiceForm({ ...serviceForm, description: e.target.value })}
+              rows={4}
+              className="resize-y"
               required
             />
           </div>

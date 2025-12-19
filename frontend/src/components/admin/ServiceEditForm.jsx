@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const ServiceEditForm = ({ service, onSave, onCancel }) => {
@@ -116,9 +117,11 @@ const ServiceEditForm = ({ service, onSave, onCancel }) => {
       </div>
       <div>
         <Label>Description</Label>
-        <Input
+        <Textarea
           value={formData.description}
           onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+          rows={4}
+          className="resize-y"
         />
       </div>
       <div>

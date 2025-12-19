@@ -136,12 +136,10 @@ const DashboardOrderForm = React.memo(({
     
     // Split by line breaks first to preserve them
     const lines = text.split('\n');
+    const result = [];
     
-    return lines.map((line, lineIndex) => {
-      if (!line.trim()) {
-        return <br key={`line-${lineIndex}`} />;
-      }
-      
+    lines.forEach((line, lineIndex) => {
+      // Process each line for formatting
       const parts = [];
       let currentIndex = 0;
       let keyCounter = 0;
@@ -203,13 +201,27 @@ const DashboardOrderForm = React.memo(({
         }
       }
       
-      return (
-        <React.Fragment key={`line-${lineIndex}`}>
-          {parts}
-          {lineIndex < lines.length - 1 && <br />}
-        </React.Fragment>
-      );
+      // Add the line content (even if empty, to preserve line breaks)
+      if (parts.length > 0) {
+        result.push(
+          <span key={`line-${lineIndex}`}>
+            {parts}
+          </span>
+        );
+      } else {
+        // Empty line - add a non-breaking space to preserve the line break
+        result.push(
+          <span key={`line-${lineIndex}`}>&nbsp;</span>
+        );
+      }
+      
+      // Add line break after each line except the last one
+      if (lineIndex < lines.length - 1) {
+        result.push(<br key={`br-${lineIndex}`} />);
+      }
     });
+    
+    return result;
   }, []);
 
   return (
