@@ -51,31 +51,18 @@ const AdminSMMCost = () => {
 
   // Test API connection
   const testConnection = useCallback(async () => {
-    if (!apiUrl || !apiKey) {
-      toast.error('Please enter API URL and API Key');
-      return;
-    }
-
     setTestingConnection(true);
     setConnectionStatus(null);
     setConnectionMessage('');
 
     try {
-      // Temporarily set environment variables for testing
-      // In production, these should be set in Vercel environment variables
-      const originalUrl = process.env.SMMCOST_API_URL;
-      const originalKey = process.env.SMMCOST_API_KEY;
-
       // Test by fetching balance (lightweight operation)
+      // Note: API credentials must be set in Vercel environment variables
       const response = await fetch('/api/smmcost/balance', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          api_url: apiUrl,
-          api_key: apiKey
-        })
+        }
       });
 
       if (response.ok) {
@@ -84,27 +71,42 @@ const AdminSMMCost = () => {
         setConnectionMessage('Successfully connected to SMMCost API');
         toast.success('Connection test successful');
       } else {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (parseError) {
+          errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
+        }
+        
+        const errorMessage = errorData.error || errorData.message || 'Connection test failed';
         setConnectionStatus('error');
-        setConnectionMessage(errorData.error || 'Connection test failed');
-        toast.error(`Connection test failed: ${errorData.error || 'Unknown error'}`);
+        setConnectionMessage(errorMessage);
+        
+        // Show helpful message if API is not configured
+        if (errorData.configIssue || errorMessage.includes('not configured')) {
+          toast.error('SMMCost API is not configured. Please set SMMCOST_API_KEY and SMMCOST_API_URL in Vercel environment variables.');
+        } else {
+          toast.error(`Connection test failed: ${errorMessage}`);
+        }
       }
     } catch (error) {
       setConnectionStatus('error');
-      setConnectionMessage(error.message || 'Failed to connect');
-      toast.error(`Connection test failed: ${error.message}`);
+      const errorMessage = error.message || 'Failed to connect';
+      setConnectionMessage(errorMessage);
+      
+      // Check if it's a configuration error
+      if (errorMessage.includes('not configured')) {
+        toast.error('SMMCost API is not configured. Please set SMMCOST_API_KEY and SMMCOST_API_URL in Vercel environment variables.');
+      } else {
+        toast.error(`Connection test failed: ${errorMessage}`);
+      }
     } finally {
       setTestingConnection(false);
     }
-  }, [apiUrl, apiKey]);
+  }, []);
 
   // Fetch available services from SMMCost
   const syncServices = useCallback(async () => {
-    if (!apiUrl || !apiKey) {
-      toast.error('Please configure API URL and API Key first');
-      return;
-    }
-
     setSyncingServices(true);
     setSyncLogs([]);
     addLog('Starting service sync...');
@@ -126,7 +128,7 @@ const AdminSMMCost = () => {
     } finally {
       setSyncingServices(false);
     }
-  }, [apiUrl, apiKey]);
+  }, []);
 
   // Fetch account balance
   const fetchBalance = useCallback(async () => {
@@ -274,10 +276,22 @@ const AdminSMMCost = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+              <p className="text-sm text-blue-800">
+                <strong>Note:</strong> API credentials must be configured as environment variables in Vercel:
+                <br />
+                • <code className="bg-blue-100 px-1 rounded">SMMCOST_API_URL</code> - Base URL for SMMCost API
+                <br />
+                • <code className="bg-blue-100 px-1 rounded">SMMCOST_API_KEY</code> - Your SMMCost API key
+                <br />
+                <br />
+                The fields below are for reference only. Set the environment variables in your Vercel project settings.
+              </p>
+            </div>
             <div>
               <Label htmlFor="api-url" className="flex items-center gap-2 mb-2">
                 <Globe className="w-4 h-4" />
-                API Base URL
+                API Base URL (Reference)
               </Label>
               <Input
                 id="api-url"
@@ -286,12 +300,14 @@ const AdminSMMCost = () => {
                 value={apiUrl}
                 onChange={(e) => setApiUrl(e.target.value)}
                 className="w-full"
+                disabled
               />
+              <p className="text-xs text-gray-500 mt-1">Set SMMCOST_API_URL in Vercel environment variables</p>
             </div>
             <div>
               <Label htmlFor="api-key" className="flex items-center gap-2 mb-2">
                 <Key className="w-4 h-4" />
-                API Key
+                API Key (Reference)
               </Label>
               <Input
                 id="api-key"
@@ -300,15 +316,17 @@ const AdminSMMCost = () => {
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 className="w-full"
+                disabled
               />
+              <p className="text-xs text-gray-500 mt-1">Set SMMCOST_API_KEY in Vercel environment variables</p>
             </div>
             <div className="flex gap-2">
-              <Button onClick={saveConfig} variant="outline">
-                Save Configuration
+              <Button onClick={saveConfig} variant="outline" disabled>
+                Save Configuration (Disabled)
               </Button>
               <Button 
                 onClick={testConnection} 
-                disabled={testingConnection || !apiUrl || !apiKey}
+                disabled={testingConnection}
                 className="flex items-center gap-2"
               >
                 {testingConnection ? (
@@ -363,7 +381,7 @@ const AdminSMMCost = () => {
               </div>
               <Button 
                 onClick={fetchBalance} 
-                disabled={loadingBalance || !apiUrl || !apiKey}
+                disabled={loadingBalance}
                 variant="outline"
                 className="flex items-center gap-2"
               >
@@ -397,7 +415,7 @@ const AdminSMMCost = () => {
           <CardContent className="space-y-4">
             <Button 
               onClick={syncServices} 
-              disabled={syncingServices || !apiUrl || !apiKey}
+              disabled={syncingServices}
               className="flex items-center gap-2"
             >
               {syncingServices ? (

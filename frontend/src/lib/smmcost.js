@@ -166,10 +166,23 @@ export const fetchSMMCostServices = async () => {
       }
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-      throw new Error(errorData.error || errorData.message || `Failed to fetch services: ${response.status}`);
-    }
+      if (!response.ok) {
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (parseError) {
+          errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
+        }
+        
+        const errorMessage = errorData.error || errorData.message || `Failed to fetch services: ${response.status}`;
+        
+        // Check if it's a configuration issue
+        if (errorData.configIssue || errorMessage.includes('not configured')) {
+          throw new Error('SMMCost API is not configured. Please set SMMCOST_API_KEY and SMMCOST_API_URL in Vercel environment variables.');
+        }
+        
+        throw new Error(errorMessage);
+      }
 
     const data = await response.json();
     
@@ -620,8 +633,26 @@ export const getSMMCostBalance = async () => {
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-      throw new Error(errorData.error || errorData.message || `Failed to fetch balance: ${response.status}`);
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch (parseError) {
+        errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
+      }
+      
+      const errorMessage = errorData.error || errorData.message || `Failed to fetch balance: ${response.status}`;
+      
+      // Check if it's a configuration issue
+      if (errorData.configIssue || errorMessage.includes('not configured')) {
+        throw new Error('SMMCost API is not configured. Please set SMMCOST_API_KEY and SMMCOST_API_URL in Vercel environment variables.');
+      }
+      
+      // Check if it's a network error
+      if (errorData.networkError || errorMessage.includes('Failed to connect') || errorMessage.includes('Network error')) {
+        throw new Error(`Network error: ${errorMessage}. Please verify SMMCOST_API_URL is correct in Vercel environment variables.`);
+      }
+      
+      throw new Error(errorMessage);
     }
 
     const data = await response.json();
@@ -629,6 +660,12 @@ export const getSMMCostBalance = async () => {
     return data;
   } catch (error) {
     console.error('SMMCost balance error:', error);
+    
+    // Handle network errors
+    if (error.message?.includes('fetch failed') || error.message?.includes('Network error')) {
+      throw new Error(`Network error: Failed to connect to SMMCost API. Please verify SMMCOST_API_URL is correct in Vercel environment variables.`);
+    }
+    
     throw error;
   }
 };

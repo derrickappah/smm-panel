@@ -214,6 +214,21 @@ export default async function handler(req, res) {
         });
       }
 
+      // Handle network errors (DNS, connection refused, etc.)
+      if (fetchError.message?.includes('fetch failed') || fetchError.code === 'ENOTFOUND' || fetchError.code === 'ECONNREFUSED') {
+        console.error('SMMCost network error:', {
+          error: fetchError.message,
+          code: fetchError.code,
+          url: `${SMMCOST_API_URL}/api/order`
+        });
+        return res.status(500).json({ 
+          error: `Failed to connect to SMMCost API at ${SMMCOST_API_URL}. Please verify SMMCOST_API_URL is correct and the API is accessible.`,
+          networkError: true,
+          url: SMMCOST_API_URL,
+          details: fetchError.message
+        });
+      }
+
       throw fetchError;
     }
   } catch (error) {
@@ -222,12 +237,23 @@ export default async function handler(req, res) {
       error: error.message,
       errorName: error.name,
       duration: `${duration}ms`,
-      stack: error.stack
+      stack: error.stack,
+      code: error.code
     });
+
+    // Check for network-related errors
+    if (error.message?.includes('fetch failed') || error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+      return res.status(500).json({ 
+        error: `Network error: Failed to connect to SMMCost API. Please verify SMMCOST_API_URL is correct.`,
+        networkError: true,
+        details: error.message
+      });
+    }
 
     return res.status(500).json({ 
       error: error.message || 'Failed to place order',
-      errorName: error.name
+      errorName: error.name,
+      details: error.code || error.message
     });
   }
 }
