@@ -168,10 +168,20 @@ const AdminSMMCost = () => {
 
       for (const service of servicesToImport) {
         try {
+          // Extract service ID from various possible field names
+          const smmcostServiceId = service.id || service.service_id || service.serviceId || service.ID;
+          
+          // Validate that we have a service ID
+          if (!smmcostServiceId && smmcostServiceId !== 0) {
+            addLog(`Service "${service.name || service.service_name || 'Unknown'}" has no valid ID, skipping...`);
+            errorCount++;
+            continue;
+          }
+
           // Map service from SMMCost format to our database format
           // NOTE: Adjust field mapping based on actual SMMCost API response format
           const serviceData = {
-            smmcost_service_id: service.id || service.service_id || service.serviceId,
+            smmcost_service_id: smmcostServiceId,
             platform: service.platform || service.category || 'unknown',
             service_type: service.type || service.service_type || 'unknown',
             name: service.name || service.service_name || 'Unknown Service',
@@ -182,16 +192,18 @@ const AdminSMMCost = () => {
             enabled: true
           };
 
-          // Check if service already exists
-          const { data: existing } = await supabase
-            .from('services')
-            .select('id')
-            .eq('smmcost_service_id', serviceData.smmcost_service_id)
-            .maybeSingle();
+          // Check if service already exists (only if we have a valid ID)
+          if (smmcostServiceId !== null && smmcostServiceId !== undefined) {
+            const { data: existing } = await supabase
+              .from('services')
+              .select('id')
+              .eq('smmcost_service_id', smmcostServiceId)
+              .maybeSingle();
 
-          if (existing) {
-            addLog(`Service "${serviceData.name}" already exists, skipping...`);
-            continue;
+            if (existing) {
+              addLog(`Service "${serviceData.name}" already exists, skipping...`);
+              continue;
+            }
           }
 
           // Insert service
