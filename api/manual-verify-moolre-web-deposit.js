@@ -150,6 +150,7 @@ export default async function handler(req, res) {
     }
 
     // Get Moolre ID (preferred) or fallback to reference
+    // If reference is provided manually, we'll validate it matches the transaction after API call
     const moolreId = transaction.moolre_id || reference;
 
     if (!moolreId) {
@@ -158,6 +159,10 @@ export default async function handler(req, res) {
         transactionId: transaction.id
       });
     }
+
+    // If using a manually provided reference (not from transaction.moolre_id), 
+    // we need to validate it matches this transaction after getting Moolre data
+    const isManualReference = !transaction.moolre_id && !!reference;
 
     console.log(`[MANUAL-VERIFY-MOOLRE-WEB] Verifying Moolre Web payment:`, {
       transactionId: transaction.id,
@@ -190,6 +195,101 @@ export default async function handler(req, res) {
         code: moolreData.code,
         details: moolreData
       });
+    }
+
+    // Validate that the Moolre transaction matches this deposit
+    const moolreAmount = parseFloat(moolreData.data?.amount || 0);
+    const transactionAmount = parseFloat(transaction.amount || 0);
+    
+    // Check amount match (allow small floating point differences)
+    if (Math.abs(moolreAmount - transactionAmount) > 0.01) {
+      console.error('[MANUAL-VERIFY-MOOLRE-WEB] Amount mismatch:', {
+        transactionId: transaction.id,
+        expectedAmount: transactionAmount,
+        moolreAmount: moolreAmount,
+        moolreId: moolreId
+      });
+      return res.status(400).json({
+        success: false,
+        error: `Amount mismatch: Expected ₵${transactionAmount.toFixed(2)}, but Moolre transaction shows ₵${moolreAmount.toFixed(2)}`,
+        transactionAmount: transactionAmount,
+        moolreAmount: moolreAmount,
+        moolreId: moolreId
+      });
+    }
+
+    // Check transaction time (should be within 24 hours before or after deposit creation)
+    const moolreTimestamp = moolreData.data?.timestamp || moolreData.data?.created_at || moolreData.data?.date;
+    if (moolreTimestamp) {
+      const moolreDate = new Date(moolreTimestamp);
+      const transactionDate = new Date(transaction.created_at);
+      const timeDiffHours = Math.abs(moolreDate - transactionDate) / (1000 * 60 * 60);
+      
+      // Allow 24 hours difference (transactions might be created slightly before or after)
+      if (timeDiffHours > 24) {
+        console.error('[MANUAL-VERIFY-MOOLRE-WEB] Time mismatch:', {
+          transactionId: transaction.id,
+          transactionTime: transactionDate.toISOString(),
+          moolreTime: moolreDate.toISOString(),
+          timeDiffHours: timeDiffHours.toFixed(2),
+          moolreId: moolreId
+        });
+        return res.status(400).json({
+          success: false,
+          error: `Transaction time mismatch: Moolre transaction time does not match deposit creation time (difference: ${timeDiffHours.toFixed(2)} hours)`,
+          transactionTime: transactionDate.toISOString(),
+          moolreTime: moolreDate.toISOString(),
+          timeDiffHours: timeDiffHours.toFixed(2),
+          moolreId: moolreId
+        });
+      }
+    }
+
+    // If using a manually provided reference, verify it's associated with this transaction
+    if (isManualReference) {
+      // For manual references, we must verify:
+      // 1. The externalref matches the transaction's moolre_reference (if set)
+      // 2. OR the Moolre ID from response matches what we stored (if we have it)
+      // 3. AND amount/time already validated above
+      
+      if (transaction.moolre_reference && moolreData.data?.externalref) {
+        if (transaction.moolre_reference !== moolreData.data.externalref) {
+          console.error('[MANUAL-VERIFY-MOOLRE-WEB] Manual reference validation failed - externalref mismatch:', {
+            transactionId: transaction.id,
+            expectedReference: transaction.moolre_reference,
+            moolreReference: moolreData.data.externalref,
+            providedMoolreId: moolreId
+          });
+          return res.status(400).json({
+            success: false,
+            error: 'The provided Moolre ID does not match this transaction. The external reference does not match.',
+            expectedReference: transaction.moolre_reference,
+            moolreReference: moolreData.data.externalref,
+            moolreId: moolreId
+          });
+        }
+      } else if (!transaction.moolre_reference) {
+        // If transaction has no moolre_reference, we can't fully validate the manual ID
+        // But we've already validated amount and time, so this is acceptable
+        console.log('[MANUAL-VERIFY-MOOLRE-WEB] Manual reference provided for transaction without stored reference - validated by amount and time');
+      }
+    } else if (transaction.moolre_reference && moolreData.data?.externalref) {
+      // If moolre_reference is set, verify it matches the externalref from Moolre
+      if (transaction.moolre_reference !== moolreData.data.externalref) {
+        console.error('[MANUAL-VERIFY-MOOLRE-WEB] Reference mismatch:', {
+          transactionId: transaction.id,
+          expectedReference: transaction.moolre_reference,
+          moolreReference: moolreData.data.externalref,
+          moolreId: moolreId
+        });
+        return res.status(400).json({
+          success: false,
+          error: 'Reference mismatch: Moolre transaction reference does not match deposit reference',
+          expectedReference: transaction.moolre_reference,
+          moolreReference: moolreData.data.externalref,
+          moolreId: moolreId
+        });
+      }
     }
 
     // Parse transaction status
