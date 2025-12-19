@@ -48,13 +48,15 @@ const ServicesPage = ({ user, onLogout }) => {
     try {
       // Fetch services from Supabase only
       // Only fetch enabled services for users
-      let query = supabase.from('services').select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, created_at').eq('enabled', true);
+      let query = supabase.from('services').select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, display_order, created_at').eq('enabled', true);
       
       if (selectedPlatform !== 'all') {
         query = query.eq('platform', selectedPlatform);
       }
       
-      const { data, error } = await query.order('created_at', { ascending: false });
+      const { data, error } = await query
+        .order('display_order', { ascending: true })
+        .order('created_at', { ascending: false });
       
       if (error) throw error;
       setServices(data || []);

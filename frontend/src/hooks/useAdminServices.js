@@ -7,7 +7,8 @@ import { toast } from 'sonner';
 const fetchServices = async () => {
   const { data, error } = await supabase
     .from('services')
-    .select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, created_at')
+    .select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, display_order, created_at')
+    .order('display_order', { ascending: true })
     .order('created_at', { ascending: false });
 
   if (error) throw error;
@@ -38,6 +39,20 @@ export const useCreateService = () => {
 
   return useMutation({
     mutationFn: async (serviceData) => {
+      // If display_order is not provided, set it to max + 1
+      if (serviceData.display_order === undefined) {
+        const { data: existingServices } = await supabase
+          .from('services')
+          .select('display_order')
+          .order('display_order', { ascending: false })
+          .limit(1);
+        
+        const maxOrder = existingServices && existingServices.length > 0 
+          ? existingServices[0].display_order 
+          : -1;
+        serviceData.display_order = maxOrder + 1;
+      }
+
       const { data, error } = await supabase
         .from('services')
         .insert(serviceData)
@@ -103,6 +118,47 @@ export const useDeleteService = () => {
     },
     onError: (error) => {
       toast.error(error.message || 'Failed to delete service');
+    },
+  });
+};
+
+export const useReorderServices = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (serviceIds) => {
+      // serviceIds is an array of service IDs in the new order
+      // We need to update each service's display_order to match its position in the array
+      const updates = serviceIds.map((serviceId, index) => ({
+        id: serviceId,
+        display_order: index
+      }));
+
+      // Batch update all services
+      const updatePromises = updates.map(({ id, display_order }) =>
+        supabase
+          .from('services')
+          .update({ display_order })
+          .eq('id', id)
+      );
+
+      const results = await Promise.all(updatePromises);
+      
+      // Check for errors
+      const errors = results.filter(result => result.error);
+      if (errors.length > 0) {
+        throw new Error(errors[0].error.message || 'Failed to reorder services');
+      }
+
+      return results;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'services'] });
+      queryClient.invalidateQueries({ queryKey: ['services'] }); // Also invalidate user-facing services
+      toast.success('Services reordered successfully');
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to reorder services');
     },
   });
 };

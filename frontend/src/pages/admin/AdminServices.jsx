@@ -1,5 +1,5 @@
-import React, { memo, useState, useMemo, useCallback } from 'react';
-import { useAdminServices, useCreateService, useUpdateService, useDeleteService } from '@/hooks/useAdminServices';
+import React, { memo, useState, useMemo, useCallback, useEffect } from 'react';
+import { useAdminServices, useCreateService, useUpdateService, useDeleteService, useReorderServices } from '@/hooks/useAdminServices';
 import { useDebounce } from '@/hooks/useDebounce';
 import ServiceEditForm from '@/components/admin/ServiceEditForm';
 import { Button } from '@/components/ui/button';
@@ -7,9 +7,161 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, RefreshCw, Edit, Trash2, Power, PowerOff, Layers, CheckCircle } from 'lucide-react';
+import { Search, RefreshCw, Edit, Trash2, Power, PowerOff, Layers, CheckCircle, GripVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+// Sortable Service Item Component
+const SortableServiceItem = memo(({ service, editingService, onEdit, onToggle, onDelete, updateServicePending, deleteServicePending, onSave, onCancel }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: service.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div 
+      ref={setNodeRef}
+      style={style}
+      className={`p-4 rounded-xl transition-all ${
+        service.enabled === false 
+          ? 'bg-gray-100/50 border-2 border-gray-300 opacity-75' 
+          : 'bg-white/50 border-2 border-green-200'
+      } ${isDragging ? 'cursor-grabbing' : ''}`}
+    >
+      {editingService?.id === service.id ? (
+        <ServiceEditForm 
+          service={service} 
+          onSave={onSave}
+          onCancel={onCancel}
+        />
+      ) : (
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="flex items-start gap-3 flex-1">
+            <button
+              {...attributes}
+              {...listeners}
+              className="mt-1 cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 transition-colors"
+              aria-label="Drag to reorder"
+            >
+              <GripVertical className="w-5 h-5" />
+            </button>
+            <div className="flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  {service.enabled !== false ? (
+                    <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse"></div>
+                  ) : (
+                    <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                  )}
+                  <p className={`font-medium ${service.enabled === false ? 'text-gray-500 line-through' : 'text-gray-900'}`}>
+                    {service.name}
+                  </p>
+                </div>
+                {service.enabled !== false ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded-full border border-green-300">
+                    <CheckCircle className="w-3 h-3" />
+                    Enabled
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-700 text-xs font-medium rounded-full border border-red-300">
+                    <PowerOff className="w-3 h-3" />
+                    Disabled
+                  </span>
+                )}
+                {service.is_combo && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full">
+                    <Layers className="w-3 h-3" />
+                    Combo
+                  </span>
+                )}
+                {service.seller_only && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs font-medium rounded-full">
+                    Seller Only
+                  </span>
+                )}
+              </div>
+              <p className={`text-sm ${service.enabled === false ? 'text-gray-400' : 'text-gray-600'}`}>
+                {service.platform} • {service.service_type}
+              </p>
+              <p className={`text-sm ${service.enabled === false ? 'text-gray-400' : 'text-gray-600'}`}>
+                Rate: ₵{service.rate}/1K • Qty: {service.min_quantity}-{service.max_quantity}
+              </p>
+              {service.is_combo && service.combo_service_ids && (
+                <p className="text-xs text-purple-600 mt-1">
+                  Includes {service.combo_service_ids.length} service{service.combo_service_ids.length !== 1 ? 's' : ''}
+                </p>
+              )}
+              {service.smmgen_service_id && (
+                <p className="text-xs text-gray-500 mt-1">
+                  SMMGen ID: {service.smmgen_service_id}
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => onToggle(service.id, service.enabled === true)}
+              variant={service.enabled === true ? "outline" : "default"}
+              size="sm"
+              className={service.enabled === true ? "" : "bg-green-600 hover:bg-green-700 text-white"}
+              title={service.enabled === true ? "Disable service" : "Enable service"}
+              disabled={updateServicePending}
+            >
+              {service.enabled === true ? (
+                <PowerOff className="w-4 h-4" />
+              ) : (
+                <Power className="w-4 h-4" />
+              )}
+            </Button>
+            <Button
+              onClick={() => onEdit(service)}
+              variant="outline"
+              size="sm"
+            >
+              <Edit className="w-4 h-4" />
+            </Button>
+            <Button
+              onClick={() => onDelete(service.id)}
+              variant="destructive"
+              size="sm"
+              disabled={deleteServicePending}
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
+
+SortableServiceItem.displayName = 'SortableServiceItem';
 
 const AdminServices = memo(() => {
   const queryClient = useQueryClient();
@@ -17,9 +169,26 @@ const AdminServices = memo(() => {
   const createService = useCreateService();
   const updateService = useUpdateService();
   const deleteService = useDeleteService();
+  const reorderServices = useReorderServices();
 
   const [serviceSearch, setServiceSearch] = useState('');
   const [editingService, setEditingService] = useState(null);
+  const [servicesOrder, setServicesOrder] = useState([]);
+
+  // Initialize services order when services data changes
+  useEffect(() => {
+    if (services.length > 0 && servicesOrder.length === 0) {
+      setServicesOrder(services.map(s => s.id));
+    }
+  }, [services, servicesOrder.length]);
+
+  // Sensors for drag and drop
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
   const [serviceForm, setServiceForm] = useState({
     platform: '',
     service_type: '',
@@ -39,14 +208,37 @@ const AdminServices = memo(() => {
   const debouncedSearch = useDebounce(serviceSearch, 300);
 
   const filteredServices = useMemo(() => {
-    if (!debouncedSearch) return services;
+    if (!debouncedSearch) {
+      // When not searching, maintain the order from servicesOrder
+      const orderedServices = servicesOrder
+        .map(id => services.find(s => s.id === id))
+        .filter(Boolean);
+      // Add any services that might not be in the order array (newly created)
+      const unorderedServices = services.filter(s => !servicesOrder.includes(s.id));
+      return [...orderedServices, ...unorderedServices];
+    }
+    // When searching, filter and maintain original order
     const searchLower = debouncedSearch.toLowerCase();
     return services.filter(s =>
       s.name?.toLowerCase().includes(searchLower) ||
       s.platform?.toLowerCase().includes(searchLower) ||
       s.service_type?.toLowerCase().includes(searchLower)
     );
-  }, [services, debouncedSearch]);
+  }, [services, debouncedSearch, servicesOrder]);
+
+  const handleDragEnd = useCallback((event) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const oldIndex = servicesOrder.indexOf(active.id);
+      const newIndex = servicesOrder.indexOf(over.id);
+      const newOrder = arrayMove(servicesOrder, oldIndex, newIndex);
+      setServicesOrder(newOrder);
+      
+      // Update the order in the database
+      reorderServices.mutate(newOrder);
+    }
+  }, [servicesOrder, reorderServices]);
 
   const handleCreateService = useCallback(async (e) => {
     e.preventDefault();
@@ -439,11 +631,12 @@ const AdminServices = memo(() => {
             />
           </div>
         </div>
-        <div className="space-y-4">
-          {filteredServices.length === 0 ? (
-            <p className="text-gray-600 text-center py-8">No services found</p>
-          ) : (
-            filteredServices.map((service) => (
+        {filteredServices.length === 0 ? (
+          <p className="text-gray-600 text-center py-8">No services found</p>
+        ) : debouncedSearch ? (
+          // When searching, show services without drag and drop
+          <div className="space-y-4">
+            {filteredServices.map((service) => (
               <div 
                 key={service.id} 
                 className={`p-4 rounded-xl transition-all ${
@@ -546,9 +739,38 @@ const AdminServices = memo(() => {
                   </div>
                 )}
               </div>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        ) : (
+          // When not searching, enable drag and drop
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={filteredServices.map(s => s.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="space-y-4">
+                {filteredServices.map((service) => (
+                  <SortableServiceItem
+                    key={service.id}
+                    service={service}
+                    editingService={editingService}
+                    onEdit={setEditingService}
+                    onToggle={handleToggleService}
+                    onDelete={handleDeleteService}
+                    updateServicePending={updateService.isPending}
+                    deleteServicePending={deleteService.isPending}
+                    onSave={(updates) => handleUpdateService(service.id, updates)}
+                    onCancel={() => setEditingService(null)}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+        )}
       </div>
     </div>
   );
