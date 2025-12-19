@@ -24,6 +24,7 @@
  */
 
 import { verifyAuth, getServiceRoleClient } from './utils/auth.js';
+import { logUserAction } from './utils/activityLogger.js';
 
 export default async function handler(req, res) {
   // Enable CORS
@@ -166,6 +167,22 @@ export default async function handler(req, res) {
 
     // Check if order placement was successful
     if (!orderResult.success) {
+      // Log failed order placement
+      await logUserAction({
+        user_id: user.id,
+        action_type: 'order_placement_failed',
+        description: `Order placement failed: ${orderResult.message || 'Unknown error'}`,
+        metadata: {
+          service_id: service_id || null,
+          package_id: package_id || null,
+          link: link.trim(),
+          quantity: quantityNum,
+          total_cost: totalCostNum,
+          error: orderResult.message
+        },
+        req
+      });
+      
       return res.status(400).json({
         error: orderResult.message || 'Order placement failed',
         success: false,
@@ -184,6 +201,27 @@ export default async function handler(req, res) {
       console.warn('Failed to fetch order details:', orderError);
       // Order was created but we can't fetch details - still return success
     }
+
+    // Log successful order placement
+    await logUserAction({
+      user_id: user.id,
+      action_type: 'order_placed',
+      entity_type: 'order',
+      entity_id: orderResult.order_id,
+      description: `Order placed: ${quantityNum} items for ${totalCostNum}`,
+      metadata: {
+        order_id: orderResult.order_id,
+        service_id: service_id || null,
+        package_id: package_id || null,
+        link: link.trim(),
+        quantity: quantityNum,
+        total_cost: totalCostNum,
+        old_balance: orderResult.old_balance,
+        new_balance: orderResult.new_balance,
+        smmgen_order_id: smmgenOrderIdString
+      },
+      req
+    });
 
     // Success
     return res.status(200).json({

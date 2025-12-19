@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { verifyTransactionOwner } from './utils/auth.js';
+import { logAdminAction, logSecurityEvent } from './utils/activityLogger.js';
 
 export default async function handler(req, res) {
   // Enable CORS
@@ -44,11 +45,25 @@ export default async function handler(req, res) {
     // Authenticate user and verify transaction ownership (users can approve their own, admins can approve any)
     let transaction;
     let isAdmin;
+    let user;
     try {
       const authResult = await verifyTransactionOwner(req, transaction_id);
       transaction = authResult.transaction;
       isAdmin = authResult.isAdmin;
+      user = authResult.user;
     } catch (authError) {
+      // Log failed authentication attempt
+      await logSecurityEvent({
+        action_type: 'deposit_approval_failed',
+        description: `Failed deposit approval attempt: ${authError.message}`,
+        metadata: {
+          transaction_id,
+          payment_method: payment_method || null,
+          error: authError.message
+        },
+        req
+      });
+      
       // Handle authentication errors
       if (authError.message === 'Missing or invalid authorization header' ||
         authError.message === 'Missing authentication token' ||
@@ -171,6 +186,28 @@ export default async function handler(req, res) {
         payment_reference: payment_reference || null
       });
     }
+
+    // Log successful deposit approval
+    await logAdminAction({
+      user_id: user.id,
+      action_type: isAdmin ? 'deposit_approved_admin' : 'deposit_approved_user',
+      entity_type: 'transaction',
+      entity_id: transaction_id,
+      description: `Deposit ${approvalResult.new_status === 'approved' ? 'approved' : 'updated'} via ${method}`,
+      metadata: {
+        transaction_id,
+        payment_method: method,
+        payment_status: status,
+        payment_reference: payment_reference || null,
+        old_status: approvalResult.old_status,
+        new_status: approvalResult.new_status,
+        old_balance: approvalResult.old_balance,
+        new_balance: approvalResult.new_balance,
+        amount: transaction.amount,
+        is_admin: isAdmin
+      },
+      req
+    });
 
     // Success
     return res.status(200).json({

@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { RefreshCw, Power, PowerOff, CheckCircle, Wallet, Save } from 'lucide-react';
 import { toast } from 'sonner';
+import { logUserActivity } from '@/lib/activityLogger';
 
 const AdminSettings = memo(() => {
   const queryClient = useQueryClient();
@@ -161,13 +162,35 @@ const AdminSettings = memo(() => {
       if (error) throw error;
       return { stateKey, enabled, displayName };
     },
-    onSuccess: ({ stateKey, enabled, displayName }) => {
+    onSuccess: async ({ stateKey, enabled, displayName }) => {
       setPaymentMethodSettings(prev => ({
         ...prev,
         [stateKey]: enabled
       }));
       queryClient.invalidateQueries({ queryKey: ['admin', 'payment-settings'] });
       queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
+      
+      // Log settings change
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await logUserActivity({
+            action_type: 'settings_changed',
+            entity_type: 'settings',
+            description: `${displayName} payment method ${enabled ? 'enabled' : 'disabled'}`,
+            metadata: {
+              setting_key: `payment_method_${displayName.toLowerCase().replace(' ', '_')}_enabled`,
+              old_value: !enabled,
+              new_value: enabled
+            },
+            severity: 'security'
+          });
+        }
+      } catch (error) {
+        // Silently fail - don't block settings update
+        console.warn('Failed to log settings change:', error);
+      }
+      
       toast.success(`${displayName} payment method ${enabled ? 'enabled' : 'disabled'}`);
     },
     onError: (error) => {
@@ -231,12 +254,33 @@ const AdminSettings = memo(() => {
       if (error) throw error;
       return { stateKey, amount, displayName };
     },
-    onSuccess: ({ stateKey, amount, displayName }) => {
+    onSuccess: async ({ stateKey, amount, displayName }) => {
       setMinDepositSettings(prev => ({
         ...prev,
         [stateKey]: amount
       }));
       queryClient.invalidateQueries({ queryKey: ['admin', 'payment-settings'] });
+      
+      // Log settings change
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await logUserActivity({
+            action_type: 'settings_changed',
+            entity_type: 'settings',
+            description: `${displayName} minimum deposit updated to ₵${amount}`,
+            metadata: {
+              setting_key: `payment_method_${displayName.toLowerCase().replace(' ', '_')}_min_deposit`,
+              new_value: amount
+            },
+            severity: 'info'
+          });
+        }
+      } catch (error) {
+        // Silently fail - don't block settings update
+        console.warn('Failed to log settings change:', error);
+      }
+      
       toast.success(`${displayName} minimum deposit updated to ₵${amount}`);
     },
     onError: (error) => {

@@ -268,6 +268,17 @@ function App() {
   };
 
   const logout = async () => {
+    // Log logout before signing out
+    if (user) {
+      try {
+        const { logLogout } = await import('@/lib/activityLogger');
+        await logLogout();
+      } catch (error) {
+        // Silently fail - don't block logout
+        console.warn('Failed to log logout:', error);
+      }
+    }
+    
     await supabase.auth.signOut();
     setUser(null);
   };
@@ -534,6 +545,18 @@ function App() {
               />
               <Route
                 path="/admin/referrals"
+                element={
+                  user?.role === 'admin' ? (
+                    <AdminDashboard user={user} onLogout={logout} />
+                  ) : user ? (
+                    <Navigate to="/dashboard" />
+                  ) : (
+                    <Navigate to="/auth" />
+                  )
+                }
+              />
+              <Route
+                path="/admin/activity-logs"
                 element={
                   user?.role === 'admin' ? (
                     <AdminDashboard user={user} onLogout={logout} />

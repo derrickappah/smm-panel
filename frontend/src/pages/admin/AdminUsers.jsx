@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, RefreshCw, Edit, Download, Eye, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { toast } from 'sonner';
+import { logUserActivity } from '@/lib/activityLogger';
 
 const ITEMS_PER_PAGE = 50;
 const VIRTUAL_SCROLL_THRESHOLD = 100;
@@ -189,6 +190,20 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
   const handleUpdateUser = useCallback(async (userId, updates) => {
     try {
       await updateUserMutation.mutateAsync({ userId, updates });
+      
+      // Log admin action
+      await logUserActivity({
+        action_type: 'user_updated',
+        entity_type: 'user',
+        entity_id: userId,
+        description: `Admin updated user: ${Object.keys(updates).join(', ')}`,
+        metadata: {
+          updated_fields: Object.keys(updates),
+          updates: updates
+        },
+        severity: 'info'
+      });
+      
       setEditingUser(null);
       if (onRefresh) {
         onRefresh();

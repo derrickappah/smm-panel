@@ -1,4 +1,5 @@
 import { verifyAuth } from './utils/auth.js';
+import { logUserAction } from './utils/activityLogger.js';
 
 export default async function handler(req, res) {
   // Enable CORS
@@ -18,8 +19,10 @@ export default async function handler(req, res) {
 
   try {
     // Authenticate user
+    let user;
     try {
-      await verifyAuth(req);
+      const authResult = await verifyAuth(req);
+      user = authResult.user;
     } catch (authError) {
       return res.status(401).json({
         error: 'Authentication required',
@@ -106,6 +109,23 @@ export default async function handler(req, res) {
 
     if (moolreData.code === '200_PAYMENT_REQ') {
       // Payment prompt sent successfully
+      // Log payment initiation
+      await logUserAction({
+        user_id: user.id,
+        action_type: 'payment_initiated',
+        entity_type: 'transaction',
+        description: `Moolre payment initiated: ${amount} ${currency}`,
+        metadata: {
+          amount,
+          currency,
+          reference,
+          channel,
+          payment_method: 'moolre',
+          code: '200_PAYMENT_REQ'
+        },
+        req
+      });
+      
       return res.status(200).json({
         success: true,
         requiresOtp: false,

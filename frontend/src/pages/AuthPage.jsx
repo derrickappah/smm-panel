@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { supabase, isConfigured } from '@/lib/supabase';
+import { logLoginAttempt } from '@/lib/activityLogger';
 import SEO from '@/components/SEO';
 
 // Email validation function with TLD validation
@@ -221,12 +222,25 @@ const AuthPage = () => {
             errorMsg = error.message || 'Login failed. Please try again.';
           }
           
+          // Log failed login attempt
+          await logLoginAttempt({
+            success: false,
+            email: formData.email.trim(),
+            error: errorMsg
+          });
+          
           toast.error(errorMsg);
           setLoading(false);
           return;
         }
 
         if (data.user) {
+          // Log successful login
+          await logLoginAttempt({
+            success: true,
+            email: formData.email.trim()
+          });
+          
           toast.success('Welcome back!');
           
           // Create profile if it doesn't exist (non-blocking)

@@ -20,6 +20,7 @@
  */
 
 import { verifyAdmin, getServiceRoleClient } from './utils/auth.js';
+import { logAdminAction, logSecurityEvent } from './utils/activityLogger.js';
 
 export default async function handler(req, res) {
   // Enable CORS
@@ -39,9 +40,23 @@ export default async function handler(req, res) {
 
   try {
     // Authenticate admin user
+    let adminUser;
     try {
-      await verifyAdmin(req);
+      const authResult = await verifyAdmin(req);
+      adminUser = authResult.user;
     } catch (authError) {
+      // Log failed admin authentication attempt
+      await logSecurityEvent({
+        action_type: 'manual_verification_failed',
+        description: `Failed manual Moolre Web verification attempt: ${authError.message}`,
+        metadata: {
+          transaction_id: req.body?.transactionId || null,
+          reference: req.body?.reference || null,
+          error: authError.message
+        },
+        req
+      });
+      
       if (authError.message === 'Missing or invalid authorization header' ||
           authError.message === 'Missing authentication token' ||
           authError.message === 'Invalid or expired token') {
@@ -446,6 +461,27 @@ export default async function handler(req, res) {
         .update({ moolre_reference: moolreReferenceFromResponse })
         .eq('id', transaction.id);
     }
+
+    // Log successful manual verification
+    await logAdminAction({
+      user_id: adminUser.id,
+      action_type: 'deposit_manually_verified',
+      entity_type: 'transaction',
+      entity_id: transaction.id,
+      description: `Manual Moolre Web deposit verification: ${paymentStatus}`,
+      metadata: {
+        transaction_id: transaction.id,
+        moolre_id: moolreId,
+        moolre_status: paymentStatus,
+        txstatus: txstatus,
+        old_status: updateResult?.oldStatus || transaction.status,
+        new_status: updateResult?.newStatus || transaction.status,
+        amount: transaction.amount,
+        deposit_method: 'moolre_web',
+        balance_updated: updateResult?.balanceUpdated || false
+      },
+      req
+    });
 
     return res.status(200).json({
       success: true,
