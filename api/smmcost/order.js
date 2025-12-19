@@ -107,15 +107,17 @@ export default async function handler(req, res) {
 
     try {
       // Call SMMCost API
-      // NOTE: API endpoint and request format may need adjustment based on actual API documentation
-      // Common patterns: POST /api/order, POST /api/v1/order, or POST with action parameter
-      const response = await fetch(`${SMMCOST_API_URL}/api/order`, {
+      // Using POST with action parameter (similar to SMMGen pattern)
+      // If SMMCost uses different endpoints, adjust SMMCOST_API_URL accordingly
+      const response = await fetch(SMMCOST_API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-API-Key': SMMCOST_API_KEY, // API key in header (adjust header name if needed)
         },
         body: JSON.stringify({
+          action: 'add', // or 'order' depending on SMMCost API
+          key: SMMCOST_API_KEY, // Some APIs also require key in body
           service: serviceId,
           link: link.trim(),
           quantity: quantityNum

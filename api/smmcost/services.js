@@ -40,15 +40,19 @@ export default async function handler(req, res) {
 
     try {
       // Call SMMCost API
-      // NOTE: API endpoint and request format may need adjustment based on actual API documentation
-      // Common patterns: /api/services, /api/v1/services, or POST with action parameter
-      const response = await fetch(`${SMMCOST_API_URL}/api/services`, {
-        method: 'GET',
+      // Using POST with action parameter (similar to SMMGen pattern)
+      // If SMMCost uses different endpoints, adjust SMMCOST_API_URL accordingly
+      const response = await fetch(SMMCOST_API_URL, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-API-Key': SMMCOST_API_KEY, // API key in header (adjust header name if needed)
           // Alternative header names: 'Authorization', 'API-Key', 'apikey'
         },
+        body: JSON.stringify({
+          action: 'services',
+          key: SMMCOST_API_KEY // Some APIs also require key in body
+        }),
         signal: controller.signal
       });
 
