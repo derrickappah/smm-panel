@@ -3,6 +3,7 @@
 
 import { supabase } from './supabase';
 import { getSMMGenOrderStatus } from './smmgen';
+import { getSMMCostOrderStatus } from './smmcost';
 import { saveOrderStatusHistory } from './orderStatusHistory';
 
 /**
@@ -28,14 +29,40 @@ const mapSMMGenStatus = (smmgenStatus) => {
 };
 
 /**
+ * Map SMMCost status to our status format (same mapping as SMMGen)
+ * @param {string} smmcostStatus - Status from SMMCost API
+ * @returns {string|null} Mapped status or null if unknown
+ */
+const mapSMMCostStatus = (smmcostStatus) => {
+  if (!smmcostStatus) return null;
+  
+  const statusString = String(smmcostStatus).trim();
+  const statusLower = statusString.toLowerCase();
+  
+  if (statusLower === 'pending' || statusLower.includes('pending')) return 'pending';
+  if (statusLower === 'in progress' || statusLower.includes('in progress')) return 'in progress';
+  if (statusLower === 'completed' || statusLower.includes('completed')) return 'completed';
+  if (statusLower === 'partial' || statusLower.includes('partial')) return 'partial';
+  if (statusLower === 'processing' || statusLower.includes('processing')) return 'processing';
+  if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower.includes('cancel')) return 'canceled';
+  if (statusLower === 'refunds' || statusLower.includes('refund')) return 'refunds';
+  
+  return null;
+};
+
+/**
  * Check if an order should be checked for status updates
  * @param {Object} order - Order object
  * @param {number} minIntervalMinutes - Minimum minutes since last check (default: 5)
  * @returns {boolean} True if order should be checked
  */
 export const shouldCheckOrder = (order, minIntervalMinutes = 5) => {
-  // Skip if no valid SMMGen order ID
-  if (!order.smmgen_order_id || order.smmgen_order_id === "order not placed at smm gen") {
+  // Check if order has SMMGen or SMMCost order ID
+  const hasSmmgenId = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
+  const hasSmmcostId = order.smmcost_order_id && order.smmcost_order_id > 0;
+  
+  // Skip if no valid order ID from either panel
+  if (!hasSmmgenId && !hasSmmcostId) {
     return false;
   }
 
@@ -74,12 +101,30 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
   };
 
   try {
-    // Get status from SMMGen
-    const statusData = await getSMMGenOrderStatus(order.smmgen_order_id);
-    
-    // Map SMMGen status to our format
-    const smmgenStatus = statusData.status || statusData.Status;
-    const mappedStatus = mapSMMGenStatus(smmgenStatus);
+    let statusData = null;
+    let mappedStatus = null;
+    let panelSource = null;
+
+    // Check if order has SMMGen or SMMCost order ID
+    const hasSmmgenId = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
+    const hasSmmcostId = order.smmcost_order_id && order.smmcost_order_id > 0;
+
+    // Prioritize SMMCost if both exist, otherwise use whichever is available
+    if (hasSmmcostId) {
+      // Get status from SMMCost
+      statusData = await getSMMCostOrderStatus(order.smmcost_order_id);
+      const smmcostStatus = statusData?.status || statusData?.Status;
+      mappedStatus = mapSMMCostStatus(smmcostStatus);
+      panelSource = 'smmcost';
+    } else if (hasSmmgenId) {
+      // Get status from SMMGen
+      statusData = await getSMMGenOrderStatus(order.smmgen_order_id);
+      const smmgenStatus = statusData?.status || statusData?.Status;
+      mappedStatus = mapSMMGenStatus(smmgenStatus);
+      panelSource = 'smmgen';
+    } else {
+      throw new Error('Order has no valid panel order ID');
+    }
 
     // Update if status changed and order is not refunded
     if (mappedStatus && mappedStatus !== order.status && order.status !== 'refunded') {
@@ -87,7 +132,7 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
       await saveOrderStatusHistory(
         order.id,
         mappedStatus,
-        'smmgen',
+        panelSource,
         statusData,
         order.status
       );
@@ -132,7 +177,8 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
     console.error(`Error checking order status for order ${order.id}:`, {
       error: error.message,
       orderId: order.id,
-      smmgenOrderId: order.smmgen_order_id
+      smmgenOrderId: order.smmgen_order_id,
+      smmcostOrderId: order.smmcost_order_id
     });
     result.error = error.message;
   }
@@ -202,12 +248,14 @@ export const checkOrdersStatusBatch = async (orders, options = {}) => {
   }
 
   // Batch update last_status_check for orders that were skipped (not checked recently)
-  const skippedOrders = orders.filter(order => !shouldCheckOrder(order, minIntervalMinutes) && 
-    order.smmgen_order_id && 
-    order.smmgen_order_id !== "order not placed at smm gen" &&
-    order.status !== 'completed' &&
-    order.status !== 'refunded'
-  );
+  const skippedOrders = orders.filter(order => {
+    const hasSmmgenId = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
+    const hasSmmcostId = order.smmcost_order_id && order.smmcost_order_id > 0;
+    return !shouldCheckOrder(order, minIntervalMinutes) && 
+      (hasSmmgenId || hasSmmcostId) &&
+      order.status !== 'completed' &&
+      order.status !== 'refunded';
+  });
 
   if (skippedOrders.length > 0) {
     // Update last_status_check for skipped orders in batch (they were filtered out but still valid)

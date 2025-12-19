@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { placeSMMGenOrder } from '@/lib/smmgen';
+import { placeSMMCostOrder } from '@/lib/smmcost';
 import { saveOrderStatusHistory } from '@/lib/orderStatusHistory';
 import { normalizePhoneNumber } from '@/utils/phoneUtils';
 import Navbar from '@/components/Navbar';
@@ -3507,10 +3508,84 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         smmgenOrderId = "order not placed at smm gen";
       }
 
+      // Place order via SMMCost API if service has SMMCost ID
+      let smmcostOrderId = null;
+      if (service.smmcost_service_id) {
+        console.log('Attempting to place SMMCost order:', {
+          serviceId: service.smmcost_service_id,
+          link: orderForm.link,
+          quantity: quantity
+        });
+        
+        try {
+          const smmcostResponse = await placeSMMCostOrder(
+            service.smmcost_service_id,
+            orderForm.link,
+            quantity
+          );
+          
+          console.log('SMMCost API response received:', smmcostResponse);
+          
+          // If SMMCost returns null, it means backend is not available (graceful skip)
+          if (smmcostResponse === null) {
+            console.warn('SMMCost returned null - backend unavailable or not configured');
+            // Mark as failure since we attempted but couldn't place the order
+          } else if (smmcostResponse) {
+            // Check if SMMCost returned an error response
+            if (smmcostResponse.error) {
+              console.warn('SMMCost returned error:', smmcostResponse.error);
+              // Don't extract order ID from error responses
+              smmcostOrderId = null;
+            } else {
+              // SMMCost API might return order ID in different fields (expecting numeric)
+              smmcostOrderId = smmcostResponse.order || 
+                              smmcostResponse.order_id || 
+                              smmcostResponse.orderId || 
+                              smmcostResponse.id || 
+                              null;
+              // Ensure it's a number
+              if (smmcostOrderId !== null) {
+                smmcostOrderId = typeof smmcostOrderId === 'string' ? parseInt(smmcostOrderId, 10) : smmcostOrderId;
+                if (isNaN(smmcostOrderId)) smmcostOrderId = null;
+              }
+              console.log('SMMCost order response:', smmcostResponse);
+              console.log('SMMCost order ID extracted:', smmcostOrderId);
+            }
+          }
+        } catch (smmcostError) {
+          console.error('SMMCost order error caught:', smmcostError);
+          // Only log actual API errors, not connection failures (which are handled gracefully)
+          if (!smmcostError.message?.includes('Failed to fetch') && 
+              !smmcostError.message?.includes('ERR_CONNECTION_REFUSED') &&
+              !smmcostError.message?.includes('Backend proxy server not running')) {
+            console.error('SMMCost order failed:', smmcostError);
+            
+            // If SMMCost API key is not configured, continue with local order only
+            if (smmcostError.message?.includes('API key not configured')) {
+              toast.warning('SMMCost API not configured. Order created locally.');
+            } else {
+              // For other SMMCost errors, fail the order and notify user
+              throw new Error(`SMMCost order failed: ${smmcostError.message}`);
+            }
+          }
+          // Continue with local order creation even if SMMCost fails (unless it's a critical error)
+        }
+        
+        // If SMMCost service ID exists but order failed (smmcostOrderId is still null), fail the order
+        if (smmcostOrderId === null && service.smmcost_service_id) {
+          console.log('SMMCost order failed - order will fail');
+          throw new Error('Failed to place order with SMMCost. Please try again or contact support.');
+        } else if (smmcostOrderId !== null) {
+          console.log('SMMCost order successful - order ID:', smmcostOrderId);
+        }
+      } else {
+        console.log('Service does not have SMMCost service ID - skipping SMMCost order placement');
+      }
+
       // Create order record in our database
-      console.log('Creating order with SMMGen ID:', smmgenOrderId);
+      console.log('Creating order with SMMGen ID:', smmgenOrderId, 'SMMCost ID:', smmcostOrderId);
       console.log('SMMGen ID type:', typeof smmgenOrderId);
-      console.log('SMMGen ID value before insert:', JSON.stringify(smmgenOrderId));
+      console.log('SMMCost ID type:', typeof smmcostOrderId);
       
       // Get JWT token for API authentication
       const { data: { session } } = await supabase.auth.getSession();
@@ -3535,7 +3610,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           link: orderForm.link,
           quantity: quantity,
           total_cost: totalCost,
-          smmgen_order_id: smmgenOrderIdString
+          smmgen_order_id: smmgenOrderIdString,
+          smmcost_order_id: smmcostOrderId
         })
       });
 

@@ -1,0 +1,634 @@
+// SMMCost API Integration
+// This service handles all interactions with SMMCost API via backend proxy
+
+// Backend proxy URL (to avoid CORS issues)
+// Priority: 1. Vercel serverless functions (same domain), 2. Custom backend URL, 3. Localhost
+const BACKEND_PROXY_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
+
+// Check if we're in production (Vercel)
+// In production, hostname will be something like 'smm-panel-ten.vercel.app'
+const isProduction = process.env.NODE_ENV === 'production' || 
+  (typeof window !== 'undefined' && 
+   window.location.hostname !== 'localhost' && 
+   window.location.hostname !== '127.0.0.1' &&
+   !window.location.hostname.includes('localhost'));
+
+// Cache for serverless function availability check
+let serverlessFunctionAvailable = null;
+let availabilityCheckTime = 0;
+const AVAILABILITY_CHECK_TTL = 60000; // Check every 60 seconds
+
+/**
+ * Check if serverless functions are available
+ * @returns {Promise<boolean>} True if serverless functions are available
+ */
+const checkServerlessFunctionAvailability = async () => {
+  const now = Date.now();
+  
+  // Return cached result if still valid
+  if (serverlessFunctionAvailable !== null && (now - availabilityCheckTime) < AVAILABILITY_CHECK_TTL) {
+    return serverlessFunctionAvailable;
+  }
+
+  // Only check in development
+  if (isProduction) {
+    serverlessFunctionAvailable = true;
+    availabilityCheckTime = now;
+    return true;
+  }
+
+  try {
+    // Try a simple OPTIONS request to check if serverless function exists
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second timeout
+    
+    const response = await fetch('/api/smmcost/order', {
+      method: 'OPTIONS',
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    serverlessFunctionAvailable = true;
+    availabilityCheckTime = now;
+    return true;
+  } catch (error) {
+    // Serverless function not available
+    serverlessFunctionAvailable = false;
+    availabilityCheckTime = now;
+    console.warn('Serverless functions not available, will try backend server if configured:', error.message);
+    return false;
+  }
+};
+
+// Get SMMCost config from environment variables
+const getSMMCostConfig = async () => {
+  let backendUrl;
+  let useServerlessFunctions = true;
+  let isConfigured = true;
+  
+  // Check if serverless functions are available
+  const serverlessAvailable = await checkServerlessFunctionAvailability();
+  
+  if (serverlessAvailable) {
+    // Use serverless functions at /api/smmcost
+    backendUrl = '/api/smmcost';
+    useServerlessFunctions = true;
+  } else {
+    // Fallback to backend server if configured
+    const customBackendUrl = process.env.REACT_APP_BACKEND_URL;
+    
+    if (customBackendUrl) {
+      backendUrl = customBackendUrl;
+      useServerlessFunctions = false;
+      console.log('Using backend server fallback:', customBackendUrl);
+    } else {
+      // No backend configured
+      isConfigured = false;
+      console.warn('Neither serverless functions nor backend server are available');
+    }
+  }
+  
+  return { backendUrl, isConfigured, useServerlessFunctions };
+};
+
+// Helper function to build the correct API endpoint URL
+const buildApiUrl = async (endpoint) => {
+  const { backendUrl, useServerlessFunctions } = await getSMMCostConfig();
+  
+  // Remove any trailing slashes from backendUrl and leading slashes from endpoint
+  let cleanBackendUrl = (backendUrl || '').replace(/\/+$/, '');
+  const cleanEndpoint = (endpoint || '').replace(/^\/+/, '');
+  
+  if (useServerlessFunctions) {
+    // Serverless functions: /api/smmcost/order, /api/smmcost/services, etc.
+    // backendUrl should be '/api/smmcost', endpoint should be 'order'
+    // Result: '/api/smmcost/order'
+    
+    // Safety check: if endpoint already contains /api/smmcost, don't duplicate it
+    if (cleanEndpoint.includes('/api/smmcost')) {
+      // Endpoint already has full path, use it as-is
+      return cleanEndpoint.startsWith('/') ? cleanEndpoint : `/${cleanEndpoint}`;
+    }
+    
+    const url = `${cleanBackendUrl}/${cleanEndpoint}`.replace(/\/+/g, '/');
+    // Ensure it starts with / for relative URLs
+    return url.startsWith('/') ? url : `/${url}`;
+  } else {
+    // Backend proxy: http://localhost:5000/api/smmcost/order
+    // Ensure backendUrl is a full URL (starts with http:// or https://)
+    // If it doesn't have a protocol, add http:// (for development)
+    if (!cleanBackendUrl.startsWith('http://') && !cleanBackendUrl.startsWith('https://')) {
+      // If it's just a hostname like 'localhost:5000', add http://
+      if (cleanBackendUrl.includes(':') || cleanBackendUrl.includes('.')) {
+        cleanBackendUrl = `http://${cleanBackendUrl}`;
+      } else {
+        // Fallback: assume it's a relative path
+        console.warn('Backend URL format unclear, using relative path:', cleanBackendUrl);
+        const url = `/api/smmcost/${cleanEndpoint}`.replace(/\/+/g, '/');
+        return url;
+      }
+    }
+    
+    // Construct the full URL
+    const url = `${cleanBackendUrl}/api/smmcost/${cleanEndpoint}`.replace(/\/+/g, '/');
+    
+    // Final validation: ensure it's a valid absolute URL
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      console.error('Invalid URL constructed:', url, 'from backendUrl:', backendUrl);
+      throw new Error(`Invalid backend URL configuration: ${backendUrl}`);
+    }
+    
+    return url;
+  }
+};
+
+/**
+ * Fetch all services from SMMCost API
+ * @returns {Promise<Array>} Array of services
+ */
+export const fetchSMMCostServices = async () => {
+  try {
+    const { backendUrl, isConfigured } = await getSMMCostConfig();
+
+    if (!isConfigured) {
+      console.warn('SMMCost backend not configured. Skipping service fetch.');
+      return [];
+    }
+
+    const apiUrl = await buildApiUrl('services');
+    
+    console.log('Fetching SMMCost services from:', apiUrl);
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+      throw new Error(errorData.error || errorData.message || `Failed to fetch services: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    // Validate response structure
+    if (!Array.isArray(data) && (!data.services || !Array.isArray(data.services))) {
+      console.warn('SMMCost API returned unexpected response format:', data);
+      return [];
+    }
+
+    // Return services array (handle both direct array and wrapped in object)
+    return Array.isArray(data) ? data : data.services || [];
+  } catch (error) {
+    console.error('SMMCost services error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Place order to SMMCost API with retry logic and comprehensive error handling
+ * @param {number|string} serviceId - SMMCost service ID (numeric)
+ * @param {string} link - Target URL
+ * @param {number} quantity - Quantity to order
+ * @param {number} retryCount - Internal parameter for retry attempts (default: 0)
+ * @returns {Promise<Object>} Order response from SMMCost
+ */
+export const placeSMMCostOrder = async (serviceId, link, quantity, retryCount = 0) => {
+  const MAX_RETRIES = 3;
+  const INITIAL_RETRY_DELAY = 1000; // 1 second
+  const REQUEST_TIMEOUT = 30000; // 30 seconds
+
+  // Input validation
+  const serviceIdNum = typeof serviceId === 'string' ? parseInt(serviceId, 10) : serviceId;
+  if (!serviceIdNum || isNaN(serviceIdNum) || serviceIdNum <= 0) {
+    const error = new Error('Invalid service ID: serviceId is required and must be a positive integer');
+    console.error('SMMCost Order Validation Error:', error);
+    throw error;
+  }
+
+  if (!link || typeof link !== 'string' || link.trim() === '') {
+    const error = new Error('Invalid link: link is required and must be a non-empty string');
+    console.error('SMMCost Order Validation Error:', error);
+    throw error;
+  }
+
+  if (!quantity || typeof quantity !== 'number' || quantity <= 0 || !Number.isInteger(quantity)) {
+    const error = new Error(`Invalid quantity: quantity must be a positive integer, got ${quantity}`);
+    console.error('SMMCost Order Validation Error:', error);
+    throw error;
+  }
+
+  try {
+    const { backendUrl, isConfigured, useServerlessFunctions } = await getSMMCostConfig();
+
+    // Log configuration for debugging
+    console.log('SMMCost Configuration:', {
+      backendUrl,
+      isConfigured,
+      useServerlessFunctions,
+      isProduction,
+      hasBackendUrl: !!process.env.REACT_APP_BACKEND_URL
+    });
+
+    // If backend is not configured, skip SMMCost integration
+    if (!isConfigured) {
+      console.warn('SMMCost backend not configured. Skipping SMMCost order placement.');
+      return null; // Return null to indicate SMMCost was skipped
+    }
+
+    const apiUrl = await buildApiUrl('order');
+    
+    // Comprehensive logging
+    console.log('SMMCost Order Request:', {
+      attempt: retryCount + 1,
+      maxRetries: MAX_RETRIES,
+      serviceId: serviceIdNum,
+      link: link.trim(),
+      quantity: quantity,
+      backendUrl,
+      apiUrl,
+      isConfigured,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Create abort controller for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+
+    try {
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          service: serviceIdNum,
+          link: link.trim(),
+          quantity: quantity
+        }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      // Log response status
+      console.log('SMMCost API Response Status:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        url: apiUrl
+      });
+
+      if (!response.ok) {
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (parseError) {
+          errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
+        }
+        
+        const errorMessage = errorData.error || errorData.message || `Order failed: ${response.status}`;
+        const fullError = new Error(errorMessage);
+        fullError.status = response.status;
+        fullError.responseData = errorData;
+        
+        console.error('SMMCost API Error Response:', {
+          status: response.status,
+          errorMessage,
+          errorData,
+          serviceId: serviceIdNum,
+          link,
+          quantity
+        });
+        
+        // Check for duplicate order errors - don't retry these
+        const errorMessageLower = errorMessage.toLowerCase();
+        if (errorMessageLower.includes('duplicate') || 
+            errorMessageLower.includes('already exists') ||
+            errorMessageLower.includes('already placed')) {
+          console.warn('SMMCost returned duplicate order error - not retrying:', errorMessage);
+          throw fullError;
+        }
+        
+        // For 4xx errors (client errors), don't retry - these are permanent failures
+        if (response.status >= 400 && response.status < 500) {
+          throw fullError;
+        }
+        
+        // For 5xx errors (server errors), retry if we haven't exceeded max retries
+        if (response.status >= 500 && retryCount < MAX_RETRIES) {
+          const delay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
+          console.warn(`SMMCost server error (${response.status}), retrying in ${delay}ms... (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return placeSMMCostOrder(serviceId, link, quantity, retryCount + 1);
+        }
+        
+        throw fullError;
+      }
+
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        console.error('SMMCost Response Parse Error:', parseError);
+        throw new Error('Invalid JSON response from SMMCost API');
+      }
+
+      // Log full response for debugging
+      console.log('SMMCost API Full Response:', JSON.stringify(data, null, 2));
+
+      // Validate response structure - check for order ID in various formats (expecting numeric)
+      const orderId = data.order || 
+                     data.order_id || 
+                     data.orderId || 
+                     data.id ||
+                     data.Order ||
+                     data.OrderID ||
+                     data.OrderId ||
+                     (data.data && (data.data.order || data.data.order_id || data.data.id)) ||
+                     null;
+
+      // Check for error in response even if status was 200
+      if (data.error || data.message?.toLowerCase().includes('error')) {
+        const errorMessage = data.error || data.message || 'Unknown error from SMMCost';
+        console.error('SMMCost returned error in response body:', {
+          error: errorMessage,
+          response: data,
+          serviceId: serviceIdNum,
+          link,
+          quantity
+        });
+        
+        // If we have an order ID despite the error, log it but still return the error
+        if (orderId) {
+          console.warn('SMMCost returned error but also provided order ID. This may indicate a partial success:', orderId);
+        }
+        
+        // Don't retry on client errors (4xx-like errors in response body)
+        if (errorMessage.toLowerCase().includes('duplicate') || 
+            errorMessage.toLowerCase().includes('already exists') ||
+            errorMessage.toLowerCase().includes('invalid')) {
+          throw new Error(errorMessage);
+        }
+      }
+
+      if (!orderId) {
+        console.warn('SMMCost response does not contain order ID in expected format:', {
+          response: data,
+          checkedFields: ['order', 'order_id', 'orderId', 'id', 'Order', 'OrderID', 'OrderId', 'data.order', 'data.order_id', 'data.id']
+        });
+        // Don't throw - return the response anyway, let the caller handle it
+      } else {
+        console.log('SMMCost Order ID extracted:', orderId);
+        // Log successful order placement
+        console.log('SMMCost order successfully placed:', {
+          orderId,
+          serviceId: serviceIdNum,
+          link: link.trim(),
+          quantity,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      // Validate response is an object
+      if (typeof data !== 'object' || data === null) {
+        throw new Error('SMMCost API returned invalid response format');
+      }
+
+      return data;
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      
+      // Handle timeout
+      if (fetchError.name === 'AbortError') {
+        const timeoutError = new Error(`Request timeout after ${REQUEST_TIMEOUT}ms`);
+        timeoutError.isTimeout = true;
+        
+        // Retry timeout errors if we haven't exceeded max retries
+        if (retryCount < MAX_RETRIES) {
+          const delay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
+          console.warn(`SMMCost request timeout, retrying in ${delay}ms... (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return placeSMMCostOrder(serviceId, link, quantity, retryCount + 1);
+        }
+        
+        throw timeoutError;
+      }
+      
+      throw fetchError;
+    }
+  } catch (error) {
+    // Check if this is a network/connection error that should be retried
+    const isNetworkError = error.name === 'TypeError' && 
+      (error.message.includes('Failed to fetch') || 
+       error.message.includes('NetworkError') ||
+       error.message.includes('ERR_CONNECTION_REFUSED') ||
+       error.message.includes('ERR_NETWORK') ||
+       error.message.includes('ERR_INTERNET_DISCONNECTED'));
+
+    const isCorsError = error.message.includes('CORS');
+    
+    // Retry network errors if we haven't exceeded max retries
+    if ((isNetworkError || isCorsError) && retryCount < MAX_RETRIES) {
+      const delay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
+      console.warn(`SMMCost network error (${error.message}), retrying in ${delay}ms... (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return placeSMMCostOrder(serviceId, link, quantity, retryCount + 1);
+    }
+    
+    // Log error details
+    console.error('SMMCost Order Error:', {
+      error: error.message,
+      errorName: error.name,
+      status: error.status,
+      responseData: error.responseData,
+      isNetworkError,
+      isCorsError,
+      retryCount,
+      serviceId,
+      link,
+      quantity,
+      stack: error.stack
+    });
+    
+    // For network errors after all retries, return null to allow graceful degradation
+    if (isNetworkError || isCorsError) {
+      if (!isProduction) {
+        console.debug('SMMCost backend unavailable after retries. Continuing with local order only.');
+      }
+      return null; // Return null to allow graceful degradation
+    }
+    
+    // For all other errors (API errors, validation errors, etc.), throw them
+    // These should be handled by the caller to show appropriate error messages
+    throw error;
+  }
+};
+
+/**
+ * Get order status from SMMCost API with retry logic and comprehensive error handling
+ * @param {number|string} orderId - SMMCost order ID (numeric)
+ * @param {number} retryCount - Internal parameter for retry attempts (default: 0)
+ * @returns {Promise<Object>} Order status
+ */
+export const getSMMCostOrderStatus = async (orderId, retryCount = 0) => {
+  const MAX_RETRIES = 3;
+  const INITIAL_RETRY_DELAY = 1000; // 1 second
+  const REQUEST_TIMEOUT = 20000; // 20 seconds (shorter than order placement)
+
+  // Input validation
+  const orderIdNum = typeof orderId === 'string' ? parseInt(orderId, 10) : orderId;
+  if (!orderIdNum || isNaN(orderIdNum) || orderIdNum <= 0) {
+    const error = new Error('Invalid order ID: orderId is required and must be a positive integer');
+    console.error('SMMCost Status Validation Error:', error);
+    throw error;
+  }
+
+  // Skip status check for failure messages
+  if (typeof orderId === 'string' && orderId.toLowerCase().includes('not placed')) {
+    console.warn('Skipping SMMCost status check for failed order:', orderId);
+    return null;
+  }
+
+  try {
+    const { backendUrl, isConfigured } = await getSMMCostConfig();
+
+    if (!isConfigured) {
+      console.warn('SMMCost backend not configured. Skipping status check.');
+      return null;
+    }
+
+    const apiUrl = await buildApiUrl('status');
+    
+    console.log('SMMCost Status Request:', {
+      attempt: retryCount + 1,
+      maxRetries: MAX_RETRIES,
+      orderId: orderIdNum,
+      apiUrl,
+      timestamp: new Date().toISOString()
+    });
+
+    // Create abort controller for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+
+    try {
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          order: orderIdNum
+        }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (parseError) {
+          errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
+        }
+        
+        const errorMessage = errorData.error || errorData.message || `Status check failed: ${response.status}`;
+        
+        // Retry on server errors
+        if (response.status >= 500 && retryCount < MAX_RETRIES) {
+          const delay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
+          console.warn(`SMMCost status server error (${response.status}), retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return getSMMCostOrderStatus(orderId, retryCount + 1);
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+      console.log('SMMCost Status Response:', data);
+      return data;
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      
+      if (fetchError.name === 'AbortError') {
+        if (retryCount < MAX_RETRIES) {
+          const delay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
+          console.warn(`SMMCost status timeout, retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return getSMMCostOrderStatus(orderId, retryCount + 1);
+        }
+        throw new Error(`Request timeout after ${REQUEST_TIMEOUT}ms`);
+      }
+      
+      throw fetchError;
+    }
+  } catch (error) {
+    console.error('SMMCost Status Error:', {
+      error: error.message,
+      orderId,
+      retryCount,
+      stack: error.stack
+    });
+    
+    // Don't throw for network errors - just return null
+    const isNetworkError = error.name === 'TypeError' && 
+      (error.message.includes('Failed to fetch') || 
+       error.message.includes('NetworkError'));
+    
+    if (isNetworkError && retryCount < MAX_RETRIES) {
+      const delay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
+      console.warn(`SMMCost status network error, retrying in ${delay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return getSMMCostOrderStatus(orderId, retryCount + 1);
+    }
+    
+    if (isNetworkError) {
+      return null; // Return null for network errors after retries
+    }
+    
+    throw error;
+  }
+};
+
+/**
+ * Get account balance from SMMCost API
+ * @returns {Promise<Object>} Balance information
+ */
+export const getSMMCostBalance = async () => {
+  try {
+    const { backendUrl, isConfigured } = await getSMMCostConfig();
+
+    if (!isConfigured) {
+      console.warn('SMMCost backend not configured. Skipping balance fetch.');
+      return null;
+    }
+
+    const apiUrl = await buildApiUrl('balance');
+    
+    console.log('Fetching SMMCost balance from:', apiUrl);
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+      throw new Error(errorData.error || errorData.message || `Failed to fetch balance: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log('SMMCost Balance Response:', data);
+    return data;
+  } catch (error) {
+    console.error('SMMCost balance error:', error);
+    throw error;
+  }
+};

@@ -8,7 +8,7 @@ import SEO from '@/components/SEO';
 import { 
   Users, ShoppingCart, DollarSign, Package, Wallet, Receipt, 
   MessageSquare, UserPlus, RefreshCw, BarChart3, Menu, X, LayoutDashboard, Tag,
-  ChevronLeft, ChevronRight, FileText
+  ChevronLeft, ChevronRight, FileText, Server
 } from 'lucide-react';
 import { useAdminOrders } from '@/hooks/useAdminOrders';
 import { useAdminDeposits } from '@/hooks/useAdminDeposits';
@@ -30,6 +30,7 @@ const AdminReferrals = lazy(() => import('@/pages/admin/AdminReferrals'));
 const AdminSettings = lazy(() => import('@/pages/admin/AdminSettings'));
 const AdminBalanceCheck = lazy(() => import('@/pages/admin/AdminBalanceCheck'));
 const AdminActivityLogs = lazy(() => import('@/pages/admin/AdminActivityLogs'));
+const AdminSMMCost = lazy(() => import('@/pages/admin/AdminSMMCost'));
 
 // Loading fallback component
 const ComponentLoader = () => (
@@ -68,7 +69,8 @@ const AdminDashboard = memo(({ user, onLogout }) => {
         'support': 'support',
         'balance': 'balance',
         'referrals': 'referrals',
-        'activity-logs': 'activity-logs'
+        'activity-logs': 'activity-logs',
+        'smmcost': 'smmcost'
       };
       return sectionMap[section] || 'dashboard';
     }
@@ -285,7 +287,8 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     support: 'Support',
     balance: 'Balance Check',
     referrals: 'Referrals',
-    'activity-logs': 'Activity Logs'
+    'activity-logs': 'Activity Logs',
+    smmcost: 'SMMCost Integration'
   };
 
   // Navigation items configuration
@@ -302,6 +305,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     { id: 'balance', label: 'Balance', icon: Wallet },
     { id: 'referrals', label: 'Referrals', icon: UserPlus },
     { id: 'activity-logs', label: 'Activity Logs', icon: FileText },
+    { id: 'smmcost', label: 'SMMCost', icon: Server },
   ];
 
   // Show skeleton loader while initial data is loading
@@ -701,6 +705,13 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                 <TabsContent value="referrals" className="lg:mt-0">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminReferrals />
+                  </Suspense>
+                </TabsContent>
+
+                {/* SMMCost Section */}
+                <TabsContent value="smmcost" className="lg:mt-0">
+                  <Suspense fallback={<ComponentLoader />}>
+                    <AdminSMMCost />
                   </Suspense>
                 </TabsContent>
 
