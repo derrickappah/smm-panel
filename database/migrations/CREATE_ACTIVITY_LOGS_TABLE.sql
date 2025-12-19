@@ -39,6 +39,11 @@ COMMENT ON COLUMN activity_logs.user_agent IS 'User agent string of the browser/
 -- Enable Row Level Security (RLS)
 ALTER TABLE activity_logs ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if they exist (to allow re-running this migration)
+DROP POLICY IF EXISTS "Users can view own activity logs" ON activity_logs;
+DROP POLICY IF EXISTS "Admins can view all activity logs" ON activity_logs;
+DROP POLICY IF EXISTS "Authenticated users can insert activity logs" ON activity_logs;
+
 -- Policy for users to view their own activity logs
 CREATE POLICY "Users can view own activity logs"
     ON activity_logs FOR SELECT
