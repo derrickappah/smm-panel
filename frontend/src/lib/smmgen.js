@@ -327,6 +327,15 @@ export const placeSMMGenOrder = async (serviceId, link, quantity, retryCount = 0
           quantity
         });
         
+        // Check for duplicate order errors - don't retry these
+        const errorMessageLower = errorMessage.toLowerCase();
+        if (errorMessageLower.includes('duplicate') || 
+            errorMessageLower.includes('already exists') ||
+            errorMessageLower.includes('already placed')) {
+          console.warn('SMMGen returned duplicate order error - not retrying:', errorMessage);
+          throw fullError;
+        }
+        
         // For 4xx errors (client errors), don't retry - these are permanent failures
         if (response.status >= 400 && response.status < 500) {
           throw fullError;
@@ -336,6 +345,13 @@ export const placeSMMGenOrder = async (serviceId, link, quantity, retryCount = 0
         if (response.status >= 500 && retryCount < MAX_RETRIES) {
           const delay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
           console.warn(`SMMGen server error (${response.status}), retrying in ${delay}ms... (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+          console.log('Retry attempt details:', {
+            serviceId: serviceId.trim(),
+            link: link.trim(),
+            quantity,
+            retryCount: retryCount + 1,
+            maxRetries: MAX_RETRIES
+          });
           await new Promise(resolve => setTimeout(resolve, delay));
           return placeSMMGenOrder(serviceId, link, quantity, retryCount + 1);
         }
@@ -365,6 +381,30 @@ export const placeSMMGenOrder = async (serviceId, link, quantity, retryCount = 0
                      (data.data && (data.data.order || data.data.order_id || data.data.id)) ||
                      null;
 
+      // Check for error in response even if status was 200
+      if (data.error || data.message?.toLowerCase().includes('error')) {
+        const errorMessage = data.error || data.message || 'Unknown error from SMMGen';
+        console.error('SMMGen returned error in response body:', {
+          error: errorMessage,
+          response: data,
+          serviceId,
+          link,
+          quantity
+        });
+        
+        // If we have an order ID despite the error, log it but still return the error
+        if (orderId) {
+          console.warn('SMMGen returned error but also provided order ID. This may indicate a partial success:', orderId);
+        }
+        
+        // Don't retry on client errors (4xx-like errors in response body)
+        if (errorMessage.toLowerCase().includes('duplicate') || 
+            errorMessage.toLowerCase().includes('already exists') ||
+            errorMessage.toLowerCase().includes('invalid')) {
+          throw new Error(errorMessage);
+        }
+      }
+
       if (!orderId) {
         console.warn('SMMGen response does not contain order ID in expected format:', {
           response: data,
@@ -373,6 +413,14 @@ export const placeSMMGenOrder = async (serviceId, link, quantity, retryCount = 0
         // Don't throw - return the response anyway, let the caller handle it
       } else {
         console.log('SMMGen Order ID extracted:', orderId);
+        // Log successful order placement to help track duplicates
+        console.log('SMMGen order successfully placed:', {
+          orderId,
+          serviceId: serviceId.trim(),
+          link: link.trim(),
+          quantity,
+          timestamp: new Date().toISOString()
+        });
       }
 
       // Validate response is an object

@@ -44,6 +44,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
   const [moolreOtpError, setMoolreOtpError] = useState(null);
   const [moolrePaymentStatus, setMoolrePaymentStatus] = useState(null); // 'waiting' | 'success' | 'failed' | null
   const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false); // Prevent duplicate order submissions
   const [pendingTransaction, setPendingTransaction] = useState(null);
   const [orderForm, setOrderForm] = useState({
     service_id: '',
@@ -3013,11 +3014,19 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
   const handleOrder = useCallback(async (e) => {
     e.preventDefault();
+    
+    // Prevent duplicate submissions
+    if (isSubmitting) {
+      console.warn('Order submission already in progress, ignoring duplicate request');
+      return;
+    }
+    
     if ((!orderForm.service_id && !orderForm.package_id) || !orderForm.link) {
       toast.error('Please fill all fields');
       return;
     }
 
+    setIsSubmitting(true);
     setLoading(true);
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -3035,6 +3044,33 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         // Check balance (use displayUser to allow immediate orders after deposit)
         if (displayUser.balance < totalCost) {
           throw new Error('Insufficient balance');
+        }
+
+        // Idempotency check: Check if an order with the same parameters already exists
+        const { data: existingOrders } = await supabase
+          .from('orders')
+          .select('id, smmgen_order_id, created_at')
+          .eq('user_id', authUser.id)
+          .eq('promotion_package_id', pkg.id)
+          .eq('link', orderForm.link.trim())
+          .eq('quantity', quantity)
+          .gte('created_at', new Date(Date.now() - 60000).toISOString()) // Last 60 seconds
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (existingOrders && existingOrders.length > 0) {
+          const existingOrder = existingOrders[0];
+          const existingSmmgenId = existingOrder.smmgen_order_id;
+          
+          // If order exists and has a valid SMMGen ID, reuse it
+          if (existingSmmgenId && existingSmmgenId !== "order not placed at smm gen") {
+            console.log('Duplicate order detected - reusing existing SMMGen order ID:', existingSmmgenId);
+            toast.warning('Order already placed. Please check your order history.');
+            return;
+          }
+          
+          // If order exists but SMMGen order failed, log it but allow retry
+          console.warn('Duplicate order detected but SMMGen order failed previously. Allowing retry.');
         }
 
         // Place order via SMMGen API if package has SMMGen ID
@@ -3182,6 +3218,37 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         let totalCost = 0;
         const orderPromises = [];
         const smmgenServiceIds = service.combo_smmgen_service_ids || [];
+
+        // Idempotency check for combo services: Check if orders with the same parameters already exist
+        const { data: existingComboOrders } = await supabase
+          .from('orders')
+          .select('id, smmgen_order_id, service_id, created_at')
+          .eq('user_id', authUser.id)
+          .eq('link', orderForm.link.trim())
+          .eq('quantity', quantity)
+          .in('service_id', componentServices.map(s => s.id))
+          .gte('created_at', new Date(Date.now() - 60000).toISOString()) // Last 60 seconds
+          .order('created_at', { ascending: false });
+
+        if (existingComboOrders && existingComboOrders.length > 0) {
+          // Check if all component services have existing orders
+          const existingServiceIds = new Set(existingComboOrders.map(o => o.service_id));
+          const allServicesExist = componentServices.every(s => existingServiceIds.has(s.id));
+          
+          if (allServicesExist) {
+            const hasValidSmmgenIds = existingComboOrders.some(
+              o => o.smmgen_order_id && o.smmgen_order_id !== "order not placed at smm gen"
+            );
+            
+            if (hasValidSmmgenIds) {
+              console.log('Duplicate combo order detected - orders already exist');
+              toast.warning('Combo order already placed. Please check your order history.');
+              return;
+            }
+            
+            console.warn('Duplicate combo order detected but SMMGen orders failed previously. Allowing retry.');
+          }
+        }
 
         for (let i = 0; i < componentServices.length; i++) {
           const componentService = componentServices[i];
@@ -3341,6 +3408,33 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         throw new Error('Insufficient balance');
       }
 
+      // Idempotency check: Check if an order with the same parameters already exists
+      const { data: existingOrders } = await supabase
+        .from('orders')
+        .select('id, smmgen_order_id, created_at')
+        .eq('user_id', authUser.id)
+        .eq('service_id', service.id)
+        .eq('link', orderForm.link.trim())
+        .eq('quantity', quantity)
+        .gte('created_at', new Date(Date.now() - 60000).toISOString()) // Last 60 seconds
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (existingOrders && existingOrders.length > 0) {
+        const existingOrder = existingOrders[0];
+        const existingSmmgenId = existingOrder.smmgen_order_id;
+        
+        // If order exists and has a valid SMMGen ID, reuse it
+        if (existingSmmgenId && existingSmmgenId !== "order not placed at smm gen") {
+          console.log('Duplicate order detected - reusing existing SMMGen order ID:', existingSmmgenId);
+          toast.warning('Order already placed. Please check your order history.');
+          return;
+        }
+        
+        // If order exists but SMMGen order failed, log it but allow retry
+        console.warn('Duplicate order detected but SMMGen order failed previously. Allowing retry.');
+      }
+
       // Place order via SMMGen API if service has SMMGen ID
       let smmgenOrderId = null;
       if (service.smmgen_service_id) {
@@ -3470,11 +3564,13 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         console.error('Error fetching recent orders:', error);
       });
     } catch (error) {
+      console.error('Order placement error:', error);
       toast.error(error.message || 'Failed to place order');
     } finally {
       setLoading(false);
+      setIsSubmitting(false);
     }
-  }, [orderForm, services, promotionPackages, displayUser, fetchRecentOrders, onUpdateUser]);
+  }, [orderForm, services, promotionPackages, displayUser, fetchRecentOrders, onUpdateUser, isSubmitting]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -3568,7 +3664,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             orderForm={orderForm}
             setOrderForm={setOrderForm}
             handleOrder={handleOrder}
-            loading={loading}
+            loading={loading || isSubmitting}
           />
         </div>
 

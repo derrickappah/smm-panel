@@ -111,6 +111,80 @@ export default async function handler(req, res) {
       ? String(smmgen_order_id) 
       : null;
 
+    // Idempotency check: Check if an order with the same parameters already exists
+    // This prevents duplicate orders even if frontend checks are bypassed
+    const duplicateCheckQuery = supabase
+      .from('orders')
+      .select('id, smmgen_order_id, created_at')
+      .eq('user_id', user.id)
+      .eq('link', link.trim())
+      .eq('quantity', quantityNum)
+      .gte('created_at', new Date(Date.now() - 60000).toISOString()); // Last 60 seconds
+
+    if (service_id) {
+      duplicateCheckQuery.eq('service_id', service_id);
+    } else if (package_id) {
+      duplicateCheckQuery.eq('promotion_package_id', package_id);
+    }
+
+    const { data: existingOrders, error: duplicateCheckError } = await duplicateCheckQuery
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (duplicateCheckError) {
+      console.warn('Error checking for duplicate orders:', duplicateCheckError);
+      // Continue with order placement if check fails
+    } else if (existingOrders && existingOrders.length > 0) {
+      const existingOrder = existingOrders[0];
+      const existingSmmgenId = existingOrder.smmgen_order_id;
+      
+      // If order exists and has a valid SMMGen ID, return it
+      if (existingSmmgenId && existingSmmgenId !== "order not placed at smm gen") {
+        console.log('Duplicate order detected at API level - returning existing order:', {
+          order_id: existingOrder.id,
+          smmgen_order_id: existingSmmgenId,
+          user_id: user.id,
+          link: link.trim(),
+          quantity: quantityNum
+        });
+        
+        // Log duplicate attempt
+        await logUserAction({
+          user_id: user.id,
+          action_type: 'duplicate_order_prevented',
+          entity_type: 'order',
+          entity_id: existingOrder.id,
+          description: `Duplicate order prevented: Order with same parameters already exists`,
+          metadata: {
+            existing_order_id: existingOrder.id,
+            existing_smmgen_order_id: existingSmmgenId,
+            service_id: service_id || null,
+            package_id: package_id || null,
+            link: link.trim(),
+            quantity: quantityNum,
+            total_cost: totalCostNum
+          },
+          req
+        });
+        
+        return res.status(409).json({
+          error: 'Duplicate order detected',
+          message: 'An order with the same parameters was recently placed. Please check your order history.',
+          success: false,
+          existing_order_id: existingOrder.id,
+          existing_smmgen_order_id: existingSmmgenId
+        });
+      }
+      
+      // If order exists but SMMGen order failed, log it but allow retry
+      console.warn('Duplicate order detected but SMMGen order failed previously. Allowing retry:', {
+        order_id: existingOrder.id,
+        user_id: user.id,
+        link: link.trim(),
+        quantity: quantityNum
+      });
+    }
+
     // Log the parameters being sent to the database function
     console.log('Calling place_order_with_balance_deduction with:', {
       p_user_id: user.id,
