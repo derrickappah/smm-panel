@@ -439,11 +439,11 @@ const AdminActivityLogs = memo(({ onRefresh, refreshing = false }) => {
 
       {/* Table */}
       <ResponsiveTable
-        data={allLogs}
-        renderHeader={renderTableHeader}
-        renderRow={renderTableRow}
-        renderMobileCard={renderMobileCard}
-        virtualScrollThreshold={VIRTUAL_SCROLL_THRESHOLD}
+        items={allLogs}
+        renderTableHeader={renderTableHeader}
+        renderTableRow={renderTableRow}
+        renderCard={renderMobileCard}
+        useVirtualScroll={allLogs.length > VIRTUAL_SCROLL_THRESHOLD}
         emptyMessage="No activity logs found"
       />
 
