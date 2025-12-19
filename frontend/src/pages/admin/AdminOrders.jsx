@@ -84,11 +84,13 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
         const serviceName = (order.promotion_package_id 
           ? order.promotion_packages?.name || ''
           : order.services?.name || '').toLowerCase();
+        const orderLink = (order.link || '').toLowerCase();
         return orderId.includes(searchLower) || 
                userName.includes(searchLower) || 
                userEmail.includes(searchLower) ||
                userPhone.includes(searchLower) ||
-               serviceName.includes(searchLower);
+               serviceName.includes(searchLower) ||
+               orderLink.includes(searchLower);
       });
     }
 
@@ -634,7 +636,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <Input
-              placeholder="Search by order ID, username, email, phone, or service..."
+              placeholder="Search by order ID, username, email, phone, service, or link..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-11 h-12 text-base"
