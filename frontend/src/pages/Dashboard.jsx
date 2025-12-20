@@ -3198,6 +3198,17 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       const service = services.find(s => s.id === orderForm.service_id);
       if (!service) throw new Error('Service not found');
 
+      // Debug: Log the full service object to check for smmcost_service_id
+      console.log('Service object for order placement:', {
+        id: service.id,
+        name: service.name,
+        smmgen_service_id: service.smmgen_service_id,
+        smmcost_service_id: service.smmcost_service_id,
+        has_smmcost: !!service.smmcost_service_id,
+        has_smmgen: !!service.smmgen_service_id,
+        full_service: service
+      });
+
       // Validate quantity
       const quantity = parseInt(orderForm.quantity);
       if (quantity < service.min_quantity || quantity > service.max_quantity) {
