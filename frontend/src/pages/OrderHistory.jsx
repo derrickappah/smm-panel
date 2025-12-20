@@ -35,7 +35,7 @@ const OrderHistory = ({ user, onLogout }) => {
       const [ordersRes, servicesRes] = await Promise.all([
         supabase
           .from('orders')
-          .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, created_at, completed_at, refund_status, total_cost, last_status_check, promotion_packages(name, platform, service_type)')
+          .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, created_at, completed_at, refund_status, total_cost, last_status_check, promotion_packages(name, platform, service_type)')
           .eq('user_id', authUser.id)
           .order('created_at', { ascending: false }),
         supabase
@@ -230,7 +230,7 @@ const OrderHistory = ({ user, onLogout }) => {
 
           const { data: currentOrders } = await supabase
             .from('orders')
-            .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, created_at, completed_at, refund_status, total_cost, last_status_check, promotion_packages(name, platform, service_type)')
+            .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, created_at, completed_at, refund_status, total_cost, last_status_check, promotion_packages(name, platform, service_type)')
             .eq('user_id', authUser.id)
             .order('created_at', { ascending: false });
 
