@@ -192,6 +192,46 @@ const AdminSMMCost = () => {
       let successCount = 0;
       let errorCount = 0;
 
+      // Helper function to normalize platform to valid database values
+      const normalizePlatform = (platform) => {
+        if (!platform) return 'instagram'; // Default fallback
+        
+        const platformLower = platform.toLowerCase().trim();
+        
+        // Map common platform names to database values
+        const platformMap = {
+          'instagram': 'instagram',
+          'ig': 'instagram',
+          'tiktok': 'tiktok',
+          'tt': 'tiktok',
+          'youtube': 'youtube',
+          'yt': 'youtube',
+          'facebook': 'facebook',
+          'fb': 'facebook',
+          'twitter': 'twitter',
+          'x': 'twitter',
+          'whatsapp': 'whatsapp',
+          'wa': 'whatsapp',
+          'telegram': 'telegram',
+          'tg': 'telegram'
+        };
+        
+        // Check direct match or mapped value
+        if (platformMap[platformLower]) {
+          return platformMap[platformLower];
+        }
+        
+        // Check if it contains any of the valid platform names
+        for (const [key, value] of Object.entries(platformMap)) {
+          if (platformLower.includes(key)) {
+            return value;
+          }
+        }
+        
+        // Default fallback to instagram (valid platform)
+        return 'instagram';
+      };
+
       for (const service of servicesToImport) {
         try {
           // Extract service ID from various possible field names
@@ -204,19 +244,30 @@ const AdminSMMCost = () => {
             continue;
           }
 
+          // Extract and normalize platform
+          const rawPlatform = service.platform || service.category || service.platform_name || '';
+          const normalizedPlatform = normalizePlatform(rawPlatform);
+
           // Map service from SMMCost format to our database format
           // NOTE: Adjust field mapping based on actual SMMCost API response format
           const serviceData = {
             smmcost_service_id: smmcostServiceId,
-            platform: service.platform || service.category || 'unknown',
-            service_type: service.type || service.service_type || 'unknown',
+            platform: normalizedPlatform,
+            service_type: service.type || service.service_type || 'other',
             name: service.name || service.service_name || 'Unknown Service',
             rate: 0, // Custom price - admin will set this
-            min_quantity: service.min || service.min_quantity || 0,
-            max_quantity: service.max || service.max_quantity || 0,
+            min_quantity: parseInt(service.min || service.min_quantity || 0, 10),
+            max_quantity: parseInt(service.max || service.max_quantity || 0, 10),
             description: service.description || service.desc || '',
             enabled: true
           };
+
+          // Validate required fields
+          if (!serviceData.name || serviceData.name === 'Unknown Service') {
+            addLog(`Service with ID ${smmcostServiceId} has no name, skipping...`);
+            errorCount++;
+            continue;
+          }
 
           // Check if service already exists (only if we have a valid ID)
           if (smmcostServiceId !== null && smmcostServiceId !== undefined) {
@@ -238,14 +289,29 @@ const AdminSMMCost = () => {
             .insert(serviceData);
 
           if (insertError) {
-            throw insertError;
+            // Enhanced error logging
+            const errorDetails = {
+              message: insertError.message,
+              details: insertError.details,
+              hint: insertError.hint,
+              code: insertError.code,
+              serviceData: {
+                name: serviceData.name,
+                platform: serviceData.platform,
+                service_type: serviceData.service_type
+              }
+            };
+            console.error('Service import error:', errorDetails);
+            throw new Error(`${insertError.message}${insertError.details ? ` - ${insertError.details}` : ''}${insertError.hint ? ` (${insertError.hint})` : ''}`);
           }
 
           successCount++;
-          addLog(`Successfully imported "${serviceData.name}"`);
+          addLog(`Successfully imported "${serviceData.name}" (Platform: ${normalizedPlatform})`);
         } catch (error) {
           errorCount++;
-          addLog(`Error importing service: ${error.message}`);
+          const errorMsg = error.message || 'Unknown error';
+          addLog(`Error importing "${service.name || service.service_name || 'Unknown'}": ${errorMsg}`);
+          console.error('Service import error:', error);
         }
       }
 
