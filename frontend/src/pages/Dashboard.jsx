@@ -3598,6 +3598,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         } else if (smmcostOrderId !== null) {
           console.log('SMMCost order successful - order ID:', smmcostOrderId);
         }
+        // Note: smmgenOrderId remains null since we're using SMMCost, not SMMGen
       } else {
         console.log('Service does not have SMMCost service ID - skipping SMMCost order placement');
         
