@@ -15,6 +15,7 @@ const ServiceEditForm = ({ service, onSave, onCancel }) => {
     max_quantity: service.max_quantity,
     description: service.description || '',
     smmgen_service_id: service.smmgen_service_id || '',
+    smmcost_service_id: service.smmcost_service_id || '',
     is_combo: service.is_combo || false,
     combo_service_ids: service.combo_service_ids || [],
     combo_smmgen_service_ids: service.combo_smmgen_service_ids || [],
@@ -33,6 +34,7 @@ const ServiceEditForm = ({ service, onSave, onCancel }) => {
       max_quantity: parseInt(formData.max_quantity),
       description: formData.description || null,
       smmgen_service_id: formData.smmgen_service_id || null,
+      smmcost_service_id: formData.smmcost_service_id ? parseInt(formData.smmcost_service_id, 10) : null,
       is_combo: Boolean(formData.is_combo),
       combo_service_ids: formData.is_combo && formData.combo_service_ids.length > 0 
         ? formData.combo_service_ids 
@@ -124,14 +126,26 @@ const ServiceEditForm = ({ service, onSave, onCancel }) => {
           className="resize-y"
         />
       </div>
-      <div>
-        <Label>SMMGen Service ID</Label>
-        <Input
-          placeholder="SMMGen API service ID (optional)"
-          value={formData.smmgen_service_id}
-          onChange={(e) => setFormData({ ...formData, smmgen_service_id: e.target.value })}
-        />
-        <p className="text-xs text-gray-500 mt-1">Enter the SMMGen API service ID for integration</p>
+      <div className="grid md:grid-cols-2 gap-4">
+        <div>
+          <Label>SMMGen Service ID</Label>
+          <Input
+            placeholder="SMMGen API service ID (optional)"
+            value={formData.smmgen_service_id}
+            onChange={(e) => setFormData({ ...formData, smmgen_service_id: e.target.value })}
+          />
+          <p className="text-xs text-gray-500 mt-1">Enter the SMMGen API service ID for integration</p>
+        </div>
+        <div>
+          <Label>SMMCost Service ID</Label>
+          <Input
+            type="number"
+            placeholder="SMMCost API service ID (optional)"
+            value={formData.smmcost_service_id}
+            onChange={(e) => setFormData({ ...formData, smmcost_service_id: e.target.value })}
+          />
+          <p className="text-xs text-gray-500 mt-1">Enter the SMMCost API service ID for integration</p>
+        </div>
       </div>
       <div className="flex items-center space-x-2 p-3 border border-gray-200 rounded-lg bg-yellow-50">
         <input
