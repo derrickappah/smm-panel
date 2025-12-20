@@ -140,15 +140,25 @@ const AdminSMMGen = () => {
     try {
       const balanceData = await getSMMGenBalance();
       
-      // Extract balance from various possible response formats
-      // Common field names: balance, amount, current_balance, balance_amount, etc.
-      let balanceValue = balanceData?.balance || 
-                        balanceData?.amount || 
-                        balanceData?.current_balance || 
-                        balanceData?.balance_amount ||
-                        balanceData?.data?.balance ||
-                        balanceData?.data?.amount ||
-                        null;
+      // getSMMGenBalance returns a number directly, or could be an object
+      let balanceValue = null;
+      
+      if (typeof balanceData === 'number') {
+        // If it's already a number, use it directly
+        balanceValue = balanceData;
+      } else if (typeof balanceData === 'object' && balanceData !== null) {
+        // Extract balance from various possible response formats
+        balanceValue = balanceData?.balance || 
+                      balanceData?.amount || 
+                      balanceData?.current_balance || 
+                      balanceData?.balance_amount ||
+                      balanceData?.data?.balance ||
+                      balanceData?.data?.amount ||
+                      null;
+      } else if (typeof balanceData === 'string') {
+        // If it's a string, try to parse it
+        balanceValue = parseFloat(balanceData.replace(/[^0-9.-]/g, ''));
+      }
       
       // Convert to number if it's a string
       if (balanceValue !== null && balanceValue !== undefined) {
