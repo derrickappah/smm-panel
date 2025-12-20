@@ -135,13 +135,39 @@ const AdminSMMCost = () => {
     setLoadingBalance(true);
     try {
       const balanceData = await getSMMCostBalance();
-      if (balanceData && balanceData.balance !== undefined) {
-        setBalance(balanceData.balance);
-        toast.success('Balance fetched successfully');
+      
+      // Extract balance from various possible response formats
+      // Common field names: balance, amount, current_balance, balance_amount, etc.
+      let balanceValue = balanceData?.balance || 
+                        balanceData?.amount || 
+                        balanceData?.current_balance || 
+                        balanceData?.balance_amount ||
+                        balanceData?.data?.balance ||
+                        balanceData?.data?.amount ||
+                        null;
+      
+      // Convert to number if it's a string
+      if (balanceValue !== null && balanceValue !== undefined) {
+        const numBalance = typeof balanceValue === 'string' 
+          ? parseFloat(balanceValue.replace(/[^0-9.-]/g, '')) 
+          : Number(balanceValue);
+        
+        // Validate it's a valid number
+        if (!isNaN(numBalance) && isFinite(numBalance)) {
+          setBalance(numBalance);
+          toast.success('Balance fetched successfully');
+        } else {
+          console.warn('Invalid balance value received:', balanceValue);
+          setBalance(null);
+          toast.warning('Could not parse balance information');
+        }
       } else {
+        console.warn('Balance not found in API response:', balanceData);
+        setBalance(null);
         toast.warning('Could not retrieve balance information');
       }
     } catch (error) {
+      setBalance(null);
       toast.error(`Failed to fetch balance: ${error.message}`);
     } finally {
       setLoadingBalance(false);
@@ -382,15 +408,15 @@ const AdminSMMCost = () => {
               Check your SMMCost account balance
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div>
-                {balance !== null ? (
-                  <p className="text-2xl font-bold text-gray-900">${balance.toFixed(2)}</p>
-                ) : (
-                  <p className="text-gray-500">Not loaded</p>
-                )}
-              </div>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div>
+                  {balance !== null && typeof balance === 'number' && !isNaN(balance) ? (
+                    <p className="text-2xl font-bold text-gray-900">${balance.toFixed(2)}</p>
+                  ) : (
+                    <p className="text-gray-500">Not loaded</p>
+                  )}
+                </div>
               <Button 
                 onClick={fetchBalance} 
                 disabled={loadingBalance}
