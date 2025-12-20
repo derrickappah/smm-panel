@@ -399,16 +399,20 @@ const OrderHistory = ({ user, onLogout }) => {
                                   const serviceHasSmmgen = orderService?.smmgen_service_id;
                                   
                                   // Prioritize SMMCost if both exist
+                                  // Check if smmgen_order_id is the internal UUID (set by trigger) - if so, ignore it
+                                  const isInternalUuid = order.smmgen_order_id === order.id;
                                   const hasSmmcost = order.smmcost_order_id && String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost";
-                                  const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
+                                  const hasSmmgen = order.smmgen_order_id && 
+                                                  order.smmgen_order_id !== "order not placed at smm gen" && 
+                                                  !isInternalUuid; // Ignore if it's just the internal UUID
                                   
                                   if (hasSmmcost) {
                                     // SMMCost order ID exists and is valid
                                     return <p className="font-medium text-gray-900 text-sm">{order.smmcost_order_id}</p>;
                                   } else if (hasSmmgen) {
-                                    // SMMGen order ID exists and is valid
+                                    // SMMGen order ID exists and is valid (and not the internal UUID)
                                     return <p className="font-medium text-gray-900 text-sm">{order.smmgen_order_id}</p>;
-                                  } else if (order.smmcost_order_id === "order not placed at smmcost") {
+                                  } else if (order.smmcost_order_id === "order not placed at smmcost" || String(order.smmcost_order_id || '').toLowerCase() === "order not placed at smmcost") {
                                     // Order failed at SMMCost
                                     return <p className="text-xs text-red-600 italic font-medium">Order not placed</p>;
                                   } else if (order.smmgen_order_id === "order not placed at smm gen") {

@@ -58,7 +58,11 @@ const mapSMMCostStatus = (smmcostStatus) => {
  */
 export const shouldCheckOrder = (order, minIntervalMinutes = 5) => {
   // Check if order has SMMGen or SMMCost order ID (smmcost_order_id is now TEXT)
-  const hasSmmgenId = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
+  // Ignore smmgen_order_id if it's the internal UUID (set by trigger)
+  const isInternalUuid = order.smmgen_order_id === order.id;
+  const hasSmmgenId = order.smmgen_order_id && 
+                     order.smmgen_order_id !== "order not placed at smm gen" && 
+                     !isInternalUuid; // Ignore if it's just the internal UUID
   const hasSmmcostId = order.smmcost_order_id && String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost";
   
   // Skip if no valid order ID from either panel
@@ -106,7 +110,11 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
     let panelSource = null;
 
     // Check if order has SMMGen or SMMCost order ID (smmcost_order_id is now TEXT)
-    const hasSmmgenId = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
+    // Ignore smmgen_order_id if it's the internal UUID (set by trigger)
+    const isInternalUuid = order.smmgen_order_id === order.id;
+    const hasSmmgenId = order.smmgen_order_id && 
+                       order.smmgen_order_id !== "order not placed at smm gen" && 
+                       !isInternalUuid; // Ignore if it's just the internal UUID
     const hasSmmcostId = order.smmcost_order_id && String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost";
 
     // Prioritize SMMCost if both exist, otherwise use whichever is available

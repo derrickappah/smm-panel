@@ -320,16 +320,20 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
             const serviceHasSmmgen = order.services?.smmgen_service_id;
             
             // Prioritize SMMCost if both exist
+            // Check if smmgen_order_id is the internal UUID (set by trigger) - if so, ignore it
+            const isInternalUuid = order.smmgen_order_id === order.id;
             const hasSmmcost = order.smmcost_order_id && String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost";
-            const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
+            const hasSmmgen = order.smmgen_order_id && 
+                            order.smmgen_order_id !== "order not placed at smm gen" && 
+                            !isInternalUuid; // Ignore if it's just the internal UUID
             
             if (hasSmmcost) {
               // SMMCost order ID exists and is valid
               return <p className="font-medium text-gray-900 text-sm">{order.smmcost_order_id}</p>;
             } else if (hasSmmgen) {
-              // SMMGen order ID exists and is valid
+              // SMMGen order ID exists and is valid (and not the internal UUID)
               return <p className="font-medium text-gray-900 text-sm">{order.smmgen_order_id}</p>;
-            } else if (order.smmcost_order_id === "order not placed at smmcost") {
+            } else if (order.smmcost_order_id === "order not placed at smmcost" || String(order.smmcost_order_id || '').toLowerCase() === "order not placed at smmcost") {
               // Order failed at SMMCost
               return (
                 <div className="flex items-center gap-1">
@@ -375,8 +379,12 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
         <div className="col-span-1">
           {(() => {
             // Show which panel(s) have IDs
+            // Check if smmgen_order_id is the internal UUID (set by trigger) - if so, ignore it
+            const isInternalUuid = order.smmgen_order_id === order.id;
             const hasSmmcost = order.smmcost_order_id && String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost";
-            const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
+            const hasSmmgen = order.smmgen_order_id && 
+                            order.smmgen_order_id !== "order not placed at smm gen" && 
+                            !isInternalUuid; // Ignore if it's just the internal UUID
             
             if (hasSmmcost && hasSmmgen) {
               return (
@@ -532,14 +540,18 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               const serviceHasSmmgen = order.services?.smmgen_service_id;
               
               // Prioritize SMMCost if both exist (smmcost_order_id is now TEXT)
+              // Check if smmgen_order_id is the internal UUID (set by trigger) - if so, ignore it
+              const isInternalUuid = order.smmgen_order_id === order.id;
               const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id !== "order not placed at smmcost";
-              const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
+              const hasSmmgen = order.smmgen_order_id && 
+                              order.smmgen_order_id !== "order not placed at smm gen" && 
+                              !isInternalUuid; // Ignore if it's just the internal UUID
               
               if (hasSmmcost) {
                 return <p className="font-semibold text-gray-900 text-base">Order No: {order.smmcost_order_id}</p>;
               } else if (hasSmmgen) {
                 return <p className="font-semibold text-gray-900 text-base">Order No: {order.smmgen_order_id}</p>;
-              } else if (order.smmcost_order_id === "order not placed at smmcost") {
+              } else if (order.smmcost_order_id === "order not placed at smmcost" || String(order.smmcost_order_id || '').toLowerCase() === "order not placed at smmcost") {
                 // Order failed at SMMCost
                 return (
                   <div className="flex items-center gap-1 mt-1">
@@ -572,15 +584,19 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
             })()}
             {(() => {
               // Show which panel(s) have IDs (smmcost_order_id is now TEXT)
+              // Check if smmgen_order_id is the internal UUID (set by trigger) - if so, ignore it
+              const isInternalUuid = order.smmgen_order_id === order.id;
               const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id !== "order not placed at smmcost";
-              const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
+              const hasSmmgen = order.smmgen_order_id && 
+                              order.smmgen_order_id !== "order not placed at smm gen" && 
+                              !isInternalUuid; // Ignore if it's just the internal UUID
               
               if (hasSmmcost && hasSmmgen) {
                 return (
                   <div className="text-xs text-gray-600 mt-1">
                     <p>SMMCost: {order.smmcost_order_id}</p>
                     <p>SMMGen: {order.smmgen_order_id}</p>
-              </div>
+                  </div>
                 );
               } else if (hasSmmcost) {
                 return <p className="text-xs text-gray-600 mt-1">SMMCost: {order.smmcost_order_id}</p>;
