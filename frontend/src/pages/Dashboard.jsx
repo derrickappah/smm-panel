@@ -3478,24 +3478,33 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           // If SMMCost returns null, it means backend is not available (graceful skip)
           if (smmcostResponse === null) {
             console.warn('SMMCost returned null - backend unavailable or not configured');
-            // Mark as failure since we attempted but couldn't place the order
+            smmcostOrderId = "order not placed at smmcost";
           } else if (smmcostResponse) {
             // Check if SMMCost returned an error response
             if (smmcostResponse.error) {
               console.warn('SMMCost returned error:', smmcostResponse.error);
               // Don't extract order ID from error responses
-              smmcostOrderId = null;
+              smmcostOrderId = "order not placed at smmcost";
             } else {
-              // SMMCost API might return order ID in different fields (expecting numeric)
-              smmcostOrderId = smmcostResponse.order || 
-                              smmcostResponse.order_id || 
-                              smmcostResponse.orderId || 
-                              smmcostResponse.id || 
-                              null;
-              // Ensure it's a number
-              if (smmcostOrderId !== null) {
-                smmcostOrderId = typeof smmcostOrderId === 'string' ? parseInt(smmcostOrderId, 10) : smmcostOrderId;
-                if (isNaN(smmcostOrderId)) smmcostOrderId = null;
+              // SMMCost API might return order ID in different fields
+              const extracted =
+                smmcostResponse.order ||
+                smmcostResponse.order_id ||
+                smmcostResponse.orderId ||
+                smmcostResponse.id ||
+                null;
+
+              // Store as TEXT so we can also store failure messages
+              smmcostOrderId = extracted !== null && extracted !== undefined
+                ? String(extracted)
+                : "order not placed at smmcost";
+
+              // Basic sanity check: if not numeric, treat as failure
+              if (smmcostOrderId !== "order not placed at smmcost") {
+                const num = parseInt(String(smmcostOrderId), 10);
+                if (isNaN(num) || num <= 0) {
+                  smmcostOrderId = "order not placed at smmcost";
+                }
               }
               console.log('SMMCost order response:', smmcostResponse);
               console.log('SMMCost order ID extracted:', smmcostOrderId);
@@ -3512,23 +3521,23 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             // If SMMCost API key is not configured, continue with local order only
             if (smmcostError.message?.includes('API key not configured')) {
               toast.warning('SMMCost API not configured. Order created locally.');
+              smmcostOrderId = "order not placed at smmcost";
             } else {
-              // For other SMMCost errors, fail the order and notify user
-              throw new Error(`SMMCost order failed: ${smmcostError.message}`);
+              // For other SMMCost errors, do not block local order creation
+              smmcostOrderId = "order not placed at smmcost";
             }
           }
           // Continue with local order creation even if SMMCost fails (unless it's a critical error)
         }
         
-        // If SMMCost service ID exists but order failed (smmcostOrderId is still null), log it
-        // Note: We can't set a failure message string like SMMGen because smmcost_order_id is INTEGER in DB
-        // So we leave it as null when failed (same as when not attempted)
-        if (smmcostOrderId === null && service.smmcost_service_id) {
-          console.log('SMMCost order failed - leaving smmcostOrderId as null');
-          // Don't throw error - allow order to be created locally even if SMMCost fails
-          // This matches the behavior for SMMGen orders
-        } else if (smmcostOrderId !== null) {
+        // If SMMCost service ID exists but order failed, ensure we store a failure message
+        if (smmcostOrderId === null) {
+          smmcostOrderId = "order not placed at smmcost";
+          console.log('SMMCost order failed - setting failure message:', smmcostOrderId);
+        } else if (smmcostOrderId !== "order not placed at smmcost") {
           console.log('SMMCost order successful - order ID:', smmcostOrderId);
+        } else {
+          console.log('SMMCost order failed - setting failure message:', smmcostOrderId);
         }
         // Note: smmgenOrderId remains null since we're using SMMCost, not SMMGen
       } else {
@@ -3537,64 +3546,64 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         // Only set "order not placed at smmcost" if we actually attempted but failed
         
         // Only check SMMGen if service doesn't have SMMCost ID
-        // Place order via SMMGen API if service has SMMGen ID
-        if (service.smmgen_service_id) {
-          console.log('Attempting to place SMMGen order:', {
-            serviceId: service.smmgen_service_id,
-            link: orderForm.link,
-            quantity: quantity
-          });
+      // Place order via SMMGen API if service has SMMGen ID
+      if (service.smmgen_service_id) {
+        console.log('Attempting to place SMMGen order:', {
+          serviceId: service.smmgen_service_id,
+          link: orderForm.link,
+          quantity: quantity
+        });
+        
+        try {
+          const smmgenResponse = await placeSMMGenOrder(
+            service.smmgen_service_id,
+            orderForm.link,
+            quantity
+          );
           
-          try {
-            const smmgenResponse = await placeSMMGenOrder(
-              service.smmgen_service_id,
-              orderForm.link,
-              quantity
-            );
-            
-            console.log('SMMGen API response received:', smmgenResponse);
-            
-            // If SMMGen returns null, it means backend is not available (graceful skip)
-            if (smmgenResponse === null) {
-              console.warn('SMMGen returned null - backend unavailable or not configured');
-              // Mark as failure since we attempted but couldn't place the order
-            } else if (smmgenResponse) {
-              // Check if SMMGen returned an error response
-              if (smmgenResponse.error) {
-                console.warn('SMMGen returned error:', smmgenResponse.error);
-                // Don't extract order ID from error responses
-                smmgenOrderId = null;
-              } else {
+          console.log('SMMGen API response received:', smmgenResponse);
+          
+          // If SMMGen returns null, it means backend is not available (graceful skip)
+          if (smmgenResponse === null) {
+            console.warn('SMMGen returned null - backend unavailable or not configured');
+            // Mark as failure since we attempted but couldn't place the order
+          } else if (smmgenResponse) {
+            // Check if SMMGen returned an error response
+            if (smmgenResponse.error) {
+              console.warn('SMMGen returned error:', smmgenResponse.error);
+              // Don't extract order ID from error responses
+              smmgenOrderId = null;
+            } else {
                 // SMMGen API might return order ID in different fields (expecting string)
-                smmgenOrderId = smmgenResponse.order || 
-                              smmgenResponse.order_id || 
-                              smmgenResponse.orderId || 
-                              smmgenResponse.id || 
-                              null;
-                console.log('SMMGen order response:', smmgenResponse);
-                console.log('SMMGen order ID extracted:', smmgenOrderId);
-              }
+              smmgenOrderId = smmgenResponse.order || 
+                             smmgenResponse.order_id || 
+                             smmgenResponse.orderId || 
+                             smmgenResponse.id || 
+                             null;
+              console.log('SMMGen order response:', smmgenResponse);
+              console.log('SMMGen order ID extracted:', smmgenOrderId);
             }
-          } catch (smmgenError) {
-            console.error('SMMGen order error caught:', smmgenError);
-            // Only log actual API errors, not connection failures (which are handled gracefully)
-            if (!smmgenError.message?.includes('Failed to fetch') && 
-                !smmgenError.message?.includes('ERR_CONNECTION_REFUSED') &&
-                !smmgenError.message?.includes('Backend proxy server not running')) {
-              console.error('SMMGen order failed:', smmgenError);
-            }
+          }
+        } catch (smmgenError) {
+          console.error('SMMGen order error caught:', smmgenError);
+          // Only log actual API errors, not connection failures (which are handled gracefully)
+          if (!smmgenError.message?.includes('Failed to fetch') && 
+              !smmgenError.message?.includes('ERR_CONNECTION_REFUSED') &&
+              !smmgenError.message?.includes('Backend proxy server not running')) {
+            console.error('SMMGen order failed:', smmgenError);
+          }
             // Continue with local order creation
-          }
-          
-          // If SMMGen service ID exists but order failed (smmgenOrderId is still null), set failure message
-          if (smmgenOrderId === null) {
-            smmgenOrderId = "order not placed at smm gen";
-            console.log('SMMGen order failed - setting failure message:', smmgenOrderId);
-          } else {
-            console.log('SMMGen order successful - order ID:', smmgenOrderId);
-          }
+        }
+        
+        // If SMMGen service ID exists but order failed (smmgenOrderId is still null), set failure message
+        if (smmgenOrderId === null) {
+          smmgenOrderId = "order not placed at smm gen";
+          console.log('SMMGen order failed - setting failure message:', smmgenOrderId);
         } else {
-          console.log('Service does not have SMMGen service ID - skipping SMMGen order placement');
+          console.log('SMMGen order successful - order ID:', smmgenOrderId);
+        }
+      } else {
+        console.log('Service does not have SMMGen service ID - skipping SMMGen order placement');
           // Leave smmgenOrderId as null since we never attempted SMMGen order placement
           // Only set "order not placed at smm gen" if we actually attempted but failed
         }

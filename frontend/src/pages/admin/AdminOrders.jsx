@@ -320,7 +320,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
             const serviceHasSmmgen = order.services?.smmgen_service_id;
             
             // Prioritize SMMCost if both exist
-            const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id > 0;
+            const hasSmmcost = order.smmcost_order_id && String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost";
             const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
             
             if (hasSmmcost) {
@@ -332,9 +332,17 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
             } else if (order.smmgen_order_id === "order not placed at smm gen") {
               // Order failed at SMMGen
               return (
+              <div className="flex items-center gap-1">
+                <AlertCircle className="w-4 h-4 text-red-500" />
+                <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMGen</p>
+              </div>
+              );
+            } else if (String(order.smmcost_order_id || '').toLowerCase() === "order not placed at smmcost") {
+              // Order failed at SMMCost (stored message)
+              return (
                 <div className="flex items-center gap-1">
                   <AlertCircle className="w-4 h-4 text-red-500" />
-                  <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMGen</p>
+                  <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMCost</p>
                 </div>
               );
             } else if (serviceHasSmmcost && !hasSmmcost) {
@@ -356,10 +364,10 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
             } else {
               // Fallback - shouldn't reach here
               return (
-                <div className="flex items-center gap-1">
-                  <AlertCircle className="w-4 h-4 text-orange-500" />
-                  <p className="text-xs text-orange-600 italic font-medium">Not sent</p>
-                </div>
+            <div className="flex items-center gap-1">
+              <AlertCircle className="w-4 h-4 text-orange-500" />
+              <p className="text-xs text-orange-600 italic font-medium">Not sent</p>
+            </div>
               );
             }
           })()}
@@ -367,7 +375,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
         <div className="col-span-1">
           {(() => {
             // Show which panel(s) have IDs
-            const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id > 0;
+            const hasSmmcost = order.smmcost_order_id && String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost";
             const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
             
             if (hasSmmcost && hasSmmgen) {
@@ -533,10 +541,10 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                 return <p className="font-semibold text-gray-900 text-base">Order No: {order.smmgen_order_id}</p>;
               } else if (order.smmgen_order_id === "order not placed at smm gen") {
                 return (
-                  <div className="flex items-center gap-1 mt-1">
-                    <AlertCircle className="w-4 h-4 text-red-500" />
-                    <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMGen</p>
-                  </div>
+                <div className="flex items-center gap-1 mt-1">
+                  <AlertCircle className="w-4 h-4 text-red-500" />
+                  <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMGen</p>
+                </div>
                 );
               } else if (serviceHasSmmcost && !hasSmmcost) {
                 // Service has SMMCost ID but order doesn't - order failed at SMMCost
@@ -555,8 +563,8 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                 );
               } else {
                 return (
-                  <div className="flex items-center gap-1 mt-1">
-                    <AlertCircle className="w-4 h-4 text-orange-500" />
+              <div className="flex items-center gap-1 mt-1">
+                <AlertCircle className="w-4 h-4 text-orange-500" />
                     <p className="text-xs text-orange-600 italic font-medium">Not sent</p>
                   </div>
                 );
@@ -572,7 +580,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                   <div className="text-xs text-gray-600 mt-1">
                     <p>SMMCost: {order.smmcost_order_id}</p>
                     <p>SMMGen: {order.smmgen_order_id}</p>
-                  </div>
+              </div>
                 );
               } else if (hasSmmcost) {
                 return <p className="text-xs text-gray-600 mt-1">SMMCost: {order.smmcost_order_id}</p>;

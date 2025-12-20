@@ -59,7 +59,7 @@ const mapSMMCostStatus = (smmcostStatus) => {
 export const shouldCheckOrder = (order, minIntervalMinutes = 5) => {
   // Check if order has SMMGen or SMMCost order ID
   const hasSmmgenId = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
-  const hasSmmcostId = order.smmcost_order_id && order.smmcost_order_id > 0;
+  const hasSmmcostId = order.smmcost_order_id && String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost";
   
   // Skip if no valid order ID from either panel
   if (!hasSmmgenId && !hasSmmcostId) {
@@ -107,7 +107,7 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
 
     // Check if order has SMMGen or SMMCost order ID
     const hasSmmgenId = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
-    const hasSmmcostId = order.smmcost_order_id && order.smmcost_order_id > 0;
+    const hasSmmcostId = order.smmcost_order_id && String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost";
 
     // Prioritize SMMCost if both exist, otherwise use whichever is available
     if (hasSmmcostId) {
@@ -117,7 +117,7 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
       mappedStatus = mapSMMCostStatus(smmcostStatus);
       panelSource = 'smmcost';
     } else if (hasSmmgenId) {
-      // Get status from SMMGen
+    // Get status from SMMGen
       statusData = await getSMMGenOrderStatus(order.smmgen_order_id);
       const smmgenStatus = statusData?.status || statusData?.Status;
       mappedStatus = mapSMMGenStatus(smmgenStatus);
@@ -253,7 +253,7 @@ export const checkOrdersStatusBatch = async (orders, options = {}) => {
     const hasSmmcostId = order.smmcost_order_id && order.smmcost_order_id > 0;
     return !shouldCheckOrder(order, minIntervalMinutes) && 
       (hasSmmgenId || hasSmmcostId) &&
-      order.status !== 'completed' &&
+    order.status !== 'completed' &&
       order.status !== 'refunded';
   });
 

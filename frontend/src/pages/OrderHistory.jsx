@@ -399,7 +399,7 @@ const OrderHistory = ({ user, onLogout }) => {
                                   const serviceHasSmmgen = orderService?.smmgen_service_id;
                                   
                                   // Prioritize SMMCost if both exist
-                                  const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id > 0;
+                                  const hasSmmcost = order.smmcost_order_id && String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost";
                                   const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
                                   
                                   if (hasSmmcost) {
@@ -410,6 +410,9 @@ const OrderHistory = ({ user, onLogout }) => {
                                     return <p className="font-medium text-gray-900 text-sm">{order.smmgen_order_id}</p>;
                                   } else if (order.smmgen_order_id === "order not placed at smm gen") {
                                     // Order failed at SMMGen
+                                    return <p className="text-xs text-red-600 italic font-medium">Order not placed</p>;
+                                  } else if (String(order.smmcost_order_id || '').toLowerCase() === "order not placed at smmcost") {
+                                    // Order failed at SMMCost (stored message)
                                     return <p className="text-xs text-red-600 italic font-medium">Order not placed</p>;
                                   } else if (serviceHasSmmcost && !hasSmmcost) {
                                     // Service has SMMCost ID but order doesn't - order failed at SMMCost
@@ -460,25 +463,25 @@ const OrderHistory = ({ user, onLogout }) => {
                                   
                                   if (hasSmmcost || hasSmmgen) {
                                     return (
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => checkOrderStatus(order)}
-                                        disabled={checkingStatus[order.id]}
-                                        className="text-xs h-8 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                                      >
-                                        {checkingStatus[order.id] ? (
-                                          <>
-                                            <Loader className="w-3 h-3 mr-1 animate-spin" />
-                                            Checking...
-                                          </>
-                                        ) : (
-                                          <>
-                                            <RefreshCw className="w-3 h-3 mr-1" />
-                                            Check
-                                          </>
-                                        )}
-                                      </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => checkOrderStatus(order)}
+                                    disabled={checkingStatus[order.id]}
+                                    className="text-xs h-8 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                                  >
+                                    {checkingStatus[order.id] ? (
+                                      <>
+                                        <Loader className="w-3 h-3 mr-1 animate-spin" />
+                                        Checking...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <RefreshCw className="w-3 h-3 mr-1" />
+                                        Check
+                                      </>
+                                    )}
+                                  </Button>
                                     );
                                   }
                                   return null;

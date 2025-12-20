@@ -491,18 +491,18 @@ export const getSMMCostOrderStatus = async (orderId, retryCount = 0) => {
   const INITIAL_RETRY_DELAY = 1000; // 1 second
   const REQUEST_TIMEOUT = 20000; // 20 seconds (shorter than order placement)
 
+  // Skip status check for failure messages (must happen before numeric parsing)
+  if (typeof orderId === 'string' && orderId.toLowerCase().includes('not placed')) {
+    console.warn('Skipping SMMCost status check for failed order:', orderId);
+    return null;
+  }
+
   // Input validation
   const orderIdNum = typeof orderId === 'string' ? parseInt(orderId, 10) : orderId;
   if (!orderIdNum || isNaN(orderIdNum) || orderIdNum <= 0) {
     const error = new Error('Invalid order ID: orderId is required and must be a positive integer');
     console.error('SMMCost Status Validation Error:', error);
     throw error;
-  }
-
-  // Skip status check for failure messages
-  if (typeof orderId === 'string' && orderId.toLowerCase().includes('not placed')) {
-    console.warn('Skipping SMMCost status check for failed order:', orderId);
-    return null;
   }
 
   try {
