@@ -315,6 +315,10 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
         </div>
         <div className="col-span-1">
           {(() => {
+            // Get service info to check if it has panel IDs
+            const serviceHasSmmcost = order.services?.smmcost_service_id && order.services.smmcost_service_id > 0;
+            const serviceHasSmmgen = order.services?.smmgen_service_id;
+            
             // Prioritize SMMCost if both exist
             const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id > 0;
             const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
@@ -333,6 +337,14 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                   <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMGen</p>
                 </div>
               );
+            } else if (serviceHasSmmcost && !hasSmmcost) {
+              // Service has SMMCost ID but order doesn't - order failed at SMMCost
+              return (
+                <div className="flex items-center gap-1">
+                  <AlertCircle className="w-4 h-4 text-red-500" />
+                  <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMCost</p>
+                </div>
+              );
             } else if (order.smmcost_order_id === null && order.smmgen_order_id === null) {
               // No order IDs at all
               return (
@@ -342,11 +354,11 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                 </div>
               );
             } else {
-              // Order failed at SMMCost (smmcost_order_id is null but was attempted)
+              // Fallback - shouldn't reach here
               return (
                 <div className="flex items-center gap-1">
-                  <AlertCircle className="w-4 h-4 text-red-500" />
-                  <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMCost</p>
+                  <AlertCircle className="w-4 h-4 text-orange-500" />
+                  <p className="text-xs text-orange-600 italic font-medium">Not sent</p>
                 </div>
               );
             }
@@ -507,6 +519,10 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               )}
             </div>
             {(() => {
+              // Get service info to check if it has panel IDs
+              const serviceHasSmmcost = order.services?.smmcost_service_id && order.services.smmcost_service_id > 0;
+              const serviceHasSmmgen = order.services?.smmgen_service_id;
+              
               // Prioritize SMMCost if both exist
               const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id > 0;
               const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
@@ -522,6 +538,14 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                     <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMGen</p>
                   </div>
                 );
+              } else if (serviceHasSmmcost && !hasSmmcost) {
+                // Service has SMMCost ID but order doesn't - order failed at SMMCost
+                return (
+                  <div className="flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-4 h-4 text-red-500" />
+                    <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMCost</p>
+                  </div>
+                );
               } else if (order.smmcost_order_id === null && order.smmgen_order_id === null) {
                 return (
                   <div className="flex items-center gap-1 mt-1">
@@ -532,8 +556,8 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               } else {
                 return (
                   <div className="flex items-center gap-1 mt-1">
-                    <AlertCircle className="w-4 h-4 text-red-500" />
-                    <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMCost</p>
+                    <AlertCircle className="w-4 h-4 text-orange-500" />
+                    <p className="text-xs text-orange-600 italic font-medium">Not sent</p>
                   </div>
                 );
               }
