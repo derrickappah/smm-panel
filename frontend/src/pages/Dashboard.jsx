@@ -3194,12 +3194,21 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         return;
       }
 
-      // Get service details from local state (from SMMGen or Supabase)
-      const service = services.find(s => s.id === orderForm.service_id);
-      if (!service) throw new Error('Service not found');
+      // Get service details - fetch fresh from database to ensure we have latest data including smmcost_service_id
+      const { data: serviceData, error: serviceError } = await supabase
+        .from('services')
+        .select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, created_at')
+        .eq('id', orderForm.service_id)
+        .single();
+      
+      if (serviceError || !serviceData) {
+        throw new Error('Service not found');
+      }
+      
+      const service = serviceData;
 
       // Debug: Log the full service object to check for smmcost_service_id
-      console.log('Service object for order placement:', {
+      console.log('Service object fetched from database for order placement:', {
         id: service.id,
         name: service.name,
         smmgen_service_id: service.smmgen_service_id,
