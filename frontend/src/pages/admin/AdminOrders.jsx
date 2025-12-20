@@ -99,13 +99,6 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
         if (statusFilter === 'refunded') {
           return order.refund_status === 'succeeded';
         }
-        if (statusFilter === 'failed_to_smmgen') {
-          // Show orders without SMMGen ID that are not completed or cancelled
-          return !order.smmgen_order_id && !order.smmcost_order_id && 
-                 order.status !== 'completed' && 
-                 order.status !== 'cancelled' &&
-                 order.status !== 'refunded';
-        }
         if (statusFilter === 'failed_to_place') {
           // Show orders that failed to place at either SMMCost or SMMGen
           // Check if smmgen_order_id is the internal UUID (set by trigger) - if so, ignore it
