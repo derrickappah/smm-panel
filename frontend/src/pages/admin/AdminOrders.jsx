@@ -618,7 +618,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
             </SelectContent>
           </Select>
           {!order.smmgen_order_id && !order.smmcost_order_id && 
-           order.services?.smmgen_service_id && 
+           (order.services?.smmgen_service_id || order.services?.smmcost_service_id) && 
            order.status !== 'completed' && 
            order.status !== 'cancelled' && 
            order.status !== 'refunded' && (
