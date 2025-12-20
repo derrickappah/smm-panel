@@ -119,7 +119,7 @@ const SortableServiceItem = memo(({ service, editingService, onEdit, onToggle, o
               )}
               {(service.smmgen_service_id || service.smmcost_service_id) && (
                 <div className="flex flex-wrap gap-2 text-xs text-gray-500 mt-1">
-                  {service.smmgen_service_id && (
+              {service.smmgen_service_id && (
                     <span>SMMGen ID: {service.smmgen_service_id}</span>
                   )}
                   {service.smmcost_service_id && (
@@ -494,14 +494,14 @@ const AdminServices = memo(() => {
             />
           </div>
           <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <Label>SMMGen Service ID</Label>
-              <Input
-                placeholder="SMMGen API service ID (optional)"
-                value={serviceForm.smmgen_service_id}
-                onChange={(e) => setServiceForm({ ...serviceForm, smmgen_service_id: e.target.value })}
-              />
-              <p className="text-xs text-gray-500 mt-1">Enter the SMMGen API service ID for integration</p>
+          <div>
+            <Label>SMMGen Service ID</Label>
+            <Input
+              placeholder="SMMGen API service ID (optional)"
+              value={serviceForm.smmgen_service_id}
+              onChange={(e) => setServiceForm({ ...serviceForm, smmgen_service_id: e.target.value })}
+            />
+            <p className="text-xs text-gray-500 mt-1">Enter the SMMGen API service ID for integration</p>
             </div>
             <div>
               <Label>SMMCost Service ID</Label>
@@ -721,7 +721,7 @@ const AdminServices = memo(() => {
                       )}
                       {(service.smmgen_service_id || service.smmcost_service_id) && (
                         <div className="flex flex-wrap gap-2 text-xs text-gray-500 mt-1">
-                          {service.smmgen_service_id && (
+                      {service.smmgen_service_id && (
                             <span>SMMGen ID: {service.smmgen_service_id}</span>
                           )}
                           {service.smmcost_service_id && (

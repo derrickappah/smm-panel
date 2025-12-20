@@ -3512,6 +3512,9 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           }
         } catch (smmcostError) {
           console.error('SMMCost order error caught:', smmcostError);
+          // Mark as failure since we attempted but failed
+          smmcostOrderId = 'order not placed at smmcost';
+          
           // Only log actual API errors, not connection failures (which are handled gracefully)
           if (!smmcostError.message?.includes('Failed to fetch') && 
               !smmcostError.message?.includes('ERR_CONNECTION_REFUSED') &&
@@ -3526,8 +3529,9 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               // For other SMMCost errors, do not block local order creation
               smmcostOrderId = "order not placed at smmcost";
             }
+            // For other SMMCost errors, continue with local order (smmcostOrderId already set to failure message)
           }
-          // Continue with local order creation even if SMMCost fails (unless it's a critical error)
+          // Continue with local order creation even if SMMCost fails
         }
         
         // If SMMCost service ID exists but order failed, ensure we store a failure message

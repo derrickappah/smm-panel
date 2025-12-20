@@ -57,7 +57,7 @@ const mapSMMCostStatus = (smmcostStatus) => {
  * @returns {boolean} True if order should be checked
  */
 export const shouldCheckOrder = (order, minIntervalMinutes = 5) => {
-  // Check if order has SMMGen or SMMCost order ID
+  // Check if order has SMMGen or SMMCost order ID (smmcost_order_id is now TEXT)
   const hasSmmgenId = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
   const hasSmmcostId = order.smmcost_order_id && String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost";
   
@@ -105,14 +105,14 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
     let mappedStatus = null;
     let panelSource = null;
 
-    // Check if order has SMMGen or SMMCost order ID
+    // Check if order has SMMGen or SMMCost order ID (smmcost_order_id is now TEXT)
     const hasSmmgenId = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
     const hasSmmcostId = order.smmcost_order_id && String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost";
 
     // Prioritize SMMCost if both exist, otherwise use whichever is available
     if (hasSmmcostId) {
-      // Get status from SMMCost
-      statusData = await getSMMCostOrderStatus(order.smmcost_order_id);
+      // Get status from SMMCost (parse the order ID since it's stored as TEXT but API expects a number)
+      statusData = await getSMMCostOrderStatus(parseInt(order.smmcost_order_id, 10));
       const smmcostStatus = statusData?.status || statusData?.Status;
       mappedStatus = mapSMMCostStatus(smmcostStatus);
       panelSource = 'smmcost';
@@ -250,7 +250,7 @@ export const checkOrdersStatusBatch = async (orders, options = {}) => {
   // Batch update last_status_check for orders that were skipped (not checked recently)
   const skippedOrders = orders.filter(order => {
     const hasSmmgenId = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
-    const hasSmmcostId = order.smmcost_order_id && order.smmcost_order_id > 0;
+    const hasSmmcostId = order.smmcost_order_id && order.smmcost_order_id !== "order not placed at smmcost";
     return !shouldCheckOrder(order, minIntervalMinutes) && 
       (hasSmmgenId || hasSmmcostId) &&
     order.status !== 'completed' &&

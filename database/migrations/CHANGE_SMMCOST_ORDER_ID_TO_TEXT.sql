@@ -1,0 +1,125 @@
+-- Change smmcost_order_id from INTEGER to TEXT to allow failure messages
+-- This matches the pattern used for smmgen_order_id
+-- Run this in Supabase SQL Editor
+
+-- Step 1: Add a new TEXT column
+ALTER TABLE orders 
+ADD COLUMN IF NOT EXISTS smmcost_order_id_text TEXT;
+
+-- Step 2: Convert existing INTEGER values to TEXT
+UPDATE orders 
+SET smmcost_order_id_text = CASE 
+  WHEN smmcost_order_id IS NOT NULL AND smmcost_order_id > 0 
+  THEN smmcost_order_id::TEXT 
+  ELSE NULL 
+END;
+
+-- Step 3: Drop the old INTEGER column
+ALTER TABLE orders 
+DROP COLUMN IF EXISTS smmcost_order_id;
+
+-- Step 4: Rename the new column to the original name
+ALTER TABLE orders 
+RENAME COLUMN smmcost_order_id_text TO smmcost_order_id;
+
+-- Step 5: Add index for performance (if it doesn't exist)
+CREATE INDEX IF NOT EXISTS idx_orders_smmcost_order_id ON orders(smmcost_order_id) 
+WHERE smmcost_order_id IS NOT NULL;
+
+-- Step 6: Add comment
+COMMENT ON COLUMN orders.smmcost_order_id IS 'SMMCost order ID (TEXT) - can store order ID or failure message like "order not placed at smmcost"';
+
+-- Step 7: Update the place_order_with_balance_deduction function signature
+-- Drop the old function
+DROP FUNCTION IF EXISTS place_order_with_balance_deduction(UUID, TEXT, INTEGER, NUMERIC, UUID, UUID, TEXT, INTEGER);
+
+-- Recreate with TEXT parameter for smmcost_order_id
+CREATE OR REPLACE FUNCTION place_order_with_balance_deduction(
+    p_user_id UUID,
+    p_link TEXT,
+    p_quantity INTEGER,
+    p_total_cost NUMERIC,
+    p_service_id UUID DEFAULT NULL,
+    p_package_id UUID DEFAULT NULL,
+    p_smmgen_order_id TEXT DEFAULT NULL,
+    p_smmcost_order_id TEXT DEFAULT NULL
+)
+RETURNS TABLE(
+    success BOOLEAN,
+    message TEXT,
+    order_id UUID,
+    old_balance NUMERIC,
+    new_balance NUMERIC
+) AS $$
+DECLARE
+    v_user_balance NUMERIC;
+    v_new_balance NUMERIC;
+    v_order_id UUID;
+BEGIN
+    -- Get current user balance
+    SELECT balance INTO v_user_balance
+    FROM profiles
+    WHERE id = p_user_id
+    FOR UPDATE; -- Lock the row for update
+    
+    -- Check if user exists
+    IF v_user_balance IS NULL THEN
+        RETURN QUERY SELECT FALSE, 'User not found', NULL::UUID, NULL::NUMERIC, NULL::NUMERIC;
+        RETURN;
+    END IF;
+    
+    -- Check if user has sufficient balance
+    IF v_user_balance < p_total_cost THEN
+        RETURN QUERY SELECT FALSE, 'Insufficient balance', NULL::UUID, v_user_balance, v_user_balance;
+        RETURN;
+    END IF;
+    
+    -- Calculate new balance
+    v_new_balance := v_user_balance - p_total_cost;
+    
+    -- Create the order
+    INSERT INTO orders (
+        user_id,
+        service_id,
+        promotion_package_id,
+        link,
+        quantity,
+        total_cost,
+        status,
+        smmgen_order_id,
+        smmcost_order_id
+    )
+    VALUES (
+        p_user_id,
+        p_service_id,
+        p_package_id,
+        p_link,
+        p_quantity,
+        p_total_cost,
+        'pending',
+        p_smmgen_order_id,
+        p_smmcost_order_id
+    )
+    RETURNING id INTO v_order_id;
+    
+    -- Update user balance
+    UPDATE profiles
+    SET balance = v_new_balance
+    WHERE id = p_user_id;
+    
+    -- Return success result
+    RETURN QUERY SELECT TRUE, 'Order placed successfully and balance deducted', v_order_id, v_user_balance, v_new_balance;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Grant execute permissions
+GRANT EXECUTE ON FUNCTION place_order_with_balance_deduction(UUID, TEXT, INTEGER, NUMERIC, UUID, UUID, TEXT, TEXT) TO service_role, authenticated;
+
+-- Verify the change
+SELECT 
+    column_name,
+    data_type,
+    is_nullable
+FROM information_schema.columns
+WHERE table_name = 'orders'
+AND column_name = 'smmcost_order_id';

@@ -127,14 +127,14 @@ const ServiceEditForm = ({ service, onSave, onCancel }) => {
         />
       </div>
       <div className="grid md:grid-cols-2 gap-4">
-        <div>
-          <Label>SMMGen Service ID</Label>
-          <Input
-            placeholder="SMMGen API service ID (optional)"
-            value={formData.smmgen_service_id}
-            onChange={(e) => setFormData({ ...formData, smmgen_service_id: e.target.value })}
-          />
-          <p className="text-xs text-gray-500 mt-1">Enter the SMMGen API service ID for integration</p>
+      <div>
+        <Label>SMMGen Service ID</Label>
+        <Input
+          placeholder="SMMGen API service ID (optional)"
+          value={formData.smmgen_service_id}
+          onChange={(e) => setFormData({ ...formData, smmgen_service_id: e.target.value })}
+        />
+        <p className="text-xs text-gray-500 mt-1">Enter the SMMGen API service ID for integration</p>
         </div>
         <div>
           <Label>SMMCost Service ID</Label>
