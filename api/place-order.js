@@ -111,17 +111,11 @@ export default async function handler(req, res) {
       ? String(smmgen_order_id) 
       : null;
 
-    // Ensure smmcost_order_id is an integer (database expects INTEGER)
-    const smmcostOrderIdNum = smmcost_order_id !== undefined && smmcost_order_id !== null
-      ? (typeof smmcost_order_id === 'string' ? parseInt(smmcost_order_id, 10) : smmcost_order_id)
+    // Ensure smmcost_order_id is a string (recommended: TEXT column, like smmgen_order_id)
+    // This allows storing numeric IDs *or* a failure message like "order not placed at smmcost".
+    const smmcostOrderIdString = smmcost_order_id !== undefined && smmcost_order_id !== null
+      ? String(smmcost_order_id)
       : null;
-    
-    // Validate smmcost_order_id is a positive integer if provided
-    if (smmcostOrderIdNum !== null && (isNaN(smmcostOrderIdNum) || smmcostOrderIdNum <= 0)) {
-      return res.status(400).json({
-        error: 'Invalid smmcost_order_id: must be a positive integer'
-      });
-    }
 
     // Idempotency check: Check if an order with the same parameters already exists
     // This prevents duplicate orders even if frontend checks are bypassed
@@ -206,9 +200,9 @@ export default async function handler(req, res) {
       p_service_id: service_id || null,
       p_package_id: package_id || null,
       p_smmgen_order_id: smmgenOrderIdString,
-      p_smmcost_order_id: smmcostOrderIdNum,
+      p_smmcost_order_id: smmcostOrderIdString,
       smmgen_order_id_type: typeof smmgenOrderIdString,
-      smmcost_order_id_type: typeof smmcostOrderIdNum
+      smmcost_order_id_type: typeof smmcostOrderIdString
     });
 
     // Call the atomic database function to place order and deduct balance
@@ -221,7 +215,7 @@ export default async function handler(req, res) {
       p_service_id: service_id || null,
       p_package_id: package_id || null,
       p_smmgen_order_id: smmgenOrderIdString,
-      p_smmcost_order_id: smmcostOrderIdNum
+      p_smmcost_order_id: smmcostOrderIdString
     });
 
     if (rpcError) {
@@ -240,13 +234,13 @@ export default async function handler(req, res) {
           p_service_id: service_id || null,
           p_package_id: package_id || null,
           p_smmgen_order_id: smmgenOrderIdString,
-          p_smmcost_order_id: smmcostOrderIdNum
+          p_smmcost_order_id: smmcostOrderIdString
         }
       });
       return res.status(500).json({
         error: 'Failed to place order',
         details: rpcError.message || rpcError.code || 'Unknown database error',
-        hint: rpcError.hint || 'Check if place_order_with_balance_deduction function includes p_smmcost_order_id parameter'
+        hint: rpcError.hint || 'Check if place_order_with_balance_deduction includes p_smmcost_order_id parameter (TEXT recommended)'
       });
     }
 
