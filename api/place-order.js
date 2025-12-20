@@ -231,11 +231,22 @@ export default async function handler(req, res) {
         code: rpcError.code,
         details: rpcError.details,
         hint: rpcError.hint,
-        body: req.body
+        body: req.body,
+        functionParams: {
+          p_user_id: user.id,
+          p_link: link.trim(),
+          p_quantity: quantityNum,
+          p_total_cost: totalCostNum,
+          p_service_id: service_id || null,
+          p_package_id: package_id || null,
+          p_smmgen_order_id: smmgenOrderIdString,
+          p_smmcost_order_id: smmcostOrderIdNum
+        }
       });
       return res.status(500).json({
         error: 'Failed to place order',
-        details: rpcError.message || rpcError.code || 'Unknown database error'
+        details: rpcError.message || rpcError.code || 'Unknown database error',
+        hint: rpcError.hint || 'Check if place_order_with_balance_deduction function includes p_smmcost_order_id parameter'
       });
     }
 
