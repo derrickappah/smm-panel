@@ -238,31 +238,50 @@ const AdminSMMCost = () => {
 
       for (const service of servicesToImport) {
         try {
-          // Extract service ID from various possible field names
-          const smmcostServiceId = service.id || service.service_id || service.serviceId || service.ID;
+          // Extract service ID - SMMCost uses "service" field (numeric)
+          const smmcostServiceId = service.service || service.id || service.service_id || service.serviceId || service.ID;
           
           // Validate that we have a service ID
           if (!smmcostServiceId && smmcostServiceId !== 0) {
-            addLog(`Service "${service.name || service.service_name || 'Unknown'}" has no valid ID, skipping...`);
+            addLog(`Service "${service.name || 'Unknown'}" has no valid ID, skipping...`);
             errorCount++;
             continue;
           }
 
-          // Extract and normalize platform
-          const rawPlatform = service.platform || service.category || service.platform_name || '';
+          // Extract platform from category field
+          // Category format: "Tiktok Followers [ Super Fast Delivery 🚀 ] [ Cheapest 💥] ᴺᴱᵂ"
+          // Need to extract platform name from the beginning
+          const category = service.category || '';
+          const rawPlatform = service.platform || category.split(' ')[0] || '';
           const normalizedPlatform = normalizePlatform(rawPlatform);
 
+          // Extract service type from name or use type field
+          // Type field is usually "Default", so try to infer from name
+          let serviceType = service.type || 'other';
+          if (serviceType === 'Default' && service.name) {
+            // Try to extract service type from name (e.g., "Followers", "Likes", "Views")
+            const nameLower = service.name.toLowerCase();
+            if (nameLower.includes('follower')) serviceType = 'followers';
+            else if (nameLower.includes('like')) serviceType = 'likes';
+            else if (nameLower.includes('view')) serviceType = 'views';
+            else if (nameLower.includes('comment')) serviceType = 'comments';
+            else if (nameLower.includes('share')) serviceType = 'shares';
+            else serviceType = 'other';
+          }
+
+          // Parse rate - SMMCost returns it as a string
+          const rateValue = service.rate ? parseFloat(service.rate) : 0;
+
           // Map service from SMMCost format to our database format
-          // NOTE: Adjust field mapping based on actual SMMCost API response format
           const serviceData = {
             smmcost_service_id: smmcostServiceId,
             platform: normalizedPlatform,
-            service_type: service.type || service.service_type || 'other',
-            name: service.name || service.service_name || 'Unknown Service',
-            rate: 0, // Custom price - admin will set this
-            min_quantity: parseInt(service.min || service.min_quantity || 0, 10),
-            max_quantity: parseInt(service.max || service.max_quantity || 0, 10),
-            description: service.description || service.desc || '',
+            service_type: serviceType,
+            name: service.name || 'Unknown Service',
+            rate: rateValue, // Use actual rate from API (admin can adjust later)
+            min_quantity: parseInt(service.min || 0, 10),
+            max_quantity: parseInt(service.max || 0, 10),
+            description: service.description || service.desc || category || '',
             enabled: true
           };
 
