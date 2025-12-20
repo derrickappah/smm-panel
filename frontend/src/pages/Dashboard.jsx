@@ -3478,13 +3478,15 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           // If SMMCost returns null, it means backend is not available (graceful skip)
           if (smmcostResponse === null) {
             console.warn('SMMCost returned null - backend unavailable or not configured');
-            smmcostOrderId = "order not placed at smmcost";
+            // Mark as failure since we attempted but couldn't place the order
+            // Leave as null, will be set to failure message in final check below
           } else if (smmcostResponse) {
             // Check if SMMCost returned an error response
             if (smmcostResponse.error) {
               console.warn('SMMCost returned error:', smmcostResponse.error);
               // Don't extract order ID from error responses
-              smmcostOrderId = "order not placed at smmcost";
+              // Leave as null, will be set to failure message in final check below
+              smmcostOrderId = null;
             } else {
               // SMMCost API might return order ID in different fields
               const extracted =
@@ -3495,16 +3497,19 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                 null;
 
               // Store as TEXT so we can also store failure messages
-              smmcostOrderId = extracted !== null && extracted !== undefined
-                ? String(extracted)
-                : "order not placed at smmcost";
-
-              // Basic sanity check: if not numeric, treat as failure
-              if (smmcostOrderId !== "order not placed at smmcost") {
-                const num = parseInt(String(smmcostOrderId), 10);
-                if (isNaN(num) || num <= 0) {
-                  smmcostOrderId = "order not placed at smmcost";
+              if (extracted !== null && extracted !== undefined) {
+                const orderIdString = String(extracted);
+                // Basic sanity check: if not numeric or <= 0, treat as failure
+                const num = parseInt(orderIdString, 10);
+                if (!isNaN(num) && num > 0) {
+                  smmcostOrderId = orderIdString;
+                } else {
+                  // Invalid order ID, treat as failure
+                  smmcostOrderId = null;
                 }
+              } else {
+                // No order ID found, treat as failure
+                smmcostOrderId = null;
               }
               console.log('SMMCost order response:', smmcostResponse);
               console.log('SMMCost order ID extracted:', smmcostOrderId);
@@ -3512,9 +3517,6 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           }
         } catch (smmcostError) {
           console.error('SMMCost order error caught:', smmcostError);
-          // Mark as failure since we attempted but failed
-          smmcostOrderId = 'order not placed at smmcost';
-          
           // Only log actual API errors, not connection failures (which are handled gracefully)
           if (!smmcostError.message?.includes('Failed to fetch') && 
               !smmcostError.message?.includes('ERR_CONNECTION_REFUSED') &&
@@ -3524,24 +3526,20 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             // If SMMCost API key is not configured, continue with local order only
             if (smmcostError.message?.includes('API key not configured')) {
               toast.warning('SMMCost API not configured. Order created locally.');
-              smmcostOrderId = "order not placed at smmcost";
-            } else {
-              // For other SMMCost errors, do not block local order creation
-              smmcostOrderId = "order not placed at smmcost";
             }
-            // For other SMMCost errors, continue with local order (smmcostOrderId already set to failure message)
+            // Continue with local order creation - leave smmcostOrderId as null, will be set in final check
           }
           // Continue with local order creation even if SMMCost fails
+          // Leave smmcostOrderId as null, will be set to failure message in final check below
         }
         
-        // If SMMCost service ID exists but order failed, ensure we store a failure message
+        // If SMMCost service ID exists but order failed (smmcostOrderId is still null), set failure message
+        // This matches the pattern used for SMMGen
         if (smmcostOrderId === null) {
           smmcostOrderId = "order not placed at smmcost";
           console.log('SMMCost order failed - setting failure message:', smmcostOrderId);
-        } else if (smmcostOrderId !== "order not placed at smmcost") {
-          console.log('SMMCost order successful - order ID:', smmcostOrderId);
         } else {
-          console.log('SMMCost order failed - setting failure message:', smmcostOrderId);
+          console.log('SMMCost order successful - order ID:', smmcostOrderId);
         }
         // Note: smmgenOrderId remains null since we're using SMMCost, not SMMGen
       } else {
