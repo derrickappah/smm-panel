@@ -3482,39 +3482,53 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             // Leave as null, will be set to failure message in final check below
           } else if (smmcostResponse) {
             // Check if SMMCost returned an error response (check both error field and message field)
-            const hasError = smmcostResponse.error || 
-                            (smmcostResponse.message && smmcostResponse.message.toLowerCase().includes('error')) ||
-                            (smmcostResponse.message && smmcostResponse.message.toLowerCase().includes('incorrect'));
+            // Also check for common error indicators
+            const errorValue = smmcostResponse.error || smmcostResponse.message || smmcostResponse.Error || smmcostResponse.Message;
+            const hasError = errorValue !== undefined && errorValue !== null;
             
-            if (hasError) {
-              const errorMsg = smmcostResponse.error || smmcostResponse.message || 'Unknown error';
-              console.warn('SMMCost returned error:', errorMsg);
+            // Also check if the error message contains common error keywords
+            const errorString = String(errorValue || '').toLowerCase();
+            const hasErrorKeywords = errorString.includes('error') || 
+                                    errorString.includes('incorrect') ||
+                                    errorString.includes('invalid') ||
+                                    errorString.includes('failed') ||
+                                    errorString.includes('not found');
+            
+            if (hasError || hasErrorKeywords) {
+              const errorMsg = errorValue || 'Unknown error';
+              console.warn('SMMCost returned error:', errorMsg, 'Full response:', smmcostResponse);
               // Don't extract order ID from error responses
               // Leave as null, will be set to failure message in final check below
               smmcostOrderId = null;
             } else {
-              // SMMCost API might return order ID in different fields
-              const extracted =
-                smmcostResponse.order ||
-                smmcostResponse.order_id ||
-                smmcostResponse.orderId ||
-                smmcostResponse.id ||
-                null;
+              // Double-check: if error exists, don't extract order ID
+              if (smmcostResponse.error || smmcostResponse.message) {
+                console.warn('SMMCost response has error field, skipping order ID extraction:', smmcostResponse);
+                smmcostOrderId = null;
+              } else {
+                // SMMCost API might return order ID in different fields
+                const extracted =
+                  smmcostResponse.order ||
+                  smmcostResponse.order_id ||
+                  smmcostResponse.orderId ||
+                  smmcostResponse.id ||
+                  null;
 
-              // Store as TEXT so we can also store failure messages
-              if (extracted !== null && extracted !== undefined) {
-                const orderIdString = String(extracted);
-                // Basic sanity check: if not numeric or <= 0, treat as failure
-                const num = parseInt(orderIdString, 10);
-                if (!isNaN(num) && num > 0) {
-                  smmcostOrderId = orderIdString;
+                // Store as TEXT so we can also store failure messages
+                if (extracted !== null && extracted !== undefined) {
+                  const orderIdString = String(extracted);
+                  // Basic sanity check: if not numeric or <= 0, treat as failure
+                  const num = parseInt(orderIdString, 10);
+                  if (!isNaN(num) && num > 0) {
+                    smmcostOrderId = orderIdString;
+                  } else {
+                    // Invalid order ID, treat as failure
+                    smmcostOrderId = null;
+                  }
                 } else {
-                  // Invalid order ID, treat as failure
+                  // No order ID found, treat as failure
                   smmcostOrderId = null;
                 }
-              } else {
-                // No order ID found, treat as failure
-                smmcostOrderId = null;
               }
               console.log('SMMCost order response:', smmcostResponse);
               console.log('SMMCost order ID extracted:', smmcostOrderId);
