@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 const fetchServices = async () => {
   const { data, error } = await supabase
     .from('services')
-    .select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, display_order, created_at')
+    .select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, display_order, created_at')
     .order('display_order', { ascending: true })
     .order('created_at', { ascending: false });
 
