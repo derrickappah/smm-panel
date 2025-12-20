@@ -115,6 +115,10 @@ const AdminSMMCost = () => {
       const services = await fetchSMMCostServices();
       
       if (Array.isArray(services) && services.length > 0) {
+        // Log first service structure for debugging
+        console.log('Sample SMMCost service structure:', JSON.stringify(services[0], null, 2));
+        addLog(`Sample service fields: ${Object.keys(services[0]).join(', ')}`);
+        
         setAvailableServices(services);
         addLog(`Successfully fetched ${services.length} services from SMMCost`);
         toast.success(`Fetched ${services.length} services from SMMCost`);
@@ -283,27 +287,31 @@ const AdminSMMCost = () => {
             }
           }
 
+          // Log the service data being inserted for debugging
+          console.log('Attempting to insert service:', JSON.stringify(serviceData, null, 2));
+
           // Insert service
-          const { error: insertError } = await supabase
+          const { data: insertedData, error: insertError } = await supabase
             .from('services')
-            .insert(serviceData);
+            .insert(serviceData)
+            .select();
 
           if (insertError) {
-            // Enhanced error logging
+            // Enhanced error logging with full context
             const errorDetails = {
               message: insertError.message,
               details: insertError.details,
               hint: insertError.hint,
               code: insertError.code,
-              serviceData: {
-                name: serviceData.name,
-                platform: serviceData.platform,
-                service_type: serviceData.service_type
-              }
+              serviceData: JSON.stringify(serviceData, null, 2),
+              originalService: JSON.stringify(service, null, 2)
             };
-            console.error('Service import error:', errorDetails);
+            console.error('Service import error - Full details:', errorDetails);
+            addLog(`Failed: ${serviceData.name} - ${insertError.message}${insertError.details ? ` (${insertError.details})` : ''}`);
             throw new Error(`${insertError.message}${insertError.details ? ` - ${insertError.details}` : ''}${insertError.hint ? ` (${insertError.hint})` : ''}`);
           }
+
+          console.log('Successfully inserted service:', insertedData);
 
           successCount++;
           addLog(`Successfully imported "${serviceData.name}" (Platform: ${normalizedPlatform})`);
