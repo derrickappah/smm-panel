@@ -3617,7 +3617,17 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
       if (!orderResponse.ok) {
         const errorData = await orderResponse.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || 'Failed to place order');
+        const errorMessage = errorData.error || 'Failed to place order';
+        const errorDetails = errorData.details ? ` - ${errorData.details}` : '';
+        const errorHint = errorData.hint ? ` (${errorData.hint})` : '';
+        console.error('Order placement API error:', {
+          status: orderResponse.status,
+          error: errorMessage,
+          details: errorData.details,
+          hint: errorData.hint,
+          fullError: errorData
+        });
+        throw new Error(`${errorMessage}${errorDetails}${errorHint}`);
       }
 
       const orderResult = await orderResponse.json();
