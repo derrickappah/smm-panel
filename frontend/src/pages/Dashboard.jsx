@@ -3519,16 +3519,18 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           // Continue with local order creation even if SMMCost fails (unless it's a critical error)
         }
         
-        // If SMMCost service ID exists but order failed (smmcostOrderId is still null), fail the order
+        // If SMMCost service ID exists but order failed (smmcostOrderId is still null), set failure message
         if (smmcostOrderId === null && service.smmcost_service_id) {
-          console.log('SMMCost order failed - order will fail');
-          throw new Error('Failed to place order with SMMCost. Please try again or contact support.');
+          smmcostOrderId = "order not placed at smmcost";
+          console.log('SMMCost order failed - setting failure message:', smmcostOrderId);
         } else if (smmcostOrderId !== null) {
           console.log('SMMCost order successful - order ID:', smmcostOrderId);
         }
         // Note: smmgenOrderId remains null since we're using SMMCost, not SMMGen
       } else {
         console.log('Service does not have SMMCost service ID - skipping SMMCost order placement');
+        // Leave smmcostOrderId as null since we never attempted SMMCost order placement
+        // Only set "order not placed at smmcost" if we actually attempted but failed
         
         // Only check SMMGen if service doesn't have SMMCost ID
         // Place order via SMMGen API if service has SMMGen ID
