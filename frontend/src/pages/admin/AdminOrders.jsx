@@ -106,6 +106,29 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                  order.status !== 'cancelled' &&
                  order.status !== 'refunded';
         }
+        if (statusFilter === 'failed_to_place') {
+          // Show orders that failed to place at either SMMCost or SMMGen
+          // Check if smmgen_order_id is the internal UUID (set by trigger) - if so, ignore it
+          const isInternalUuid = order.smmgen_order_id === order.id;
+          const smmgenFailed = order.smmgen_order_id === "order not placed at smm gen";
+          const smmcostFailed = order.smmcost_order_id === "order not placed at smmcost" || 
+                               String(order.smmcost_order_id || '').toLowerCase() === "order not placed at smmcost";
+          // Also check if service has panel IDs but order doesn't have valid IDs
+          const serviceHasSmmcost = order.services?.smmcost_service_id && order.services.smmcost_service_id > 0;
+          const serviceHasSmmgen = order.services?.smmgen_service_id;
+          const hasValidSmmcost = order.smmcost_order_id && 
+                                 String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost";
+          const hasValidSmmgen = order.smmgen_order_id && 
+                               order.smmgen_order_id !== "order not placed at smm gen" && 
+                               !isInternalUuid;
+          
+          // Order failed if:
+          // 1. Explicitly has failure message, OR
+          // 2. Service has panel ID but order doesn't have valid panel order ID
+          return smmgenFailed || smmcostFailed || 
+                 (serviceHasSmmcost && !hasValidSmmcost) || 
+                 (serviceHasSmmgen && !hasValidSmmgen);
+        }
         return order.status === statusFilter;
       });
     }
@@ -779,13 +802,17 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                 className="w-full h-12 text-base"
               />
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <Select value={statusFilter} onValueChange={(value) => {
+              setStatusFilter(value);
+              setPage(1);
+            }}>
               <SelectTrigger className="w-full sm:w-48 min-h-[44px]">
                 <Filter className="w-4 h-4 mr-2" />
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="failed_to_place">❌ Failed to Place</SelectItem>
                 <SelectItem value="failed_to_smmgen">⚠️ Failed to SMMGen</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
                 <SelectItem value="in progress">In Progress</SelectItem>
