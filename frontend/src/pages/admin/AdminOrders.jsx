@@ -101,7 +101,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
         }
         if (statusFilter === 'failed_to_smmgen') {
           // Show orders without SMMGen ID that are not completed or cancelled
-          return !order.smmgen_order_id && 
+          return !order.smmgen_order_id && !order.smmcost_order_id && 
                  order.status !== 'completed' && 
                  order.status !== 'cancelled' &&
                  order.status !== 'refunded';
@@ -282,8 +282,8 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
   const renderTableHeader = useCallback(() => (
     <div className="grid grid-cols-12 gap-4 p-4 font-semibold text-sm min-w-[1500px]">
       <div className="col-span-1.5 min-w-[120px]">Status</div>
-      <div className="col-span-1 min-w-[100px]">Order ID</div>
-      <div className="col-span-1 min-w-[100px]">SMMGen ID</div>
+      <div className="col-span-1 min-w-[100px]">Order No</div>
+      <div className="col-span-1 min-w-[100px]">Panel ID</div>
       <div className="col-span-1 min-w-[80px]">Quantity</div>
       <div className="col-span-1.5 min-w-[130px]">Time</div>
       <div className="col-span-2 min-w-[180px]">User</div>
@@ -314,25 +314,65 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
           )}
         </div>
         <div className="col-span-1">
-          <p className="font-medium text-gray-900 text-sm">{order.id?.slice(0, 8)}...</p>
-          <p className="text-xs text-gray-500">{order.id?.slice(8, 16)}...</p>
+          {(() => {
+            // Prioritize SMMCost if both exist
+            const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id > 0;
+            const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
+            
+            if (hasSmmcost) {
+              // SMMCost order ID exists and is valid
+              return <p className="font-medium text-gray-900 text-sm">{order.smmcost_order_id}</p>;
+            } else if (hasSmmgen) {
+              // SMMGen order ID exists and is valid
+              return <p className="font-medium text-gray-900 text-sm">{order.smmgen_order_id}</p>;
+            } else if (order.smmgen_order_id === "order not placed at smm gen") {
+              // Order failed at SMMGen
+              return (
+                <div className="flex items-center gap-1">
+                  <AlertCircle className="w-4 h-4 text-red-500" />
+                  <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMGen</p>
+                </div>
+              );
+            } else if (order.smmcost_order_id === null && order.smmgen_order_id === null) {
+              // No order IDs at all
+              return (
+                <div className="flex items-center gap-1">
+                  <AlertCircle className="w-4 h-4 text-orange-500" />
+                  <p className="text-xs text-orange-600 italic font-medium">Not sent</p>
+                </div>
+              );
+            } else {
+              // Order failed at SMMCost (smmcost_order_id is null but was attempted)
+              return (
+                <div className="flex items-center gap-1">
+                  <AlertCircle className="w-4 h-4 text-red-500" />
+                  <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMCost</p>
+                </div>
+              );
+            }
+          })()}
         </div>
         <div className="col-span-1">
-          {order.smmgen_order_id ? (
-            order.smmgen_order_id === "order not placed at smm gen" ? (
-              <div className="flex items-center gap-1">
-                <AlertCircle className="w-4 h-4 text-red-500" />
-                <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMGen</p>
-              </div>
-            ) : (
-              <p className="font-medium text-gray-900 text-sm">{order.smmgen_order_id}</p>
-            )
-          ) : (
-            <div className="flex items-center gap-1">
-              <AlertCircle className="w-4 h-4 text-orange-500" />
-              <p className="text-xs text-orange-600 italic font-medium">Not sent</p>
-            </div>
-          )}
+          {(() => {
+            // Show which panel(s) have IDs
+            const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id > 0;
+            const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
+            
+            if (hasSmmcost && hasSmmgen) {
+              return (
+                <div className="text-xs">
+                  <p className="text-gray-900">SMMCost: {order.smmcost_order_id}</p>
+                  <p className="text-gray-600 mt-0.5">SMMGen: {order.smmgen_order_id}</p>
+                </div>
+              );
+            } else if (hasSmmcost) {
+              return <p className="text-xs text-gray-600">SMMCost: {order.smmcost_order_id}</p>;
+            } else if (hasSmmgen) {
+              return <p className="text-xs text-gray-600">SMMGen: {order.smmgen_order_id}</p>;
+            } else {
+              return <p className="text-xs text-gray-400 italic">None</p>;
+            }
+          })()}
         </div>
         <div className="col-span-1">
           <p className="font-semibold text-gray-900 text-base">{order.quantity}</p>
@@ -391,8 +431,9 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                 <SelectItem value="refunded">Already Refunded</SelectItem>
               </SelectContent>
             </Select>
-            {!order.smmgen_order_id && 
-             order.services?.smmgen_service_id && 
+            {!order.smmgen_order_id && !order.smmcost_order_id && 
+             !order.smmcost_order_id &&
+             (order.services?.smmgen_service_id || order.services?.smmcost_service_id) && 
              order.status !== 'completed' && 
              order.status !== 'cancelled' && 
              order.status !== 'refunded' && (
@@ -465,22 +506,57 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                 <span className="text-xs text-gray-500">Refund: {order.refund_status}</span>
               )}
             </div>
-            <p className="font-semibold text-gray-900 text-base">Order: {order.id?.slice(0, 12)}...</p>
-            {order.smmgen_order_id ? (
-              order.smmgen_order_id === "order not placed at smm gen" ? (
-                <div className="flex items-center gap-1 mt-1">
-                  <AlertCircle className="w-4 h-4 text-red-500" />
-                  <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMGen</p>
-                </div>
-              ) : (
-                <p className="text-sm text-gray-600 mt-1">SMMGen: {order.smmgen_order_id}</p>
-              )
-            ) : (
-              <div className="flex items-center gap-1 mt-1">
-                <AlertCircle className="w-4 h-4 text-orange-500" />
-                <p className="text-xs text-orange-600 italic font-medium">Not sent to SMMGen</p>
-              </div>
-            )}
+            {(() => {
+              // Prioritize SMMCost if both exist
+              const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id > 0;
+              const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
+              
+              if (hasSmmcost) {
+                return <p className="font-semibold text-gray-900 text-base">Order No: {order.smmcost_order_id}</p>;
+              } else if (hasSmmgen) {
+                return <p className="font-semibold text-gray-900 text-base">Order No: {order.smmgen_order_id}</p>;
+              } else if (order.smmgen_order_id === "order not placed at smm gen") {
+                return (
+                  <div className="flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-4 h-4 text-red-500" />
+                    <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMGen</p>
+                  </div>
+                );
+              } else if (order.smmcost_order_id === null && order.smmgen_order_id === null) {
+                return (
+                  <div className="flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-4 h-4 text-orange-500" />
+                    <p className="text-xs text-orange-600 italic font-medium">Not sent</p>
+                  </div>
+                );
+              } else {
+                return (
+                  <div className="flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-4 h-4 text-red-500" />
+                    <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMCost</p>
+                  </div>
+                );
+              }
+            })()}
+            {(() => {
+              // Show which panel(s) have IDs
+              const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id > 0;
+              const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
+              
+              if (hasSmmcost && hasSmmgen) {
+                return (
+                  <div className="text-xs text-gray-600 mt-1">
+                    <p>SMMCost: {order.smmcost_order_id}</p>
+                    <p>SMMGen: {order.smmgen_order_id}</p>
+                  </div>
+                );
+              } else if (hasSmmcost) {
+                return <p className="text-xs text-gray-600 mt-1">SMMCost: {order.smmcost_order_id}</p>;
+              } else if (hasSmmgen) {
+                return <p className="text-xs text-gray-600 mt-1">SMMGen: {order.smmgen_order_id}</p>;
+              }
+              return null;
+            })()}
           </div>
           <div className="text-right">
             <p className="font-semibold text-gray-900 text-lg">₵{order.total_cost?.toFixed(2) || '0.00'}</p>
@@ -541,7 +617,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               <SelectItem value="refunded">Already Refunded</SelectItem>
             </SelectContent>
           </Select>
-          {!order.smmgen_order_id && 
+          {!order.smmgen_order_id && !order.smmcost_order_id && 
            order.services?.smmgen_service_id && 
            order.status !== 'completed' && 
            order.status !== 'cancelled' && 

@@ -392,15 +392,28 @@ const OrderHistory = ({ user, onLogout }) => {
                               </div>
                               {/* Order No */}
                               <div className="text-center">
-                                {order.smmgen_order_id ? (
-                                  order.smmgen_order_id === "order not placed at smm gen" ? (
-                                    <p className="text-xs text-red-600 italic font-medium">Order not placed</p>
-                                  ) : (
-                                    <p className="font-medium text-gray-900 text-sm">{order.smmgen_order_id}</p>
-                                  )
-                                ) : (
-                                  <p className="text-xs text-gray-400 italic">N/A</p>
-                                )}
+                                {(() => {
+                                  // Prioritize SMMCost if both exist
+                                  const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id > 0;
+                                  const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
+                                  
+                                  if (hasSmmcost) {
+                                    // SMMCost order ID exists and is valid
+                                    return <p className="font-medium text-gray-900 text-sm">{order.smmcost_order_id}</p>;
+                                  } else if (hasSmmgen) {
+                                    // SMMGen order ID exists and is valid
+                                    return <p className="font-medium text-gray-900 text-sm">{order.smmgen_order_id}</p>;
+                                  } else if (order.smmgen_order_id === "order not placed at smm gen") {
+                                    // Order failed at SMMGen
+                                    return <p className="text-xs text-red-600 italic font-medium">Order not placed</p>;
+                                  } else if (order.smmcost_order_id === null && order.smmgen_order_id === null) {
+                                    // No order IDs at all (shouldn't happen, but handle gracefully)
+                                    return <p className="text-xs text-gray-400 italic">N/A</p>;
+                                  } else {
+                                    // Order failed (smmcost_order_id is null but was attempted)
+                                    return <p className="text-xs text-red-600 italic font-medium">Order not placed</p>;
+                                  }
+                                })()}
                               </div>
                               {/* Link */}
                               <div className="text-center">
@@ -432,27 +445,36 @@ const OrderHistory = ({ user, onLogout }) => {
                               </div>
                               {/* Actions */}
                               <div className="flex justify-center">
-                                {order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen" && (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => checkOrderStatus(order)}
-                                    disabled={checkingStatus[order.id]}
-                                    className="text-xs h-8 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                                  >
-                                    {checkingStatus[order.id] ? (
-                                      <>
-                                        <Loader className="w-3 h-3 mr-1 animate-spin" />
-                                        Checking...
-                                      </>
-                                    ) : (
-                                      <>
-                                        <RefreshCw className="w-3 h-3 mr-1" />
-                                        Check
-                                      </>
-                                    )}
-                                  </Button>
-                                )}
+                                {(() => {
+                                  // Show check button if order has valid SMMCost or SMMGen ID
+                                  const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id > 0;
+                                  const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
+                                  
+                                  if (hasSmmcost || hasSmmgen) {
+                                    return (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => checkOrderStatus(order)}
+                                        disabled={checkingStatus[order.id]}
+                                        className="text-xs h-8 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                                      >
+                                        {checkingStatus[order.id] ? (
+                                          <>
+                                            <Loader className="w-3 h-3 mr-1 animate-spin" />
+                                            Checking...
+                                          </>
+                                        ) : (
+                                          <>
+                                            <RefreshCw className="w-3 h-3 mr-1" />
+                                            Check
+                                          </>
+                                        )}
+                                      </Button>
+                                    );
+                                  }
+                                  return null;
+                                })()}
                               </div>
                             </div>
                           </div>
