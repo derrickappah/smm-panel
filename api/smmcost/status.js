@@ -63,14 +63,15 @@ export default async function handler(req, res) {
 
     try {
       // Call SMMCost API
-      // NOTE: API endpoint and request format may need adjustment based on actual API documentation
-      const response = await fetch(`${SMMCOST_API_URL}/api/status`, {
+      // Using POST with action parameter (same pattern as order endpoint)
+      const response = await fetch(SMMCOST_API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Key': SMMCOST_API_KEY, // API key in header (adjust header name if needed)
         },
         body: JSON.stringify({
+          action: 'status',
+          key: SMMCOST_API_KEY, // API key in body (same pattern as order endpoint)
           order: orderId
         }),
         signal: controller.signal
@@ -161,7 +162,7 @@ export default async function handler(req, res) {
         console.error('SMMCost network error:', {
           error: fetchError.message,
           code: fetchError.code,
-          url: `${SMMCOST_API_URL}/api/status`
+          url: SMMCOST_API_URL
         });
         return res.status(500).json({ 
           error: `Failed to connect to SMMCost API at ${SMMCOST_API_URL}. Please verify SMMCOST_API_URL is correct and the API is accessible.`,
