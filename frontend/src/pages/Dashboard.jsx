@@ -3580,6 +3580,69 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         }
       } else {
         console.log('Service does not have SMMCost service ID - skipping SMMCost order placement');
+        
+        // Only check SMMGen if service doesn't have SMMCost ID
+        // Place order via SMMGen API if service has SMMGen ID
+        if (service.smmgen_service_id) {
+          console.log('Attempting to place SMMGen order:', {
+            serviceId: service.smmgen_service_id,
+            link: orderForm.link,
+            quantity: quantity
+          });
+          
+          try {
+            const smmgenResponse = await placeSMMGenOrder(
+              service.smmgen_service_id,
+              orderForm.link,
+              quantity
+            );
+            
+            console.log('SMMGen API response received:', smmgenResponse);
+            
+            // If SMMGen returns null, it means backend is not available (graceful skip)
+            if (smmgenResponse === null) {
+              console.warn('SMMGen returned null - backend unavailable or not configured');
+              // Mark as failure since we attempted but couldn't place the order
+            } else if (smmgenResponse) {
+              // Check if SMMGen returned an error response
+              if (smmgenResponse.error) {
+                console.warn('SMMGen returned error:', smmgenResponse.error);
+                // Don't extract order ID from error responses
+                smmgenOrderId = null;
+              } else {
+                // SMMGen API might return order ID in different fields (expecting string)
+                smmgenOrderId = smmgenResponse.order || 
+                              smmgenResponse.order_id || 
+                              smmgenResponse.orderId || 
+                              smmgenResponse.id || 
+                              null;
+                console.log('SMMGen order response:', smmgenResponse);
+                console.log('SMMGen order ID extracted:', smmgenOrderId);
+              }
+            }
+          } catch (smmgenError) {
+            console.error('SMMGen order error caught:', smmgenError);
+            // Only log actual API errors, not connection failures (which are handled gracefully)
+            if (!smmgenError.message?.includes('Failed to fetch') && 
+                !smmgenError.message?.includes('ERR_CONNECTION_REFUSED') &&
+                !smmgenError.message?.includes('Backend proxy server not running')) {
+              console.error('SMMGen order failed:', smmgenError);
+            }
+            // Continue with local order creation
+          }
+          
+          // If SMMGen service ID exists but order failed (smmgenOrderId is still null), set failure message
+          if (smmgenOrderId === null) {
+            smmgenOrderId = "order not placed at smm gen";
+            console.log('SMMGen order failed - setting failure message:', smmgenOrderId);
+          } else {
+            console.log('SMMGen order successful - order ID:', smmgenOrderId);
+          }
+        } else {
+          console.log('Service does not have SMMGen service ID - skipping SMMGen order placement');
+          // Set failure message to prevent database trigger from overwriting with order ID
+          smmgenOrderId = "order not placed at smm gen";
+        }
       }
 
       // Create order record in our database
