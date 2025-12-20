@@ -3474,6 +3474,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           );
           
           console.log('SMMCost API response received:', smmcostResponse);
+          console.log('SMMCost response type:', typeof smmcostResponse, 'Keys:', Object.keys(smmcostResponse || {}));
           
           // If SMMCost returns null, it means backend is not available (graceful skip)
           if (smmcostResponse === null) {
@@ -3482,9 +3483,21 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             // Leave as null, will be set to failure message in final check below
           } else if (smmcostResponse) {
             // Check if SMMCost returned an error response (check both error field and message field)
-            // Also check for common error indicators
-            const errorValue = smmcostResponse.error || smmcostResponse.message || smmcostResponse.Error || smmcostResponse.Message;
+            // Also check nested response object if it exists
+            const nestedResponse = smmcostResponse.response || smmcostResponse.data || smmcostResponse.Response || smmcostResponse.Data;
+            const errorValue = smmcostResponse.error || 
+                             smmcostResponse.message || 
+                             smmcostResponse.Error || 
+                             smmcostResponse.Message ||
+                             (nestedResponse && (nestedResponse.error || nestedResponse.message || nestedResponse.Error || nestedResponse.Message));
             const hasError = errorValue !== undefined && errorValue !== null;
+            
+            console.log('SMMCost error detection:', {
+              errorValue,
+              hasError,
+              errorField: smmcostResponse.error,
+              messageField: smmcostResponse.message
+            });
             
             // Also check if the error message contains common error keywords
             const errorString = String(errorValue || '').toLowerCase();
@@ -3494,9 +3507,16 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                                     errorString.includes('failed') ||
                                     errorString.includes('not found');
             
+            console.log('SMMCost error keyword check:', {
+              errorString,
+              hasErrorKeywords,
+              includesIncorrect: errorString.includes('incorrect')
+            });
+            
             if (hasError || hasErrorKeywords) {
               const errorMsg = errorValue || 'Unknown error';
-              console.warn('SMMCost returned error:', errorMsg, 'Full response:', smmcostResponse);
+              console.warn('SMMCost returned error - DETECTED:', errorMsg, 'Full response:', smmcostResponse);
+              console.warn('Setting smmcostOrderId to null due to error');
               // Don't extract order ID from error responses
               // Leave as null, will be set to failure message in final check below
               smmcostOrderId = null;
