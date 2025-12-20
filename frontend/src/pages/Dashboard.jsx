@@ -3519,10 +3519,13 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           // Continue with local order creation even if SMMCost fails (unless it's a critical error)
         }
         
-        // If SMMCost service ID exists but order failed (smmcostOrderId is still null), set failure message
+        // If SMMCost service ID exists but order failed (smmcostOrderId is still null), log it
+        // Note: We can't set a failure message string like SMMGen because smmcost_order_id is INTEGER in DB
+        // So we leave it as null when failed (same as when not attempted)
         if (smmcostOrderId === null && service.smmcost_service_id) {
-          smmcostOrderId = "order not placed at smmcost";
-          console.log('SMMCost order failed - setting failure message:', smmcostOrderId);
+          console.log('SMMCost order failed - leaving smmcostOrderId as null');
+          // Don't throw error - allow order to be created locally even if SMMCost fails
+          // This matches the behavior for SMMGen orders
         } else if (smmcostOrderId !== null) {
           console.log('SMMCost order successful - order ID:', smmcostOrderId);
         }
