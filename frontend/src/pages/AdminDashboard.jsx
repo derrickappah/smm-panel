@@ -31,6 +31,7 @@ const AdminSettings = lazy(() => import('@/pages/admin/AdminSettings'));
 const AdminBalanceCheck = lazy(() => import('@/pages/admin/AdminBalanceCheck'));
 const AdminActivityLogs = lazy(() => import('@/pages/admin/AdminActivityLogs'));
 const AdminSMMCost = lazy(() => import('@/pages/admin/AdminSMMCost'));
+const AdminSMMGen = lazy(() => import('@/pages/admin/AdminSMMGen'));
 
 // Loading fallback component
 const ComponentLoader = () => (
@@ -70,7 +71,8 @@ const AdminDashboard = memo(({ user, onLogout }) => {
         'balance': 'balance',
         'referrals': 'referrals',
         'activity-logs': 'activity-logs',
-        'smmcost': 'smmcost'
+        'smmcost': 'smmcost',
+        'smmgen': 'smmgen'
       };
       return sectionMap[section] || 'dashboard';
     }
@@ -306,6 +308,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     { id: 'referrals', label: 'Referrals', icon: UserPlus },
     { id: 'activity-logs', label: 'Activity Logs', icon: FileText },
     { id: 'smmcost', label: 'SMMCost', icon: Server },
+    { id: 'smmgen', label: 'SMMGen', icon: Server },
   ];
 
   // Show skeleton loader while initial data is loading
@@ -712,6 +715,13 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                 <TabsContent value="smmcost" className="lg:mt-0">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminSMMCost />
+                  </Suspense>
+                </TabsContent>
+
+                {/* SMMGen Section */}
+                <TabsContent value="smmgen" className="lg:mt-0">
+                  <Suspense fallback={<ComponentLoader />}>
+                    <AdminSMMGen />
                   </Suspense>
                 </TabsContent>
 
