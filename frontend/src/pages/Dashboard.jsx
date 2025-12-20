@@ -3458,6 +3458,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
       // Place order via SMMCost API if service has SMMCost ID (prioritize SMMCost)
       let smmcostOrderId = null;
+      let smmgenOrderId = null; // Declare at top level so it's available in both code paths
       if (service.smmcost_service_id) {
         console.log('Attempting to place SMMCost order:', {
           serviceId: service.smmcost_service_id,
