@@ -3634,6 +3634,15 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         ? String(smmgenOrderId) 
         : null;
 
+      // Convert SMMCost order ID to string (database expects TEXT, like smmgen_order_id)
+      // This ensures failure messages like "order not placed at smmcost" are properly sent
+      const smmcostOrderIdString = smmcostOrderId !== null && smmcostOrderId !== undefined 
+        ? String(smmcostOrderId) 
+        : null;
+
+      // Log what we're sending to the API
+      console.log('Sending to API - smmgen_order_id:', smmgenOrderIdString, 'smmcost_order_id:', smmcostOrderIdString);
+
       // Place order via secure API endpoint
       const orderResponse = await fetch('/api/place-order', {
         method: 'POST',
@@ -3647,7 +3656,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           quantity: quantity,
           total_cost: totalCost,
           smmgen_order_id: smmgenOrderIdString,
-          smmcost_order_id: smmcostOrderId
+          smmcost_order_id: smmcostOrderIdString
         })
       });
 

@@ -116,6 +116,14 @@ export default async function handler(req, res) {
     const smmcostOrderIdString = smmcost_order_id !== undefined && smmcost_order_id !== null
       ? String(smmcost_order_id)
       : null;
+    
+    // Log what we received and converted
+    console.log('API received smmcost_order_id:', {
+      original: smmcost_order_id,
+      originalType: typeof smmcost_order_id,
+      converted: smmcostOrderIdString,
+      convertedType: typeof smmcostOrderIdString
+    });
 
     // Idempotency check: Check if an order with the same parameters already exists
     // This prevents duplicate orders even if frontend checks are bypassed
