@@ -3481,9 +3481,14 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             // Mark as failure since we attempted but couldn't place the order
             // Leave as null, will be set to failure message in final check below
           } else if (smmcostResponse) {
-            // Check if SMMCost returned an error response
-            if (smmcostResponse.error) {
-              console.warn('SMMCost returned error:', smmcostResponse.error);
+            // Check if SMMCost returned an error response (check both error field and message field)
+            const hasError = smmcostResponse.error || 
+                            (smmcostResponse.message && smmcostResponse.message.toLowerCase().includes('error')) ||
+                            (smmcostResponse.message && smmcostResponse.message.toLowerCase().includes('incorrect'));
+            
+            if (hasError) {
+              const errorMsg = smmcostResponse.error || smmcostResponse.message || 'Unknown error';
+              console.warn('SMMCost returned error:', errorMsg);
               // Don't extract order ID from error responses
               // Leave as null, will be set to failure message in final check below
               smmcostOrderId = null;
@@ -3535,7 +3540,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         
         // If SMMCost service ID exists but order failed (smmcostOrderId is still null), set failure message
         // This matches the pattern used for SMMGen
-        if (smmcostOrderId === null) {
+        console.log('SMMCost final check - smmcostOrderId value:', smmcostOrderId, 'type:', typeof smmcostOrderId);
+        if (smmcostOrderId === null || smmcostOrderId === undefined) {
           smmcostOrderId = "order not placed at smmcost";
           console.log('SMMCost order failed - setting failure message:', smmcostOrderId);
         } else {
