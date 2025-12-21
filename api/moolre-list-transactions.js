@@ -9,7 +9,8 @@
  * - MOOLRE_ACCOUNT_NUMBER: Your Moolre account number
  */
 
-import { verifyAdmin } from './utils/auth.js';
+import { verifyAdmin, getServiceRoleClient } from './utils/auth.js';
+import { createClient } from '@supabase/supabase-js';
 
 /**
  * Get channel name from channel code
@@ -67,153 +68,146 @@ export default async function handler(req, res) {
     } = req.body;
 
     // Get Moolre credentials from environment variables
+    // Note: The account/status endpoint uses X-API-KEY (not X-API-PUBKEY)
+    // But we support MOOLRE_API_PUBKEY for backward compatibility
     const moolreApiUser = process.env.MOOLRE_API_USER;
-    const moolreApiPubkey = process.env.MOOLRE_API_PUBKEY;
+    const moolreApiKey = process.env.MOOLRE_API_KEY || process.env.MOOLRE_API_PUBKEY; // Support both for backward compatibility
     const moolreAccountNumber = process.env.MOOLRE_ACCOUNT_NUMBER;
     
-    if (!moolreApiUser || !moolreApiPubkey || !moolreAccountNumber) {
+    if (!moolreApiUser || !moolreApiKey || !moolreAccountNumber) {
       console.error('Moolre credentials are not configured');
       return res.status(500).json({
-        error: 'Moolre is not configured on the server. Please contact support.'
+        error: 'Moolre is not configured on the server. Please contact support.',
+        note: 'Required: MOOLRE_API_USER, MOOLRE_API_KEY (or MOOLRE_API_PUBKEY), MOOLRE_ACCOUNT_NUMBER'
       });
     }
 
-    // Build request body for Moolre API
+    // Build request body for Moolre API - List Transactions endpoint
+    // Documentation: https://docs.moolre.com/
+    // Endpoint: POST https://api.moolre.com/open/account/status
+    // type: 2 (required for list transactions)
     const moolreRequest = {
-      type: 1,
+      type: 2, // Required: 2 for list transactions
       accountnumber: moolreAccountNumber,
       ...(limit && { limit: limit }),
-      ...(offset && { offset: offset }),
       ...(startDate && { startdate: startDate }),
       ...(endDate && { enddate: endDate }),
-      ...(status && { status: status })
+      ...(status && { status: status }) // Filter by status if provided
     };
 
-    // Try multiple possible endpoints for listing transactions
-    // Common patterns: /open/transact/list, /open/transact/query, /open/transact/history
-    const possibleEndpoints = [
-      'https://api.moolre.com/open/transact/list',
-      'https://api.moolre.com/open/transact/query',
-      'https://api.moolre.com/open/transact/history'
-    ];
+    // Use the correct Moolre endpoint for listing transactions
+    const endpoint = 'https://api.moolre.com/open/account/status';
 
-    let moolreResponse = null;
-    let moolreData = null;
-    let lastError = null;
+    try {
+      console.log(`Fetching transactions from Moolre: ${endpoint}`);
+      const moolreResponse = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-USER': moolreApiUser,
+          'X-API-KEY': moolreApiKey // Note: Uses X-API-KEY, not X-API-PUBKEY
+        },
+        body: JSON.stringify(moolreRequest)
+      });
 
-    // Try each endpoint until one works
-    for (const endpoint of possibleEndpoints) {
-      try {
-        console.log(`Trying Moolre endpoint: ${endpoint}`);
-        moolreResponse = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-API-USER': moolreApiUser,
-            'X-API-PUBKEY': moolreApiPubkey
-          },
-          body: JSON.stringify(moolreRequest)
+      // Check content-type before parsing JSON
+      const contentType = moolreResponse.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const textResponse = await moolreResponse.text();
+        console.error(`Moolre API returned non-JSON response (${contentType || 'unknown'}):`, textResponse.substring(0, 200));
+        return res.status(moolreResponse.status || 500).json({
+          success: false,
+          error: `Moolre API returned ${contentType || 'non-JSON'} response`,
+          details: textResponse.substring(0, 500)
         });
-
-        moolreData = await moolreResponse.json();
-
-        // If we get a successful response (status 200 and status field is 1 or data exists)
-        if (moolreResponse.ok && (moolreData.status === 1 || moolreData.data || moolreData.transactions)) {
-          console.log(`Successfully connected to Moolre endpoint: ${endpoint}`);
-          break;
-        } else {
-          lastError = moolreData;
-          console.log(`Endpoint ${endpoint} returned error:`, moolreData);
-        }
-      } catch (fetchError) {
-        lastError = fetchError;
-        console.error(`Error calling ${endpoint}:`, fetchError);
-        continue;
       }
-    }
 
-    // If all endpoints failed, return error
-    if (!moolreResponse || !moolreResponse.ok || (moolreData.status === 0 && !moolreData.data && !moolreData.transactions)) {
-      console.error('All Moolre endpoints failed. Last error:', lastError);
-      return res.status(moolreResponse?.status || 500).json({
+      const moolreData = await moolreResponse.json();
+
+      // Check if request was successful
+      if (!moolreResponse.ok || moolreData.status === 0) {
+        console.error('Moolre API error:', moolreData);
+        return res.status(moolreResponse.status || 500).json({
+          success: false,
+          error: moolreData.message || 'Failed to fetch transactions from Moolre API',
+          code: moolreData.code,
+          details: moolreData
+        });
+      }
+
+      // Handle empty response (code: 200_EMPTY)
+      if (moolreData.code === '200_EMPTY' || !moolreData.data || !moolreData.data.transactions) {
+        return res.status(200).json({
+          success: true,
+          transactions: [],
+          total: 0,
+          hasMore: false,
+          code: moolreData.code,
+          message: moolreData.message || 'No transactions found'
+        });
+      }
+
+      // Extract transactions from response
+      // Response format: { status: 1, code: "ST08", data: { txcount: "1", transactions: [...] } }
+      const transactions = moolreData.data.transactions || [];
+
+      // Map transactions to consistent format
+      // Moolre response format: { txstatus, txtype, accountnumber, payer, payee, amount, transactionid, externalref, thirdpartyref, ts }
+      const formattedTransactions = transactions.map(tx => {
+        // Parse transaction status
+        // txstatus: 1=Success, 0=Pending, 2=Failed
+        const txstatus = tx.txstatus !== undefined ? tx.txstatus : tx.status;
+        let status = 'pending';
+        if (txstatus === 1) {
+          status = 'success';
+        } else if (txstatus === 2) {
+          status = 'failed';
+        }
+
+        // Parse transaction type
+        // txtype: 1=Payment, etc.
+        const txtype = tx.txtype || tx.type;
+
+        return {
+          id: tx.transactionid || tx.id || tx.moolre_id,
+          externalref: tx.externalref || tx.reference || tx.external_ref,
+          thirdpartyref: tx.thirdpartyref,
+          amount: parseFloat(tx.amount || tx.value || 0),
+          currency: 'GHS', // Moolre uses GHS by default
+          status: status,
+          txstatus: txstatus,
+          txtype: txtype,
+          payer: tx.payer || tx.phone || tx.phone_number,
+          payee: tx.payee,
+          accountnumber: tx.accountnumber,
+          channel: tx.channel || tx.channel_code,
+          channelName: tx.channelName || getChannelName(tx.channel || tx.channel_code),
+          created_at: tx.ts || tx.created_at || tx.createdAt || tx.date || tx.timestamp,
+          updated_at: tx.ts || tx.updated_at || tx.updatedAt || tx.modified_at,
+          message: moolreData.message,
+          code: moolreData.code,
+          raw: tx // Include raw data for debugging
+        };
+      });
+
+      // Return formatted response
+      return res.status(200).json({
+        success: true,
+        transactions: formattedTransactions,
+        total: parseInt(moolreData.data.txcount || formattedTransactions.length, 10),
+        hasMore: formattedTransactions.length === limit,
+        code: moolreData.code,
+        message: moolreData.message
+      });
+
+    } catch (fetchError) {
+      console.error('Error calling Moolre API:', fetchError);
+      return res.status(500).json({
         success: false,
-        error: moolreData?.message || lastError?.message || 'Failed to fetch transactions from Moolre API',
-        code: moolreData?.code,
-        details: moolreData || lastError,
-        note: 'Please verify the Moolre API endpoint for listing transactions. Common endpoints: /open/transact/list, /open/transact/query, /open/transact/history'
+        error: 'Failed to fetch transactions from Moolre API',
+        message: fetchError.message
       });
     }
-
-    // Parse response - handle different possible response formats
-    let transactions = [];
-    
-    if (moolreData.data) {
-      // If data is an array, use it directly
-      if (Array.isArray(moolreData.data)) {
-        transactions = moolreData.data;
-      } 
-      // If data is an object with transactions array
-      else if (moolreData.data.transactions && Array.isArray(moolreData.data.transactions)) {
-        transactions = moolreData.data.transactions;
-      }
-      // If data is an object with a list/items array
-      else if (moolreData.data.list && Array.isArray(moolreData.data.list)) {
-        transactions = moolreData.data.list;
-      }
-      // If data is a single transaction object, wrap it in array
-      else if (moolreData.data.id || moolreData.data.externalref) {
-        transactions = [moolreData.data];
-      }
-    } 
-    // Check if transactions is at root level
-    else if (moolreData.transactions && Array.isArray(moolreData.transactions)) {
-      transactions = moolreData.transactions;
-    }
-    // Check if list is at root level
-    else if (moolreData.list && Array.isArray(moolreData.list)) {
-      transactions = moolreData.list;
-    }
-
-    // Map transactions to consistent format
-    const formattedTransactions = transactions.map(tx => {
-      // Parse transaction status
-      // txstatus: 1=Success, 0=Pending, 2=Failed
-      const txstatus = tx.txstatus !== undefined ? tx.txstatus : tx.status;
-      let status = 'pending';
-      if (txstatus === 1) {
-        status = 'success';
-      } else if (txstatus === 2) {
-        status = 'failed';
-      }
-
-      return {
-        id: tx.id || tx.transaction_id || tx.moolre_id,
-        externalref: tx.externalref || tx.reference || tx.external_ref,
-        amount: tx.amount || 0,
-        currency: tx.currency || 'GHS',
-        status: status,
-        txstatus: txstatus,
-        payer: tx.payer || tx.phone || tx.phone_number,
-        channel: tx.channel || tx.channel_code,
-        channelName: tx.channelName || getChannelName(tx.channel || tx.channel_code),
-        created_at: tx.created_at || tx.createdAt || tx.date || tx.timestamp,
-        updated_at: tx.updated_at || tx.updatedAt || tx.modified_at,
-        message: tx.message,
-        code: tx.code,
-        raw: tx // Include raw data for debugging
-      };
-    });
-
-    // Return formatted response
-    return res.status(200).json({
-      success: true,
-      transactions: formattedTransactions,
-      total: formattedTransactions.length,
-      hasMore: formattedTransactions.length === limit,
-      code: moolreData.code,
-      message: moolreData.message,
-      raw: moolreData // Include raw response for debugging
-    });
 
   } catch (error) {
     console.error('Error fetching Moolre transactions:', error);
