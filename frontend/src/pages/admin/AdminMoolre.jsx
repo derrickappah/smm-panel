@@ -38,9 +38,9 @@ const fetchMoolreTransactions = async (filters = {}) => {
     throw new Error('No session token available. Please log in again.');
   }
 
-  // Try serverless function first, then fallback to backend server
+  // Use serverless functions in production, backend server in development
   const apiUrls = isProduction 
-    ? ['/api/moolre-list-transactions']
+    ? ['/api/moolre-list-transactions']  // Only use serverless function in production
     : [`${BACKEND_PROXY_URL}/api/moolre-list-transactions`, '/api/moolre-list-transactions'];
 
   let lastError = null;
