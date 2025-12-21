@@ -234,3 +234,6 @@ GRANT EXECUTE ON FUNCTION place_order_with_balance_deduction(UUID, TEXT, INTEGER
 
 -- Add comment
 COMMENT ON FUNCTION place_order_with_balance_deduction IS 'Atomically places an order, deducts balance, and creates a transaction record. Improved to prevent duplicate transactions by linking order transactions to balance_audit_log and removing duplicate manual_adjustments.';
+
+
+

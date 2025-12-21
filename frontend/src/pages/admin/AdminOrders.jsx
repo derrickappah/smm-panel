@@ -99,28 +99,12 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
         if (statusFilter === 'refunded') {
           return order.refund_status === 'succeeded';
         }
-        if (statusFilter === 'failed_to_place') {
-          // Show orders that failed to place at either SMMCost or SMMGen
-          // Check if smmgen_order_id is the internal UUID (set by trigger) - if so, ignore it
-          const isInternalUuid = order.smmgen_order_id === order.id;
-          const smmgenFailed = order.smmgen_order_id === "order not placed at smm gen";
-          const smmcostFailed = order.smmcost_order_id === "order not placed at smmcost" || 
-                               String(order.smmcost_order_id || '').toLowerCase() === "order not placed at smmcost";
-          // Also check if service has panel IDs but order doesn't have valid IDs
-          const serviceHasSmmcost = order.services?.smmcost_service_id && order.services.smmcost_service_id > 0;
-          const serviceHasSmmgen = order.services?.smmgen_service_id;
-          const hasValidSmmcost = order.smmcost_order_id && 
-                                 String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost";
-          const hasValidSmmgen = order.smmgen_order_id && 
-                               order.smmgen_order_id !== "order not placed at smm gen" && 
-                               !isInternalUuid;
-          
-          // Order failed if:
-          // 1. Explicitly has failure message, OR
-          // 2. Service has panel ID but order doesn't have valid panel order ID
-          return smmgenFailed || smmcostFailed || 
-                 (serviceHasSmmcost && !hasValidSmmcost) || 
-                 (serviceHasSmmgen && !hasValidSmmgen);
+        if (statusFilter === 'failed_to_smmgen') {
+          // Show orders without SMMGen ID that are not completed or cancelled
+          return !order.smmgen_order_id && !order.smmcost_order_id && 
+                 order.status !== 'completed' && 
+                 order.status !== 'cancelled' &&
+                 order.status !== 'refunded';
         }
         return order.status === statusFilter;
       });
@@ -336,27 +320,15 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
             const serviceHasSmmgen = order.services?.smmgen_service_id;
             
             // Prioritize SMMCost if both exist
-            // Check if smmgen_order_id is the internal UUID (set by trigger) - if so, ignore it
-            const isInternalUuid = order.smmgen_order_id === order.id;
-            const hasSmmcost = order.smmcost_order_id && String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost";
-            const hasSmmgen = order.smmgen_order_id && 
-                            order.smmgen_order_id !== "order not placed at smm gen" && 
-                            !isInternalUuid; // Ignore if it's just the internal UUID
+            const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id > 0;
+            const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
             
             if (hasSmmcost) {
               // SMMCost order ID exists and is valid
               return <p className="font-medium text-gray-900 text-sm">{order.smmcost_order_id}</p>;
             } else if (hasSmmgen) {
-              // SMMGen order ID exists and is valid (and not the internal UUID)
+              // SMMGen order ID exists and is valid
               return <p className="font-medium text-gray-900 text-sm">{order.smmgen_order_id}</p>;
-            } else if (order.smmcost_order_id === "order not placed at smmcost" || String(order.smmcost_order_id || '').toLowerCase() === "order not placed at smmcost") {
-              // Order failed at SMMCost
-              return (
-                <div className="flex items-center gap-1">
-                  <AlertCircle className="w-4 h-4 text-red-500" />
-                  <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMCost</p>
-                </div>
-              );
             } else if (order.smmgen_order_id === "order not placed at smm gen") {
               // Order failed at SMMGen
               return (
@@ -365,8 +337,8 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                 <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMGen</p>
               </div>
               );
-            } else if (String(order.smmcost_order_id || '').toLowerCase() === "order not placed at smmcost") {
-              // Order failed at SMMCost (stored message)
+            } else if (serviceHasSmmcost && !hasSmmcost) {
+              // Service has SMMCost ID but order doesn't - order failed at SMMCost
               return (
                 <div className="flex items-center gap-1">
                   <AlertCircle className="w-4 h-4 text-red-500" />
@@ -395,12 +367,8 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
         <div className="col-span-1">
           {(() => {
             // Show which panel(s) have IDs
-            // Check if smmgen_order_id is the internal UUID (set by trigger) - if so, ignore it
-            const isInternalUuid = order.smmgen_order_id === order.id;
-            const hasSmmcost = order.smmcost_order_id && String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost";
-            const hasSmmgen = order.smmgen_order_id && 
-                            order.smmgen_order_id !== "order not placed at smm gen" && 
-                            !isInternalUuid; // Ignore if it's just the internal UUID
+            const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id > 0;
+            const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
             
             if (hasSmmcost && hasSmmgen) {
               return (
@@ -555,32 +523,28 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               const serviceHasSmmcost = order.services?.smmcost_service_id && order.services.smmcost_service_id > 0;
               const serviceHasSmmgen = order.services?.smmgen_service_id;
               
-              // Prioritize SMMCost if both exist (smmcost_order_id is now TEXT)
-              // Check if smmgen_order_id is the internal UUID (set by trigger) - if so, ignore it
-              const isInternalUuid = order.smmgen_order_id === order.id;
-              const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id !== "order not placed at smmcost";
-              const hasSmmgen = order.smmgen_order_id && 
-                              order.smmgen_order_id !== "order not placed at smm gen" && 
-                              !isInternalUuid; // Ignore if it's just the internal UUID
+              // Prioritize SMMCost if both exist
+              const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id > 0;
+              const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
               
               if (hasSmmcost) {
                 return <p className="font-semibold text-gray-900 text-base">Order No: {order.smmcost_order_id}</p>;
               } else if (hasSmmgen) {
                 return <p className="font-semibold text-gray-900 text-base">Order No: {order.smmgen_order_id}</p>;
-              } else if (order.smmcost_order_id === "order not placed at smmcost" || String(order.smmcost_order_id || '').toLowerCase() === "order not placed at smmcost") {
-                // Order failed at SMMCost
-                return (
-                  <div className="flex items-center gap-1 mt-1">
-                    <AlertCircle className="w-4 h-4 text-red-500" />
-                    <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMCost</p>
-                  </div>
-                );
               } else if (order.smmgen_order_id === "order not placed at smm gen") {
                 return (
                 <div className="flex items-center gap-1 mt-1">
                   <AlertCircle className="w-4 h-4 text-red-500" />
                   <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMGen</p>
                 </div>
+                );
+              } else if (serviceHasSmmcost && !hasSmmcost) {
+                // Service has SMMCost ID but order doesn't - order failed at SMMCost
+                return (
+                  <div className="flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-4 h-4 text-red-500" />
+                    <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMCost</p>
+                  </div>
                 );
               } else if (order.smmcost_order_id === null && order.smmgen_order_id === null) {
                 return (
@@ -599,20 +563,16 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               }
             })()}
             {(() => {
-              // Show which panel(s) have IDs (smmcost_order_id is now TEXT)
-              // Check if smmgen_order_id is the internal UUID (set by trigger) - if so, ignore it
-              const isInternalUuid = order.smmgen_order_id === order.id;
-              const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id !== "order not placed at smmcost";
-              const hasSmmgen = order.smmgen_order_id && 
-                              order.smmgen_order_id !== "order not placed at smm gen" && 
-                              !isInternalUuid; // Ignore if it's just the internal UUID
+              // Show which panel(s) have IDs
+              const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id > 0;
+              const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
               
               if (hasSmmcost && hasSmmgen) {
                 return (
                   <div className="text-xs text-gray-600 mt-1">
                     <p>SMMCost: {order.smmcost_order_id}</p>
                     <p>SMMGen: {order.smmgen_order_id}</p>
-                  </div>
+              </div>
                 );
               } else if (hasSmmcost) {
                 return <p className="text-xs text-gray-600 mt-1">SMMCost: {order.smmcost_order_id}</p>;
@@ -795,17 +755,13 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                 className="w-full h-12 text-base"
               />
             </div>
-            <Select value={statusFilter} onValueChange={(value) => {
-              setStatusFilter(value);
-              setPage(1);
-            }}>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-full sm:w-48 min-h-[44px]">
                 <Filter className="w-4 h-4 mr-2" />
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="failed_to_place">❌ Failed to Place</SelectItem>
                 <SelectItem value="failed_to_smmgen">⚠️ Failed to SMMGen</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
                 <SelectItem value="in progress">In Progress</SelectItem>

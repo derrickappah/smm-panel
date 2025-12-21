@@ -103,3 +103,6 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- Grant execute permission
 GRANT EXECUTE ON FUNCTION increment_kb_article_views(UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION increment_kb_article_views(UUID) TO anon;
+
+
+

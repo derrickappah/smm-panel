@@ -157,3 +157,6 @@ const KnowledgeBaseSearch = ({ onArticleSelect, searchTerm = '' }) => {
 };
 
 export default KnowledgeBaseSearch;
+
+
+

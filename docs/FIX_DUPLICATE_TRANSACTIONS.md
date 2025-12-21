@@ -45,3 +45,6 @@ After applying the migrations:
 - The cleanup script only processes transactions from the last 30 days to avoid performance issues
 - The trigger now waits for order transactions to be created by the place_order function before creating manual_adjustments
 - Order transactions are identified by having `order_id IS NOT NULL`, which ensures they were created by the place_order function
+
+
+

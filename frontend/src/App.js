@@ -592,6 +592,18 @@ function App() {
                 }
               />
               <Route
+                path="/admin/faq"
+                element={
+                  user?.role === 'admin' ? (
+                    <AdminDashboard user={user} onLogout={logout} />
+                  ) : user ? (
+                    <Navigate to="/dashboard" />
+                  ) : (
+                    <Navigate to="/auth" />
+                  )
+                }
+              />
+              <Route
                 path="/support"
                 element={<SupportPage user={user} onLogout={logout} />}
               />

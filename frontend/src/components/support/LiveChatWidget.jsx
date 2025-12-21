@@ -194,3 +194,6 @@ const LiveChatWidget = ({ ticketId, user }) => {
 };
 
 export default LiveChatWidget;
+
+
+

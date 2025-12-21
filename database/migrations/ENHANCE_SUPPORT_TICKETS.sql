@@ -34,3 +34,6 @@ COMMENT ON COLUMN support_tickets.sla_deadline IS 'SLA deadline calculated based
 COMMENT ON COLUMN support_tickets.sla_breached IS 'Whether the SLA deadline has been breached';
 COMMENT ON COLUMN support_tickets.subject IS 'Brief subject line for the ticket';
 COMMENT ON COLUMN support_tickets.tags IS 'Array of tags for flexible categorization';
+
+
+

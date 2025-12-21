@@ -149,3 +149,6 @@ GRANT EXECUTE ON FUNCTION check_sla_breaches() TO authenticated;
 -- Create a scheduled function to check SLA breaches periodically
 -- Note: This requires pg_cron extension. If not available, you can call check_sla_breaches() manually or via a cron job
 -- Example: SELECT cron.schedule('check-sla-breaches', '*/5 * * * *', 'SELECT check_sla_breaches();');
+
+
+

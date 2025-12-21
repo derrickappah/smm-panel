@@ -92,3 +92,6 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Grant execute permission
 GRANT EXECUTE ON FUNCTION increment_canned_response_usage(UUID) TO authenticated;
+
+
+

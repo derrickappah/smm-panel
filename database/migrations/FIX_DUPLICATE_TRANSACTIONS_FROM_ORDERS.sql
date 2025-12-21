@@ -158,3 +158,6 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Step 2: Add comment
 COMMENT ON FUNCTION create_transaction_from_audit_log IS 'Trigger function that automatically creates transaction records for balance changes. Improved to prevent duplicate transactions for orders by checking for order_id and waiting for place_order function to create order transactions.';
+
+
+

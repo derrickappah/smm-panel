@@ -130,3 +130,6 @@ export const useSupportChat = (ticketId) => {
     isSending: sendMessage.isPending,
   };
 };
+
+
+

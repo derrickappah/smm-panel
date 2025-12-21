@@ -99,3 +99,6 @@ CREATE POLICY "Admins can update read status for any message"
             WHERE id = auth.uid() AND role = 'admin'
         )
     );
+
+
+

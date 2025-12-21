@@ -127,3 +127,6 @@ FROM (
         WHERE t.id = bal.transaction_id
     )) > 1
 ) duplicates;
+
+
+
