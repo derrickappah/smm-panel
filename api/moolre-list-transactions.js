@@ -154,19 +154,26 @@ export default async function handler(req, res) {
       // Get Supabase client for database lookup
       const supabase = getServiceRoleClient();
 
-      // Extract all externalrefs for batch lookup
+      // Extract all externalrefs and transaction IDs for batch lookup
       const externalRefs = transactions
         .map(tx => tx.externalref || tx.reference || tx.external_ref)
-        .filter(ref => ref); // Remove null/undefined
+        .filter(ref => ref && ref !== '0'); // Remove null/undefined and "0" values
+      
+      const transactionIds = transactions
+        .map(tx => tx.transactionid || tx.id || tx.moolre_id)
+        .filter(id => id); // Remove null/undefined
 
-      // Batch lookup: Get user info for all transactions by matching moolre_reference
+      // Batch lookup: Get user info for all transactions by matching moolre_reference and moolre_id
       let userInfoMap = {};
+      
+      // Try matching by moolre_reference first
       if (externalRefs.length > 0) {
         try {
           const { data: dbTransactions, error: dbError } = await supabase
             .from('transactions')
             .select(`
               moolre_reference,
+              moolre_id,
               user_id,
               profiles!transactions_user_id_fkey (
                 name,
@@ -176,21 +183,65 @@ export default async function handler(req, res) {
             .in('moolre_reference', externalRefs);
 
           if (!dbError && dbTransactions) {
+            console.log(`Found ${dbTransactions.length} transactions by moolre_reference`);
             // Create a map of externalref -> user info
             dbTransactions.forEach(dbTx => {
-              if (dbTx.moolre_reference && dbTx.profiles) {
-                userInfoMap[dbTx.moolre_reference] = {
+              if (dbTx.profiles) {
+                if (dbTx.moolre_reference) {
+                  userInfoMap[dbTx.moolre_reference] = {
+                    username: dbTx.profiles.name || null,
+                    email: dbTx.profiles.email || null
+                  };
+                }
+                // Also map by moolre_id if available
+                if (dbTx.moolre_id) {
+                  userInfoMap[dbTx.moolre_id] = {
+                    username: dbTx.profiles.name || null,
+                    email: dbTx.profiles.email || null
+                  };
+                }
+              }
+            });
+          } else if (dbError) {
+            console.warn('Error fetching user info from database (by reference):', dbError);
+          }
+        } catch (lookupError) {
+          console.warn('Error during user info lookup (by reference):', lookupError);
+        }
+      }
+
+      // Also try matching by moolre_id (transactionid from Moolre API)
+      if (transactionIds.length > 0) {
+        try {
+          const { data: dbTransactionsById, error: dbErrorById } = await supabase
+            .from('transactions')
+            .select(`
+              moolre_reference,
+              moolre_id,
+              user_id,
+              profiles!transactions_user_id_fkey (
+                name,
+                email
+              )
+            `)
+            .in('moolre_id', transactionIds);
+
+          if (!dbErrorById && dbTransactionsById) {
+            console.log(`Found ${dbTransactionsById.length} transactions by moolre_id`);
+            // Add to map using transactionid as key
+            dbTransactionsById.forEach(dbTx => {
+              if (dbTx.profiles && dbTx.moolre_id) {
+                userInfoMap[dbTx.moolre_id] = {
                   username: dbTx.profiles.name || null,
                   email: dbTx.profiles.email || null
                 };
               }
             });
-          } else if (dbError) {
-            console.warn('Error fetching user info from database:', dbError);
+          } else if (dbErrorById) {
+            console.warn('Error fetching user info from database (by ID):', dbErrorById);
           }
         } catch (lookupError) {
-          console.warn('Error during user info lookup:', lookupError);
-          // Continue without user info if lookup fails
+          console.warn('Error during user info lookup (by ID):', lookupError);
         }
       }
 
@@ -211,11 +262,19 @@ export default async function handler(req, res) {
         // txtype: 1=Payment, etc.
         const txtype = tx.txtype || tx.type;
 
-        // Get externalref for lookup
+        // Get externalref and transactionid for lookup
         const externalref = tx.externalref || tx.reference || tx.external_ref;
+        const transactionid = tx.transactionid || tx.id || tx.moolre_id;
         
-        // Get user info from map
-        const userInfo = externalref ? userInfoMap[externalref] : null;
+        // Get user info from map - try externalref first, then transactionid
+        let userInfo = null;
+        if (externalref && externalref !== '0') {
+          userInfo = userInfoMap[externalref];
+        }
+        // If not found by externalref, try transactionid
+        if (!userInfo && transactionid) {
+          userInfo = userInfoMap[transactionid];
+        }
 
         return {
           id: tx.transactionid || tx.id || tx.moolre_id,
