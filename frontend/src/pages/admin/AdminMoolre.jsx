@@ -38,33 +38,81 @@ const fetchMoolreTransactions = async (filters = {}) => {
     throw new Error('No session token available. Please log in again.');
   }
 
-  // Use backend proxy in development, serverless function in production
-  const apiUrl = isProduction 
-    ? '/api/moolre-list-transactions'
-    : `${BACKEND_PROXY_URL}/api/moolre-list-transactions`;
+  // Try serverless function first, then fallback to backend server
+  const apiUrls = isProduction 
+    ? ['/api/moolre-list-transactions']
+    : [`${BACKEND_PROXY_URL}/api/moolre-list-transactions`, '/api/moolre-list-transactions'];
 
-  const response = await fetch(apiUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${session.access_token}`
-    },
-    body: JSON.stringify({
-      startDate: filters.startDate,
-      endDate: filters.endDate,
-      status: filters.status !== 'all' ? filters.status : undefined,
-      limit: filters.limit || 1000,
-      offset: filters.offset || 0
-    })
-  });
+  let lastError = null;
+  
+  for (const apiUrl of apiUrls) {
+    try {
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          startDate: filters.startDate,
+          endDate: filters.endDate,
+          status: filters.status !== 'all' ? filters.status : undefined,
+          limit: filters.limit || 1000,
+          offset: filters.offset || 0
+        })
+      });
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+      // Check if response is HTML (404 page)
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('text/html')) {
+        console.warn(`Received HTML response from ${apiUrl}, trying next endpoint...`);
+        lastError = new Error(`Endpoint ${apiUrl} returned HTML (likely 404). The API endpoint may not be available.`);
+        continue;
+      }
+
+      if (!response.ok) {
+        // Try to parse JSON error, but handle HTML responses
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (parseError) {
+          // If JSON parsing fails, it might be HTML
+          const text = await response.text();
+          if (text.includes('<!DOCTYPE') || text.includes('<html')) {
+            lastError = new Error(`Endpoint ${apiUrl} returned HTML page (${response.status}). Make sure the API endpoint is available.`);
+            continue;
+          }
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      // If it's a network error or CORS error, try next URL
+      if (error.message.includes('Failed to fetch') || error.message.includes('CORS')) {
+        console.warn(`Error with ${apiUrl}:`, error.message);
+        lastError = error;
+        continue;
+      }
+      // If it's a JSON parse error or other error, throw it
+      throw error;
+    }
   }
 
-  const data = await response.json();
-  return data;
+  // If all URLs failed, throw the last error with helpful message
+  if (lastError) {
+    throw new Error(
+      `Failed to connect to Moolre API. ${lastError.message}\n\n` +
+      `Please ensure:\n` +
+      `- In production: The serverless function is deployed\n` +
+      `- In development: Either run 'vercel dev' OR start the backend server (cd backend && npm start)\n` +
+      `- Backend server URL: ${BACKEND_PROXY_URL}`
+    );
+  }
+
+  throw new Error('No API endpoints available');
 };
 
 const AdminMoolre = () => {
@@ -380,10 +428,17 @@ const AdminMoolre = () => {
                 <XCircle className="w-5 h-5" />
                 <p className="font-medium">Error loading transactions</p>
               </div>
-              <p className="text-sm text-red-600 mt-2">{error.message}</p>
-              <p className="text-xs text-red-500 mt-2">
-                Note: Please verify the Moolre API endpoint for listing transactions is correct.
-              </p>
+              <p className="text-sm text-red-600 mt-2 whitespace-pre-line">{error.message}</p>
+              {error.message.includes('Failed to connect') && (
+                <div className="mt-4 p-3 bg-red-100 rounded border border-red-200">
+                  <p className="text-xs font-semibold text-red-800 mb-2">Quick Fix:</p>
+                  <ul className="text-xs text-red-700 space-y-1 list-disc list-inside">
+                    <li>For local development: Run <code className="bg-red-200 px-1 rounded">vercel dev</code> in the root directory, OR</li>
+                    <li>Start the backend server: <code className="bg-red-200 px-1 rounded">cd backend && npm start</code></li>
+                    <li>Make sure Moolre credentials are set in environment variables</li>
+                  </ul>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
