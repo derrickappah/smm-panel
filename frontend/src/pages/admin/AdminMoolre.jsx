@@ -439,6 +439,17 @@ const AdminMoolre = () => {
                   </ul>
                 </div>
               )}
+              {error.message.includes('404') && (
+                <div className="mt-4 p-3 bg-yellow-100 rounded border border-yellow-200">
+                  <p className="text-xs font-semibold text-yellow-800 mb-2">Deployment Issue:</p>
+                  <ul className="text-xs text-yellow-700 space-y-1 list-disc list-inside">
+                    <li>The serverless function needs to be deployed to Vercel</li>
+                    <li>Trigger a new deployment: Push a commit or redeploy from Vercel dashboard</li>
+                    <li>Verify the file <code className="bg-yellow-200 px-1 rounded">api/moolre-list-transactions.js</code> exists in your repository</li>
+                    <li>After deployment, the endpoint should be available at <code className="bg-yellow-200 px-1 rounded">/api/moolre-list-transactions</code></li>
+                  </ul>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
