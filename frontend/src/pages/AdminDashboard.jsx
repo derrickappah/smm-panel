@@ -8,7 +8,7 @@ import SEO from '@/components/SEO';
 import { 
   Users, ShoppingCart, DollarSign, Package, Wallet, Receipt, 
   MessageSquare, UserPlus, RefreshCw, BarChart3, Menu, X, LayoutDashboard, Tag,
-  ChevronLeft, ChevronRight, FileText, Server, HelpCircle
+  ChevronLeft, ChevronRight, FileText, Server, HelpCircle, CreditCard
 } from 'lucide-react';
 import { useAdminOrders } from '@/hooks/useAdminOrders';
 import { useAdminDeposits } from '@/hooks/useAdminDeposits';
@@ -32,6 +32,7 @@ const AdminBalanceCheck = lazy(() => import('@/pages/admin/AdminBalanceCheck'));
 const AdminActivityLogs = lazy(() => import('@/pages/admin/AdminActivityLogs'));
 const AdminSMMCost = lazy(() => import('@/pages/admin/AdminSMMCost'));
 const AdminSMMGen = lazy(() => import('@/pages/admin/AdminSMMGen'));
+const AdminMoolre = lazy(() => import('@/pages/admin/AdminMoolre'));
 const AdminFAQ = lazy(() => import('@/pages/admin/AdminFAQ'));
 
 // Loading fallback component
@@ -74,6 +75,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
         'activity-logs': 'activity-logs',
         'smmcost': 'smmcost',
         'smmgen': 'smmgen',
+        'moolre': 'moolre',
         'faq': 'faq'
       };
       return sectionMap[section] || 'dashboard';
@@ -293,7 +295,9 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     faq: 'FAQ Management',
     referrals: 'Referrals',
     'activity-logs': 'Activity Logs',
-    smmcost: 'SMMCost Integration'
+    smmcost: 'SMMCost Integration',
+    smmgen: 'SMMGen Integration',
+    moolre: 'Moolre Transactions'
   };
 
   // Navigation items configuration
@@ -313,6 +317,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     { id: 'faq', label: 'FAQ', icon: HelpCircle },
     { id: 'smmcost', label: 'SMMCost', icon: Server },
     { id: 'smmgen', label: 'SMMGen', icon: Server },
+    { id: 'moolre', label: 'Moolre', icon: CreditCard },
   ];
 
   // Show skeleton loader while initial data is loading
@@ -726,6 +731,13 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                 <TabsContent value="smmgen" className="lg:mt-0">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminSMMGen />
+                  </Suspense>
+                </TabsContent>
+
+                {/* Moolre Section */}
+                <TabsContent value="moolre" className="lg:mt-0 w-full max-w-full">
+                  <Suspense fallback={<ComponentLoader />}>
+                    <AdminMoolre />
                   </Suspense>
                 </TabsContent>
 
