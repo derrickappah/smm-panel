@@ -151,6 +151,49 @@ export default async function handler(req, res) {
       // Response format: { status: 1, code: "ST08", data: { txcount: "1", transactions: [...] } }
       const transactions = moolreData.data.transactions || [];
 
+      // Get Supabase client for database lookup
+      const supabase = getServiceRoleClient();
+
+      // Extract all externalrefs for batch lookup
+      const externalRefs = transactions
+        .map(tx => tx.externalref || tx.reference || tx.external_ref)
+        .filter(ref => ref); // Remove null/undefined
+
+      // Batch lookup: Get user info for all transactions by matching moolre_reference
+      let userInfoMap = {};
+      if (externalRefs.length > 0) {
+        try {
+          const { data: dbTransactions, error: dbError } = await supabase
+            .from('transactions')
+            .select(`
+              moolre_reference,
+              user_id,
+              profiles!transactions_user_id_fkey (
+                name,
+                email
+              )
+            `)
+            .in('moolre_reference', externalRefs);
+
+          if (!dbError && dbTransactions) {
+            // Create a map of externalref -> user info
+            dbTransactions.forEach(dbTx => {
+              if (dbTx.moolre_reference && dbTx.profiles) {
+                userInfoMap[dbTx.moolre_reference] = {
+                  username: dbTx.profiles.name || null,
+                  email: dbTx.profiles.email || null
+                };
+              }
+            });
+          } else if (dbError) {
+            console.warn('Error fetching user info from database:', dbError);
+          }
+        } catch (lookupError) {
+          console.warn('Error during user info lookup:', lookupError);
+          // Continue without user info if lookup fails
+        }
+      }
+
       // Map transactions to consistent format
       // Moolre response format: { txstatus, txtype, accountnumber, payer, payee, amount, transactionid, externalref, thirdpartyref, ts }
       const formattedTransactions = transactions.map(tx => {
@@ -168,9 +211,15 @@ export default async function handler(req, res) {
         // txtype: 1=Payment, etc.
         const txtype = tx.txtype || tx.type;
 
+        // Get externalref for lookup
+        const externalref = tx.externalref || tx.reference || tx.external_ref;
+        
+        // Get user info from map
+        const userInfo = externalref ? userInfoMap[externalref] : null;
+
         return {
           id: tx.transactionid || tx.id || tx.moolre_id,
-          externalref: tx.externalref || tx.reference || tx.external_ref,
+          externalref: externalref,
           thirdpartyref: tx.thirdpartyref,
           amount: parseFloat(tx.amount || tx.value || 0),
           currency: 'GHS', // Moolre uses GHS by default
@@ -186,6 +235,9 @@ export default async function handler(req, res) {
           updated_at: tx.ts || tx.updated_at || tx.updatedAt || tx.modified_at,
           message: moolreData.message,
           code: moolreData.code,
+          // Add username and email from database lookup
+          username: userInfo?.username || null,
+          email: userInfo?.email || null,
           raw: tx // Include raw data for debugging
         };
       });

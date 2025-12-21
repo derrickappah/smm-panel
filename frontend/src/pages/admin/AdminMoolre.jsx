@@ -190,9 +190,13 @@ const AdminMoolre = () => {
         const ref = (tx.externalref || '').toLowerCase();
         const id = (tx.id || '').toLowerCase();
         const payer = (tx.payer || '').toLowerCase();
+        const username = (tx.username || '').toLowerCase();
+        const email = (tx.email || '').toLowerCase();
         return ref.includes(searchLower) || 
                id.includes(searchLower) || 
-               payer.includes(searchLower);
+               payer.includes(searchLower) ||
+               username.includes(searchLower) ||
+               email.includes(searchLower);
       });
     }
 
@@ -344,7 +348,7 @@ const AdminMoolre = () => {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <Input
-                  placeholder="Search by reference, ID, or payer..."
+                  placeholder="Search by reference, ID, payer, username, or email..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -493,6 +497,8 @@ const AdminMoolre = () => {
                       <th className="text-left p-3 font-semibold text-sm text-gray-700">Reference</th>
                       <th className="text-left p-3 font-semibold text-sm text-gray-700">Amount</th>
                       <th className="text-left p-3 font-semibold text-sm text-gray-700">Status</th>
+                      <th className="text-left p-3 font-semibold text-sm text-gray-700">Username</th>
+                      <th className="text-left p-3 font-semibold text-sm text-gray-700">Email</th>
                       <th className="text-left p-3 font-semibold text-sm text-gray-700">Payer</th>
                       <th className="text-left p-3 font-semibold text-sm text-gray-700">Channel</th>
                       <th className="text-left p-3 font-semibold text-sm text-gray-700">Created</th>
@@ -518,6 +524,12 @@ const AdminMoolre = () => {
                         </td>
                         <td className="p-3">
                           {getStatusBadge(tx.status)}
+                        </td>
+                        <td className="p-3">
+                          <span className="text-sm">{tx.username || 'N/A'}</span>
+                        </td>
+                        <td className="p-3">
+                          <span className="text-sm break-all">{tx.email || 'N/A'}</span>
                         </td>
                         <td className="p-3">
                           <span className="text-sm">{tx.payer || 'N/A'}</span>
