@@ -8,7 +8,7 @@ import SEO from '@/components/SEO';
 import { 
   Users, ShoppingCart, DollarSign, Package, Wallet, Receipt, 
   MessageSquare, UserPlus, RefreshCw, BarChart3, Menu, X, LayoutDashboard, Tag,
-  ChevronLeft, ChevronRight, FileText, Server
+  ChevronLeft, ChevronRight, FileText, Server, HelpCircle
 } from 'lucide-react';
 import { useAdminOrders } from '@/hooks/useAdminOrders';
 import { useAdminDeposits } from '@/hooks/useAdminDeposits';
@@ -32,6 +32,7 @@ const AdminBalanceCheck = lazy(() => import('@/pages/admin/AdminBalanceCheck'));
 const AdminActivityLogs = lazy(() => import('@/pages/admin/AdminActivityLogs'));
 const AdminSMMCost = lazy(() => import('@/pages/admin/AdminSMMCost'));
 const AdminSMMGen = lazy(() => import('@/pages/admin/AdminSMMGen'));
+const AdminFAQ = lazy(() => import('@/pages/admin/AdminFAQ'));
 
 // Loading fallback component
 const ComponentLoader = () => (
@@ -72,7 +73,8 @@ const AdminDashboard = memo(({ user, onLogout }) => {
         'referrals': 'referrals',
         'activity-logs': 'activity-logs',
         'smmcost': 'smmcost',
-        'smmgen': 'smmgen'
+        'smmgen': 'smmgen',
+        'faq': 'faq'
       };
       return sectionMap[section] || 'dashboard';
     }
@@ -288,6 +290,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     transactions: 'Transactions',
     support: 'Support',
     balance: 'Balance Check',
+    faq: 'FAQ Management',
     referrals: 'Referrals',
     'activity-logs': 'Activity Logs',
     smmcost: 'SMMCost Integration'
@@ -307,6 +310,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     { id: 'balance', label: 'Balance', icon: Wallet },
     { id: 'referrals', label: 'Referrals', icon: UserPlus },
     { id: 'activity-logs', label: 'Activity Logs', icon: FileText },
+    { id: 'faq', label: 'FAQ', icon: HelpCircle },
     { id: 'smmcost', label: 'SMMCost', icon: Server },
     { id: 'smmgen', label: 'SMMGen', icon: Server },
   ];
@@ -729,6 +733,13 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                 <TabsContent value="activity-logs" className="lg:mt-0 w-full max-w-full">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminActivityLogs onRefresh={handleRefresh} refreshing={refreshing} />
+                  </Suspense>
+                </TabsContent>
+
+                {/* FAQ Section */}
+                <TabsContent value="faq" className="lg:mt-0 w-full max-w-full">
+                  <Suspense fallback={<ComponentLoader />}>
+                    <AdminFAQ />
                   </Suspense>
                 </TabsContent>
               </div>

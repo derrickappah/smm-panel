@@ -13,6 +13,7 @@ import SEO from '@/components/SEO';
 import { generateFAQSchema } from '@/utils/schema';
 import KnowledgeBaseSearch from '@/components/support/KnowledgeBaseSearch';
 import LiveChatWidget from '@/components/support/LiveChatWidget';
+import { useFAQ } from '@/hooks/useFAQ';
 import { 
   Mail, 
   MessageSquare, 
@@ -69,63 +70,8 @@ const SupportPage = ({ user, onLogout }) => {
   const [ticketsPage, setTicketsPage] = useState(1);
   const ticketsPerPage = 20;
 
-  const faqs = [
-    {
-      id: 11,
-      question: 'How do I delete and restore a TikTok video to keep my purchased likes?',
-      answer: 'HOW TO DELETE A TIKTOK VIDEO\n1. Open TikTok\n2. Go to Profile\n3. Tap the video you want to remove\n4. Tap the three dots (⋯) or Share arrow\n5. Tap Delete\n6. Confirm Delete\n\n👉 The video goes to Recently Deleted (not gone permanently).\n\n⸻\n\nHOW TO RESTORE A DELETED TIKTOK VIDEO\n1. Open TikTok\n2. Go to Profile\n3. Tap the three lines (☰) top-right\n4. Tap Settings and Privacy\n5. Tap Activity Center\n6. Tap Recently Deleted\n7. Select the video\n8. Tap Restore\n9. Confirm Restore\n\n👉 The video returns with its likes.\n\n⸻\n\nDELETE & RESTORE — HOW IT WORKS\n(Make Likes Permanent)\n\n• TikTok usually removes the likes you buy around the 5th or 6th day of buying\n• The goal is to remove the video before TikTok starts removing the likes.\n\nExample timeline:\n1. Monday — I buy likes on my video.\n2. Friday evening — I delete the video.\n   → This removes it before TikTok\'s system deletes my likes\n3. Wait at least 48 hours\n   → Do nothing during this time.\n4. Monday evening — You will restore the video back\n\nResult:\nThe likes stay and do not reduce again.'
-    },
-    {
-      id: 1,
-      question: 'How do I place an order?',
-      answer: 'To place an order, go to your Dashboard and fill out the order form. Select a service, enter your profile link, specify the quantity, and click "Place Order". Make sure you have sufficient balance in your account.'
-    },
-    {
-      id: 2,
-      question: 'How long does it take for orders to complete?',
-      answer: 'Order completion times vary by service type. Most orders start within minutes and complete within 24-72 hours. You can track your order status in the Orders page.'
-    },
-    {
-      id: 3,
-      question: 'How do I add funds to my account?',
-      answer: 'Go to your Dashboard and use the "Add Funds" section. Enter the amount you want to deposit and click "Pay with Paystack". Your balance will be updated immediately after successful payment.'
-    },
-    {
-      id: 4,
-      question: 'What payment methods do you accept?',
-      answer: 'We accept payments through Paystack, which supports credit/debit cards, bank transfers, and mobile money. All payments are secure and processed instantly.'
-    },
-    {
-      id: 5,
-      question: 'Can I get a refund?',
-      answer: 'Refunds are available for cancelled orders or orders that fail to complete. Contact support with your order ID for assistance. Refunds are processed back to your account balance.'
-    },
-    {
-      id: 6,
-      question: 'How do I track my order status?',
-      answer: 'You can view all your orders and their status in the "Orders" page. Order statuses include: Pending, Processing, Completed, and Cancelled.'
-    },
-    {
-      id: 7,
-      question: 'What if my order is not delivered?',
-      answer: 'If your order is not delivered within the expected timeframe, please contact support with your order ID. We will investigate and either complete the order or provide a refund.'
-    },
-    {
-      id: 8,
-      question: 'Is my information secure?',
-      answer: 'Yes, we use industry-standard encryption and security measures to protect your data. Your payment information is processed securely through Paystack, and we never store your payment details.'
-    },
-    {
-      id: 9,
-      question: 'Why are my likes reducing?',
-      answer: 'When you buy likes, TikTok sometimes reduces them after a few days — especially around the 6th day. This is TikTok\'s automated system detecting and removing engagement it considers suspicious.\n\n⭐ Solution 1: Delete and Restore Method\nA simple trick to avoid this loss is to delete the video and restore it after a few minutes or hours. This refreshes the video and helps keep your purchased likes safe.\n\nHow to Restore a Deleted TikTok Video:\n1. Open TikTok\n2. Go to Your Profile (bottom right)\n3. Tap the three lines (☰) in the top-right\n4. Tap Settings and Privacy\n5. Go to Activity Center\n6. Tap Recently Deleted\n7. Find your video\n8. Tap it, then tap Restore\n\n⭐ Solution 2: Hide Video Method\nIf you bought 1,000 likes on Monday, wait until Friday evening or Saturday morning and then hide the video. Keep it hidden for 48 hours (until Monday), and then make the video visible again. By doing this, the likes will stay permanently.\n\n⚠ Disclaimer: Even if you buy likes, views, or comments without a refill policy, there is still a way to prevent them from dropping. Most drops usually happen about one week after purchasing, and we have methods to avoid that.'
-    },
-    {
-      id: 10,
-      question: 'What Is a Refill Policy?',
-      answer: 'A refill policy means that if your order (likes, views, or comments) drops after some time, the site will automatically replace them for you at no extra cost.\n\nSo when you\'re buying likes, views, or comments, always check whether the service has:\n• Refill Policy ➜ They will replace any drops\n• No Refill ➜ They won\'t restore anything if the numbers go down\n\n⚠ Disclaimer: Even if you buy likes, views, or comments without a refill policy, there is still a way to prevent them from dropping. Most drops usually happen about one week after purchasing, and we have methods to avoid that.'
-    }
-  ];
+  // Fetch FAQs from backend
+  const { data: faqs = [], isLoading: isLoadingFAQs } = useFAQ();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -875,32 +821,43 @@ const SupportPage = ({ user, onLogout }) => {
           </div>
 
           <div className="bg-white border border-gray-200 rounded-lg p-5 sm:p-6 lg:p-8 shadow-sm animate-slideUp">
-            <div className="space-y-3 sm:space-y-4">
-              {faqs.map((faq) => (
-                <div
-                  key={faq.id}
-                  className="border border-gray-200 rounded-lg overflow-hidden transition-all hover:border-gray-300"
-                >
-                  <button
-                    onClick={() => toggleFaq(faq.id)}
-                    className="w-full px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between text-left hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-inset"
-                    aria-expanded={openFaq === faq.id}
+            {isLoadingFAQs ? (
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-200 border-t-indigo-600 mx-auto"></div>
+              </div>
+            ) : faqs.length === 0 ? (
+              <div className="text-center py-12 text-gray-500">
+                <HelpCircle className="w-12 h-12 mx-auto mb-2 text-gray-400" />
+                <p>No FAQs available at the moment.</p>
+              </div>
+            ) : (
+              <div className="space-y-3 sm:space-y-4">
+                {faqs.map((faq) => (
+                  <div
+                    key={faq.id}
+                    className="border border-gray-200 rounded-lg overflow-hidden transition-all hover:border-gray-300"
                   >
-                    <span className="text-sm sm:text-base font-medium text-gray-900 pr-4">{faq.question}</span>
-                    {openFaq === faq.id ? (
-                      <ChevronUp className="w-5 h-5 text-indigo-600 flex-shrink-0" />
-                    ) : (
-                      <ChevronDown className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                    <button
+                      onClick={() => toggleFaq(faq.id)}
+                      className="w-full px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between text-left hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-inset"
+                      aria-expanded={openFaq === faq.id}
+                    >
+                      <span className="text-sm sm:text-base font-medium text-gray-900 pr-4">{faq.question}</span>
+                      {openFaq === faq.id ? (
+                        <ChevronUp className="w-5 h-5 text-indigo-600 flex-shrink-0" />
+                      ) : (
+                        <ChevronDown className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                      )}
+                    </button>
+                    {openFaq === faq.id && (
+                      <div className="px-4 sm:px-6 pb-4 sm:pb-5 pt-0">
+                        <p className="text-sm sm:text-base text-gray-600 leading-relaxed whitespace-pre-line">{faq.answer}</p>
+                      </div>
                     )}
-                  </button>
-                  {openFaq === faq.id && (
-                    <div className="px-4 sm:px-6 pb-4 sm:pb-5 pt-0">
-                      <p className="text-sm sm:text-base text-gray-600 leading-relaxed whitespace-pre-line">{faq.answer}</p>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
