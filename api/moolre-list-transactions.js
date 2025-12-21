@@ -11,6 +11,26 @@
 
 import { verifyAdmin } from './utils/auth.js';
 
+/**
+ * Get channel name from channel code
+ * @param {number|string} channelCode - Channel code
+ * @returns {string} - Channel name
+ */
+function getChannelName(channelCode) {
+  const channelMap = {
+    13: 'MTN',
+    14: 'Vodafone',
+    15: 'AirtelTigo',
+    '13': 'MTN',
+    '14': 'Vodafone',
+    '15': 'AirtelTigo',
+    'MTN': 'MTN',
+    'VOD': 'Vodafone',
+    'AT': 'AirtelTigo'
+  };
+  return channelMap[channelCode] || channelCode || 'Unknown';
+}
+
 export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -202,25 +222,5 @@ export default async function handler(req, res) {
       message: error.message
     });
   }
-}
-
-/**
- * Get channel name from channel code
- * @param {number|string} channelCode - Channel code
- * @returns {string} - Channel name
- */
-function getChannelName(channelCode) {
-  const channelMap = {
-    13: 'MTN',
-    14: 'Vodafone',
-    15: 'AirtelTigo',
-    '13': 'MTN',
-    '14': 'Vodafone',
-    '15': 'AirtelTigo',
-    'MTN': 'MTN',
-    'VOD': 'Vodafone',
-    'AT': 'AirtelTigo'
-  };
-  return channelMap[channelCode] || channelCode || 'Unknown';
 }
 
