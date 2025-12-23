@@ -120,10 +120,21 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
         // Panel order IDs (what users see in "Order No" column)
         const smmcostOrderId = String(order.smmcost_order_id || '').toLowerCase();
         const smmgenOrderId = String(order.smmgen_order_id || '').toLowerCase();
-        const userName = (order.profiles?.name || '').toLowerCase();
-        const userEmail = (order.profiles?.email || '').toLowerCase();
-        // Get phone number and normalize it for comparison
-        const userPhone = (order.profiles?.phone_number || '').toLowerCase();
+        // Get user name - handle both object and array formats, trim whitespace
+        const profileName = order.profiles?.name || 
+                          (Array.isArray(order.profiles) && order.profiles[0]?.name) || 
+                          '';
+        const userName = profileName ? String(profileName).toLowerCase().trim() : '';
+        // Get user email - handle both object and array formats
+        const profileEmail = order.profiles?.email || 
+                            (Array.isArray(order.profiles) && order.profiles[0]?.email) || 
+                            '';
+        const userEmail = profileEmail ? String(profileEmail).toLowerCase().trim() : '';
+        // Get phone number - handle both object and array formats
+        const profilePhone = order.profiles?.phone_number || 
+                            (Array.isArray(order.profiles) && order.profiles[0]?.phone_number) || 
+                            '';
+        const userPhone = profilePhone ? String(profilePhone).toLowerCase().trim() : '';
         const userPhoneNormalized = normalizePhoneNumber(userPhone);
         const serviceName = (order.promotion_package_id 
           ? order.promotion_packages?.name || ''
@@ -146,10 +157,16 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
           ))
         );
         
+        // Check name with both substring and exact match
+        const nameMatches = userName && (
+          userName.includes(searchLower) || 
+          userName === searchLower
+        );
+        
         return orderId.includes(searchLower) || 
                smmcostOrderId.includes(searchLower) ||
                smmgenOrderId.includes(searchLower) ||
-               userName.includes(searchLower) || 
+               nameMatches ||
                userEmail.includes(searchLower) ||
                userPhone.includes(searchLower) ||
                (searchNormalized && userPhoneNormalized && userPhoneNormalized.includes(searchNormalized)) ||
