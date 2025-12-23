@@ -129,11 +129,22 @@ const DashboardDeposit = React.memo(({
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Add Funds</h2>
         {isPollingDeposit && pendingTransaction && (
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
-            <span className="text-xs sm:text-sm font-medium text-blue-700">
-              Confirming payment...
-            </span>
+          <div className="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
+              <span className="text-xs sm:text-sm font-medium text-blue-700">
+                Confirming payment...
+              </span>
+            </div>
+            <div className="mt-2 pt-2 border-t border-blue-200">
+              <p className="text-xs text-blue-800 font-medium mb-1">To approve payment on your phone:</p>
+              <ol className="text-xs text-blue-700 list-decimal list-inside space-y-0.5">
+                <li>Dial <span className="font-semibold">*170#</span></li>
+                <li>Select option <span className="font-semibold">6</span> (My Wallet)</li>
+                <li>Select option <span className="font-semibold">3</span> (My Approvals)</li>
+                <li>Enter your PIN and approve payment</li>
+              </ol>
+            </div>
           </div>
         )}
       </div>
