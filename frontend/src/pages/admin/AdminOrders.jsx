@@ -106,13 +106,15 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
     let filtered = [...allOrders];
 
     if (debouncedSearch) {
-      const searchLower = debouncedSearch.toLowerCase();
+      const searchLower = debouncedSearch.toLowerCase().trim();
       // Normalize search term for phone number matching (remove non-digits)
       const searchNormalized = normalizePhoneNumber(debouncedSearch);
       // Normalize search term for URL matching
       const searchUrlNormalized = normalizeUrl(debouncedSearch);
       
       filtered = filtered.filter(order => {
+        if (!order) return false;
+        
         // Convert order ID to string explicitly (database UUID)
         const orderId = String(order.id || '').toLowerCase();
         // Panel order IDs (what users see in "Order No" column)
@@ -126,11 +128,24 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
         const serviceName = (order.promotion_package_id 
           ? order.promotion_packages?.name || ''
           : order.services?.name || '').toLowerCase();
-        // Get link and normalize it for comparison
-        const orderLink = (order.link || '').toLowerCase();
-        const orderLinkNormalized = normalizeUrl(order.link || '');
         
-        // Check all fields, including normalized phone number matching, panel order IDs, and normalized URLs
+        // Get link - check original first, then normalized
+        const orderLink = order.link ? String(order.link).toLowerCase().trim() : '';
+        const orderLinkNormalized = order.link ? normalizeUrl(order.link) : '';
+        
+        // For links, check multiple ways:
+        // 1. Direct substring match on original link
+        // 2. Normalized match (handles protocol/www/trailing slash differences)
+        const linkMatches = orderLink && (
+          orderLink.includes(searchLower) || 
+          orderLink === searchLower ||
+          (searchUrlNormalized && orderLinkNormalized && (
+            orderLinkNormalized.includes(searchUrlNormalized) ||
+            orderLinkNormalized === searchUrlNormalized ||
+            searchUrlNormalized.includes(orderLinkNormalized)
+          ))
+        );
+        
         return orderId.includes(searchLower) || 
                smmcostOrderId.includes(searchLower) ||
                smmgenOrderId.includes(searchLower) ||
@@ -139,8 +154,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                userPhone.includes(searchLower) ||
                (searchNormalized && userPhoneNormalized && userPhoneNormalized.includes(searchNormalized)) ||
                serviceName.includes(searchLower) ||
-               orderLink.includes(searchLower) ||
-               (searchUrlNormalized && orderLinkNormalized && orderLinkNormalized.includes(searchUrlNormalized));
+               linkMatches;
       });
     }
 
