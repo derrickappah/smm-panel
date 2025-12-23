@@ -112,6 +112,34 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
     }
   }, [page, allDeposits.length, hasNextPage, isFetchingNextPage, isLoading, fetchNextPage]);
 
+  // Subscribe to real-time updates for deposits
+  useEffect(() => {
+    // Only subscribe once when component mounts and data is loaded
+    if (isLoading) return;
+
+    const channel = supabase
+      .channel('admin-deposits-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'transactions',
+          filter: 'type=eq.deposit'
+        },
+        (payload) => {
+          // Invalidate queries to trigger refetch when deposits change
+          queryClient.invalidateQueries({ queryKey: ['admin', 'deposits'] });
+          queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isLoading, queryClient]); // Subscribe when data is loaded, cleanup on unmount
+
   const filteredDeposits = useMemo(() => {
     let filtered = [...allDeposits];
 
