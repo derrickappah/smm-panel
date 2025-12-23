@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -75,6 +75,32 @@ const DashboardDeposit = React.memo(({
     [paymentMethodSettings]
   );
 
+  // Countdown timer for payment confirmation (60 seconds)
+  const [countdown, setCountdown] = useState(60);
+
+  // Reset and start countdown when polling starts
+  useEffect(() => {
+    if (isPollingDeposit && pendingTransaction) {
+      setCountdown(60); // Reset to 60 seconds
+      
+      // Countdown interval
+      const countdownInterval = setInterval(() => {
+        setCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(countdownInterval);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      return () => clearInterval(countdownInterval);
+    } else {
+      // Reset countdown when polling stops
+      setCountdown(60);
+    }
+  }, [isPollingDeposit, pendingTransaction]);
+
   // Helper function to highlight specific words in text
   const highlightWords = useCallback((text, phoneNumber, accountName) => {
     // Keywords to highlight
@@ -133,7 +159,7 @@ const DashboardDeposit = React.memo(({
             <div className="flex items-center gap-2 mb-2">
               <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
               <span className="text-xs sm:text-sm font-medium text-blue-700">
-                Confirming payment...
+                Confirming payment... <span className="font-semibold">{countdown}s</span>
               </span>
             </div>
             <div className="mt-2 pt-2 border-t border-blue-200">
