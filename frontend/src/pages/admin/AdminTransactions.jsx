@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Search, RefreshCw, Filter, CheckCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { getPaymentStatusConfig } from '@/lib/paymentStatusHelpers';
 
 const ITEMS_PER_PAGE = 50;
 const VIRTUAL_SCROLL_THRESHOLD = 100;
@@ -184,26 +185,30 @@ const AdminTransactions = memo(({ onRefresh, refreshing = false, getBalanceCheck
           }`}>
             {transaction.status}
           </span>
-          {transaction.type === 'deposit' && transaction.paystack_status && (
-            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-              transaction.paystack_status === 'success' ? 'bg-green-100 text-green-700' :
-              transaction.paystack_status === 'failed' ? 'bg-red-100 text-red-700' :
-              transaction.paystack_status === 'abandoned' ? 'bg-orange-100 text-orange-700' :
-              'bg-gray-100 text-gray-700'
-            }`}>
-              {transaction.paystack_status}
-            </span>
-          )}
-          {transaction.type === 'deposit' && transaction.moolre_status && (
-            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-              transaction.moolre_status === 'success' ? 'bg-green-100 text-green-700' :
-              transaction.moolre_status === 'failed' ? 'bg-red-100 text-red-700' :
-              transaction.moolre_status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-              'bg-gray-100 text-gray-700'
-            }`}>
-              Moolre: {transaction.moolre_status}
-            </span>
-          )}
+          {transaction.type === 'deposit' && transaction.paystack_status && (() => {
+            const statusConfig = getPaymentStatusConfig(transaction.paystack_status, 'paystack');
+            return (
+              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig.color}`}>
+                {statusConfig.label}
+              </span>
+            );
+          })()}
+          {transaction.type === 'deposit' && transaction.korapay_status && (() => {
+            const statusConfig = getPaymentStatusConfig(transaction.korapay_status, 'korapay');
+            return (
+              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig.color}`}>
+                {statusConfig.label}
+              </span>
+            );
+          })()}
+          {transaction.type === 'deposit' && transaction.moolre_status && (() => {
+            const statusConfig = getPaymentStatusConfig(transaction.moolre_status, 'moolre');
+            return (
+              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig.color}`}>
+                Moolre: {statusConfig.label}
+              </span>
+            );
+          })()}
         </div>
         <div className="text-center">
           {(() => {
@@ -399,32 +404,39 @@ const AdminTransactions = memo(({ onRefresh, refreshing = false, getBalanceCheck
             <p className="text-xs text-gray-500">Date</p>
             <p className="text-sm text-gray-700">{new Date(transaction.created_at).toLocaleDateString()} {new Date(transaction.created_at).toLocaleTimeString()}</p>
           </div>
-          {transaction.type === 'deposit' && transaction.paystack_status && (
-            <div>
-              <p className="text-xs text-gray-500">Paystack Status</p>
-              <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                transaction.paystack_status === 'success' ? 'bg-green-100 text-green-700' :
-                transaction.paystack_status === 'failed' ? 'bg-red-100 text-red-700' :
-                transaction.paystack_status === 'abandoned' ? 'bg-orange-100 text-orange-700' :
-                'bg-gray-100 text-gray-700'
-              }`}>
-                {transaction.paystack_status}
-              </span>
-            </div>
-          )}
-          {transaction.type === 'deposit' && transaction.moolre_status && (
-            <div>
-              <p className="text-xs text-gray-500">Moolre Status</p>
-              <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                transaction.moolre_status === 'success' ? 'bg-green-100 text-green-700' :
-                transaction.moolre_status === 'failed' ? 'bg-red-100 text-red-700' :
-                transaction.moolre_status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                'bg-gray-100 text-gray-700'
-              }`}>
-                {transaction.moolre_status}
-              </span>
-            </div>
-          )}
+          {transaction.type === 'deposit' && transaction.paystack_status && (() => {
+            const statusConfig = getPaymentStatusConfig(transaction.paystack_status, 'paystack');
+            return (
+              <div>
+                <p className="text-xs text-gray-500">Paystack Status</p>
+                <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig.color}`}>
+                  {statusConfig.label}
+                </span>
+              </div>
+            );
+          })()}
+          {transaction.type === 'deposit' && transaction.korapay_status && (() => {
+            const statusConfig = getPaymentStatusConfig(transaction.korapay_status, 'korapay');
+            return (
+              <div>
+                <p className="text-xs text-gray-500">Korapay Status</p>
+                <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig.color}`}>
+                  {statusConfig.label}
+                </span>
+              </div>
+            );
+          })()}
+          {transaction.type === 'deposit' && transaction.moolre_status && (() => {
+            const statusConfig = getPaymentStatusConfig(transaction.moolre_status, 'moolre');
+            return (
+              <div>
+                <p className="text-xs text-gray-500">Moolre Status</p>
+                <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig.color}`}>
+                  {statusConfig.label}
+                </span>
+              </div>
+            );
+          })()}
           <div>
             <p className="text-xs text-gray-500">Balance Status</p>
             {balanceCheck === 'not_updated' ? (

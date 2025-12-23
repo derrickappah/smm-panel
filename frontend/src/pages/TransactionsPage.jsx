@@ -22,6 +22,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { getPaymentStatusConfig } from '@/lib/paymentStatusHelpers';
 
 const TransactionsPage = ({ user, onLogout }) => {
   const [transactions, setTransactions] = useState([]);
@@ -776,16 +777,34 @@ const TransactionsPage = ({ user, onLogout }) => {
                                 <StatusIcon className="w-3 h-3" />
                                 {statusConfig.label}
                               </span>
-                              {/* Show Paystack status for deposit transactions */}
-                              {transaction.type === 'deposit' && transaction.paystack_status && (
-                                <span className={`px-2 py-0.5 rounded border text-xs font-medium ${
-                                  transaction.paystack_status === 'success' ? 'bg-green-100 text-green-700 border-green-200' :
-                                  transaction.paystack_status === 'failed' ? 'bg-red-100 text-red-700 border-red-200' :
-                                  transaction.paystack_status === 'abandoned' ? 'bg-orange-100 text-orange-700 border-orange-200' :
-                                  'bg-gray-100 text-gray-700 border-gray-200'
-                                }`}>
-                                  {transaction.paystack_status}
-                                </span>
+                              {/* Show payment provider status for deposit transactions */}
+                              {transaction.type === 'deposit' && (
+                                <>
+                                  {transaction.paystack_status && (() => {
+                                    const statusConfig = getPaymentStatusConfig(transaction.paystack_status, 'paystack');
+                                    return (
+                                      <span className={`px-2 py-0.5 rounded border text-xs font-medium ${statusConfig.color}`}>
+                                        {statusConfig.label}
+                                      </span>
+                                    );
+                                  })()}
+                                  {transaction.korapay_status && (() => {
+                                    const statusConfig = getPaymentStatusConfig(transaction.korapay_status, 'korapay');
+                                    return (
+                                      <span className={`px-2 py-0.5 rounded border text-xs font-medium ${statusConfig.color}`}>
+                                        {statusConfig.label}
+                                      </span>
+                                    );
+                                  })()}
+                                  {transaction.moolre_status && (() => {
+                                    const statusConfig = getPaymentStatusConfig(transaction.moolre_status, 'moolre');
+                                    return (
+                                      <span className={`px-2 py-0.5 rounded border text-xs font-medium ${statusConfig.color}`}>
+                                        {statusConfig.label}
+                                      </span>
+                                    );
+                                  })()}
+                                </>
                               )}
                             </div>
                             {/* Amount */}
