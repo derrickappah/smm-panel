@@ -156,12 +156,20 @@ export default async function handler(req, res) {
 
       // Extract all externalrefs and transaction IDs for batch lookup
       const externalRefs = transactions
-        .map(tx => tx.externalref || tx.reference || tx.external_ref)
-        .filter(ref => ref && ref !== '0'); // Remove null/undefined and "0" values
+        .map(tx => {
+          const ref = tx.externalref || tx.reference || tx.external_ref;
+          return ref && ref !== '0' ? String(ref) : null;
+        })
+        .filter(ref => ref); // Remove null/undefined and "0" values
       
       const transactionIds = transactions
-        .map(tx => tx.transactionid || tx.id || tx.moolre_id)
+        .map(tx => {
+          const id = tx.transactionid || tx.id || tx.moolre_id;
+          return id ? String(id) : null;
+        })
         .filter(id => id); // Remove null/undefined
+
+      console.log(`Looking up user info for ${externalRefs.length} externalrefs and ${transactionIds.length} transaction IDs`);
 
       // Batch lookup: Get user info for all transactions by matching moolre_reference and moolre_id
       let userInfoMap = {};
@@ -188,14 +196,14 @@ export default async function handler(req, res) {
             dbTransactions.forEach(dbTx => {
               if (dbTx.profiles) {
                 if (dbTx.moolre_reference) {
-                  userInfoMap[dbTx.moolre_reference] = {
+                  userInfoMap[String(dbTx.moolre_reference)] = {
                     username: dbTx.profiles.name || null,
                     email: dbTx.profiles.email || null
                   };
                 }
                 // Also map by moolre_id if available
                 if (dbTx.moolre_id) {
-                  userInfoMap[dbTx.moolre_id] = {
+                  userInfoMap[String(dbTx.moolre_id)] = {
                     username: dbTx.profiles.name || null,
                     email: dbTx.profiles.email || null
                   };
@@ -231,7 +239,7 @@ export default async function handler(req, res) {
             // Add to map using transactionid as key
             dbTransactionsById.forEach(dbTx => {
               if (dbTx.profiles && dbTx.moolre_id) {
-                userInfoMap[dbTx.moolre_id] = {
+                userInfoMap[String(dbTx.moolre_id)] = {
                   username: dbTx.profiles.name || null,
                   email: dbTx.profiles.email || null
                 };
@@ -243,6 +251,53 @@ export default async function handler(req, res) {
         } catch (lookupError) {
           console.warn('Error during user info lookup (by ID):', lookupError);
         }
+      }
+
+      // Fallback: Fetch all recent Moolre transactions and match by amount + date
+      // This helps when moolre_reference or moolre_id aren't set
+      try {
+        const amounts = [...new Set(transactions.map(tx => parseFloat(tx.amount || tx.value || 0)).filter(a => a > 0))];
+        if (amounts.length > 0) {
+          const { data: fallbackTransactions, error: fallbackError } = await supabase
+            .from('transactions')
+            .select(`
+              amount,
+              moolre_id,
+              moolre_reference,
+              user_id,
+              created_at,
+              profiles!transactions_user_id_fkey (
+                name,
+                email
+              )
+            `)
+            .in('deposit_method', ['moolre', 'moolre_web'])
+            .in('amount', amounts)
+            .gte('created_at', new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()) // Last 90 days
+            .limit(500); // Limit to avoid too many results
+
+          if (!fallbackError && fallbackTransactions) {
+            console.log(`Found ${fallbackTransactions.length} fallback transactions by amount`);
+            // Create a map by amount + approximate date match
+            fallbackTransactions.forEach(dbTx => {
+              if (dbTx.profiles) {
+                const amountKey = String(dbTx.amount);
+                // Store by amount as a fallback key
+                if (!userInfoMap[`amount_${amountKey}`]) {
+                  userInfoMap[`amount_${amountKey}`] = [];
+                }
+                userInfoMap[`amount_${amountKey}`].push({
+                  username: dbTx.profiles.name || null,
+                  email: dbTx.profiles.email || null,
+                  created_at: dbTx.created_at,
+                  moolre_id: dbTx.moolre_id
+                });
+              }
+            });
+          }
+        }
+      } catch (fallbackError) {
+        console.warn('Error during fallback lookup:', fallbackError);
       }
 
       // Map transactions to consistent format
@@ -265,15 +320,26 @@ export default async function handler(req, res) {
         // Get externalref and transactionid for lookup
         const externalref = tx.externalref || tx.reference || tx.external_ref;
         const transactionid = tx.transactionid || tx.id || tx.moolre_id;
+        const txAmount = parseFloat(tx.amount || tx.value || 0);
         
         // Get user info from map - try externalref first, then transactionid
         let userInfo = null;
         if (externalref && externalref !== '0') {
-          userInfo = userInfoMap[externalref];
+          userInfo = userInfoMap[String(externalref)];
         }
         // If not found by externalref, try transactionid
         if (!userInfo && transactionid) {
-          userInfo = userInfoMap[transactionid];
+          userInfo = userInfoMap[String(transactionid)];
+        }
+        
+        // If still not found, try fallback matching by amount
+        if (!userInfo && txAmount > 0) {
+          const amountKey = `amount_${String(txAmount)}`;
+          const fallbackMatches = userInfoMap[amountKey];
+          if (fallbackMatches && Array.isArray(fallbackMatches) && fallbackMatches.length > 0) {
+            // Use the most recent match (first one since they're sorted by created_at desc)
+            userInfo = fallbackMatches[0];
+          }
         }
 
         return {
