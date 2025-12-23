@@ -27,8 +27,8 @@ export function useDepositPolling(
 ) {
   const {
     interval = 2000, // 2 seconds
-    maxDuration = 180000, // 3 minutes
-    maxAttempts = 90, // 90 attempts * 2 seconds = 3 minutes
+    maxDuration = 60000, // 1 minute
+    maxAttempts = 30, // 30 attempts * 2 seconds = 1 minute
     onStatusChange
   } = options;
 
