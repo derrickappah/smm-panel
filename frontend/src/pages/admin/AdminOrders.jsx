@@ -21,6 +21,30 @@ const normalizePhoneNumber = (phone) => {
   return phone.toString().replace(/\D/g, '');
 };
 
+// Helper function to normalize URLs for better search matching
+const normalizeUrl = (url) => {
+  if (!url) return '';
+  try {
+    let normalized = url.toString().toLowerCase().trim();
+    // Remove protocol (http://, https://)
+    normalized = normalized.replace(/^https?:\/\//, '');
+    // Remove www.
+    normalized = normalized.replace(/^www\./, '');
+    // Remove trailing slash
+    normalized = normalized.replace(/\/$/, '');
+    // Try to decode URL encoding, but catch errors for malformed URLs
+    try {
+      normalized = decodeURIComponent(normalized);
+    } catch (e) {
+      // If decoding fails, use the normalized version without decoding
+    }
+    return normalized;
+  } catch (e) {
+    // If any error occurs, return the original URL in lowercase
+    return url.toString().toLowerCase();
+  }
+};
+
 const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -85,6 +109,8 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
       const searchLower = debouncedSearch.toLowerCase();
       // Normalize search term for phone number matching (remove non-digits)
       const searchNormalized = normalizePhoneNumber(debouncedSearch);
+      // Normalize search term for URL matching
+      const searchUrlNormalized = normalizeUrl(debouncedSearch);
       
       filtered = filtered.filter(order => {
         // Convert order ID to string explicitly (database UUID)
@@ -100,9 +126,11 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
         const serviceName = (order.promotion_package_id 
           ? order.promotion_packages?.name || ''
           : order.services?.name || '').toLowerCase();
+        // Get link and normalize it for comparison
         const orderLink = (order.link || '').toLowerCase();
+        const orderLinkNormalized = normalizeUrl(order.link || '');
         
-        // Check all fields, including normalized phone number matching and panel order IDs
+        // Check all fields, including normalized phone number matching, panel order IDs, and normalized URLs
         return orderId.includes(searchLower) || 
                smmcostOrderId.includes(searchLower) ||
                smmgenOrderId.includes(searchLower) ||
@@ -111,7 +139,8 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                userPhone.includes(searchLower) ||
                (searchNormalized && userPhoneNormalized && userPhoneNormalized.includes(searchNormalized)) ||
                serviceName.includes(searchLower) ||
-               orderLink.includes(searchLower);
+               orderLink.includes(searchLower) ||
+               (searchUrlNormalized && orderLinkNormalized && orderLinkNormalized.includes(searchUrlNormalized));
       });
     }
 
