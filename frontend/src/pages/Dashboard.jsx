@@ -349,8 +349,44 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           }
         } else {
           // No reference stored - this means callback never fired
-          // We can't verify without reference, but we can check if it's been more than 30 minutes
-          // If so, it's likely the payment was never completed
+          // For recent transactions (within 30 minutes), try server-side verification
+          // which can match Paystack transactions by amount and time even without a stored reference
+          if (transactionAge <= thirtyMinutes && transaction.deposit_method === 'paystack') {
+            try {
+              console.log('Attempting server-side verification for transaction without reference:', transaction.id);
+              
+              // Get JWT token for API authentication
+              const { data: { session } } = await supabase.auth.getSession();
+              if (session?.access_token) {
+                // Call server-side verification endpoint which can match by amount and time
+                const verifyResponse = await fetch('/api/verify-pending-payments', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`
+                  },
+                  body: JSON.stringify({
+                    hours: 2 // Check last 2 hours for matching transactions
+                  })
+                });
+
+                if (verifyResponse.ok) {
+                  const verifyData = await verifyResponse.json();
+                  if (verifyData.success && verifyData.matched > 0) {
+                    console.log('Server-side verification matched transaction:', transaction.id);
+                    // The server-side endpoint already approved the transaction
+                    // Refresh user data to get updated balance
+                    await onUpdateUser();
+                  }
+                }
+              }
+            } catch (serverVerifyError) {
+              console.warn('Server-side verification failed for transaction without reference:', serverVerifyError);
+              // Continue with normal flow below
+            }
+          }
+          
+          // If transaction is old and has no reference, mark as rejected
           if (transactionAge > thirtyMinutes) {
             // Transaction is old and has no reference - likely never completed
             // Mark as rejected after 30 minutes (increased from 10 to account for slower payment processing)
@@ -383,6 +419,51 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       console.error('Error verifying pending payments:', error);
     });
   }, [fetchServices, fetchRecentOrders, verifyPendingPayments]);
+
+  // Restore pending transaction on page load/refresh
+  // This ensures polling continues even after page refresh
+  useEffect(() => {
+    const restorePendingTransaction = async () => {
+      // Only restore if user is loaded and no pending transaction is already set
+      if (!user || pendingTransaction) {
+        return;
+      }
+
+      try {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (!authUser) return;
+
+        // Find the most recent pending deposit transaction (within last 2 hours)
+        const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+        
+        const { data: pendingTransactions, error } = await supabase
+          .from('transactions')
+          .select('id, user_id, type, amount, status, deposit_method, paystack_reference, korapay_reference, moolre_reference, created_at')
+          .eq('user_id', authUser.id)
+          .eq('type', 'deposit')
+          .eq('status', 'pending')
+          .gte('created_at', twoHoursAgo)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (error) {
+          console.error('Error fetching pending transaction for restoration:', error);
+          return;
+        }
+
+        if (pendingTransactions && pendingTransactions.length > 0) {
+          const mostRecentPending = pendingTransactions[0];
+          console.log('Restoring pending transaction on page load:', mostRecentPending.id);
+          setPendingTransaction(mostRecentPending);
+          // Polling will automatically start via useDepositPolling hook
+        }
+      } catch (error) {
+        console.error('Error restoring pending transaction:', error);
+      }
+    };
+
+    restorePendingTransaction();
+  }, [user, pendingTransaction]);
 
   // Global error handler for unhandled promise rejections
   useEffect(() => {
