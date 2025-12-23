@@ -253,52 +253,6 @@ export default async function handler(req, res) {
         }
       }
 
-      // Fallback: Fetch all recent Moolre transactions and match by amount + date
-      // This helps when moolre_reference or moolre_id aren't set
-      try {
-        const amounts = [...new Set(transactions.map(tx => parseFloat(tx.amount || tx.value || 0)).filter(a => a > 0))];
-        if (amounts.length > 0) {
-          const { data: fallbackTransactions, error: fallbackError } = await supabase
-            .from('transactions')
-            .select(`
-              amount,
-              moolre_id,
-              moolre_reference,
-              user_id,
-              created_at,
-              profiles!transactions_user_id_fkey (
-                name,
-                email
-              )
-            `)
-            .in('deposit_method', ['moolre', 'moolre_web'])
-            .in('amount', amounts)
-            .gte('created_at', new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()) // Last 90 days
-            .limit(500); // Limit to avoid too many results
-
-          if (!fallbackError && fallbackTransactions) {
-            console.log(`Found ${fallbackTransactions.length} fallback transactions by amount`);
-            // Create a map by amount + approximate date match
-            fallbackTransactions.forEach(dbTx => {
-              if (dbTx.profiles) {
-                const amountKey = String(dbTx.amount);
-                // Store by amount as a fallback key
-                if (!userInfoMap[`amount_${amountKey}`]) {
-                  userInfoMap[`amount_${amountKey}`] = [];
-                }
-                userInfoMap[`amount_${amountKey}`].push({
-                  username: dbTx.profiles.name || null,
-                  email: dbTx.profiles.email || null,
-                  created_at: dbTx.created_at,
-                  moolre_id: dbTx.moolre_id
-                });
-              }
-            });
-          }
-        }
-      } catch (fallbackError) {
-        console.warn('Error during fallback lookup:', fallbackError);
-      }
 
       // Map transactions to consistent format
       // Moolre response format: { txstatus, txtype, accountnumber, payer, payee, amount, transactionid, externalref, thirdpartyref, ts }
@@ -320,9 +274,9 @@ export default async function handler(req, res) {
         // Get externalref and transactionid for lookup
         const externalref = tx.externalref || tx.reference || tx.external_ref;
         const transactionid = tx.transactionid || tx.id || tx.moolre_id;
-        const txAmount = parseFloat(tx.amount || tx.value || 0);
         
         // Get user info from map - try externalref first, then transactionid
+        // Only use exact matches to avoid incorrect associations
         let userInfo = null;
         if (externalref && externalref !== '0') {
           userInfo = userInfoMap[String(externalref)];
@@ -332,15 +286,7 @@ export default async function handler(req, res) {
           userInfo = userInfoMap[String(transactionid)];
         }
         
-        // If still not found, try fallback matching by amount
-        if (!userInfo && txAmount > 0) {
-          const amountKey = `amount_${String(txAmount)}`;
-          const fallbackMatches = userInfoMap[amountKey];
-          if (fallbackMatches && Array.isArray(fallbackMatches) && fallbackMatches.length > 0) {
-            // Use the most recent match (first one since they're sorted by created_at desc)
-            userInfo = fallbackMatches[0];
-          }
-        }
+        // If still not found, return null (don't use fallback matching to avoid incorrect matches)
 
         return {
           id: tx.transactionid || tx.id || tx.moolre_id,
