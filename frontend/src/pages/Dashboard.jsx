@@ -2358,9 +2358,25 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       // Use the extracted payment link
       const finalPaymentLink = paymentLink;
 
-      // Note: moolre_web_reference column doesn't exist in database
-      // Transaction ID is embedded in the reference format: MOOLRE_WEB_{transaction_id}_{timestamp}
-      // So we can extract it later if needed
+      // Store the Moolre Web reference in the database so polling can verify payment status
+      // The reference is needed for check-transaction-status API to verify with Moolre API
+      await supabase
+        .from('transactions')
+        .update({
+          moolre_reference: moolreWebReference,
+          moolre_status: 'pending'
+        })
+        .eq('id', transaction.id);
+
+      console.log('Stored Moolre Web reference for polling:', {
+        transactionId: transaction.id,
+        reference: moolreWebReference
+      });
+
+      // Set pending transaction for polling
+      setPendingTransaction(transaction);
+      setDepositAmount('');
+      setLoading(false);
 
       // Redirect user to Moolre payment page
       window.location.href = finalPaymentLink;

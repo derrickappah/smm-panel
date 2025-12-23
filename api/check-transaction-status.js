@@ -88,6 +88,14 @@ export default async function handler(req, res) {
     }
 
     // If transaction is Moolre or Moolre Web and still pending, verify with Moolre API
+    console.log('Checking Moolre transaction:', {
+      transactionId: transaction.id,
+      deposit_method: transaction.deposit_method,
+      status: transaction.status,
+      has_moolre_reference: !!transaction.moolre_reference,
+      moolre_reference: transaction.moolre_reference
+    });
+    
     if ((transaction.deposit_method === 'moolre' || transaction.deposit_method === 'moolre_web') && 
         transaction.status === 'pending' && 
         transaction.moolre_reference) {
@@ -115,9 +123,29 @@ export default async function handler(req, res) {
 
           if (moolreResponse.ok) {
             const moolreData = await moolreResponse.json();
-            const txstatus = moolreData.data?.txstatus; // 1=Success, 0=Pending, 2=Failed
+            
+            // Log Moolre API response for debugging
+            console.log('Moolre API response for transaction:', {
+              transactionId: transaction.id,
+              reference: transaction.moolre_reference,
+              moolreStatus: moolreData.status,
+              moolreCode: moolreData.code,
+              txstatus: moolreData.data?.txstatus,
+              message: moolreData.message
+            });
+            
+            // Check if Moolre API returned an error (status: 0 means error)
+            if (moolreData.status === 0) {
+              console.warn('Moolre API returned error status:', {
+                transactionId: transaction.id,
+                code: moolreData.code,
+                message: moolreData.message
+              });
+              // Continue with normal flow - return current status
+            } else {
+              const txstatus = moolreData.data?.txstatus; // 1=Success, 0=Pending, 2=Failed
 
-            if (txstatus === 1) {
+              if (txstatus === 1) {
               // Payment successful - update transaction status and balance atomically
               // IMPORTANT: Only call approve_deposit_transaction_universal if transaction is still pending
               // If already approved, we need to manually ensure balance was updated
@@ -243,15 +271,30 @@ export default async function handler(req, res) {
                 .eq('id', transaction.id);
 
               // Refetch transaction to get updated status
-              const { data: updatedTransaction } = await supabase
+              // Add small delay to ensure database has updated
+              await new Promise(resolve => setTimeout(resolve, 100));
+              
+              const { data: updatedTransaction, error: refetchError } = await supabase
                 .from('transactions')
                 .select('status, amount')
                 .eq('id', transaction.id)
                 .single();
 
+              if (refetchError) {
+                console.warn('Error refetching transaction after approval:', refetchError);
+              }
+
+              const finalStatus = updatedTransaction?.status || 'approved';
+              
+              console.log('Moolre transaction approval complete:', {
+                transactionId: transaction.id,
+                finalStatus,
+                approvalSuccess: approvalResult?.[0]?.success
+              });
+
               // Return updated status
               return res.status(200).json({
-                status: updatedTransaction?.status || 'approved',
+                status: finalStatus,
                 amount: updatedTransaction?.amount || transaction.amount,
                 transactionId: transaction.id
               });
@@ -297,13 +340,36 @@ export default async function handler(req, res) {
                   transactionId: transaction.id
                 });
               }
+              } else if (txstatus === 0) {
+                // Still pending at Moolre
+                console.log('Moolre payment still pending:', {
+                  transactionId: transaction.id,
+                  reference: transaction.moolre_reference
+                });
+              }
+              // If txstatus === 2, already handled above
             }
-            // If txstatus === 0, still pending, continue with normal flow
+          } else {
+            // Moolre API request failed
+            console.error('Moolre API request failed:', {
+              transactionId: transaction.id,
+              reference: transaction.moolre_reference,
+              status: moolreResponse.status,
+              statusText: moolreResponse.statusText
+            });
           }
+        } else {
+          // Moolre credentials not configured
+          console.warn('Moolre credentials not configured, skipping verification');
         }
       } catch (moolreError) {
         // Don't fail the request if Moolre verification fails
-        console.warn('Error verifying Moolre payment:', moolreError);
+        console.error('Error verifying Moolre payment:', {
+          transactionId: transaction.id,
+          reference: transaction.moolre_reference,
+          error: moolreError.message,
+          stack: moolreError.stack
+        });
       }
     }
 
