@@ -253,6 +253,70 @@ export default async function handler(req, res) {
         }
       }
 
+      // Additional lookup: Fetch all Moolre transactions and match by transactionid
+      // This helps when moolre_id isn't set in database but we have transactionid from API
+      // We'll create a reverse lookup map
+      try {
+        const { data: allMoolreTransactions, error: allMoolreError } = await supabase
+          .from('transactions')
+          .select(`
+            moolre_reference,
+            moolre_id,
+            user_id,
+            amount,
+            created_at,
+            profiles!transactions_user_id_fkey (
+              name,
+              email
+            )
+          `)
+          .in('deposit_method', ['moolre', 'moolre_web'])
+          .not('user_id', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(1000); // Limit to recent transactions
+
+        if (!allMoolreError && allMoolreTransactions) {
+          console.log(`Fetched ${allMoolreTransactions.length} Moolre transactions for reverse lookup`);
+          
+          // For each transaction from Moolre API, try to find matching database transaction
+          // by checking if we can verify the transactionid matches
+          transactions.forEach(moolreTx => {
+            const moolreTransactionId = String(moolreTx.transactionid || moolreTx.id || moolreTx.moolre_id || '');
+            const moolreAmount = parseFloat(moolreTx.amount || moolreTx.value || 0);
+            const moolrePayer = moolreTx.payer || moolreTx.phone || moolreTx.phone_number;
+            
+            // If we haven't found user info yet, try to match by amount and date
+            if (!userInfoMap[moolreTransactionId] && moolreAmount > 0) {
+              // Find matching transaction by amount and approximate date (within 1 hour - very strict)
+              // Only use this as last resort when exact match fails
+              const moolreDate = new Date(moolreTx.ts || moolreTx.created_at || moolreTx.date || moolreTx.timestamp);
+              const match = allMoolreTransactions.find(dbTx => {
+                if (!dbTx.profiles) return false;
+                // Skip if this transaction already has moolre_id set (should have matched above)
+                if (dbTx.moolre_id) return false;
+                const dbAmount = parseFloat(dbTx.amount || 0);
+                const dbDate = new Date(dbTx.created_at);
+                const timeDiff = Math.abs(moolreDate - dbDate);
+                const hoursDiff = timeDiff / (1000 * 60 * 60);
+                
+                // Very strict: amount must match exactly and within 1 hour
+                return Math.abs(dbAmount - moolreAmount) < 0.01 && hoursDiff < 1;
+              });
+              
+              if (match && match.profiles) {
+                userInfoMap[moolreTransactionId] = {
+                  username: match.profiles.name || null,
+                  email: match.profiles.email || null
+                };
+                console.log(`Matched transaction ${moolreTransactionId} by amount and date`);
+              }
+            }
+          });
+        }
+      } catch (reverseLookupError) {
+        console.warn('Error during reverse lookup:', reverseLookupError);
+      }
+
 
       // Map transactions to consistent format
       // Moolre response format: { txstatus, txtype, accountnumber, payer, payee, amount, transactionid, externalref, thirdpartyref, ts }
