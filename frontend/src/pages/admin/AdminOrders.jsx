@@ -14,6 +14,13 @@ import { toast } from 'sonner';
 const ITEMS_PER_PAGE = 50;
 const VIRTUAL_SCROLL_THRESHOLD = 100;
 
+// Helper function to normalize phone numbers by removing formatting characters
+const normalizePhoneNumber = (phone) => {
+  if (!phone) return '';
+  // Remove all non-digit characters (spaces, dashes, plus signs, parentheses, etc.)
+  return phone.toString().replace(/\D/g, '');
+};
+
 const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -76,19 +83,28 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
 
     if (debouncedSearch) {
       const searchLower = debouncedSearch.toLowerCase();
+      // Normalize search term for phone number matching (remove non-digits)
+      const searchNormalized = normalizePhoneNumber(debouncedSearch);
+      
       filtered = filtered.filter(order => {
-        const orderId = (order.id || '').toLowerCase();
+        // Convert order ID to string explicitly
+        const orderId = String(order.id || '').toLowerCase();
         const userName = (order.profiles?.name || '').toLowerCase();
         const userEmail = (order.profiles?.email || '').toLowerCase();
+        // Get phone number and normalize it for comparison
         const userPhone = (order.profiles?.phone_number || '').toLowerCase();
+        const userPhoneNormalized = normalizePhoneNumber(userPhone);
         const serviceName = (order.promotion_package_id 
           ? order.promotion_packages?.name || ''
           : order.services?.name || '').toLowerCase();
         const orderLink = (order.link || '').toLowerCase();
+        
+        // Check all fields, including normalized phone number matching
         return orderId.includes(searchLower) || 
                userName.includes(searchLower) || 
                userEmail.includes(searchLower) ||
                userPhone.includes(searchLower) ||
+               (searchNormalized && userPhoneNormalized && userPhoneNormalized.includes(searchNormalized)) ||
                serviceName.includes(searchLower) ||
                orderLink.includes(searchLower);
       });
