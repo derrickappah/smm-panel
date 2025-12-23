@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
@@ -37,6 +37,7 @@ export function useDepositPolling(
   const startTimeRef = useRef(null);
   const isPollingRef = useRef(false);
   const processedTransactionIdsRef = useRef(new Set());
+  const [isPollingState, setIsPollingState] = useState(false);
 
   /**
    * Check transaction status via lightweight API endpoint
@@ -213,13 +214,16 @@ export function useDepositPolling(
             amount: statusData.amount || pendingTransaction.amount
           });
 
-          if (success) {
-            // Clear pending transaction
-            setPendingTransaction(null);
-            stopPolling();
-          } else {
-            // Retry verification on next poll (balance might still be syncing)
-            processedTransactionIdsRef.current.delete(transactionId);
+          // Always clear pending transaction when approved, even if verification fails
+          // The transaction is already approved in the database, verification is just for UI
+          setPendingTransaction(null);
+          stopPolling();
+          
+          if (!success) {
+            // Verification failed but transaction is approved - log warning
+            console.warn('Transaction approved but balance verification failed. Balance should still be updated in database.');
+            // Don't retry - transaction is already approved, just refresh user data
+            onUpdateUser();
           }
         } else {
           // Already processed, just stop polling
@@ -284,6 +288,7 @@ export function useDepositPolling(
     console.log('Starting deposit polling for transaction:', pendingTransaction.id);
     
     isPollingRef.current = true;
+    setIsPollingState(true);
     attemptsRef.current = 0;
     startTimeRef.current = Date.now();
 
@@ -305,6 +310,7 @@ export function useDepositPolling(
       intervalRef.current = null;
     }
     isPollingRef.current = false;
+    setIsPollingState(false);
     console.log('Stopped deposit polling');
   }, []);
 
@@ -325,7 +331,7 @@ export function useDepositPolling(
   }, [pendingTransaction?.id, startPolling, stopPolling]);
 
   return {
-    isPolling: isPollingRef.current,
+    isPolling: isPollingState,
     stopPolling
   };
 }
