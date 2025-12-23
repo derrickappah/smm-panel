@@ -124,7 +124,7 @@ export default async function handler(req, res) {
     // Find transaction by reference
     const { data: transactions, error: txError } = await supabase
       .from('transactions')
-      .select('id, user_id, type, amount, status, deposit_method, moolre_reference, moolre_status, created_at')
+      .select('id, user_id, type, amount, status, deposit_method, moolre_reference, moolre_id, moolre_status, created_at')
       .eq('moolre_reference', reference)
       .order('created_at', { ascending: false })
       .limit(1);
@@ -153,6 +153,18 @@ export default async function handler(req, res) {
       isFailed,
       currentStatus: transaction.status
     });
+
+    // Extract moolre_id (transactionid) from Moolre API response
+    const moolreId = moolreData.data?.id || moolreData.data?.transactionid || moolreData.data?.transaction_id;
+    
+    // Update moolre_id if available and not already set
+    if (moolreId && !transaction.moolre_id) {
+      await supabase
+        .from('transactions')
+        .update({ moolre_id: String(moolreId) })
+        .eq('id', transaction.id);
+      console.log('[MOOLRE WEB CALLBACK] Updated moolre_id:', moolreId);
+    }
 
     // Handle successful payment
     if (isSuccessful && transaction.status !== 'approved') {
@@ -225,14 +237,21 @@ export default async function handler(req, res) {
     if (isFailed && transaction.status !== 'rejected') {
       console.log('[MOOLRE WEB CALLBACK] Processing failed payment for transaction:', transaction.id);
 
+      // Extract moolre_id for failed payments too
+      const moolreId = moolreData.data?.id || moolreData.data?.transactionid || moolreData.data?.transaction_id;
+      const updateData = {
+        status: 'rejected',
+        moolre_status: 'failed',
+        moolre_reference: reference
+      };
+      if (moolreId && !transaction.moolre_id) {
+        updateData.moolre_id = String(moolreId);
+      }
+
       // First attempt with pending check
       let { error: updateError } = await supabase
         .from('transactions')
-        .update({
-          status: 'rejected',
-          moolre_status: 'failed',
-          moolre_reference: reference
-        })
+        .update(updateData)
         .eq('id', transaction.id)
         .eq('status', 'pending');
 
@@ -245,13 +264,19 @@ export default async function handler(req, res) {
           .single();
         
         if (currentTx?.status === 'pending') {
+          const moolreId = moolreData.data?.id || moolreData.data?.transactionid || moolreData.data?.transaction_id;
+          const retryUpdateData = {
+            status: 'rejected',
+            moolre_status: 'failed',
+            moolre_reference: reference
+          };
+          if (moolreId && !transaction.moolre_id) {
+            retryUpdateData.moolre_id = String(moolreId);
+          }
+          
           const { error: retryError } = await supabase
             .from('transactions')
-            .update({
-              status: 'rejected',
-              moolre_status: 'failed',
-              moolre_reference: reference
-            })
+            .update(retryUpdateData)
             .eq('id', transaction.id);
           
           if (retryError) {
