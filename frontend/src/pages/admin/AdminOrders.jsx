@@ -87,8 +87,11 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
       const searchNormalized = normalizePhoneNumber(debouncedSearch);
       
       filtered = filtered.filter(order => {
-        // Convert order ID to string explicitly
+        // Convert order ID to string explicitly (database UUID)
         const orderId = String(order.id || '').toLowerCase();
+        // Panel order IDs (what users see in "Order No" column)
+        const smmcostOrderId = String(order.smmcost_order_id || '').toLowerCase();
+        const smmgenOrderId = String(order.smmgen_order_id || '').toLowerCase();
         const userName = (order.profiles?.name || '').toLowerCase();
         const userEmail = (order.profiles?.email || '').toLowerCase();
         // Get phone number and normalize it for comparison
@@ -99,8 +102,10 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
           : order.services?.name || '').toLowerCase();
         const orderLink = (order.link || '').toLowerCase();
         
-        // Check all fields, including normalized phone number matching
+        // Check all fields, including normalized phone number matching and panel order IDs
         return orderId.includes(searchLower) || 
+               smmcostOrderId.includes(searchLower) ||
+               smmgenOrderId.includes(searchLower) ||
                userName.includes(searchLower) || 
                userEmail.includes(searchLower) ||
                userPhone.includes(searchLower) ||
