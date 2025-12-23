@@ -16,9 +16,22 @@ const DashboardOrderForm = React.memo(({
   const [serviceSearch, setServiceSearch] = useState('');
   const [selectOpen, setSelectOpen] = useState(false);
 
+  // Sort services by display_order to match admin page ordering
+  const sortedServices = useMemo(() => {
+    return [...services].sort((a, b) => {
+      const orderA = a.display_order ?? 0;
+      const orderB = b.display_order ?? 0;
+      if (orderA !== orderB) return orderA - orderB;
+      // If display_order is same, sort by created_at descending
+      const dateA = new Date(a.created_at || 0);
+      const dateB = new Date(b.created_at || 0);
+      return dateB - dateA;
+    });
+  }, [services]);
+
   const selectedService = useMemo(() => 
-    services.find(s => s.id === orderForm.service_id),
-    [services, orderForm.service_id]
+    sortedServices.find(s => s.id === orderForm.service_id),
+    [sortedServices, orderForm.service_id]
   );
 
   const selectedPackage = useMemo(() => 
@@ -27,15 +40,15 @@ const DashboardOrderForm = React.memo(({
   );
 
   const filteredServices = useMemo(() => {
-    if (!serviceSearch.trim()) return services;
+    if (!serviceSearch.trim()) return sortedServices;
     const searchLower = serviceSearch.toLowerCase();
-    return services.filter(service => 
+    return sortedServices.filter(service => 
       service.name?.toLowerCase().includes(searchLower) ||
       service.platform?.toLowerCase().includes(searchLower) ||
       service.service_type?.toLowerCase().includes(searchLower) ||
       service.description?.toLowerCase().includes(searchLower)
     );
-  }, [services, serviceSearch]);
+  }, [sortedServices, serviceSearch]);
 
   const filteredPackages = useMemo(() => {
     if (!serviceSearch.trim()) return packages;
@@ -62,7 +75,7 @@ const DashboardOrderForm = React.memo(({
     
     if (selectedService.is_combo && selectedService.combo_service_ids?.length > 0) {
       const componentServices = selectedService.combo_service_ids
-        .map(serviceId => services.find(s => s.id === serviceId))
+        .map(serviceId => sortedServices.find(s => s.id === serviceId))
         .filter(s => s !== undefined);
       
       if (componentServices.length === 0) {
@@ -77,7 +90,7 @@ const DashboardOrderForm = React.memo(({
     }
     
     return ((quantity / 1000) * selectedService.rate).toFixed(2);
-  }, [selectedService, selectedPackage, orderForm.quantity, services]);
+  }, [selectedService, selectedPackage, orderForm.quantity, sortedServices]);
 
   const handleServiceSearchChange = useCallback((e) => {
     const value = e.target.value;
@@ -420,7 +433,7 @@ const DashboardOrderForm = React.memo(({
                   </p>
                   <ul className="text-xs text-purple-700 space-y-0.5">
                     {selectedService.combo_service_ids.map((serviceId) => {
-                      const componentService = services.find(s => s.id === serviceId);
+                      const componentService = sortedServices.find(s => s.id === serviceId);
                       return componentService ? (
                         <li key={serviceId} className="flex items-center gap-1.5">
                           <span className="w-1 h-1 bg-purple-500 rounded-full"></span>
