@@ -287,7 +287,7 @@ export default async function handler(req, res) {
             
             // If we haven't found user info yet, try to match by amount and date
             if (!userInfoMap[moolreTransactionId] && moolreAmount > 0) {
-              // Find matching transaction by amount and approximate date (within 1 hour - very strict)
+              // Find matching transaction by amount and approximate date (within 3 minutes - very strict)
               // Only use this as last resort when exact match fails
               const moolreDate = new Date(moolreTx.ts || moolreTx.created_at || moolreTx.date || moolreTx.timestamp);
               const match = allMoolreTransactions.find(dbTx => {
@@ -297,10 +297,10 @@ export default async function handler(req, res) {
                 const dbAmount = parseFloat(dbTx.amount || 0);
                 const dbDate = new Date(dbTx.created_at);
                 const timeDiff = Math.abs(moolreDate - dbDate);
-                const hoursDiff = timeDiff / (1000 * 60 * 60);
+                const minutesDiff = timeDiff / (1000 * 60);
                 
-                // Very strict: amount must match exactly and within 1 hour
-                return Math.abs(dbAmount - moolreAmount) < 0.01 && hoursDiff < 1;
+                // Very strict: amount must match exactly and within 3 minutes
+                return Math.abs(dbAmount - moolreAmount) < 0.01 && minutesDiff < 3;
               });
               
               if (match && match.profiles) {
