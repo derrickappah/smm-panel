@@ -1,4 +1,4 @@
-import React, { memo, useState, useMemo, useCallback, useEffect } from 'react';
+import React, { memo, useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAdminDeposits, useApproveDeposit, useRejectDeposit } from '@/hooks/useAdminDeposits';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -26,6 +26,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
   const [manualRefDialog, setManualRefDialog] = useState({ open: false, deposit: null, error: null, paymentMethod: null });
   const [manualReference, setManualReference] = useState('');
   const [paymentProofDialog, setPaymentProofDialog] = useState({ open: false, imageUrl: null, deposit: null });
+  const isSubscribedRef = useRef(false);
 
   const debouncedSearch = useDebounce(searchTerm, 300);
 
@@ -115,7 +116,9 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
   // Subscribe to real-time updates for deposits
   useEffect(() => {
     // Only subscribe once when component mounts and data is loaded
-    if (isLoading) return;
+    if (isLoading || isSubscribedRef.current) return;
+
+    console.log('[AdminDeposits] Setting up realtime subscription for deposits');
 
     const channel = supabase
       .channel('admin-deposits-realtime')
@@ -128,17 +131,27 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
           filter: 'type=eq.deposit'
         },
         (payload) => {
-          // Invalidate queries to trigger refetch when deposits change
+          console.log('[AdminDeposits] Realtime event received:', payload.eventType, payload.new || payload.old);
+          // Invalidate and refetch queries to update UI when deposits change
           queryClient.invalidateQueries({ queryKey: ['admin', 'deposits'] });
           queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
+          // Trigger immediate refetch for infinite query
+          refetch();
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('[AdminDeposits] Realtime subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          isSubscribedRef.current = true;
+        }
+      });
 
     return () => {
+      console.log('[AdminDeposits] Cleaning up realtime subscription');
       supabase.removeChannel(channel);
+      isSubscribedRef.current = false;
     };
-  }, [isLoading, queryClient]); // Subscribe when data is loaded, cleanup on unmount
+  }, [isLoading, queryClient, refetch]); // Subscribe when data is loaded, cleanup on unmount
 
   const filteredDeposits = useMemo(() => {
     let filtered = [...allDeposits];
