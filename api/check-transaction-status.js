@@ -119,15 +119,18 @@ export default async function handler(req, res) {
 
             if (txstatus === 1) {
               // Payment successful - update transaction status and balance atomically
-              // IMPORTANT: Only call approve_deposit_transaction if transaction is still pending
+              // IMPORTANT: Only call approve_deposit_transaction_universal if transaction is still pending
               // If already approved, we need to manually ensure balance was updated
+              // Using universal function which supports all payment methods (Moolre, Paystack, Korapay, etc.)
               
               if (transaction.status === 'pending') {
-                // Transaction is still pending - use atomic function to update both status and balance
-                const { data: approvalResult, error: balanceError } = await supabase.rpc('approve_deposit_transaction', {
+                // Transaction is still pending - use universal atomic function to update both status and balance
+                // This function supports all payment methods including Moolre
+                const { data: approvalResult, error: balanceError } = await supabase.rpc('approve_deposit_transaction_universal', {
                   p_transaction_id: transaction.id,
-                  p_paystack_status: null,
-                  p_paystack_reference: null
+                  p_payment_method: transaction.deposit_method || 'moolre',
+                  p_payment_status: 'success',
+                  p_payment_reference: transaction.moolre_reference
                 });
 
                 if (balanceError) {
