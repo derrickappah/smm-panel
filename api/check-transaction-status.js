@@ -87,8 +87,8 @@ export default async function handler(req, res) {
       });
     }
 
-    // If transaction is Moolre and still pending, verify with Moolre API
-    if (transaction.deposit_method === 'moolre' && 
+    // If transaction is Moolre or Moolre Web and still pending, verify with Moolre API
+    if ((transaction.deposit_method === 'moolre' || transaction.deposit_method === 'moolre_web') && 
         transaction.status === 'pending' && 
         transaction.moolre_reference) {
       try {
