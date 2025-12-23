@@ -268,6 +268,19 @@ export function useDepositPolling(
   ]);
 
   /**
+   * Stop polling
+   */
+  const stopPolling = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    isPollingRef.current = false;
+    setIsPollingState(false);
+    console.log('Stopped deposit polling');
+  }, []);
+
+  /**
    * Start polling
    */
   const startPolling = useCallback(() => {
@@ -275,14 +288,15 @@ export function useDepositPolling(
       return;
     }
 
-    // Don't start if already polling
-    if (isPollingRef.current) {
-      return;
-    }
-
     // Don't start if transaction was already processed
     if (processedTransactionIdsRef.current.has(pendingTransaction.id)) {
       return;
+    }
+
+    // If already polling a different transaction, stop and switch to new one
+    if (isPollingRef.current) {
+      console.log('Switching to new transaction, stopping previous polling');
+      stopPolling();
     }
 
     console.log('Starting deposit polling for transaction:', pendingTransaction.id);
@@ -299,7 +313,7 @@ export function useDepositPolling(
     intervalRef.current = setInterval(() => {
       pollTransaction();
     }, interval);
-  }, [pendingTransaction, pollTransaction, interval]);
+  }, [pendingTransaction, pollTransaction, interval, stopPolling]);
 
   /**
    * Stop polling

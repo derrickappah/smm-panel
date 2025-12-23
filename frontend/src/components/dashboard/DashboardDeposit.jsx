@@ -250,10 +250,10 @@ const DashboardDeposit = React.memo(({
           <Button
             data-testid="deposit-submit-btn"
             type="submit"
-            disabled={loading || isPollingDeposit || !depositAmount}
+            disabled={loading || !depositAmount}
             className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isPollingDeposit ? 'Confirming payment...' : loading ? 'Processing...' : 'Pay with Paystack'}
+            {loading ? 'Processing...' : 'Pay with Paystack'}
           </Button>
           <p className="text-xs sm:text-sm text-gray-600 text-center">
             Secure payment via Paystack. Funds are added instantly after successful payment.

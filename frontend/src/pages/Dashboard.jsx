@@ -3913,7 +3913,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             moolreOtpVerified={moolreOtpVerified}
             moolreOtpError={moolreOtpError}
             moolrePaymentStatus={moolrePaymentStatus}
-            loading={loading || isPollingDeposit}
+            loading={loading}
             isPollingDeposit={isPollingDeposit}
             pendingTransaction={pendingTransaction}
             manualDepositDetails={manualDepositDetails}
