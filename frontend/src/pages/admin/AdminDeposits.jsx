@@ -132,11 +132,75 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
         },
         (payload) => {
           console.log('[AdminDeposits] Realtime event received:', payload.eventType, payload.new || payload.old);
-          // Invalidate and refetch queries to update UI when deposits change
-          queryClient.invalidateQueries({ queryKey: ['admin', 'deposits'] });
-          queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
-          // Trigger immediate refetch for infinite query
-          refetch();
+          
+          // Update cache optimistically based on the event
+          if (payload.eventType === 'UPDATE' && payload.new) {
+            console.log('[AdminDeposits] Updating deposit in cache:', payload.new.id, payload.new);
+            
+            // Update existing deposit in cache immediately for instant UI update
+            queryClient.setQueryData(['admin', 'deposits'], (oldData) => {
+              if (!oldData?.pages) {
+                console.log('[AdminDeposits] No old data found, invalidating instead');
+                return oldData;
+              }
+              
+              let found = false;
+              const updatedData = {
+                ...oldData,
+                pages: oldData.pages.map(page => ({
+                  ...page,
+                  data: page.data?.map(tx => {
+                    if (tx.id === payload.new.id) {
+                      found = true;
+                      const updated = {
+                        ...tx,
+                        ...payload.new,
+                        // Preserve profile data if it exists (payload.new won't have it)
+                        profiles: tx.profiles || payload.new.profiles
+                      };
+                      console.log('[AdminDeposits] Updated transaction:', tx.id, 'from status', tx.status, 'to', updated.status);
+                      return updated;
+                    }
+                    return tx;
+                  }) || []
+                }))
+              };
+              
+              if (!found) {
+                console.log('[AdminDeposits] Transaction not found in cache, will refetch');
+              }
+              
+              return updatedData;
+            });
+            
+            // Invalidate stats and refetch in background to ensure sync
+            queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
+            // Refetch to ensure we have the latest data, but UI already updated optimistically
+            console.log('[AdminDeposits] Triggering refetch after cache update');
+            refetch();
+          } else if (payload.eventType === 'INSERT' && payload.new) {
+            // For new deposits, we need to refetch to get full data with profile info
+            // The payload.new won't have the joined profile data
+            queryClient.invalidateQueries({ queryKey: ['admin', 'deposits'] });
+            queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
+            refetch();
+          } else if (payload.eventType === 'DELETE' && payload.old) {
+            // Remove deleted deposit from cache
+            queryClient.setQueryData(['admin', 'deposits'], (oldData) => {
+              if (!oldData?.pages) return oldData;
+              
+              return {
+                ...oldData,
+                pages: oldData.pages.map(page => ({
+                  ...page,
+                  data: page.data?.filter(tx => tx.id !== payload.old.id) || [],
+                  total: Math.max(0, (page.total || 0) - 1)
+                }))
+              };
+            });
+            
+            queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
+          }
         }
       )
       .subscribe((status) => {
