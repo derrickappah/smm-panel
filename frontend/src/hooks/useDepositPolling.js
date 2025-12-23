@@ -316,19 +316,6 @@ export function useDepositPolling(
   }, [pendingTransaction, pollTransaction, interval, stopPolling]);
 
   /**
-   * Stop polling
-   */
-  const stopPolling = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    isPollingRef.current = false;
-    setIsPollingState(false);
-    console.log('Stopped deposit polling');
-  }, []);
-
-  /**
    * Effect to start/stop polling based on pending transaction
    */
   useEffect(() => {
