@@ -32,6 +32,38 @@ function getChannelName(channelCode) {
   return channelMap[channelCode] || channelCode || 'Unknown';
 }
 
+/**
+ * Infer channel from phone number prefix (Ghana mobile networks)
+ * @param {string} phoneNumber - Phone number
+ * @returns {string|null} - Channel name or null if can't determine
+ */
+function inferChannelFromPhone(phoneNumber) {
+  if (!phoneNumber) return null;
+  
+  // Remove country code and get last 9 digits
+  const cleaned = phoneNumber.replace(/^\+?233/, '').replace(/^0/, '');
+  if (cleaned.length < 9) return null;
+  
+  const prefix = cleaned.substring(0, 2);
+  
+  // MTN prefixes: 24, 26, 54, 55, 56, 59
+  if (['24', '26', '54', '55', '56', '59'].includes(prefix)) {
+    return 'MTN';
+  }
+  
+  // Vodafone prefixes: 20, 50
+  if (['20', '50'].includes(prefix)) {
+    return 'Vodafone';
+  }
+  
+  // AirtelTigo prefixes: 27, 57
+  if (['27', '57'].includes(prefix)) {
+    return 'AirtelTigo';
+  }
+  
+  return null;
+}
+
 export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -182,6 +214,7 @@ export default async function handler(req, res) {
             .select(`
               moolre_reference,
               moolre_id,
+              moolre_channel,
               user_id,
               profiles!transactions_user_id_fkey (
                 name,
@@ -195,18 +228,17 @@ export default async function handler(req, res) {
             // Create a map of externalref -> user info
             dbTransactions.forEach(dbTx => {
               if (dbTx.profiles) {
+                const userInfo = {
+                  username: dbTx.profiles.name || null,
+                  email: dbTx.profiles.email || null,
+                  channel: dbTx.moolre_channel || null
+                };
                 if (dbTx.moolre_reference) {
-                  userInfoMap[String(dbTx.moolre_reference)] = {
-                    username: dbTx.profiles.name || null,
-                    email: dbTx.profiles.email || null
-                  };
+                  userInfoMap[String(dbTx.moolre_reference)] = userInfo;
                 }
                 // Also map by moolre_id if available
                 if (dbTx.moolre_id) {
-                  userInfoMap[String(dbTx.moolre_id)] = {
-                    username: dbTx.profiles.name || null,
-                    email: dbTx.profiles.email || null
-                  };
+                  userInfoMap[String(dbTx.moolre_id)] = userInfo;
                 }
               }
             });
@@ -226,6 +258,7 @@ export default async function handler(req, res) {
             .select(`
               moolre_reference,
               moolre_id,
+              moolre_channel,
               user_id,
               profiles!transactions_user_id_fkey (
                 name,
@@ -241,7 +274,8 @@ export default async function handler(req, res) {
               if (dbTx.profiles && dbTx.moolre_id) {
                 userInfoMap[String(dbTx.moolre_id)] = {
                   username: dbTx.profiles.name || null,
-                  email: dbTx.profiles.email || null
+                  email: dbTx.profiles.email || null,
+                  channel: dbTx.moolre_channel || null
                 };
               }
             });
@@ -257,23 +291,24 @@ export default async function handler(req, res) {
       // This helps when moolre_id isn't set in database but we have transactionid from API
       // We'll create a reverse lookup map
       try {
-        const { data: allMoolreTransactions, error: allMoolreError } = await supabase
-          .from('transactions')
-          .select(`
-            moolre_reference,
-            moolre_id,
-            user_id,
-            amount,
-            created_at,
-            profiles!transactions_user_id_fkey (
-              name,
-              email
-            )
-          `)
-          .in('deposit_method', ['moolre', 'moolre_web'])
-          .not('user_id', 'is', null)
-          .order('created_at', { ascending: false })
-          .limit(1000); // Limit to recent transactions
+          const { data: allMoolreTransactions, error: allMoolreError } = await supabase
+            .from('transactions')
+            .select(`
+              moolre_reference,
+              moolre_id,
+              moolre_channel,
+              user_id,
+              amount,
+              created_at,
+              profiles!transactions_user_id_fkey (
+                name,
+                email
+              )
+            `)
+            .in('deposit_method', ['moolre', 'moolre_web'])
+            .not('user_id', 'is', null)
+            .order('created_at', { ascending: false })
+            .limit(1000); // Limit to recent transactions
 
         if (!allMoolreError && allMoolreTransactions) {
           console.log(`Fetched ${allMoolreTransactions.length} Moolre transactions for reverse lookup`);
@@ -306,7 +341,8 @@ export default async function handler(req, res) {
               if (match && match.profiles) {
                 userInfoMap[moolreTransactionId] = {
                   username: match.profiles.name || null,
-                  email: match.profiles.email || null
+                  email: match.profiles.email || null,
+                  channel: match.moolre_channel || null
                 };
                 console.log(`Matched transaction ${moolreTransactionId} by amount and date`);
               }
@@ -365,7 +401,13 @@ export default async function handler(req, res) {
           payee: tx.payee,
           accountnumber: tx.accountnumber,
           channel: tx.channel || tx.channel_code,
-          channelName: tx.channelName || getChannelName(tx.channel || tx.channel_code),
+          // Use channel from database if available, otherwise try to get from API response, 
+          // otherwise infer from phone number, otherwise use getChannelName
+          channelName: userInfo?.channel || 
+                      tx.channelName || 
+                      getChannelName(tx.channel || tx.channel_code) ||
+                      inferChannelFromPhone(tx.payer || tx.phone || tx.phone_number) ||
+                      'Unknown',
           created_at: tx.ts || tx.created_at || tx.createdAt || tx.date || tx.timestamp,
           updated_at: tx.ts || tx.updated_at || tx.updatedAt || tx.modified_at,
           message: moolreData.message,
