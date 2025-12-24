@@ -72,6 +72,65 @@ const fetchAllUsers = async () => {
   return allUsers;
 };
 
+// Fetch deposit statuses for all users efficiently
+// Returns a Map of user_id -> Set of deposit statuses
+export const fetchUserDepositStatuses = async () => {
+  const BATCH_SIZE = 1000;
+  let allDeposits = [];
+  let from = 0;
+  let hasMore = true;
+  
+  // Fetch all deposit transactions in batches
+  while (hasMore) {
+    const to = from + BATCH_SIZE - 1;
+    
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('user_id, status')
+      .eq('type', 'deposit')
+      .range(from, to);
+
+    if (error) {
+      console.error('Error fetching deposit statuses:', error);
+      throw error;
+    }
+
+    if (data && data.length > 0) {
+      allDeposits = allDeposits.concat(data);
+      hasMore = data.length === BATCH_SIZE;
+      from += BATCH_SIZE;
+    } else {
+      hasMore = false;
+    }
+  }
+
+  // Create a Map of user_id -> Set of deposit statuses
+  const depositStatusMap = new Map();
+  
+  allDeposits.forEach(deposit => {
+    if (!depositStatusMap.has(deposit.user_id)) {
+      depositStatusMap.set(deposit.user_id, new Set());
+    }
+    depositStatusMap.get(deposit.user_id).add(deposit.status);
+  });
+
+  return depositStatusMap;
+};
+
+// Hook to fetch user deposit statuses
+export const useUserDepositStatuses = () => {
+  const { data: userRole, isLoading: roleLoading } = useUserRole();
+  const isAdmin = userRole?.isAdmin ?? false;
+  
+  return useQuery({
+    queryKey: ['admin', 'user-deposit-statuses'],
+    queryFn: fetchUserDepositStatuses,
+    enabled: !roleLoading && isAdmin,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    gcTime: 5 * 60 * 1000, // 5 minutes
+  });
+};
+
 export const useAdminUsers = (options = {}) => {
   const { enabled = true, useInfinite = false } = options;
   

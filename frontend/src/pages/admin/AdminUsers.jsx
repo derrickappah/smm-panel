@@ -1,5 +1,5 @@
 import React, { memo, useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { useAdminUsers, useUpdateUser } from '@/hooks/useAdminUsers';
+import { useAdminUsers, useUpdateUser, useUserDepositStatuses } from '@/hooks/useAdminUsers';
 import { useDebounce } from '@/hooks/useDebounce';
 import VirtualizedList from '@/components/VirtualizedList';
 import ResponsiveTable from '@/components/admin/ResponsiveTable';
@@ -8,7 +8,7 @@ import UserDetailsDialog from '@/components/admin/UserDetailsDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, RefreshCw, Edit, Download, Eye, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Search, RefreshCw, Edit, Download, Eye, ArrowUpDown, ArrowUp, ArrowDown, Filter } from 'lucide-react';
 import { toast } from 'sonner';
 import { logUserActivity } from '@/lib/activityLogger';
 
@@ -18,6 +18,7 @@ const VIRTUAL_SCROLL_THRESHOLD = 100;
 const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState('');
+  const [depositStatusFilter, setDepositStatusFilter] = useState('all');
   const [page, setPage] = useState(1);
   const [editingUser, setEditingUser] = useState(null);
   const [exportFormat, setExportFormat] = useState('name-phone');
@@ -43,6 +44,9 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
   });
 
   const updateUserMutation = useUpdateUser();
+
+  // Fetch deposit statuses for filtering
+  const { data: depositStatusMap } = useUserDepositStatuses();
 
   // Flatten all pages into a single array
   const allUsers = useMemo(() => {
@@ -83,6 +87,21 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
       });
     }
 
+    // Deposit status filter
+    if (depositStatusFilter !== 'all' && depositStatusMap) {
+      filtered = filtered.filter(user => {
+        const userDepositStatuses = depositStatusMap.get(user.id);
+        
+        if (depositStatusFilter === 'no_deposits') {
+          // User has no deposits
+          return !userDepositStatuses || userDepositStatuses.size === 0;
+        } else {
+          // User has at least one deposit with the specified status
+          return userDepositStatuses && userDepositStatuses.has(depositStatusFilter);
+        }
+      });
+    }
+
     // Sort users (only if sortField is not 'none')
     if (sortField !== 'none') {
       filtered.sort((a, b) => {
@@ -117,7 +136,7 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
     }
 
     return filtered;
-  }, [allUsers, debouncedSearch, dateFilter, sortField, sortDirection]);
+  }, [allUsers, debouncedSearch, dateFilter, depositStatusFilter, depositStatusMap, sortField, sortDirection]);
 
   // Paginate filtered results
   const paginatedUsers = useMemo(() => {
@@ -537,6 +556,25 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
               }}
               className="w-full sm:flex-1 h-12 text-base"
             />
+            <Select 
+              value={depositStatusFilter} 
+              onValueChange={(value) => {
+                setDepositStatusFilter(value);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-[180px] h-12 text-base">
+                <Filter className="w-4 h-4 mr-2" />
+                <SelectValue placeholder="Deposit Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Users</SelectItem>
+                <SelectItem value="pending">Pending Deposits</SelectItem>
+                <SelectItem value="approved">Approved Deposits</SelectItem>
+                <SelectItem value="rejected">Rejected Deposits</SelectItem>
+                <SelectItem value="no_deposits">No Deposits</SelectItem>
+              </SelectContent>
+            </Select>
             <div className="flex gap-2">
               <Select 
                 value={sortField} 
