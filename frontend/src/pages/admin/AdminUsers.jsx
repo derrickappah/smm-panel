@@ -22,6 +22,7 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
   const [page, setPage] = useState(1);
   const [editingUser, setEditingUser] = useState(null);
   const [exportFormat, setExportFormat] = useState('name-phone');
+  const [exportTag, setExportTag] = useState('');
   const [selectedUserId, setSelectedUserId] = useState(null);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   const [sortField, setSortField] = useState('none'); // 'none', 'name', or 'balance'
@@ -245,16 +246,25 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
   const handleExportCSV = useCallback(() => {
     let headers, rows;
     
+    // Format name with tag if provided
+    const formatName = (name) => {
+      const userName = name || 'N/A';
+      if (exportTag && exportTag.trim()) {
+        return `${userName} [${exportTag.trim()}]`;
+      }
+      return userName;
+    };
+    
     if (exportFormat === 'name-phone') {
       headers = ['Name', 'Phone Number'];
       rows = filteredUsers.map(user => [
-        user.name || 'N/A',
+        formatName(user.name),
         user.phone_number || 'N/A'
       ]);
     } else {
       headers = ['Name', 'Email'];
       rows = filteredUsers.map(user => [
-        user.name || 'N/A',
+        formatName(user.name),
         user.email || 'N/A'
       ]);
     }
@@ -275,7 +285,7 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
     link.click();
     document.body.removeChild(link);
     toast.success('Users exported successfully');
-  }, [filteredUsers, exportFormat]);
+  }, [filteredUsers, exportFormat, exportTag]);
 
   const renderTableHeader = useCallback(() => {
     const SortIcon = ({ field }) => {
@@ -520,6 +530,12 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
                   <SelectItem value="name-email">Name & Email</SelectItem>
                 </SelectContent>
               </Select>
+              <Input
+                placeholder="Custom tag (optional)"
+                value={exportTag}
+                onChange={(e) => setExportTag(e.target.value)}
+                className="w-full sm:w-[150px] min-h-[44px] text-base"
+              />
               <Button
                 onClick={handleExportCSV}
                 variant="outline"
