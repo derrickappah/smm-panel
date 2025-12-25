@@ -6,11 +6,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Calendar } from 'lucide-react';
-import type { SupportMetrics, AdminPerformance } from '@/types/support';
 
-const AdminSupportAnalytics: React.FC = () => {
-  const [metrics, setMetrics] = useState<SupportMetrics | null>(null);
-  const [performance, setPerformance] = useState<AdminPerformance[]>([]);
+const AdminSupportAnalytics = () => {
+  const [metrics, setMetrics] = useState(null);
+  const [performance, setPerformance] = useState([]);
   const [loading, setLoading] = useState(true);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');

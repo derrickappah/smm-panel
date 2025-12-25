@@ -1,107 +1,109 @@
 -- Create Support Attachments Storage Bucket
--- Run this in your Supabase SQL Editor
--- Note: Storage buckets are created via Supabase Dashboard or API, but policies are set here
+-- IMPORTANT: Storage buckets and policies must be created via Supabase Dashboard or API
+-- This file contains instructions and the SQL policies that need to be created manually
 
--- Create the storage bucket (if it doesn't exist)
--- This requires using the Supabase Dashboard Storage section or API
--- The bucket should be named "support-attachments" and set to private
+-- ============================================================================
+-- STEP 1: Create the Storage Bucket (via Supabase Dashboard)
+-- ============================================================================
+-- 1. Go to your Supabase Dashboard
+-- 2. Navigate to Storage section
+-- 3. Click "New bucket"
+-- 4. Configure:
+--    - Name: "support-attachments"
+--    - Public: No (private bucket)
+--    - File size limit: 10MB (or adjust as needed)
+--    - Allowed MIME types: 
+--      * image/jpeg
+--      * image/png
+--      * image/webp
+--      * image/gif
+--      * application/pdf
+--      * application/msword
+--      * application/vnd.openxmlformats-officedocument.wordprocessingml.document
 
--- Storage policies for support-attachments bucket
--- These policies control who can upload/download files
+-- ============================================================================
+-- STEP 2: Create Storage Policies (via Supabase Dashboard)
+-- ============================================================================
+-- After creating the bucket, go to the bucket's "Policies" tab and create these policies:
 
--- Policy: Users can upload files to their own conversation folders
-CREATE POLICY "Users can upload to their conversation folders"
-ON storage.objects FOR INSERT
-TO authenticated
-WITH CHECK (
-    bucket_id = 'support-attachments'
-    AND (storage.foldername(name))[1] = 'support'
-    AND (
-        -- Extract conversation_id from path: support/{conversation_id}/...
-        EXISTS (
-            SELECT 1 FROM conversations
-            WHERE id::text = (storage.foldername(name))[2]
-            AND user_id = auth.uid()
-        )
-    )
-);
+-- Policy 1: Users can upload to their conversation folders
+-- Name: "Users can upload to their conversation folders"
+-- Operation: INSERT
+-- Target roles: authenticated
+-- Policy definition (USING expression): Leave empty or use: true
+-- Policy definition (WITH CHECK expression):
+-- bucket_id = 'support-attachments' 
+-- AND (storage.foldername(name))[1] = 'support'
+-- AND EXISTS (
+--     SELECT 1 FROM conversations
+--     WHERE id::text = (storage.foldername(name))[2]
+--     AND user_id = auth.uid()
+-- )
 
--- Policy: Users can download files from their own conversation folders
-CREATE POLICY "Users can download from their conversation folders"
-ON storage.objects FOR SELECT
-TO authenticated
-USING (
-    bucket_id = 'support-attachments'
-    AND (storage.foldername(name))[1] = 'support'
-    AND (
-        -- Extract conversation_id from path: support/{conversation_id}/...
-        EXISTS (
-            SELECT 1 FROM conversations
-            WHERE id::text = (storage.foldername(name))[2]
-            AND user_id = auth.uid()
-        )
-    )
-);
+-- Policy 2: Users can download from their conversation folders
+-- Name: "Users can download from their conversation folders"
+-- Operation: SELECT
+-- Target roles: authenticated
+-- Policy definition (USING expression):
+-- bucket_id = 'support-attachments'
+-- AND (storage.foldername(name))[1] = 'support'
+-- AND EXISTS (
+--     SELECT 1 FROM conversations
+--     WHERE id::text = (storage.foldername(name))[2]
+--     AND user_id = auth.uid()
+-- )
 
--- Policy: Users can delete files from their own conversation folders
-CREATE POLICY "Users can delete from their conversation folders"
-ON storage.objects FOR DELETE
-TO authenticated
-USING (
-    bucket_id = 'support-attachments'
-    AND (storage.foldername(name))[1] = 'support'
-    AND (
-        -- Extract conversation_id from path: support/{conversation_id}/...
-        EXISTS (
-            SELECT 1 FROM conversations
-            WHERE id::text = (storage.foldername(name))[2]
-            AND user_id = auth.uid()
-        )
-    )
-);
+-- Policy 3: Users can delete from their conversation folders
+-- Name: "Users can delete from their conversation folders"
+-- Operation: DELETE
+-- Target roles: authenticated
+-- Policy definition (USING expression):
+-- bucket_id = 'support-attachments'
+-- AND (storage.foldername(name))[1] = 'support'
+-- AND EXISTS (
+--     SELECT 1 FROM conversations
+--     WHERE id::text = (storage.foldername(name))[2]
+--     AND user_id = auth.uid()
+-- )
 
--- Policy: Admins can upload files to any conversation folder
-CREATE POLICY "Admins can upload to any conversation folder"
-ON storage.objects FOR INSERT
-TO authenticated
-WITH CHECK (
-    bucket_id = 'support-attachments'
-    AND public.is_admin()
-);
+-- Policy 4: Admins can upload to any conversation folder
+-- Name: "Admins can upload to any conversation folder"
+-- Operation: INSERT
+-- Target roles: authenticated
+-- Policy definition (USING expression): Leave empty
+-- Policy definition (WITH CHECK expression):
+-- bucket_id = 'support-attachments' AND public.is_admin()
 
--- Policy: Admins can download files from any conversation folder
-CREATE POLICY "Admins can download from any conversation folder"
-ON storage.objects FOR SELECT
-TO authenticated
-USING (
-    bucket_id = 'support-attachments'
-    AND public.is_admin()
-);
+-- Policy 5: Admins can download from any conversation folder
+-- Name: "Admins can download from any conversation folder"
+-- Operation: SELECT
+-- Target roles: authenticated
+-- Policy definition (USING expression):
+-- bucket_id = 'support-attachments' AND public.is_admin()
 
--- Policy: Admins can delete files from any conversation folder
-CREATE POLICY "Admins can delete from any conversation folder"
-ON storage.objects FOR DELETE
-TO authenticated
-USING (
-    bucket_id = 'support-attachments'
-    AND public.is_admin()
-);
+-- Policy 6: Admins can delete from any conversation folder
+-- Name: "Admins can delete from any conversation folder"
+-- Operation: DELETE
+-- Target roles: authenticated
+-- Policy definition (USING expression):
+-- bucket_id = 'support-attachments' AND public.is_admin()
 
--- Add comments for documentation
-COMMENT ON POLICY "Users can upload to their conversation folders" ON storage.objects IS 
-'Allows users to upload files to support/{conversation_id}/... paths for their own conversations';
-COMMENT ON POLICY "Users can download from their conversation folders" ON storage.objects IS 
-'Allows users to download files from support/{conversation_id}/... paths for their own conversations';
-COMMENT ON POLICY "Admins can upload to any conversation folder" ON storage.objects IS 
-'Allows admins to upload files to any conversation folder';
-COMMENT ON POLICY "Admins can download from any conversation folder" ON storage.objects IS 
-'Allows admins to download files from any conversation folder';
+-- ============================================================================
+-- ALTERNATIVE: Create via Supabase CLI or API
+-- ============================================================================
+-- You can also create the bucket and policies programmatically using:
+-- 1. Supabase CLI: supabase storage create support-attachments
+-- 2. Supabase Management API
+-- 3. Supabase JavaScript client (for policies)
 
--- Note: To create the bucket, use Supabase Dashboard:
--- 1. Go to Storage section
--- 2. Click "New bucket"
--- 3. Name: "support-attachments"
--- 4. Public: No (private)
--- 5. File size limit: 10MB (or as needed)
--- 6. Allowed MIME types: image/jpeg, image/png, image/webp, image/gif, application/pdf, application/msword, application/vnd.openxmlformats-officedocument.wordprocessingml.document
+-- ============================================================================
+-- NOTE: File Path Structure
+-- ============================================================================
+-- Files should be stored with the following path structure:
+-- support/{conversation_id}/{random_uuid}.{extension}
+-- 
+-- Example: support/123e4567-e89b-12d3-a456-426614174000/abc123-def456-789.jpg
+--
+-- This structure allows the policies to extract the conversation_id from the path
+-- and verify that the user has access to that conversation.
 

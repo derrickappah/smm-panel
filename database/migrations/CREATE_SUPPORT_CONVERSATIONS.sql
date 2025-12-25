@@ -38,20 +38,17 @@ CREATE POLICY "Users can create their own conversations"
     WITH CHECK (user_id = auth.uid());
 
 -- Policy: Users can UPDATE their own conversations (but not admin-only fields)
+-- We'll enforce admin-only field protection in the application layer and via a trigger
 CREATE POLICY "Users can update their own conversations"
     ON conversations FOR UPDATE
     TO authenticated
     USING (user_id = auth.uid())
     WITH CHECK (
-        user_id = auth.uid() 
-        AND (
-            -- Users cannot modify admin-only fields
-            (OLD.assigned_to IS NULL AND NEW.assigned_to IS NULL) OR
-            (OLD.assigned_to = NEW.assigned_to)
-        )
-        AND (
-            (OLD.priority = NEW.priority)
-        )
+        user_id = auth.uid()
+        -- Prevent users from setting admin-only fields
+        AND assigned_to IS NULL
+        -- Priority can only be set by admins, so users can't change it from default
+        -- This is enforced by checking the user is not trying to set a different priority
     );
 
 -- Policy: Admins can SELECT all conversations
@@ -76,11 +73,38 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Function to prevent users from modifying admin-only fields
+CREATE OR REPLACE FUNCTION prevent_user_modify_admin_fields()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Only enforce for non-admin users
+    IF NOT public.is_admin() THEN
+        -- Prevent users from modifying assigned_to
+        IF OLD.assigned_to IS DISTINCT FROM NEW.assigned_to THEN
+            NEW.assigned_to := OLD.assigned_to;
+        END IF;
+        
+        -- Prevent users from modifying priority
+        IF OLD.priority IS DISTINCT FROM NEW.priority THEN
+            NEW.priority := OLD.priority;
+        END IF;
+    END IF;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Trigger to automatically update updated_at
 CREATE TRIGGER update_conversation_timestamp_trigger
     BEFORE UPDATE ON conversations
     FOR EACH ROW
     EXECUTE FUNCTION update_conversation_timestamp();
+
+-- Trigger to prevent users from modifying admin-only fields
+CREATE TRIGGER prevent_user_modify_admin_fields_trigger
+    BEFORE UPDATE ON conversations
+    FOR EACH ROW
+    EXECUTE FUNCTION prevent_user_modify_admin_fields();
 
 -- Add comments for documentation
 COMMENT ON TABLE conversations IS 'Support conversations between users and admins';

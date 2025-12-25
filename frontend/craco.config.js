@@ -47,6 +47,14 @@ const webpackConfig = {
     configure: (webpackConfig) => {
       const isProduction = process.env.NODE_ENV === 'production';
 
+      // Ensure .tsx and .ts are in resolve extensions (CRA includes them by default, but ensure they're present)
+      if (webpackConfig.resolve) {
+        const existingExtensions = webpackConfig.resolve.extensions || [];
+        if (!existingExtensions.includes('.tsx')) {
+          webpackConfig.resolve.extensions = ['.tsx', '.ts', ...existingExtensions];
+        }
+      }
+
       // Disable hot reload completely if environment variable is set
       if (config.disableHotReload) {
         // Remove hot reload related plugins

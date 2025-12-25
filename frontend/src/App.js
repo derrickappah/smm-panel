@@ -19,7 +19,7 @@ const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const ServicesPage = lazy(() => import("@/pages/ServicesPage"));
 const OrderHistory = lazy(() => import("@/pages/OrderHistory"));
 const AdminDashboard = lazy(() => import("@/pages/AdminDashboard"));
-const SupportPage = lazy(() => import("@/pages/SupportPage"));
+const SupportPage = lazy(() => import("@/pages/SupportPage.tsx"));
 const AdminSupport = lazy(() => import("@/pages/admin/AdminSupport"));
 const AdminSupportAnalytics = lazy(() => import("@/pages/admin/AdminSupportAnalytics"));
 const TransactionsPage = lazy(() => import("@/pages/TransactionsPage"));

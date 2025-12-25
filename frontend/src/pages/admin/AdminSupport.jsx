@@ -3,9 +3,8 @@ import { SupportProvider, useSupport } from '@/contexts/support-context';
 import { AdminSupportChat } from '@/components/support/admin/AdminSupportChat';
 import { ConversationsList } from '@/components/support/admin/ConversationsList';
 import { ConversationSearch } from '@/components/support/admin/ConversationSearch';
-import type { ConversationFilters } from '@/types/support';
 
-const AdminSupportContent: React.FC = () => {
+const AdminSupportContent = () => {
   const {
     conversations,
     currentConversation,
@@ -18,7 +17,7 @@ const AdminSupportContent: React.FC = () => {
     updateConversationStatus,
   } = useSupport();
 
-  const [filters, setFilters] = useState<ConversationFilters>({});
+  const [filters, setFilters] = useState({});
 
   useEffect(() => {
     loadAllConversations();
@@ -50,7 +49,7 @@ const AdminSupportContent: React.FC = () => {
   );
 };
 
-const AdminSupport: React.FC = () => {
+const AdminSupport = () => {
   return (
     <SupportProvider>
       <AdminSupportContent />
