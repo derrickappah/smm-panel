@@ -15,7 +15,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   const { isAdmin, editMessage, deleteMessage } = useSupport();
   const { data: userRole } = useUserRole();
   const isOwnMessage = message.sender_id === userRole?.userId;
-  const canEdit = isOwnMessage && message.sender_role === 'user';
+  // Admins can edit/delete any message, users can only edit their own user messages
+  const canEdit = isAdmin || (isOwnMessage && message.sender_role === 'user');
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState(true);
   const [imageError, setImageError] = useState(false);

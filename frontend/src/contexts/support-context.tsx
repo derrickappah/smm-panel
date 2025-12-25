@@ -519,11 +519,18 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
       return;
     }
     try {
-      const { error } = await supabase
+      // Build query - admins can edit any message, users can only edit their own
+      let query = supabase
         .from('messages')
         .update({ content: newContent.trim() })
-        .eq('id', messageId)
-        .eq('sender_id', userRole.userId);
+        .eq('id', messageId);
+      
+      // Only restrict to own messages if not admin
+      if (!isAdmin) {
+        query = query.eq('sender_id', userRole.userId);
+      }
+
+      const { error } = await query;
 
       if (error) throw error;
 
@@ -536,33 +543,54 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
       console.error('Error editing message:', error);
       toast.error('Failed to edit message');
     }
-  }, [userRole?.userId]);
+  }, [userRole?.userId, isAdmin]);
 
-  // Delete message (soft delete)
+  // Delete message
+  // Admins: hard delete (message vanishes completely)
+  // Regular users: soft delete (message shows "[Message deleted]")
   const deleteMessage = useCallback(async (messageId: string) => {
     if (!userRole?.userId) {
       toast.error('User not authenticated');
       return;
     }
     try {
-      const { error } = await supabase
-        .from('messages')
-        .update({ content: '[Message deleted]' })
-        .eq('id', messageId)
-        .eq('sender_id', userRole.userId);
+      if (isAdmin) {
+        // Admin hard delete - completely remove the message
+        let query = supabase
+          .from('messages')
+          .delete()
+          .eq('id', messageId);
 
-      if (error) throw error;
+        const { error } = await query;
 
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === messageId ? { ...msg, content: '[Message deleted]' } : msg
-        )
-      );
+        if (error) throw error;
+
+        // Remove message from state
+        setMessages((prev) => prev.filter((msg) => msg.id !== messageId));
+      } else {
+        // Regular user soft delete - mark as deleted
+        let query = supabase
+          .from('messages')
+          .update({ content: '[Message deleted]' })
+          .eq('id', messageId)
+          .eq('sender_id', userRole.userId);
+
+        const { error } = await query;
+
+        if (error) throw error;
+
+        // Update message in state to show deleted
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === messageId ? { ...msg, content: '[Message deleted]' } : msg
+          )
+        );
+      }
     } catch (error: any) {
       console.error('Error deleting message:', error);
       toast.error('Failed to delete message');
     }
-  }, [userRole?.userId]);
+  }, [userRole?.userId, isAdmin]);
 
   // Mark messages as read
   const markMessagesAsRead = useCallback(async (conversationId: string) => {
