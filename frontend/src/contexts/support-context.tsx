@@ -82,14 +82,31 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
     try {
       const { data, error } = await supabase
         .from('conversations')
-        .select(`
-          *,
-          user:profiles!conversations_user_id_fkey(id, name, email),
-          assigned_admin:profiles!conversations_assigned_to_fkey(id, name, email)
-        `)
+        .select('*')
         .order('last_message_at', { ascending: false });
 
       if (error) throw error;
+
+      // Get user profiles separately since foreign keys reference auth.users, not profiles
+      const userIds = [...new Set([
+        ...(data || []).map(c => c.user_id),
+        ...(data || []).map(c => c.assigned_to).filter(Boolean)
+      ])];
+
+      let profilesMap = {};
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, name, email')
+          .in('id', userIds);
+
+        if (profiles) {
+          profilesMap = profiles.reduce((acc, p) => {
+            acc[p.id] = p;
+            return acc;
+          }, {});
+        }
+      }
 
       // Get unread counts for each conversation
       const conversationsWithUnread = await Promise.all(
@@ -104,6 +121,8 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
           return {
             ...conv,
             unread_count: count || 0,
+            user: profilesMap[conv.user_id] || null,
+            assigned_admin: conv.assigned_to ? (profilesMap[conv.assigned_to] || null) : null,
           };
         })
       );

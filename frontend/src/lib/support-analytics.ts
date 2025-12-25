@@ -56,13 +56,30 @@ export const getSupportMetrics = async (
     // Get assignment stats
     const { data: assignmentData } = await supabase
       .from('conversations')
-      .select('assigned_to, profiles!conversations_assigned_to_fkey(id, name)')
+      .select('assigned_to')
       .not('assigned_to', 'is', null);
+
+    // Get admin profiles separately
+    const adminIds = [...new Set((assignmentData || []).map(c => c.assigned_to).filter(Boolean))];
+    let adminProfilesMap = {};
+    if (adminIds.length > 0) {
+      const { data: adminProfiles } = await supabase
+        .from('profiles')
+        .select('id, name')
+        .in('id', adminIds);
+
+      if (adminProfiles) {
+        adminProfilesMap = adminProfiles.reduce((acc, p) => {
+          acc[p.id] = p;
+          return acc;
+        }, {});
+      }
+    }
 
     const assignmentStats = (assignmentData || []).reduce((acc, conv) => {
       const adminId = conv.assigned_to;
       if (adminId) {
-        const adminName = (conv.profiles as any)?.name || 'Unknown';
+        const adminName = adminProfilesMap[adminId]?.name || 'Unknown';
         if (!acc[adminId]) {
           acc[adminId] = { admin_id: adminId, admin_name: adminName, assigned_count: 0 };
         }
