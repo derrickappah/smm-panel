@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ConnectionStatus } from '../ConnectionStatus';
 import { PrioritySelector } from './PrioritySelector';
@@ -16,6 +16,7 @@ interface ConversationHeaderProps {
   onAddTag: (tag: string) => void;
   onRemoveTag: (tag: string) => void;
   disabled?: boolean;
+  onBackToList?: () => void;
 }
 
 export const ConversationHeader: React.FC<ConversationHeaderProps> = ({
@@ -26,25 +27,40 @@ export const ConversationHeader: React.FC<ConversationHeaderProps> = ({
   onAddTag,
   onRemoveTag,
   disabled = false,
+  onBackToList,
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(true); // Collapsed by default
 
   return (
     <div className="border-b border-gray-200">
       {/* Always visible header */}
-      <div className="p-4 flex items-center justify-between">
-        <div className="flex-1">
-          <h2 className="text-lg font-semibold">
-            {conversation.subject || 'Support Conversation'}
-          </h2>
+      <div className="p-4 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          {/* Mobile back button */}
+          {onBackToList && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onBackToList}
+              className="h-9 w-9 p-0 flex-shrink-0 md:hidden"
+              aria-label="Back to conversations"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+          )}
+          <div className="flex-1 min-w-0">
+            <h2 className="text-lg font-semibold truncate">
+              {conversation.subject || 'Support Conversation'}
+            </h2>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <ConnectionStatus userId={conversation.user_id} conversationId={conversation.id} />
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="h-8 w-8 p-0"
+            className="h-9 w-9 p-0"
             aria-label={isCollapsed ? 'Expand details' : 'Collapse details'}
           >
             {isCollapsed ? (

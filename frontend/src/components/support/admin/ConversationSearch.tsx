@@ -23,12 +23,12 @@ export const ConversationSearch: React.FC<ConversationSearchProps> = ({
           placeholder="Search by user, subject, or message..."
           value={filters.search || ''}
           onChange={(e) => onFiltersChange({ ...filters, search: e.target.value })}
-          className="pl-10"
+          className="pl-10 w-full"
         />
       </div>
 
       {/* Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
         {/* Status filter */}
         <div>
           <label className="text-xs font-medium text-gray-700 mb-1 block flex items-center gap-1">

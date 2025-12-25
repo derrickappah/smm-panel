@@ -68,18 +68,18 @@ export const ConversationsList: React.FC<ConversationsListProps> = ({
           <p>No conversations found</p>
         </div>
       ) : (
-        <div className="space-y-2 p-2">
+        <div className="space-y-2 p-2 md:p-2">
           {filteredConversations.map((conversation) => (
             <Card
               key={conversation.id}
-              className={`cursor-pointer transition-colors ${
+              className={`cursor-pointer transition-colors touch-manipulation ${
                 currentConversationId === conversation.id
                   ? 'bg-indigo-50 border-indigo-200'
-                  : 'hover:bg-gray-50'
+                  : 'hover:bg-gray-50 active:bg-gray-100'
               }`}
               onClick={() => onSelectConversation(conversation.id)}
             >
-              <CardContent className="p-4">
+              <CardContent className="p-4 md:p-4">
                 <div className="space-y-2">
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">

@@ -213,12 +213,14 @@ export const SupportChat: React.FC = () => {
             </Button>
           </div>
         )}
-        <form onSubmit={handleSendMessage} className="flex gap-2">
+        <form onSubmit={handleSendMessage} className="flex gap-2 items-center">
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={() => setShowFileUpload(!showFileUpload)}
+            className="h-10 w-10 p-0 flex-shrink-0 touch-manipulation"
+            aria-label="Attach file"
           >
             <Paperclip className="w-4 h-4" />
           </Button>
@@ -228,9 +230,14 @@ export const SupportChat: React.FC = () => {
             placeholder="Type your message..."
             value={messageContent}
             onChange={(e) => handleInputChange(e.target.value)}
-            className="flex-1"
+            className="flex-1 min-h-[2.5rem]"
           />
-          <Button type="submit" disabled={!messageContent.trim() && !attachmentUrl}>
+          <Button 
+            type="submit" 
+            disabled={!messageContent.trim() && !attachmentUrl}
+            className="h-10 w-10 p-0 flex-shrink-0 touch-manipulation"
+            aria-label="Send message"
+          >
             <Send className="w-4 h-4" />
           </Button>
         </form>
