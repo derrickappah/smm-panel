@@ -889,9 +889,14 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
           // Use ref to get current conversation (avoids stale closure)
           const currentConv = currentConversationRef.current;
           
-          // Check if message already exists (avoid duplicates from optimistic updates)
+          // Check if message already exists OR if it's from current user (already added by sendMessage)
           setMessages((prev) => {
             if (prev.some(m => m.id === newMessage.id)) {
+              return prev; // Already exists
+            }
+            
+            // Skip adding if it's from current user (sendMessage already added it)
+            if (newMessage.sender_id === userRole.userId) {
               return prev;
             }
             
