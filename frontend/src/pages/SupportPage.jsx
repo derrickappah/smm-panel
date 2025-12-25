@@ -76,7 +76,7 @@ const SupportPage = ({ user, onLogout }) => {
 
       const { data, error } = await supabase
         .from('orders')
-        .select('id, service_id, promotion_package_id, status, created_at, total_cost, services(name), promotion_packages(name)')
+        .select('id, service_id, promotion_package_id, status, created_at, total_cost, smmgen_order_id, smmcost_order_id, services(name), promotion_packages(name)')
         .eq('user_id', authUser.id)
         .order('created_at', { ascending: false })
         .limit(50); // Limit to most recent 50 orders
@@ -369,15 +369,17 @@ const SupportPage = ({ user, onLogout }) => {
                             const orderDate = new Date(order.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
                             const orderStatus = (order.status || 'pending').charAt(0).toUpperCase() + (order.status || 'pending').slice(1);
                             const orderCost = order.total_cost ? `$${parseFloat(order.total_cost).toFixed(2)}` : '';
+                            // Get the SMM order ID (smmgen_order_id or smmcost_order_id)
+                            const smmOrderId = order.smmgen_order_id || order.smmcost_order_id || order.id.slice(0, 8);
                             // Truncate service name for mobile (max 30 chars)
                             const truncatedServiceName = serviceName.length > 30 ? serviceName.substring(0, 27) + '...' : serviceName;
-                            // Format: Status first, then order ID, service name, cost, date
-                            const displayText = `${orderStatus} - ${order.id.slice(0, 8)} - ${truncatedServiceName}${orderCost ? ` - ${orderCost}` : ''} - ${orderDate}`;
+                            // Format: Status first, then SMM order ID, service name, cost, date
+                            const displayText = `${orderStatus} - ${smmOrderId} - ${truncatedServiceName}${orderCost ? ` - ${orderCost}` : ''} - ${orderDate}`;
                             
                             return (
                               <SelectItem 
                                 key={order.id} 
-                                value={order.id}
+                                value={smmOrderId}
                                 className="text-xs sm:text-sm py-2 px-3 break-words"
                               >
                                 <span className="block truncate sm:whitespace-normal">{displayText}</span>
