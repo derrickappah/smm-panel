@@ -57,12 +57,14 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
   // Load user's conversations
   const loadConversations = useCallback(async () => {
     if (isAdmin) return; // Admins use loadAllConversations
+    if (!userRole?.userId) return; // Don't query if user ID is not available
+    
     setIsLoadingConversations(true);
     try {
       const { data, error } = await supabase
         .from('conversations')
         .select('*')
-        .eq('user_id', userRole?.userId || '')
+        .eq('user_id', userRole.userId)
         .order('last_message_at', { ascending: false });
 
       if (error) throw error;
@@ -139,17 +141,18 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
   // Get or create conversation (enforces single open conversation per user)
   const getOrCreateConversation = useCallback(async (): Promise<Conversation | null> => {
     if (isAdmin) return null; // Admins don't auto-create conversations
+    if (!userRole?.userId) return null; // Don't create if user ID is not available
 
     try {
       // First, try to get existing open conversation
       const { data: existing, error: existingError } = await supabase
         .from('conversations')
         .select('*')
-        .eq('user_id', userRole?.userId || '')
+        .eq('user_id', userRole.userId)
         .eq('status', 'open')
         .order('created_at', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       if (existing && !existingError) {
         return existing;
@@ -159,10 +162,10 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
       const { data: recent, error: recentError } = await supabase
         .from('conversations')
         .select('*')
-        .eq('user_id', userRole?.userId || '')
+        .eq('user_id', userRole.userId)
         .order('created_at', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       if (recent && !recentError) {
         return recent;
@@ -172,7 +175,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
       const { data: newConv, error: createError } = await supabase
         .from('conversations')
         .insert({
-          user_id: userRole?.userId || '',
+          user_id: userRole.userId,
           status: 'open',
         })
         .select()
@@ -288,13 +291,17 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
       toast.error('No conversation selected');
       return;
     }
+    if (!userRole?.userId) {
+      toast.error('User not authenticated');
+      return;
+    }
 
     try {
       const { data, error } = await supabase
         .from('messages')
         .insert({
           conversation_id: currentConversation.id,
-          sender_id: userRole?.userId || '',
+          sender_id: userRole.userId,
           content: content.trim(),
           attachment_url: attachmentUrl || null,
           attachment_type: attachmentType || null,
@@ -326,12 +333,16 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
 
   // Edit message
   const editMessage = useCallback(async (messageId: string, newContent: string) => {
+    if (!userRole?.userId) {
+      toast.error('User not authenticated');
+      return;
+    }
     try {
       const { error } = await supabase
         .from('messages')
         .update({ content: newContent.trim() })
         .eq('id', messageId)
-        .eq('sender_id', userRole?.userId || '');
+        .eq('sender_id', userRole.userId);
 
       if (error) throw error;
 
@@ -348,12 +359,16 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
 
   // Delete message (soft delete)
   const deleteMessage = useCallback(async (messageId: string) => {
+    if (!userRole?.userId) {
+      toast.error('User not authenticated');
+      return;
+    }
     try {
       const { error } = await supabase
         .from('messages')
         .update({ content: '[Message deleted]' })
         .eq('id', messageId)
-        .eq('sender_id', userRole?.userId || '');
+        .eq('sender_id', userRole.userId);
 
       if (error) throw error;
 
@@ -393,7 +408,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
 
   // Set typing indicator
   const setTyping = useCallback(async (conversationId: string, isTyping: boolean) => {
-    if (!conversationId) return;
+    if (!conversationId || !userRole?.userId) return;
 
     try {
       // Clear existing timeout
@@ -409,7 +424,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
         .upsert(
           {
             conversation_id: conversationId,
-            user_id: userRole?.userId || '',
+            user_id: userRole.userId,
             is_typing: isTyping,
           },
           { onConflict: 'conversation_id,user_id' }
@@ -546,13 +561,13 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
 
   // Add admin note (admin only)
   const addAdminNote = useCallback(async (conversationId: string, note: string) => {
-    if (!isAdmin) return;
+    if (!isAdmin || !userRole?.userId) return;
     try {
       const { error } = await supabase
         .from('admin_notes')
         .insert({
           conversation_id: conversationId,
-          admin_id: userRole?.userId || '',
+          admin_id: userRole.userId,
           note: note.trim(),
         });
 
@@ -584,13 +599,13 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
 
   // Get unread count (admin only)
   const getUnreadCount = useCallback(async (): Promise<number> => {
-    if (!isAdmin) return 0;
+    if (!isAdmin || !userRole?.userId) return 0;
     try {
       const { count, error } = await supabase
         .from('messages')
         .select('*', { count: 'exact', head: true })
         .is('read_at', null)
-        .neq('sender_id', userRole?.userId || '');
+        .neq('sender_id', userRole.userId);
 
       if (error) throw error;
       return count || 0;
