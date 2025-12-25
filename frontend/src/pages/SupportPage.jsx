@@ -334,6 +334,7 @@ const SupportPage = ({ user, onLogout }) => {
                       <SelectItem value="billing">Billing</SelectItem>
                       <SelectItem value="order">Order</SelectItem>
                       <SelectItem value="account">Account</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -623,7 +624,8 @@ const SupportPage = ({ user, onLogout }) => {
                                 billing: 'Billing',
                                 order: 'Order',
                                 account: 'Account',
-                                general: 'General'
+                                general: 'General',
+                                other: 'Other'
                               };
 
                               return (
