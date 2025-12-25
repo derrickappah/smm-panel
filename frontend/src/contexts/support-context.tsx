@@ -31,7 +31,7 @@ interface SupportProviderProps {
 }
 
 export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) => {
-  const { data: userRole } = useUserRole();
+  const { data: userRole, isLoading: isLoadingUserRole } = useUserRole();
   const isAdmin = userRole?.isAdmin || false;
 
   // State
@@ -59,6 +59,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
   const oldestMessageIdRef = useRef<string | null>(null);
   const isAtBottomRef = useRef(true);
   const currentConversationRef = useRef<Conversation | null>(null);
+  const presenceHeartbeatRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load user's conversations (should only be 0 or 1 conversation)
   const loadConversations = useCallback(async () => {
@@ -232,22 +233,31 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
 
   // Get or create conversation (each user has exactly one conversation)
   const getOrCreateConversation = useCallback(async (): Promise<Conversation | null> => {
-    if (isAdmin) return null; // Admins don't auto-create conversations
-    if (!userRole?.userId) return null; // Don't create if user ID is not available
+    console.log('getOrCreateConversation called', { isAdmin, userId: userRole?.userId });
+    if (isAdmin) {
+      console.log('User is admin, skipping conversation creation');
+      return null; // Admins don't auto-create conversations
+    }
+    if (!userRole?.userId) {
+      console.log('No user ID available, skipping conversation creation');
+      return null; // Don't create if user ID is not available
+    }
 
     try {
       // Verify authentication before making queries
       const { data: { session }, error: authError } = await supabase.auth.getSession();
       if (authError || !session) {
-        console.warn('User not authenticated, cannot get/create conversation');
+        console.warn('User not authenticated, cannot get/create conversation', authError);
         return null;
       }
 
       // Verify that userRole.userId matches the authenticated user
       if (session.user.id !== userRole.userId) {
-        console.warn('User ID mismatch, cannot get/create conversation');
+        console.warn('User ID mismatch, cannot get/create conversation', { sessionUserId: session.user.id, userRoleUserId: userRole.userId });
         return null;
       }
+      
+      console.log('Authentication verified, proceeding with conversation get/create');
 
       // Get the user's single conversation (should only be 0 or 1)
       const { data: existing, error: existingError } = await supabase
@@ -256,18 +266,31 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
         .eq('user_id', userRole.userId)
         .maybeSingle();
 
+      console.log('Existing conversation query result:', { existing, error: existingError });
+
       // Handle RLS permission errors
       if (existingError) {
         if (existingError.code === '42501' || existingError.code === 'PGRST301') {
-          console.error('Permission denied: User may not be authenticated correctly');
+          console.error('Permission denied: User may not be authenticated correctly', existingError);
           return null;
         }
         // For other errors, continue to try creating
+        console.warn('Error fetching existing conversation, will try to create:', existingError);
       }
 
       if (existing && !existingError) {
+        console.log('Found existing conversation:', existing.id);
+        // Add to conversations list if not already there
+        setConversations((prev) => {
+          if (prev.some(c => c.id === existing.id)) {
+            return prev;
+          }
+          return [existing, ...prev];
+        });
         return existing;
       }
+      
+      console.log('No existing conversation found, creating new one...');
 
       // Fetch user's name from profiles to use as subject
       const { data: profile } = await supabase
@@ -289,10 +312,14 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
         .select()
         .single();
 
+      console.log('Create conversation result:', { newConv, createError });
+
       // If we get a unique constraint violation, it means another request created it
       // In that case, fetch the existing conversation
       if (createError) {
+        console.log('Create error occurred:', createError);
         if (createError.code === '23505' || createError.message?.includes('unique constraint') || createError.message?.includes('duplicate key')) {
+          console.log('Unique constraint violation, fetching existing conversation...');
           // Race condition: conversation was created by another request, fetch it
           const { data: raceConv, error: raceError } = await supabase
             .from('conversations')
@@ -300,6 +327,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
             .eq('user_id', userRole.userId)
             .maybeSingle();
           
+          console.log('Race condition fetch result:', { raceConv, raceError });
           if (raceConv && !raceError) {
             // Add to conversations list if not already there
             setConversations((prev) => {
@@ -310,24 +338,31 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
             });
             return raceConv;
           }
+          console.error('Failed to fetch conversation after race condition:', raceError);
+          return null;
         }
         // Handle RLS permission errors
         if (createError.code === '42501' || createError.code === 'PGRST301') {
-          console.error('Permission denied when creating conversation');
+          console.error('Permission denied when creating conversation', createError);
           return null;
         }
+        console.error('Unexpected error creating conversation:', createError);
         throw createError;
       }
       
-      // Add new conversation to list
-      if (newConv) {
-        setConversations((prev) => {
-          if (prev.some(c => c.id === newConv.id)) {
-            return prev;
-          }
-          return [newConv, ...prev];
-        });
+      if (!newConv) {
+        console.error('Conversation creation succeeded but no data returned');
+        return null;
       }
+      
+      console.log('Successfully created conversation:', newConv.id);
+      // Add new conversation to list
+      setConversations((prev) => {
+        if (prev.some(c => c.id === newConv.id)) {
+          return prev;
+        }
+        return [newConv, ...prev];
+      });
       
       return newConv;
     } catch (error: any) {
@@ -1010,13 +1045,64 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
     };
   }, [userRole?.userId, isAdmin, getUnreadCount]); // Removed currentConversation and other callbacks from deps to prevent recreation
 
+  // Presence heartbeat - updates typing indicator timestamp periodically when user is active
+  useEffect(() => {
+    if (!currentConversation || !userRole?.userId) {
+      // Clear heartbeat if no conversation
+      if (presenceHeartbeatRef.current) {
+        clearInterval(presenceHeartbeatRef.current);
+        presenceHeartbeatRef.current = null;
+      }
+      return;
+    }
+
+    // Update presence immediately
+    const updatePresence = async () => {
+      try {
+        // Upsert with is_typing: false to update the timestamp without showing typing indicator
+        await supabase
+          .from('typing_indicators')
+          .upsert(
+            {
+              conversation_id: currentConversation.id,
+              user_id: userRole.userId,
+              is_typing: false,
+            },
+            { onConflict: 'conversation_id,user_id' }
+          );
+      } catch (error) {
+        console.error('Error updating presence heartbeat:', error);
+      }
+    };
+
+    // Update presence immediately
+    updatePresence();
+
+    // Update presence every 20 seconds (heartbeat)
+    presenceHeartbeatRef.current = setInterval(updatePresence, 20000);
+
+    return () => {
+      if (presenceHeartbeatRef.current) {
+        clearInterval(presenceHeartbeatRef.current);
+        presenceHeartbeatRef.current = null;
+      }
+    };
+  }, [currentConversation?.id, userRole?.userId]);
+
   // Auto-select conversation for non-admin users (always select the single conversation)
   useEffect(() => {
+    // Wait for userRole to be loaded before attempting to create/select conversations
+    if (isLoadingUserRole) {
+      console.log('Waiting for userRole to load...');
+      return;
+    }
+    
     if (!isAdmin && userRole?.userId && !isLoadingConversations) {
       // If we have a conversation but it's not selected (or different), select it
       if (conversations.length > 0) {
         const conv = conversations[0];
-        if (conv.id !== currentConversation?.id) {
+        if (!currentConversation || conv.id !== currentConversation.id) {
+          console.log('Auto-selecting conversation:', conv.id);
           setCurrentConversation(conv);
           currentConversationRef.current = conv;
           loadMessages(conv.id);
@@ -1025,21 +1111,61 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
       }
       // If no conversation exists, create one
       else if (conversations.length === 0 && !currentConversation) {
+        console.log('No conversation found, creating one...');
         getOrCreateConversation().then((conv) => {
           if (conv) {
+            console.log('Conversation created/retrieved:', conv.id);
+            // Add to conversations list if not already there (should be added by getOrCreateConversation, but ensure it)
+            setConversations((prev) => {
+              if (prev.some(c => c.id === conv.id)) {
+                return prev;
+              }
+              return [conv, ...prev];
+            });
+            // Select the conversation immediately
             setCurrentConversation(conv);
             currentConversationRef.current = conv;
             loadMessages(conv.id);
             markMessagesAsRead(conv.id);
+          } else {
+            console.error('getOrCreateConversation returned null');
+            // Retry after a short delay if creation failed
+            setTimeout(() => {
+              if (!currentConversation && conversations.length === 0) {
+                console.log('Retrying conversation creation...');
+                getOrCreateConversation().then((retryConv) => {
+                  if (retryConv) {
+                    setConversations((prev) => {
+                      if (prev.some(c => c.id === retryConv.id)) {
+                        return prev;
+                      }
+                      return [retryConv, ...prev];
+                    });
+                    setCurrentConversation(retryConv);
+                    currentConversationRef.current = retryConv;
+                    loadMessages(retryConv.id);
+                    markMessagesAsRead(retryConv.id);
+                  }
+                });
+              }
+            }, 1000);
           }
+        }).catch((error) => {
+          console.error('Error in auto-select conversation:', error);
         });
       }
     }
-  }, [isAdmin, userRole?.userId, conversations, currentConversation?.id, isLoadingConversations, getOrCreateConversation, loadMessages, markMessagesAsRead]);
+  }, [isAdmin, userRole?.userId, conversations, currentConversation?.id, isLoadingConversations, isLoadingUserRole, getOrCreateConversation, loadMessages, markMessagesAsRead]);
 
   // Load conversations on mount
   useEffect(() => {
+    // Wait for userRole to be loaded
+    if (isLoadingUserRole) {
+      return;
+    }
+    
     if (userRole?.userId) {
+      console.log('Loading conversations for user:', userRole.userId, 'isAdmin:', isAdmin);
       if (isAdmin) {
         loadAllConversations();
         getUnreadCount().then(setUnreadCount);
@@ -1047,7 +1173,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
         loadConversations();
       }
     }
-  }, [userRole?.userId, isAdmin, loadConversations, loadAllConversations, getUnreadCount]);
+  }, [userRole?.userId, isAdmin, isLoadingUserRole, loadConversations, loadAllConversations, getUnreadCount]);
 
   // Request notification permission
   useEffect(() => {

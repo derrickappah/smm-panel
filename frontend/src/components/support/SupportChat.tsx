@@ -21,6 +21,7 @@ export const SupportChat: React.FC = () => {
     loadMoreMessages,
     sendMessage,
     setTyping,
+    isLoadingConversations,
   } = useSupport();
 
   const [messageContent, setMessageContent] = useState('');
@@ -123,7 +124,14 @@ export const SupportChat: React.FC = () => {
   if (!currentConversation) {
     return (
       <div className="flex items-center justify-center h-full text-gray-500">
-        <p>Select a conversation to start chatting</p>
+        {isLoadingConversations ? (
+          <div className="flex flex-col items-center gap-2">
+            <div className="w-6 h-6 border-2 border-gray-300 border-t-indigo-600 rounded-full animate-spin"></div>
+            <p>Loading conversation...</p>
+          </div>
+        ) : (
+          <p>Select a conversation to start chatting</p>
+        )}
       </div>
     );
   }

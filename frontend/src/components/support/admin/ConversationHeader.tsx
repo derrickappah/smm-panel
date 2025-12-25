@@ -39,7 +39,7 @@ export const ConversationHeader: React.FC<ConversationHeaderProps> = ({
           </h2>
         </div>
         <div className="flex items-center gap-2">
-          <ConnectionStatus />
+          <ConnectionStatus userId={conversation.user_id} conversationId={conversation.id} />
           <Button
             variant="ghost"
             size="sm"

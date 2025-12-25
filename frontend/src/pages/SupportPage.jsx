@@ -9,13 +9,26 @@ import { MessageSquare } from 'lucide-react';
 const SupportPageContent = ({ user, onLogout }) => {
   const { currentConversation, conversations, isLoadingConversations, getOrCreateConversation } = useSupport();
 
+  // Note: The context's auto-selection effect handles conversation creation/selection
+  // This useEffect is kept for backwards compatibility but the context should handle it
   useEffect(() => {
-    // Ensure conversation is created/selected when page loads
-    // The context handles auto-selection, but we ensure it's triggered here too
-    if (!isLoadingConversations && !currentConversation) {
-      getOrCreateConversation();
+    // Only trigger if context hasn't already handled it
+    // The context's auto-selection effect is the primary handler
+    if (!isLoadingConversations && !currentConversation && conversations.length === 0) {
+      console.log('SupportPage: Context should handle this, but triggering as fallback...');
+      // Small delay to let context handle it first
+      const timeout = setTimeout(() => {
+        if (!currentConversation && conversations.length === 0) {
+          getOrCreateConversation().then((conv) => {
+            console.log('SupportPage: Fallback conversation result:', conv?.id);
+          }).catch((error) => {
+            console.error('SupportPage: Failed to create conversation:', error);
+          });
+        }
+      }, 500);
+      return () => clearTimeout(timeout);
     }
-  }, [isLoadingConversations, currentConversation, getOrCreateConversation]);
+  }, [isLoadingConversations, currentConversation, conversations.length, getOrCreateConversation]);
 
   return (
     <div className="min-h-screen bg-gray-50">
