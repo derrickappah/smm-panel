@@ -7,15 +7,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { ConversationStatus, MessagePriority } from '@/types/support';
 
 export const AdminSupportChat: React.FC = () => {
-
-  if (!currentConversation) {
-    return (
-      <div className="flex items-center justify-center h-full text-gray-500">
-        <p>Select a conversation to view</p>
-      </div>
-    );
-  }
-
   const {
     currentConversation,
     setPriority,
@@ -25,6 +16,14 @@ export const AdminSupportChat: React.FC = () => {
     closeConversation,
     updateConversationStatus,
   } = useSupport();
+
+  if (!currentConversation) {
+    return (
+      <div className="flex items-center justify-center h-full text-gray-500">
+        <p>Select a conversation to view</p>
+      </div>
+    );
+  }
 
   const handleStatusChange = async (status: ConversationStatus) => {
     if (!currentConversation) return;
