@@ -359,20 +359,27 @@ const SupportPage = ({ user, onLogout }) => {
                           }
                         }}
                       >
-                        <SelectTrigger className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        <SelectTrigger className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm sm:text-base">
                           <SelectValue placeholder={loadingOrders ? "Loading orders..." : "Select an order..."} />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="max-h-[300px] sm:max-h-[400px] overflow-y-auto">
                           {userOrders.map((order) => {
                             const serviceName = order.services?.name || order.promotion_packages?.name || 'Unknown Service';
-                            const orderDate = new Date(order.created_at).toLocaleDateString();
-                            const orderStatus = order.status || 'pending';
+                            const orderDate = new Date(order.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                            const orderStatus = (order.status || 'pending').charAt(0).toUpperCase() + (order.status || 'pending').slice(1);
                             const orderCost = order.total_cost ? `$${parseFloat(order.total_cost).toFixed(2)}` : '';
-                            const displayText = `${order.id.slice(0, 8)} - ${serviceName} - ${orderStatus}${orderCost ? ` - ${orderCost}` : ''} - ${orderDate}`;
+                            // Truncate service name for mobile (max 30 chars)
+                            const truncatedServiceName = serviceName.length > 30 ? serviceName.substring(0, 27) + '...' : serviceName;
+                            // Format: Status first, then order ID, service name, cost, date
+                            const displayText = `${orderStatus} - ${order.id.slice(0, 8)} - ${truncatedServiceName}${orderCost ? ` - ${orderCost}` : ''} - ${orderDate}`;
                             
                             return (
-                              <SelectItem key={order.id} value={order.id}>
-                                {displayText}
+                              <SelectItem 
+                                key={order.id} 
+                                value={order.id}
+                                className="text-xs sm:text-sm py-2 px-3 break-words"
+                              >
+                                <span className="block truncate sm:whitespace-normal">{displayText}</span>
                               </SelectItem>
                             );
                           })}
