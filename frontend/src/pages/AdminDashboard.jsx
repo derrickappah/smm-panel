@@ -285,18 +285,18 @@ const AdminDashboard = memo(({ user, onLogout }) => {
           .eq('status', 'pending')
       ]);
 
-      // Count unique conversations with unread messages
+      // Count unique conversations with unread messages (not total message count)
       const unreadConversationIds = unreadMessagesResult.error && unreadMessagesResult.error.code !== '42P01'
         ? []
-        : [...new Set((unreadMessagesResult.data || []).map(m => m.conversation_id))];
+        : [...new Set((unreadMessagesResult.data || []).map(m => m.conversation_id).filter(Boolean))];
       
-      const openConversations = unreadConversationIds.length;
+      const openTickets = unreadConversationIds.length;
       
       const pendingDeposits = depositsResult.error && depositsResult.error.code !== '42P01'
         ? 0
         : (depositsResult.data?.length || 0);
 
-      return { open_tickets: openConversations, pending_deposits: pendingDeposits };
+      return { open_tickets: openTickets, pending_deposits: pendingDeposits };
     },
     staleTime: 1 * 60 * 1000,
     gcTime: 5 * 60 * 1000,
