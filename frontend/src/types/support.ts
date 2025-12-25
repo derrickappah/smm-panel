@@ -145,11 +145,14 @@ export interface SupportContextState {
   hasMoreMessages: boolean;
   unreadCount: number;
   isAdmin: boolean;
+  isLoadingMoreConversations: boolean;
+  hasMoreConversations: boolean;
 }
 
 export interface SupportContextMethods {
   loadConversations: () => Promise<void>;
-  loadAllConversations: () => Promise<void>;
+  loadAllConversations: (reset?: boolean) => Promise<void>;
+  loadMoreConversations: () => Promise<void>;
   getOrCreateConversation: () => Promise<Conversation | null>;
   selectConversation: (conversationId: string) => Promise<void>;
   loadMessages: (conversationId: string) => Promise<void>;

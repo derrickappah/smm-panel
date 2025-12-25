@@ -75,7 +75,9 @@ export const SupportChat: React.FC = () => {
         return;
       }
 
-      const content = messageContent.trim() || (attachmentUrl ? '📎 Attachment' : '');
+      // If there's an attachment but no text, use a minimal placeholder
+      // The placeholder will be hidden in the UI when attachment is displayed
+      const content = messageContent.trim() || (attachmentUrl ? ' ' : '');
       await sendMessage(content, attachmentUrl || undefined, attachmentType || undefined);
 
       // Clear form
@@ -127,25 +129,18 @@ export const SupportChat: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="border-b border-gray-200 p-4 flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">
-            {currentConversation.subject || 'Support Conversation'}
-          </h2>
-          <ConnectionStatus />
-        </div>
-      </div>
-
+    <div className="flex flex-col h-full min-h-0">
       {/* Message Search */}
-      <MessageSearch />
+      <div className="flex-shrink-0 border-b border-gray-200">
+        <MessageSearch />
+      </div>
 
       {/* Messages */}
       <div
         ref={messagesContainerRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto p-4 space-y-4"
+        className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0 overscroll-contain"
+        style={{ scrollbarWidth: 'thin' }}
       >
         {hasMoreMessages && (
           <div className="flex justify-center">
@@ -184,7 +179,7 @@ export const SupportChat: React.FC = () => {
 
       {/* File Upload */}
       {showFileUpload && currentConversation && (
-        <div className="border-t border-gray-200 p-4">
+        <div className="border-t border-gray-200 p-4 flex-shrink-0">
           <FileUpload
             conversationId={currentConversation.id}
             onUploadComplete={handleFileUploadComplete}
@@ -193,7 +188,7 @@ export const SupportChat: React.FC = () => {
       )}
 
       {/* Input */}
-      <div className="border-t border-gray-200 p-4">
+      <div className="border-t border-gray-200 p-4 flex-shrink-0">
         {attachmentUrl && (
           <div className="mb-2 flex items-center gap-2 text-sm text-gray-600">
             <Paperclip className="w-4 h-4" />

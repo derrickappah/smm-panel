@@ -9,12 +9,15 @@ const AdminSupportContent = () => {
     conversations,
     currentConversation,
     loadAllConversations,
+    loadMoreConversations,
     selectConversation,
     setPriority,
     assignConversation,
     addTag,
     removeTag,
     updateConversationStatus,
+    hasMoreConversations,
+    isLoadingMoreConversations,
   } = useSupport();
 
   const [filters, setFilters] = useState({});
@@ -32,12 +35,15 @@ const AdminSupportContent = () => {
             <h2 className="text-lg font-semibold">Conversations</h2>
           </div>
           <ConversationSearch filters={filters} onFiltersChange={setFilters} />
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-hidden">
             <ConversationsList
               conversations={conversations}
               currentConversationId={currentConversation?.id || null}
               onSelectConversation={selectConversation}
               filters={filters}
+              hasMoreConversations={hasMoreConversations}
+              isLoadingMoreConversations={isLoadingMoreConversations}
+              onLoadMore={loadMoreConversations}
             />
           </div>
         </div>

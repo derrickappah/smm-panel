@@ -1,8 +1,10 @@
 import React, { useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { StatusBadge } from '../StatusBadge';
 import { formatDistanceToNow } from 'date-fns';
+import { Loader2 } from 'lucide-react';
 import type { Conversation, ConversationFilters } from '@/types/support';
 
 interface ConversationsListProps {
@@ -10,6 +12,9 @@ interface ConversationsListProps {
   currentConversationId: string | null;
   onSelectConversation: (conversationId: string) => void;
   filters: ConversationFilters;
+  hasMoreConversations?: boolean;
+  isLoadingMoreConversations?: boolean;
+  onLoadMore?: () => void;
 }
 
 export const ConversationsList: React.FC<ConversationsListProps> = ({
@@ -17,6 +22,9 @@ export const ConversationsList: React.FC<ConversationsListProps> = ({
   currentConversationId,
   onSelectConversation,
   filters,
+  hasMoreConversations = false,
+  isLoadingMoreConversations = false,
+  onLoadMore,
 }) => {
   const filteredConversations = useMemo(() => {
     return conversations.filter((conv) => {
@@ -54,7 +62,7 @@ export const ConversationsList: React.FC<ConversationsListProps> = ({
   }, [conversations, filters]);
 
   return (
-    <div className="h-full overflow-y-auto">
+    <div className="h-full overflow-y-auto overscroll-contain" style={{ scrollbarWidth: 'thin' }}>
       {filteredConversations.length === 0 ? (
         <div className="p-4 text-center text-gray-500">
           <p>No conversations found</p>
@@ -107,6 +115,27 @@ export const ConversationsList: React.FC<ConversationsListProps> = ({
               </CardContent>
             </Card>
           ))}
+          
+          {/* Load More Button */}
+          {hasMoreConversations && (
+            <div className="p-4 flex justify-center">
+              <Button
+                variant="outline"
+                onClick={onLoadMore}
+                disabled={isLoadingMoreConversations}
+                className="w-full"
+              >
+                {isLoadingMoreConversations ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  'Load More Conversations'
+                )}
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>

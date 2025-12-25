@@ -250,15 +250,34 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     }
   }, [queryClient]);
 
-  // Get stats for open conversations badge and pending deposits
+  // Get stats for unread conversations badge and pending deposits
   const { data: stats = {}, isLoading: isLoadingStats } = useQuery({
     queryKey: ['admin', 'stats', 'conversations'],
     queryFn: async () => {
-      const [conversationsResult, depositsResult] = await Promise.all([
-        supabase
-          .from('conversations')
+      // Get current admin user ID first
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        // If no user, return 0 for unread conversations but still get deposits
+        const depositsResult = await supabase
+          .from('transactions')
           .select('status')
-          .eq('status', 'open'),
+          .eq('type', 'deposit')
+          .eq('status', 'pending');
+        
+        const pendingDeposits = depositsResult.error && depositsResult.error.code !== '42P01'
+          ? 0
+          : (depositsResult.data?.length || 0);
+        
+        return { open_tickets: 0, pending_deposits: pendingDeposits };
+      }
+
+      // Count distinct conversations with unread messages
+      const [unreadMessagesResult, depositsResult] = await Promise.all([
+        supabase
+          .from('messages')
+          .select('conversation_id')
+          .is('read_at', null)
+          .neq('sender_id', user.id),
         supabase
           .from('transactions')
           .select('status')
@@ -266,9 +285,12 @@ const AdminDashboard = memo(({ user, onLogout }) => {
           .eq('status', 'pending')
       ]);
 
-      const openConversations = conversationsResult.error && conversationsResult.error.code !== '42P01' 
-        ? 0 
-        : (conversationsResult.data?.length || 0);
+      // Count unique conversations with unread messages
+      const unreadConversationIds = unreadMessagesResult.error && unreadMessagesResult.error.code !== '42P01'
+        ? []
+        : [...new Set((unreadMessagesResult.data || []).map(m => m.conversation_id))];
+      
+      const openConversations = unreadConversationIds.length;
       
       const pendingDeposits = depositsResult.error && depositsResult.error.code !== '42P01'
         ? 0

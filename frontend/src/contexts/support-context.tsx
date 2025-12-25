@@ -58,6 +58,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
   const typingTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
   const oldestMessageIdRef = useRef<string | null>(null);
   const isAtBottomRef = useRef(true);
+  const currentConversationRef = useRef<Conversation | null>(null);
 
   // Load user's conversations (should only be 0 or 1 conversation)
   const loadConversations = useCallback(async () => {
@@ -300,6 +301,13 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
             .maybeSingle();
           
           if (raceConv && !raceError) {
+            // Add to conversations list if not already there
+            setConversations((prev) => {
+              if (prev.some(c => c.id === raceConv.id)) {
+                return prev;
+              }
+              return [raceConv, ...prev];
+            });
             return raceConv;
           }
         }
@@ -310,6 +318,17 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
         }
         throw createError;
       }
+      
+      // Add new conversation to list
+      if (newConv) {
+        setConversations((prev) => {
+          if (prev.some(c => c.id === newConv.id)) {
+            return prev;
+          }
+          return [newConv, ...prev];
+        });
+      }
+      
       return newConv;
     } catch (error: any) {
       console.error('Error getting/creating conversation:', error);
@@ -320,16 +339,6 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
       return null;
     }
   }, [isAdmin, userRole?.userId]);
-
-  // Select conversation and load messages
-  const selectConversation = useCallback(async (conversationId: string) => {
-    const conversation = conversations.find((c) => c.id === conversationId);
-    if (conversation) {
-      setCurrentConversation(conversation);
-      await loadMessages(conversationId);
-      await markMessagesAsRead(conversationId);
-    }
-  }, [conversations]);
 
   // Load messages for a conversation
   const loadMessages = useCallback(async (conversationId: string) => {
@@ -443,8 +452,13 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
 
       if (error) throw error;
 
-      // Add message to local state
-      setMessages((prev) => [...prev, data]);
+      // Add message to local state (check for duplicates)
+      setMessages((prev) => {
+        if (prev.some(m => m.id === data.id)) {
+          return prev; // Already exists (from real-time subscription)
+        }
+        return [...prev, data];
+      });
 
       // Update conversation in list
       setConversations((prev) =>
@@ -538,6 +552,17 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
     }
   }, []);
 
+  // Select conversation and load messages (defined after loadMessages and markMessagesAsRead)
+  const selectConversation = useCallback(async (conversationId: string) => {
+    const conversation = conversations.find((c) => c.id === conversationId);
+    if (conversation) {
+      setCurrentConversation(conversation);
+      currentConversationRef.current = conversation;
+      await loadMessages(conversationId);
+      await markMessagesAsRead(conversationId);
+    }
+  }, [conversations, loadMessages, markMessagesAsRead]);
+
   // Set typing indicator
   const setTyping = useCallback(async (conversationId: string, isTyping: boolean) => {
     if (!conversationId || !userRole?.userId) return;
@@ -602,7 +627,11 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
       );
 
       if (currentConversation?.id === conversationId) {
-        setCurrentConversation((prev) => (prev ? { ...prev, status } : null));
+        setCurrentConversation((prev) => {
+        const updated = prev ? { ...prev, status } : null;
+        currentConversationRef.current = updated;
+        return updated;
+      });
       }
     } catch (error: any) {
       // Error already handled above, just log for debugging
@@ -760,9 +789,14 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
   useEffect(() => {
     if (!userRole?.userId) return;
 
+    // Use stable channel names with user ID to avoid conflicts
+    const conversationsChannelName = `conversations-changes-${userRole.userId}`;
+    const messagesChannelName = `messages-changes-${userRole.userId}`;
+    const typingChannelName = `typing-indicators-${userRole.userId}`;
+
     // Subscribe to conversation changes
     const conversationsChannel = supabase
-      .channel('conversations-changes')
+      .channel(conversationsChannelName)
       .on(
         'postgres_changes',
         {
@@ -772,22 +806,75 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
           filter: isAdmin ? undefined : `user_id=eq.${userRole.userId}`,
         },
         async (payload) => {
-          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-            if (isAdmin) {
-              await loadAllConversations();
-            } else {
-              await loadConversations();
+          console.log('Conversation change event:', payload.eventType, payload.new || payload.old);
+          
+          if (payload.eventType === 'INSERT' && payload.new) {
+            // Optimistically add new conversation
+            const newConv = payload.new as Conversation;
+            
+            // Fetch user profile for the new conversation
+            if (newConv.user_id) {
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('id, name, email')
+                .eq('id', newConv.user_id)
+                .single();
+              
+              const conversationWithUser = {
+                ...newConv,
+                user: profile || null,
+                unread_count: 0,
+              };
+              
+              setConversations((prev) => {
+                // Check if conversation already exists (avoid duplicates)
+                if (prev.some(c => c.id === conversationWithUser.id)) {
+                  return prev;
+                }
+                return [conversationWithUser, ...prev];
+              });
             }
+          } else if (payload.eventType === 'UPDATE' && payload.new) {
+            // Optimistically update existing conversation
+            const updatedConv = payload.new as Conversation;
+            setConversations((prev) =>
+              prev.map((conv) =>
+                conv.id === updatedConv.id
+                  ? { ...conv, ...updatedConv }
+                  : conv
+              )
+            );
+            
+            // If it's the current conversation, update it
+            const currentConv = currentConversationRef.current;
+            if (currentConv?.id === updatedConv.id) {
+              const updated = { ...currentConv, ...updatedConv };
+              setCurrentConversation(updated);
+              currentConversationRef.current = updated;
+            }
+          }
+          
+          // Refresh unread counts after conversation updates
+          if (isAdmin) {
+            const count = await getUnreadCount();
+            setUnreadCount(count);
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Conversations subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Conversations subscription active');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('❌ Conversations subscription error');
+        }
+      });
 
     conversationsChannelRef.current = conversationsChannel;
 
-    // Subscribe to message inserts for current conversation
+    // Subscribe to message inserts - listen to all messages to update conversation list
     const messagesChannel = supabase
-      .channel('messages-changes')
+      .channel(messagesChannelName)
       .on(
         'postgres_changes',
         {
@@ -797,17 +884,49 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
         },
         async (payload) => {
           const newMessage = payload.new as Message;
+          console.log('New message received:', newMessage.id, 'for conversation:', newMessage.conversation_id);
           
-          // If it's for the current conversation, add it
-          if (currentConversation && newMessage.conversation_id === currentConversation.id) {
-            setMessages((prev) => [...prev, newMessage]);
+          // Use ref to get current conversation (avoids stale closure)
+          const currentConv = currentConversationRef.current;
+          
+          // Check if message already exists (avoid duplicates from optimistic updates)
+          setMessages((prev) => {
+            if (prev.some(m => m.id === newMessage.id)) {
+              return prev;
+            }
+            
+            // If it's for the current conversation, add it
+            if (currentConv && newMessage.conversation_id === currentConv.id) {
+              return [...prev, newMessage];
+            }
+            return prev;
+          });
+          
+          // Update conversation's last_message_at in the list
+          setConversations((prev) =>
+            prev.map((conv) =>
+              conv.id === newMessage.conversation_id
+                ? { 
+                    ...conv, 
+                    last_message_at: newMessage.created_at,
+                    // Increment unread count if message is not from current user
+                    unread_count: newMessage.sender_id !== userRole.userId 
+                      ? (conv.unread_count || 0) + 1 
+                      : conv.unread_count
+                  }
+                : conv
+            )
+          );
+          
+          // If it's for the current conversation, handle it
+          if (currentConv && newMessage.conversation_id === currentConv.id) {
             // Auto-mark as read if we're viewing the conversation
-            if (isAtBottomRef.current) {
-              await markMessagesAsRead(currentConversation.id);
+            if (isAtBottomRef.current && newMessage.sender_id !== userRole.userId) {
+              markMessagesAsRead(currentConv.id).catch(console.error);
             }
           } else {
-            // Show browser notification if tab is hidden
-            if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+            // Show browser notification if tab is hidden and message is not from current user
+            if (newMessage.sender_id !== userRole.userId && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
               new Notification('New support message', {
                 body: newMessage.content.substring(0, 100),
                 icon: '/favicon.svg',
@@ -822,13 +941,20 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Messages subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Messages subscription active');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('❌ Messages subscription error');
+        }
+      });
 
     messagesChannelRef.current = messagesChannel;
 
     // Subscribe to typing indicators for current conversation
     const typingChannel = supabase
-      .channel('typing-indicators')
+      .channel(typingChannelName)
       .on(
         'postgres_changes',
         {
@@ -837,11 +963,13 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
           table: 'typing_indicators',
         },
         async (payload) => {
-          if (currentConversation) {
+          // Use ref to get current conversation (avoids stale closure)
+          const currentConv = currentConversationRef.current;
+          if (currentConv) {
             const { data } = await supabase
               .from('typing_indicators')
               .select('*')
-              .eq('conversation_id', currentConversation.id)
+              .eq('conversation_id', currentConv.id)
               .eq('is_typing', true)
               .neq('user_id', userRole.userId);
 
@@ -849,19 +977,33 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Typing indicators subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Typing indicators subscription active');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('❌ Typing indicators subscription error');
+        }
+      });
 
     typingChannelRef.current = typingChannel;
 
     return () => {
-      supabase.removeChannel(conversationsChannel);
-      supabase.removeChannel(messagesChannel);
-      supabase.removeChannel(typingChannel);
+      console.log('Cleaning up real-time subscriptions');
+      if (conversationsChannelRef.current) {
+        supabase.removeChannel(conversationsChannelRef.current);
+      }
+      if (messagesChannelRef.current) {
+        supabase.removeChannel(messagesChannelRef.current);
+      }
+      if (typingChannelRef.current) {
+        supabase.removeChannel(typingChannelRef.current);
+      }
       // Clear all typing timeouts
       typingTimeoutsRef.current.forEach((timeout) => clearTimeout(timeout));
       typingTimeoutsRef.current.clear();
     };
-  }, [userRole?.userId, isAdmin, currentConversation, loadConversations, loadAllConversations, markMessagesAsRead, getUnreadCount]);
+  }, [userRole?.userId, isAdmin, getUnreadCount]); // Removed currentConversation and other callbacks from deps to prevent recreation
 
   // Auto-select conversation for non-admin users (always select the single conversation)
   useEffect(() => {
@@ -871,6 +1013,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
         const conv = conversations[0];
         if (conv.id !== currentConversation?.id) {
           setCurrentConversation(conv);
+          currentConversationRef.current = conv;
           loadMessages(conv.id);
           markMessagesAsRead(conv.id);
         }
@@ -880,6 +1023,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
         getOrCreateConversation().then((conv) => {
           if (conv) {
             setCurrentConversation(conv);
+            currentConversationRef.current = conv;
             loadMessages(conv.id);
             markMessagesAsRead(conv.id);
           }
