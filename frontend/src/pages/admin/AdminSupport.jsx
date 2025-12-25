@@ -24,26 +24,28 @@ const AdminSupportContent = () => {
   }, [loadAllConversations]);
 
   return (
-    <div className="flex h-[calc(100vh-12rem)] w-full">
-      {/* Sidebar - Conversations List */}
-      <div className="w-80 border-r border-gray-200 flex flex-col bg-white">
-        <div className="p-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold">Conversations</h2>
+    <div className="bg-white border border-gray-200 rounded-lg shadow-sm w-full max-w-full overflow-hidden">
+      <div className="flex h-[calc(100vh-16rem)]">
+        {/* Sidebar - Conversations List */}
+        <div className="w-80 border-r border-gray-200 flex flex-col bg-white">
+          <div className="p-4 border-b border-gray-200">
+            <h2 className="text-lg font-semibold">Conversations</h2>
+          </div>
+          <ConversationSearch filters={filters} onFiltersChange={setFilters} />
+          <div className="flex-1 overflow-hidden">
+            <ConversationsList
+              conversations={conversations}
+              currentConversationId={currentConversation?.id || null}
+              onSelectConversation={selectConversation}
+              filters={filters}
+            />
+          </div>
         </div>
-        <ConversationSearch filters={filters} onFiltersChange={setFilters} />
-        <div className="flex-1 overflow-hidden">
-          <ConversationsList
-            conversations={conversations}
-            currentConversationId={currentConversation?.id || null}
-            onSelectConversation={selectConversation}
-            filters={filters}
-          />
-        </div>
-      </div>
 
-      {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <AdminSupportChat />
+        {/* Main Chat Area */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <AdminSupportChat />
+        </div>
       </div>
     </div>
   );

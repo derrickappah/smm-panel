@@ -525,7 +525,7 @@ function App() {
                 path="/admin/support"
                 element={
                   user?.role === 'admin' ? (
-                    <AdminSupport />
+                    <AdminDashboard user={user} onLogout={logout} />
                   ) : user ? (
                     <Navigate to="/dashboard" />
                   ) : (
