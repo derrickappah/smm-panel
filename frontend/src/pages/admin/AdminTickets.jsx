@@ -352,8 +352,8 @@ const AdminTickets = memo(() => {
 
       {/* Respond Dialog */}
       <Dialog open={isRespondDialogOpen} onOpenChange={setIsRespondDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>Respond to Ticket</DialogTitle>
             <DialogDescription>
               {selectedTicket && (
@@ -366,76 +366,78 @@ const AdminTickets = memo(() => {
             </DialogDescription>
           </DialogHeader>
           
-          {selectedTicket && (
-            <div className="space-y-4">
-              {/* Ticket Details */}
-              <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-                <div>
-                  <Label className="text-sm font-semibold">User Message:</Label>
-                  <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">{selectedTicket.message}</p>
-                </div>
-                {selectedTicket.order_id && (
+          <div className="flex-1 overflow-y-auto pr-2 -mr-2">
+            {selectedTicket && (
+              <div className="space-y-4">
+                {/* Ticket Details */}
+                <div className="bg-gray-50 p-4 rounded-lg space-y-2">
                   <div>
-                    <Label className="text-sm font-semibold">Order ID:</Label>
-                    <p className="text-sm text-gray-700 mt-1">{selectedTicket.order_id}</p>
+                    <Label className="text-sm font-semibold">User Message:</Label>
+                    <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">{selectedTicket.message}</p>
                   </div>
-                )}
-              </div>
-
-              {/* Status and Category */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Status</Label>
-                  <Select
-                    value={selectedTicket.status}
-                    onValueChange={(value) => handleUpdateTicketStatus(selectedTicket.id, value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="open">Open</SelectItem>
-                      <SelectItem value="in_progress">In Progress</SelectItem>
-                      <SelectItem value="resolved">Resolved</SelectItem>
-                      <SelectItem value="closed">Closed</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  {selectedTicket.order_id && (
+                    <div>
+                      <Label className="text-sm font-semibold">Order ID:</Label>
+                      <p className="text-sm text-gray-700 mt-1">{selectedTicket.order_id}</p>
+                    </div>
+                  )}
                 </div>
+
+                {/* Status and Category */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Status</Label>
+                    <Select
+                      value={selectedTicket.status}
+                      onValueChange={(value) => handleUpdateTicketStatus(selectedTicket.id, value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="open">Open</SelectItem>
+                        <SelectItem value="in_progress">In Progress</SelectItem>
+                        <SelectItem value="resolved">Resolved</SelectItem>
+                        <SelectItem value="closed">Closed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Category</Label>
+                    <Select
+                      value={selectedTicket.category || 'general'}
+                      onValueChange={(value) => handleUpdateTicketFields(selectedTicket.id, { category: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="general">General</SelectItem>
+                        <SelectItem value="technical">Technical</SelectItem>
+                        <SelectItem value="payment">Payment</SelectItem>
+                        <SelectItem value="order">Order</SelectItem>
+                        <SelectItem value="account">Account</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Response Textarea */}
                 <div>
-                  <Label>Category</Label>
-                  <Select
-                    value={selectedTicket.category || 'general'}
-                    onValueChange={(value) => handleUpdateTicketFields(selectedTicket.id, { category: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="general">General</SelectItem>
-                      <SelectItem value="technical">Technical</SelectItem>
-                      <SelectItem value="payment">Payment</SelectItem>
-                      <SelectItem value="order">Order</SelectItem>
-                      <SelectItem value="account">Account</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label>Your Response</Label>
+                  <Textarea
+                    placeholder="Add your response to the user..."
+                    value={ticketResponse}
+                    onChange={(e) => setTicketResponse(e.target.value)}
+                    className="min-h-[150px] mt-2"
+                  />
                 </div>
               </div>
+            )}
+          </div>
 
-              {/* Response Textarea */}
-              <div>
-                <Label>Your Response</Label>
-                <Textarea
-                  placeholder="Add your response to the user..."
-                  value={ticketResponse}
-                  onChange={(e) => setTicketResponse(e.target.value)}
-                  className="min-h-[150px] mt-2"
-                />
-              </div>
-            </div>
-          )}
-
-          <DialogFooter>
+          <DialogFooter className="flex-shrink-0">
             <Button
               variant="outline"
               onClick={handleCloseRespondDialog}
