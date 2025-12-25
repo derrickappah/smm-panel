@@ -165,12 +165,22 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
         return existing;
       }
 
+      // Fetch user's name from profiles to use as subject
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('name')
+        .eq('id', userRole.userId)
+        .single();
+
+      const subject = profile?.name || 'Support Conversation';
+
       // If no conversation exists, create one
       const { data: newConv, error: createError } = await supabase
         .from('conversations')
         .insert({
           user_id: userRole.userId,
           status: 'open',
+          subject: subject,
         })
         .select()
         .single();
@@ -466,7 +476,16 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
         .update({ status })
         .eq('id', conversationId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error updating conversation status:', error);
+        // Provide more specific error messages
+        if (error.code === '42501' || error.message?.includes('permission denied') || error.message?.includes('policy')) {
+          toast.error('You do not have permission to update this conversation');
+        } else {
+          toast.error(`Failed to update conversation status: ${error.message || 'Unknown error'}`);
+        }
+        throw error;
+      }
 
       setConversations((prev) =>
         prev.map((conv) =>
@@ -478,8 +497,8 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
         setCurrentConversation((prev) => (prev ? { ...prev, status } : null));
       }
     } catch (error: any) {
+      // Error already handled above, just log for debugging
       console.error('Error updating conversation status:', error);
-      toast.error('Failed to update conversation status');
     }
   }, [currentConversation]);
 
