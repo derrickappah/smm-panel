@@ -24,8 +24,8 @@ const AdminSupportContent = () => {
   }, [loadAllConversations]);
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg shadow-sm w-full max-w-full overflow-hidden">
-      <div className="flex h-[calc(100vh-16rem)]">
+    <div className="bg-white border border-gray-200 rounded-lg shadow-sm w-full max-w-full overflow-hidden flex flex-col h-[calc(100vh-10rem)]">
+      <div className="flex flex-1 min-h-0">
         {/* Sidebar - Conversations List */}
         <div className="w-80 border-r border-gray-200 flex flex-col bg-white">
           <div className="p-4 border-b border-gray-200">
@@ -43,7 +43,7 @@ const AdminSupportContent = () => {
         </div>
 
         {/* Main Chat Area */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden min-h-0">
           <AdminSupportChat />
         </div>
       </div>
