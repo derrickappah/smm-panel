@@ -113,12 +113,21 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
       // Get unread counts for each conversation
       const conversationsWithUnread = await Promise.all(
         (data || []).map(async (conv) => {
+          if (!userRole?.userId) {
+            return {
+              ...conv,
+              unread_count: 0,
+              user: profilesMap[conv.user_id] || null,
+              assigned_admin: conv.assigned_to ? (profilesMap[conv.assigned_to] || null) : null,
+            };
+          }
+          
           const { count } = await supabase
             .from('messages')
             .select('*', { count: 'exact', head: true })
             .eq('conversation_id', conv.id)
             .is('read_at', null)
-            .neq('sender_id', userRole?.userId || '');
+            .neq('sender_id', userRole.userId);
 
           return {
             ...conv,
