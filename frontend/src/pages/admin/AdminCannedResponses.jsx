@@ -57,7 +57,7 @@ const AdminCannedResponses = () => {
     setFormData({ title: '', content: '', category: '', tags: [] });
   };
 
-  const categories = ['technical', 'billing', 'order', 'account', 'general'];
+  const categories = ['technical', 'payment', 'order', 'account', 'general'];
 
   // Sort by usage count
   const sortedResponses = [...responses].sort((a, b) => (b.usage_count || 0) - (a.usage_count || 0));
@@ -233,6 +233,9 @@ const AdminCannedResponses = () => {
 };
 
 export default AdminCannedResponses;
+
+
+
 
 
 

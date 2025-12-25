@@ -157,7 +157,7 @@ const AdminKnowledgeBase = () => {
     }
   };
 
-  const categories = ['technical', 'billing', 'order', 'account', 'general'];
+  const categories = ['technical', 'payment', 'order', 'account', 'general'];
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
@@ -343,6 +343,9 @@ const AdminKnowledgeBase = () => {
 };
 
 export default AdminKnowledgeBase;
+
+
+
 
 
 

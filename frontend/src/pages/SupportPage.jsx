@@ -331,7 +331,7 @@ const SupportPage = ({ user, onLogout }) => {
                     <SelectContent>
                       <SelectItem value="general">General</SelectItem>
                       <SelectItem value="technical">Technical</SelectItem>
-                      <SelectItem value="billing">Billing</SelectItem>
+                      <SelectItem value="payment">Payment</SelectItem>
                       <SelectItem value="order">Order</SelectItem>
                       <SelectItem value="account">Account</SelectItem>
                       <SelectItem value="other">Other</SelectItem>
@@ -621,7 +621,7 @@ const SupportPage = ({ user, onLogout }) => {
 
                               const categoryLabels = {
                                 technical: 'Tech',
-                                billing: 'Billing',
+                                payment: 'Payment',
                                 order: 'Order',
                                 account: 'Account',
                                 general: 'General',

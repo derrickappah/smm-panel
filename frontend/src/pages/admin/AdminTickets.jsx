@@ -186,7 +186,7 @@ const AdminTickets = memo(() => {
               <SelectItem value="all">All Categories</SelectItem>
               <SelectItem value="general">General</SelectItem>
               <SelectItem value="technical">Technical</SelectItem>
-              <SelectItem value="billing">Billing</SelectItem>
+              <SelectItem value="payment">Payment</SelectItem>
               <SelectItem value="order">Order</SelectItem>
               <SelectItem value="account">Account</SelectItem>
               <SelectItem value="other">Other</SelectItem>
@@ -255,7 +255,7 @@ const AdminTickets = memo(() => {
                                   <SelectContent>
                                     <SelectItem value="general">General</SelectItem>
                                     <SelectItem value="technical">Technical</SelectItem>
-                                    <SelectItem value="billing">Billing</SelectItem>
+                                    <SelectItem value="payment">Payment</SelectItem>
                                     <SelectItem value="order">Order</SelectItem>
                                     <SelectItem value="account">Account</SelectItem>
                                     <SelectItem value="other">Other</SelectItem>
