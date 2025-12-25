@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Search, RefreshCw, Filter, Edit, Send, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 
 const AdminTickets = memo(() => {
   const { data: tickets = [], isLoading, refetch } = useAdminTickets();
@@ -19,8 +20,9 @@ const AdminTickets = memo(() => {
   const [ticketSearch, setTicketSearch] = useState('');
   const [ticketStatusFilter, setTicketStatusFilter] = useState('all');
   const [ticketCategoryFilter, setTicketCategoryFilter] = useState('all');
-  const [editingTicket, setEditingTicket] = useState(null);
   const [ticketResponse, setTicketResponse] = useState('');
+  const [isRespondDialogOpen, setIsRespondDialogOpen] = useState(false);
+  const [selectedTicket, setSelectedTicket] = useState(null);
   const [ticketsPage, setTicketsPage] = useState(1);
   const ticketsPerPage = 20;
 
@@ -69,11 +71,24 @@ const AdminTickets = memo(() => {
     try {
       await replyToTicket.mutateAsync({ ticketId, message: ticketResponse });
       setTicketResponse('');
-      setEditingTicket(null);
+      setSelectedTicket(null);
+      setIsRespondDialogOpen(false);
     } catch (error) {
       // Error handled by mutation
     }
   }, [ticketResponse, replyToTicket]);
+
+  const handleOpenRespondDialog = useCallback((ticket) => {
+    setSelectedTicket(ticket);
+    setTicketResponse(ticket.admin_response || '');
+    setIsRespondDialogOpen(true);
+  }, []);
+
+  const handleCloseRespondDialog = useCallback(() => {
+    setIsRespondDialogOpen(false);
+    setSelectedTicket(null);
+    setTicketResponse('');
+  }, []);
 
   const handleUpdateTicketFields = useCallback(async (ticketId, updates) => {
     try {
@@ -222,68 +237,6 @@ const AdminTickets = memo(() => {
 
                   return (
                     <div key={ticket.id} className="bg-white/50 hover:bg-white/70 transition-colors">
-                      {editingTicket === ticket.id ? (
-                        <div className="p-4">
-                          <div className="border-t border-gray-200 pt-4 space-y-3">
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <Label>Status</Label>
-                                <Select
-                                  value={ticket.status}
-                                  onValueChange={(value) => handleUpdateTicketStatus(ticket.id, value)}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="open">Open</SelectItem>
-                                    <SelectItem value="in_progress">In Progress</SelectItem>
-                                    <SelectItem value="resolved">Resolved</SelectItem>
-                                    <SelectItem value="closed">Closed</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div>
-                                <Label>Category</Label>
-                                <Select
-                                  value={ticket.category || 'general'}
-                                  onValueChange={(value) => handleUpdateTicketFields(ticket.id, { category: value })}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="general">General</SelectItem>
-                                    <SelectItem value="technical">Technical</SelectItem>
-                                    <SelectItem value="payment">Payment</SelectItem>
-                                    <SelectItem value="order">Order</SelectItem>
-                                    <SelectItem value="account">Account</SelectItem>
-                                    <SelectItem value="other">Other</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            </div>
-                            <div>
-                              <Label>Response</Label>
-                              <Textarea
-                                placeholder="Add your response..."
-                                value={ticketResponse}
-                                onChange={(e) => setTicketResponse(e.target.value)}
-                                className="min-h-[100px]"
-                              />
-                            </div>
-                            <Button
-                              size="sm"
-                              onClick={() => handleAddTicketResponse(ticket.id)}
-                              disabled={replyToTicket.isPending}
-                              className="bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 w-full"
-                            >
-                              <Send className="w-4 h-4 mr-1" />
-                              Send Response
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
                         <div className="grid grid-cols-[80px_100px_100px_120px_200px_200px_200px_100px] gap-4 p-4 items-center min-w-[1200px]">
                           {/* Status */}
                           <div className="col-span-1">
@@ -331,10 +284,7 @@ const AdminTickets = memo(() => {
                           <div className="col-span-1">
                             <Button
                               size="sm"
-                              onClick={() => {
-                                setEditingTicket(ticket.id);
-                                setTicketResponse(ticket.admin_response || '');
-                              }}
+                              onClick={() => handleOpenRespondDialog(ticket)}
                               className="bg-indigo-600 hover:bg-indigo-700 text-xs whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                             >
                               <Edit className="w-3 h-3 mr-1" />
@@ -342,7 +292,6 @@ const AdminTickets = memo(() => {
                             </Button>
                           </div>
                         </div>
-                      )}
                     </div>
                   );
                 })}
@@ -400,6 +349,111 @@ const AdminTickets = memo(() => {
           </div>
         </>
       )}
+
+      {/* Respond Dialog */}
+      <Dialog open={isRespondDialogOpen} onOpenChange={setIsRespondDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Respond to Ticket</DialogTitle>
+            <DialogDescription>
+              {selectedTicket && (
+                <>
+                  Ticket ID: {selectedTicket.id.slice(0, 8)}... | 
+                  User: {selectedTicket.profiles?.name || selectedTicket.name || 'Unknown'} | 
+                  Category: {selectedTicket.category || 'general'}
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedTicket && (
+            <div className="space-y-4">
+              {/* Ticket Details */}
+              <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+                <div>
+                  <Label className="text-sm font-semibold">User Message:</Label>
+                  <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">{selectedTicket.message}</p>
+                </div>
+                {selectedTicket.order_id && (
+                  <div>
+                    <Label className="text-sm font-semibold">Order ID:</Label>
+                    <p className="text-sm text-gray-700 mt-1">{selectedTicket.order_id}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Status and Category */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Status</Label>
+                  <Select
+                    value={selectedTicket.status}
+                    onValueChange={(value) => handleUpdateTicketStatus(selectedTicket.id, value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="open">Open</SelectItem>
+                      <SelectItem value="in_progress">In Progress</SelectItem>
+                      <SelectItem value="resolved">Resolved</SelectItem>
+                      <SelectItem value="closed">Closed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Category</Label>
+                  <Select
+                    value={selectedTicket.category || 'general'}
+                    onValueChange={(value) => handleUpdateTicketFields(selectedTicket.id, { category: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="general">General</SelectItem>
+                      <SelectItem value="technical">Technical</SelectItem>
+                      <SelectItem value="payment">Payment</SelectItem>
+                      <SelectItem value="order">Order</SelectItem>
+                      <SelectItem value="account">Account</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Response Textarea */}
+              <div>
+                <Label>Your Response</Label>
+                <Textarea
+                  placeholder="Add your response to the user..."
+                  value={ticketResponse}
+                  onChange={(e) => setTicketResponse(e.target.value)}
+                  className="min-h-[150px] mt-2"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={handleCloseRespondDialog}
+              disabled={replyToTicket.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => selectedTicket && handleAddTicketResponse(selectedTicket.id)}
+              disabled={replyToTicket.isPending || !ticketResponse.trim()}
+              className="bg-indigo-600 hover:bg-indigo-700"
+            >
+              <Send className="w-4 h-4 mr-2" />
+              {replyToTicket.isPending ? 'Sending...' : 'Send Response'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 });
