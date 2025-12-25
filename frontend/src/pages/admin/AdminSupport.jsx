@@ -24,7 +24,7 @@ const AdminSupportContent = () => {
   }, [loadAllConversations]);
 
   return (
-    <div className="flex h-[calc(100vh-10rem)] -mx-4 sm:-mx-6 lg:-mx-8 mt-[-1.5rem]">
+    <div className="flex h-[calc(100vh-12rem)] w-full">
       {/* Sidebar - Conversations List */}
       <div className="w-80 border-r border-gray-200 flex flex-col bg-white">
         <div className="p-4 border-b border-gray-200">
