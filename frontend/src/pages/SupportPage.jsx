@@ -35,7 +35,7 @@ const SupportPage = ({ user, onLogout }) => {
     name: '',
     email: '',
     orderId: '',
-    category: 'general',
+    category: 'order',
     message: ''
   });
 
@@ -71,6 +71,12 @@ const SupportPage = ({ user, onLogout }) => {
       return;
     }
 
+    // Validate Order ID when category is "order"
+    if (formData.category === 'order' && !formData.orderId?.trim()) {
+      toast.error('Order ID is required for order-related inquiries');
+      return;
+    }
+
     setLoading(true);
     
     try {
@@ -102,7 +108,7 @@ const SupportPage = ({ user, onLogout }) => {
         name: user?.name || '',
         email: user?.email || '',
         orderId: '',
-        category: 'general',
+        category: 'order',
         message: ''
       });
       // Refresh tickets list
@@ -291,7 +297,12 @@ const SupportPage = ({ user, onLogout }) => {
 
                 <div>
                   <Label htmlFor="orderId" className="text-sm font-medium text-gray-700 mb-2 block">
-                    Order ID <span className="text-gray-500 font-normal text-xs">(Optional)</span>
+                    Order ID{' '}
+                    {formData.category === 'order' ? (
+                      <span className="text-red-600 font-normal text-xs">(Required)</span>
+                    ) : (
+                      <span className="text-gray-500 font-normal text-xs">(Optional)</span>
+                    )}
                   </Label>
                   <Input
                     id="orderId"
@@ -299,10 +310,17 @@ const SupportPage = ({ user, onLogout }) => {
                     value={formData.orderId}
                     onChange={(e) => setFormData({ ...formData, orderId: e.target.value })}
                     placeholder="e.g., abc123-def456-789 or 123e4567-e89b-12d3-a456-426614174000"
-                    className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    className={`w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
+                      formData.category === 'order' && !formData.orderId?.trim() 
+                        ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
+                        : ''
+                    }`}
+                    required={formData.category === 'order'}
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    If your inquiry is about a specific order, please provide the Order ID. You can find it in your Orders page.
+                    {formData.category === 'order' 
+                      ? 'Order ID is required for order-related inquiries. You can find it in your Orders page.'
+                      : 'If your inquiry is about a specific order, please provide the Order ID. You can find it in your Orders page.'}
                   </p>
                 </div>
 
