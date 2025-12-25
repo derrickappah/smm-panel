@@ -53,6 +53,8 @@ const SupportPage = ({ user, onLogout }) => {
   const [openFaq, setOpenFaq] = useState(null);
   const [myTickets, setMyTickets] = useState([]);
   const [loadingTickets, setLoadingTickets] = useState(false);
+  const [userOrders, setUserOrders] = useState([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
   
   // Search and filter states
   const [ticketSearch, setTicketSearch] = useState('');
@@ -62,6 +64,47 @@ const SupportPage = ({ user, onLogout }) => {
 
   // Fetch FAQs from backend
   const { data: faqs = [], isLoading: isLoadingFAQs } = useFAQ();
+
+  // Fetch user orders
+  const fetchUserOrders = async () => {
+    if (!user) return;
+    
+    setLoadingOrders(true);
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) return;
+
+      const { data, error } = await supabase
+        .from('orders')
+        .select('id, service_id, promotion_package_id, status, created_at, total_cost, services(name), promotion_packages(name)')
+        .eq('user_id', authUser.id)
+        .order('created_at', { ascending: false })
+        .limit(50); // Limit to most recent 50 orders
+
+      if (error) {
+        if (error.code === '42P01') {
+          console.warn('Orders table may not exist.');
+          setUserOrders([]);
+          return;
+        }
+        throw error;
+      }
+
+      setUserOrders(data || []);
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+      setUserOrders([]);
+    } finally {
+      setLoadingOrders(false);
+    }
+  };
+
+  // Fetch orders when component loads and user is available
+  useEffect(() => {
+    if (user) {
+      fetchUserOrders();
+    }
+  }, [user]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -304,6 +347,43 @@ const SupportPage = ({ user, onLogout }) => {
                       <span className="text-gray-500 font-normal text-xs">(Optional)</span>
                     )}
                   </Label>
+                  
+                  {/* Order Selector - Show when user is logged in and has orders */}
+                  {user && userOrders.length > 0 && (
+                    <div className="mb-3">
+                      <Select
+                        value=""
+                        onValueChange={(value) => {
+                          if (value) {
+                            setFormData({ ...formData, orderId: value });
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                          <SelectValue placeholder={loadingOrders ? "Loading orders..." : "Select an order..."} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {userOrders.map((order) => {
+                            const serviceName = order.services?.name || order.promotion_packages?.name || 'Unknown Service';
+                            const orderDate = new Date(order.created_at).toLocaleDateString();
+                            const orderStatus = order.status || 'pending';
+                            const orderCost = order.total_cost ? `$${parseFloat(order.total_cost).toFixed(2)}` : '';
+                            const displayText = `${order.id.slice(0, 8)} - ${serviceName} - ${orderStatus}${orderCost ? ` - ${orderCost}` : ''} - ${orderDate}`;
+                            
+                            return (
+                              <SelectItem key={order.id} value={order.id}>
+                                {displayText}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Or enter Order ID manually below
+                      </p>
+                    </div>
+                  )}
+                  
                   <Input
                     id="orderId"
                     type="text"
