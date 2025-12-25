@@ -3,7 +3,8 @@ import { useAdminUsers } from './useAdminUsers';
 import { useAdminOrders } from './useAdminOrders';
 import { useAdminDeposits } from './useAdminDeposits';
 import { useAdminServices } from './useAdminServices';
-import { useAdminTickets } from './useAdminTickets';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/lib/supabase';
 
 // Helper function to check if a date is within the selected date range
 const isDateInRange = (dateString, dateRangeStart, dateRangeEnd) => {
@@ -40,7 +41,24 @@ export const useAdminStats = (options = {}) => {
   const { data: orders = [], isLoading: ordersLoading } = useAdminOrders({ enabled, useInfinite: false, checkSMMGenStatus: false });
   const { data: deposits = [], isLoading: depositsLoading } = useAdminDeposits({ enabled, useInfinite: false });
   const { data: services = [], isLoading: servicesLoading } = useAdminServices({ enabled });
-  const { data: tickets = [], isLoading: ticketsLoading } = useAdminTickets({ enabled });
+  
+  // Fetch conversations instead of tickets
+  const { data: conversations = [], isLoading: ticketsLoading } = useQuery({
+    queryKey: ['admin', 'conversations', 'stats'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('conversations')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error && error.code !== '42P01') throw error;
+      return data || [];
+    },
+    enabled,
+    staleTime: 1 * 60 * 1000,
+  });
+  
+  const tickets = conversations; // Use conversations as tickets for compatibility
 
   // Only show loading if we have no data at all - allow partial data to display
   const isLoading = (usersLoading && users.length === 0) || 
@@ -135,7 +153,7 @@ export const useAdminStats = (options = {}) => {
         else if (o.refund_status === 'failed' && inRange) failedRefunds++;
       });
 
-      // Single-pass calculation for tickets (optimized)
+      // Single-pass calculation for conversations (optimized)
       let openTickets = 0;
       let inProgressTickets = 0;
       let resolvedTickets = 0;
@@ -146,8 +164,8 @@ export const useAdminStats = (options = {}) => {
         currentTickets.push(t);
         
         if (t.status === 'open') openTickets++;
-        else if (t.status === 'in_progress') inProgressTickets++;
-        else if (t.status === 'resolved' || t.status === 'closed') resolvedTickets++;
+        else if (t.status === 'closed') resolvedTickets++;
+        else if (t.status === 'resolved') resolvedTickets++;
       });
 
       // Single-pass calculation for users (optimized)

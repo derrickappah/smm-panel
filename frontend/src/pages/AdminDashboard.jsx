@@ -25,7 +25,7 @@ const AdminDeposits = lazy(() => import('@/pages/admin/AdminDeposits'));
 const AdminTransactions = lazy(() => import('@/pages/admin/AdminTransactions'));
 const AdminServices = lazy(() => import('@/pages/admin/AdminServices'));
 const AdminPromotionPackages = lazy(() => import('@/pages/admin/AdminPromotionPackages'));
-const AdminTickets = lazy(() => import('@/pages/admin/AdminTickets'));
+const AdminSupport = lazy(() => import('@/pages/admin/AdminSupport'));
 const AdminReferrals = lazy(() => import('@/pages/admin/AdminReferrals'));
 const AdminSettings = lazy(() => import('@/pages/admin/AdminSettings'));
 const AdminBalanceCheck = lazy(() => import('@/pages/admin/AdminBalanceCheck'));
@@ -250,13 +250,13 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     }
   }, [queryClient]);
 
-  // Get stats for open tickets badge and pending deposits
+  // Get stats for open conversations badge and pending deposits
   const { data: stats = {}, isLoading: isLoadingStats } = useQuery({
-    queryKey: ['admin', 'stats', 'tickets'],
+    queryKey: ['admin', 'stats', 'conversations'],
     queryFn: async () => {
-      const [ticketsResult, depositsResult] = await Promise.all([
+      const [conversationsResult, depositsResult] = await Promise.all([
         supabase
-          .from('support_tickets')
+          .from('conversations')
           .select('status')
           .eq('status', 'open'),
         supabase
@@ -266,15 +266,15 @@ const AdminDashboard = memo(({ user, onLogout }) => {
           .eq('status', 'pending')
       ]);
 
-      const openTickets = ticketsResult.error && ticketsResult.error.code !== '42P01' 
+      const openConversations = conversationsResult.error && conversationsResult.error.code !== '42P01' 
         ? 0 
-        : (ticketsResult.data?.length || 0);
+        : (conversationsResult.data?.length || 0);
       
       const pendingDeposits = depositsResult.error && depositsResult.error.code !== '42P01'
         ? 0
         : (depositsResult.data?.length || 0);
 
-      return { open_tickets: openTickets, pending_deposits: pendingDeposits };
+      return { open_tickets: openConversations, pending_deposits: pendingDeposits };
     },
     staleTime: 1 * 60 * 1000,
     gcTime: 5 * 60 * 1000,
@@ -702,7 +702,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                 {/* Support Section */}
                 <TabsContent value="support" className="lg:mt-0 w-full max-w-full">
                   <Suspense fallback={<ComponentLoader />}>
-                    <AdminTickets />
+                    <AdminSupport />
                   </Suspense>
                 </TabsContent>
 
