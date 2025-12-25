@@ -12,7 +12,7 @@ const fetchTickets = async ({ pageParam = 0 }) => {
 
   const { data, error, count } = await supabase
     .from('support_tickets')
-    .select('id, user_id, name, email, order_id, message, status, subject, category, priority, assigned_to, sla_deadline, sla_breached, created_at, updated_at, admin_response, profiles!support_tickets_user_id_fkey(name, email)', { count: 'exact' })
+    .select('id, user_id, name, email, order_id, message, status, category, created_at, updated_at, admin_response, profiles!support_tickets_user_id_fkey(name, email)', { count: 'exact' })
     .order('created_at', { ascending: false })
     .range(from, to);
 
@@ -59,7 +59,7 @@ const fetchAllTickets = async () => {
     
     const { data, error } = await supabase
       .from('support_tickets')
-      .select('id, user_id, name, email, order_id, message, status, subject, category, priority, assigned_to, sla_deadline, sla_breached, created_at, updated_at, admin_response, profiles!support_tickets_user_id_fkey(name, email)')
+      .select('id, user_id, name, email, order_id, message, status, category, created_at, updated_at, admin_response, profiles!support_tickets_user_id_fkey(name, email)')
       .order('created_at', { ascending: false })
       .range(from, to);
 

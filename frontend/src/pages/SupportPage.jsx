@@ -11,8 +11,6 @@ import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
 import SEO from '@/components/SEO';
 import { generateFAQSchema } from '@/utils/schema';
-import KnowledgeBaseSearch from '@/components/support/KnowledgeBaseSearch';
-import LiveChatWidget from '@/components/support/LiveChatWidget';
 import { useFAQ } from '@/hooks/useFAQ';
 import { 
   Mail, 
@@ -20,8 +18,6 @@ import {
   HelpCircle, 
   Clock, 
   Send,
-  Phone,
-  MapPin,
   CheckCircle,
   ChevronDown,
   ChevronUp,
@@ -30,10 +26,7 @@ import {
   Filter,
   ChevronLeft,
   ChevronRight,
-  PlayCircle,
   Video,
-  AlertCircle,
-  AlertTriangle
 } from 'lucide-react';
 
 const SupportPage = ({ user, onLogout }) => {
@@ -42,12 +35,9 @@ const SupportPage = ({ user, onLogout }) => {
     name: '',
     email: '',
     orderId: '',
-    subject: '',
     category: 'general',
-    priority: 'normal',
     message: ''
   });
-  const [showKnowledgeBase, setShowKnowledgeBase] = useState(false);
 
   // Update form data when user loads
   useEffect(() => {
@@ -87,7 +77,7 @@ const SupportPage = ({ user, onLogout }) => {
       // Get current user ID if logged in
       const { data: { user: authUser } } = await supabase.auth.getUser();
       
-      // Insert support ticket into database with new fields
+      // Insert support ticket into database
       const { data, error } = await supabase
         .from('support_tickets')
         .insert({
@@ -95,9 +85,7 @@ const SupportPage = ({ user, onLogout }) => {
           name: formData.name,
           email: formData.email,
           order_id: formData.orderId || null,
-          subject: formData.subject || formData.message.substring(0, 100),
           category: formData.category,
-          priority: formData.priority,
           message: formData.message,
           status: 'open'
         })
@@ -114,12 +102,9 @@ const SupportPage = ({ user, onLogout }) => {
         name: user?.name || '',
         email: user?.email || '',
         orderId: '',
-        subject: '',
         category: 'general',
-        priority: 'normal',
         message: ''
       });
-      setShowKnowledgeBase(false);
       // Refresh tickets list
       if (user) {
         fetchMyTickets();
@@ -147,7 +132,7 @@ const SupportPage = ({ user, onLogout }) => {
 
       const { data, error } = await supabase
         .from('support_tickets')
-        .select('id, user_id, subject, message, status, category, priority, sla_deadline, sla_breached, created_at, updated_at, admin_response')
+        .select('id, user_id, message, status, category, created_at, updated_at, admin_response')
         .eq('user_id', authUser.id)
         .order('created_at', { ascending: false });
 
@@ -287,53 +272,21 @@ const SupportPage = ({ user, onLogout }) => {
                 </div>
 
                 <div>
-                  <Label htmlFor="subject" className="text-sm font-medium text-gray-700 mb-2 block">
-                    Subject <span className="text-gray-500 font-normal text-xs">(Optional)</span>
+                  <Label htmlFor="category" className="text-sm font-medium text-gray-700 mb-2 block">
+                    Category
                   </Label>
-                  <Input
-                    id="subject"
-                    type="text"
-                    value={formData.subject}
-                    onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                    placeholder="Brief summary of your issue..."
-                    className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                </div>
-
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="category" className="text-sm font-medium text-gray-700 mb-2 block">
-                      Category
-                    </Label>
-                    <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
-                      <SelectTrigger className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="general">General</SelectItem>
-                        <SelectItem value="technical">Technical</SelectItem>
-                        <SelectItem value="billing">Billing</SelectItem>
-                        <SelectItem value="order">Order</SelectItem>
-                        <SelectItem value="account">Account</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label htmlFor="priority" className="text-sm font-medium text-gray-700 mb-2 block">
-                      Priority
-                    </Label>
-                    <Select value={formData.priority} onValueChange={(value) => setFormData({ ...formData, priority: value })}>
-                      <SelectTrigger className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="low">Low</SelectItem>
-                        <SelectItem value="normal">Normal</SelectItem>
-                        <SelectItem value="high">High</SelectItem>
-                        <SelectItem value="urgent">Urgent</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
+                    <SelectTrigger className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="general">General</SelectItem>
+                      <SelectItem value="technical">Technical</SelectItem>
+                      <SelectItem value="billing">Billing</SelectItem>
+                      <SelectItem value="order">Order</SelectItem>
+                      <SelectItem value="account">Account</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div>
@@ -354,31 +307,9 @@ const SupportPage = ({ user, onLogout }) => {
                 </div>
 
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <Label htmlFor="message" className="text-sm font-medium text-gray-700">
-                      Message
-                    </Label>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowKnowledgeBase(!showKnowledgeBase)}
-                      className="text-xs h-7"
-                    >
-                      {showKnowledgeBase ? 'Hide' : 'Search'} Knowledge Base
-                    </Button>
-                  </div>
-                  {showKnowledgeBase && (
-                    <div className="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                      <KnowledgeBaseSearch
-                        onArticleSelect={(article) => {
-                          if (article && !formData.message) {
-                            setFormData({ ...formData, message: `Related to: ${article.title}\n\n` });
-                          }
-                        }}
-                      />
-                    </div>
-                  )}
+                  <Label htmlFor="message" className="text-sm font-medium text-gray-700 mb-2 block">
+                    Message
+                  </Label>
                   <Textarea
                     id="message"
                     value={formData.message}
@@ -562,7 +493,7 @@ const SupportPage = ({ user, onLogout }) => {
                           <div className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
                             <div className="grid grid-cols-[1fr_1fr_1.5fr_2fr_2fr_1.5fr] gap-4 p-4 font-semibold text-xs sm:text-sm text-gray-700">
                               <div className="text-center">Status</div>
-                              <div className="text-center">Category/Priority</div>
+                              <div className="text-center">Category</div>
                               <div className="text-center">Ticket ID</div>
                               <div className="text-center">Message</div>
                               <div className="text-center">Response</div>
@@ -582,12 +513,6 @@ const SupportPage = ({ user, onLogout }) => {
                               const status = statusConfig[ticket.status] || statusConfig.open;
                               const StatusIcon = status.icon;
 
-                              const priorityColors = {
-                                low: 'bg-gray-100 text-gray-700',
-                                normal: 'bg-blue-100 text-blue-700',
-                                high: 'bg-orange-100 text-orange-700',
-                                urgent: 'bg-red-100 text-red-700'
-                              };
                               const categoryLabels = {
                                 technical: 'Tech',
                                 billing: 'Billing',
@@ -595,19 +520,6 @@ const SupportPage = ({ user, onLogout }) => {
                                 account: 'Account',
                                 general: 'General'
                               };
-                              const getSLATimeRemaining = (deadline) => {
-                                if (!deadline) return null;
-                                const now = new Date();
-                                const deadlineDate = new Date(deadline);
-                                const diff = deadlineDate - now;
-                                const hours = Math.floor(diff / (1000 * 60 * 60));
-                                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-                                if (diff < 0) return { text: 'Breached', color: 'text-red-600', icon: AlertCircle };
-                                if (hours < 2) return { text: `${hours}h ${minutes}m`, color: 'text-orange-600', icon: AlertTriangle };
-                                return { text: `${hours}h ${minutes}m`, color: 'text-green-600', icon: Clock };
-                              };
-                              const slaInfo = ticket.sla_deadline ? getSLATimeRemaining(ticket.sla_deadline) : null;
-                              const SLAIcon = slaInfo?.icon || Clock;
 
                               return (
                                 <div key={ticket.id} className="bg-white hover:bg-gray-50 transition-colors">
@@ -619,37 +531,15 @@ const SupportPage = ({ user, onLogout }) => {
                                         {status.label}
                                       </span>
                                     </div>
-                                    {/* Category/Priority */}
-                                    <div className="text-center space-y-1">
+                                    {/* Category */}
+                                    <div className="text-center">
                                       <Badge variant="outline" className="text-xs">
                                         {categoryLabels[ticket.category] || ticket.category || 'General'}
                                       </Badge>
-                                      <div>
-                                        <Badge className={`text-xs ${priorityColors[ticket.priority] || priorityColors.normal}`}>
-                                          {ticket.priority || 'normal'}
-                                        </Badge>
-                                      </div>
-                                      {slaInfo && (
-                                        <div className={`flex items-center justify-center gap-1 text-xs ${slaInfo.color}`}>
-                                          <SLAIcon className="w-3 h-3" />
-                                          {slaInfo.text}
-                                        </div>
-                                      )}
-                                      {ticket.sla_breached && (
-                                        <div className="flex items-center justify-center gap-1 text-xs text-red-600">
-                                          <AlertCircle className="w-3 h-3" />
-                                          SLA Breached
-                                        </div>
-                                      )}
                                     </div>
                                     {/* Ticket ID */}
                                     <div className="text-center">
                                       <p className="text-xs text-gray-700 break-all">{ticket.id.slice(0, 8)}...</p>
-                                      {ticket.subject && (
-                                        <p className="text-xs text-gray-600 mt-1 line-clamp-1" title={ticket.subject}>
-                                          {ticket.subject}
-                                        </p>
-                                      )}
                                     </div>
                                     {/* Message */}
                                     <div className="text-center">
@@ -862,13 +752,6 @@ const SupportPage = ({ user, onLogout }) => {
         </div>
       </div>
 
-      {/* Live Chat Widget - Show for logged in users with open tickets */}
-      {user && myTickets.filter(t => t.status !== 'closed' && t.status !== 'resolved').length > 0 && (
-        <LiveChatWidget 
-          ticketId={myTickets.filter(t => t.status !== 'closed' && t.status !== 'resolved')[0]?.id}
-          user={user}
-        />
-      )}
     </div>
   );
 };
