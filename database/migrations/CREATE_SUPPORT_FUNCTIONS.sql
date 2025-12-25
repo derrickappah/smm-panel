@@ -1,154 +1,90 @@
--- Create Support Functions for SLA, Auto-Assignment, and Tracking
+-- Create Support System Functions and Triggers
 -- Run this in your Supabase SQL Editor
 
--- Function to calculate SLA deadline based on priority
-CREATE OR REPLACE FUNCTION calculate_sla_deadline(
-    priority TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-)
-RETURNS TIMESTAMPTZ AS $$
-DECLARE
-    deadline TIMESTAMPTZ;
+-- Function to update conversation's updated_at and last_message_at when a message is inserted
+CREATE OR REPLACE FUNCTION update_conversation_timestamp()
+RETURNS TRIGGER AS $$
 BEGIN
-    CASE priority
-        WHEN 'urgent' THEN
-            deadline := created_at + INTERVAL '2 hours';
-        WHEN 'high' THEN
-            deadline := created_at + INTERVAL '2 hours';
-        WHEN 'normal' THEN
-            deadline := created_at + INTERVAL '12 hours';
-        WHEN 'low' THEN
-            deadline := created_at + INTERVAL '12 hours';
-        ELSE
-            deadline := created_at + INTERVAL '12 hours';
-    END CASE;
-    
-    RETURN deadline;
+    UPDATE conversations
+    SET 
+        updated_at = NOW(),
+        last_message_at = NOW()
+    WHERE id = NEW.conversation_id;
+    RETURN NEW;
 END;
-$$ LANGUAGE plpgsql IMMUTABLE;
+$$ LANGUAGE plpgsql;
 
--- Function to auto-assign ticket using round-robin with workload consideration
-CREATE OR REPLACE FUNCTION auto_assign_ticket(ticket_id UUID)
-RETURNS UUID AS $$
+-- Trigger to update conversation timestamps when a message is inserted
+DROP TRIGGER IF EXISTS update_conversation_on_message_insert ON messages;
+CREATE TRIGGER update_conversation_on_message_insert
+    AFTER INSERT ON messages
+    FOR EACH ROW
+    EXECUTE FUNCTION update_conversation_timestamp();
+
+-- Function to automatically set sender_role based on user's role
+-- This ensures sender_role is always correct and prevents privilege escalation
+CREATE OR REPLACE FUNCTION set_message_sender_role()
+RETURNS TRIGGER AS $$
 DECLARE
-    assigned_admin_id UUID;
-    admin_count INTEGER;
-    admin_workload RECORD;
-    min_workload INTEGER;
+    v_user_role TEXT;
 BEGIN
-    -- Get all admin users
-    SELECT COUNT(*) INTO admin_count
+    -- Get user's role from profiles table
+    SELECT role INTO v_user_role
     FROM profiles
-    WHERE role = 'admin';
+    WHERE id = NEW.sender_id;
     
-    IF admin_count = 0 THEN
-        RETURN NULL;
-    END IF;
-    
-    -- Find admin with minimum open tickets (workload balancing)
-    SELECT 
-        p.id,
-        COUNT(st.id) as open_tickets_count
-    INTO admin_workload
-    FROM profiles p
-    LEFT JOIN support_tickets st ON st.assigned_to = p.id 
-        AND st.status IN ('open', 'in_progress')
-    WHERE p.role = 'admin'
-    GROUP BY p.id
-    ORDER BY open_tickets_count ASC, p.created_at ASC
-    LIMIT 1;
-    
-    assigned_admin_id := admin_workload.id;
-    
-    -- Update ticket with assignment
-    UPDATE support_tickets
-    SET assigned_to = assigned_admin_id
-    WHERE id = ticket_id;
-    
-    RETURN assigned_admin_id;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Function to check and update SLA breaches
-CREATE OR REPLACE FUNCTION check_sla_breaches()
-RETURNS INTEGER AS $$
-DECLARE
-    breached_count INTEGER;
-BEGIN
-    -- Update tickets that have passed their SLA deadline
-    UPDATE support_tickets
-    SET sla_breached = TRUE
-    WHERE sla_deadline IS NOT NULL
-    AND sla_deadline < NOW()
-    AND status NOT IN ('resolved', 'closed')
-    AND sla_breached = FALSE;
-    
-    GET DIAGNOSTICS breached_count = ROW_COUNT;
-    
-    RETURN breached_count;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Function to update ticket SLA on creation/update
-CREATE OR REPLACE FUNCTION update_ticket_sla()
-RETURNS TRIGGER AS $$
-BEGIN
-    -- Calculate SLA deadline if priority is set and deadline is not already set
-    IF NEW.priority IS NOT NULL AND (NEW.sla_deadline IS NULL OR OLD.priority IS DISTINCT FROM NEW.priority) THEN
-        NEW.sla_deadline := calculate_sla_deadline(NEW.priority, COALESCE(NEW.created_at, NOW()));
-    END IF;
-    
-    -- Check if SLA is breached
-    IF NEW.sla_deadline IS NOT NULL AND NEW.sla_deadline < NOW() AND NEW.status NOT IN ('resolved', 'closed') THEN
-        NEW.sla_breached := TRUE;
+    -- Set sender_role based on user's role
+    IF v_user_role = 'admin' THEN
+        NEW.sender_role := 'admin';
     ELSE
-        NEW.sla_breached := FALSE;
+        NEW.sender_role := 'user';
     END IF;
     
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Trigger to automatically calculate SLA on ticket creation/update
-DROP TRIGGER IF EXISTS trigger_update_ticket_sla ON support_tickets;
-CREATE TRIGGER trigger_update_ticket_sla
-    BEFORE INSERT OR UPDATE OF priority, status, sla_deadline ON support_tickets
+-- Trigger to automatically set sender_role before insert
+DROP TRIGGER IF EXISTS set_message_sender_role_trigger ON messages;
+CREATE TRIGGER set_message_sender_role_trigger
+    BEFORE INSERT ON messages
     FOR EACH ROW
-    EXECUTE FUNCTION update_ticket_sla();
+    EXECUTE FUNCTION set_message_sender_role();
 
--- Function to auto-assign ticket on creation if not manually assigned
-CREATE OR REPLACE FUNCTION auto_assign_new_ticket()
+-- Grant execute permission on the function
+GRANT EXECUTE ON FUNCTION set_message_sender_role() TO authenticated;
+
+-- Function to enforce single open conversation per user
+-- This is called before inserting a new conversation
+CREATE OR REPLACE FUNCTION enforce_single_open_conversation()
 RETURNS TRIGGER AS $$
 BEGIN
-    -- Only auto-assign if not already assigned
-    IF NEW.assigned_to IS NULL THEN
-        PERFORM auto_assign_ticket(NEW.id);
-        -- Refresh the assigned_to value
-        SELECT assigned_to INTO NEW.assigned_to
-        FROM support_tickets
-        WHERE id = NEW.id;
+    -- Only enforce for non-admin users
+    IF NOT public.is_admin() THEN
+        -- Check if user already has an open conversation
+        IF EXISTS (
+            SELECT 1 FROM conversations
+            WHERE user_id = NEW.user_id
+            AND status = 'open'
+            AND id != COALESCE(NEW.id, '00000000-0000-0000-0000-000000000000'::UUID)
+        ) THEN
+            -- If inserting, prevent creation of multiple open conversations
+            -- Instead, we'll let the application handle this logic
+            -- This function can be used to check, but we won't block here
+            -- to allow flexibility in the application layer
+            NULL;
+        END IF;
     END IF;
     
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Trigger to auto-assign tickets on creation
-DROP TRIGGER IF EXISTS trigger_auto_assign_ticket ON support_tickets;
-CREATE TRIGGER trigger_auto_assign_ticket
-    AFTER INSERT ON support_tickets
-    FOR EACH ROW
-    EXECUTE FUNCTION auto_assign_new_ticket();
+-- Note: We'll handle single conversation enforcement in the application layer
+-- for better user experience and error handling
 
--- Grant execute permissions
-GRANT EXECUTE ON FUNCTION calculate_sla_deadline(TEXT, TIMESTAMPTZ) TO authenticated;
-GRANT EXECUTE ON FUNCTION calculate_sla_deadline(TEXT, TIMESTAMPTZ) TO anon;
-GRANT EXECUTE ON FUNCTION auto_assign_ticket(UUID) TO authenticated;
-GRANT EXECUTE ON FUNCTION check_sla_breaches() TO authenticated;
-
--- Create a scheduled function to check SLA breaches periodically
--- Note: This requires pg_cron extension. If not available, you can call check_sla_breaches() manually or via a cron job
--- Example: SELECT cron.schedule('check-sla-breaches', '*/5 * * * *', 'SELECT check_sla_breaches();');
-
-
+-- Add comments for documentation
+COMMENT ON FUNCTION update_conversation_timestamp() IS 'Updates conversation timestamps when a message is inserted';
+COMMENT ON FUNCTION set_message_sender_role() IS 'Automatically sets sender_role based on user profile role to prevent privilege escalation';
+COMMENT ON FUNCTION enforce_single_open_conversation() IS 'Helper function to check for single open conversation per user (enforced in application layer)';
 

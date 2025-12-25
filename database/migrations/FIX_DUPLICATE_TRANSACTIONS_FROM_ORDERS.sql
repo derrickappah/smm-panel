@@ -161,3 +161,6 @@ COMMENT ON FUNCTION create_transaction_from_audit_log IS 'Trigger function that 
 
 
 
+
+
+

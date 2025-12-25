@@ -20,6 +20,8 @@ const ServicesPage = lazy(() => import("@/pages/ServicesPage"));
 const OrderHistory = lazy(() => import("@/pages/OrderHistory"));
 const AdminDashboard = lazy(() => import("@/pages/AdminDashboard"));
 const SupportPage = lazy(() => import("@/pages/SupportPage"));
+const AdminSupport = lazy(() => import("@/pages/admin/AdminSupport"));
+const AdminSupportAnalytics = lazy(() => import("@/pages/admin/AdminSupportAnalytics"));
 const TransactionsPage = lazy(() => import("@/pages/TransactionsPage"));
 const PaymentCallback = lazy(() => import("@/pages/PaymentCallback"));
 const ServiceLandingPage = lazy(() => import("@/pages/ServiceLandingPage"));
@@ -523,7 +525,19 @@ function App() {
                 path="/admin/support"
                 element={
                   user?.role === 'admin' ? (
-                    <AdminDashboard user={user} onLogout={logout} />
+                    <AdminSupport />
+                  ) : user ? (
+                    <Navigate to="/dashboard" />
+                  ) : (
+                    <Navigate to="/auth" />
+                  )
+                }
+              />
+              <Route
+                path="/admin/support/analytics"
+                element={
+                  user?.role === 'admin' ? (
+                    <AdminSupportAnalytics />
                   ) : user ? (
                     <Navigate to="/dashboard" />
                   ) : (
