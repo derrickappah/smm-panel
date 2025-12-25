@@ -1,11 +1,23 @@
 import { supabase } from '@/lib/supabase';
 import type { SupportMetrics, AdminPerformance } from '@/types/support';
 
+// Helper function to check if user is authenticated
+const checkAuth = async () => {
+  const { data: { session }, error } = await supabase.auth.getSession();
+  if (error || !session) {
+    throw new Error('Authentication required');
+  }
+  return session;
+};
+
 export const getSupportMetrics = async (
   startDate?: string,
   endDate?: string
 ): Promise<SupportMetrics> => {
   try {
+    // Ensure user is authenticated before making queries
+    await checkAuth();
+    
     let query = supabase.from('conversations').select('*', { count: 'exact' });
     let messagesQuery = supabase.from('messages').select('*', { count: 'exact' });
 
@@ -23,29 +35,49 @@ export const getSupportMetrics = async (
       messagesQuery,
     ]);
 
+    // Check for RLS errors (403)
+    if (conversationsResult.error && conversationsResult.error.code === '42501') {
+      throw new Error('Permission denied: Admin access required');
+    }
+    if (messagesResult.error && messagesResult.error.code === '42501') {
+      throw new Error('Permission denied: Admin access required');
+    }
+
     const totalConversations = conversationsResult.count || 0;
     const totalMessages = messagesResult.count || 0;
 
     // Get conversations by day
-    const { data: conversationsData } = await supabase
+    const { data: conversationsData, error: conversationsError } = await supabase
       .from('conversations')
       .select('created_at')
       .order('created_at', { ascending: true });
+
+    if (conversationsError && conversationsError.code === '42501') {
+      throw new Error('Permission denied: Admin access required');
+    }
 
     const conversationsByDay = groupByDay(conversationsData || [], 'created_at');
 
     // Get messages by day
-    const { data: messagesData } = await supabase
+    const { data: messagesData, error: messagesError } = await supabase
       .from('messages')
       .select('created_at')
       .order('created_at', { ascending: true });
 
+    if (messagesError && messagesError.code === '42501') {
+      throw new Error('Permission denied: Admin access required');
+    }
+
     const messagesByDay = groupByDay(messagesData || [], 'created_at');
 
     // Get priority breakdown
-    const { data: priorityData } = await supabase
+    const { data: priorityData, error: priorityError } = await supabase
       .from('conversations')
       .select('priority');
+
+    if (priorityError && priorityError.code === '42501') {
+      throw new Error('Permission denied: Admin access required');
+    }
 
     const priorityBreakdown = (priorityData || []).reduce((acc, conv) => {
       const priority = conv.priority || 'medium';
@@ -54,10 +86,14 @@ export const getSupportMetrics = async (
     }, {} as Record<string, number>);
 
     // Get assignment stats
-    const { data: assignmentData } = await supabase
+    const { data: assignmentData, error: assignmentError } = await supabase
       .from('conversations')
       .select('assigned_to')
       .not('assigned_to', 'is', null);
+
+    if (assignmentError && assignmentError.code === '42501') {
+      throw new Error('Permission denied: Admin access required');
+    }
 
     // Get admin profiles separately
     const adminIds = [...new Set((assignmentData || []).map(c => c.assigned_to).filter(Boolean))];
@@ -117,11 +153,18 @@ export const getAdminPerformance = async (
   endDate?: string
 ): Promise<AdminPerformance[]> => {
   try {
+    // Ensure user is authenticated before making queries
+    await checkAuth();
+    
     // Get all admins
-    const { data: admins } = await supabase
+    const { data: admins, error: adminsError } = await supabase
       .from('profiles')
       .select('id, name, email')
       .eq('role', 'admin');
+
+    if (adminsError) {
+      throw adminsError;
+    }
 
     if (!admins) return [];
 
@@ -152,6 +195,14 @@ export const getAdminPerformance = async (
           conversationsQuery,
           messagesQuery,
         ]);
+
+        // Check for RLS errors
+        if (conversationsResult.error && conversationsResult.error.code === '42501') {
+          console.warn('Permission denied for admin performance query');
+        }
+        if (messagesResult.error && messagesResult.error.code === '42501') {
+          console.warn('Permission denied for admin performance query');
+        }
 
         return {
           admin_id: admin.id,

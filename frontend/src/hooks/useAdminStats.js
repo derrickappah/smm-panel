@@ -46,16 +46,31 @@ export const useAdminStats = (options = {}) => {
   const { data: conversations = [], isLoading: ticketsLoading } = useQuery({
     queryKey: ['admin', 'conversations', 'stats'],
     queryFn: async () => {
+      // Check authentication first
+      const { data: { session }, error: authError } = await supabase.auth.getSession();
+      if (authError || !session) {
+        throw new Error('Authentication required');
+      }
+
       const { data, error } = await supabase
         .from('conversations')
         .select('*')
         .order('created_at', { ascending: false });
       
-      if (error && error.code !== '42P01') throw error;
+      // Handle RLS permission errors (403)
+      if (error) {
+        if (error.code === '42501' || error.code === 'PGRST301') {
+          throw new Error('Permission denied: Admin access required');
+        }
+        if (error.code !== '42P01') {
+          throw error;
+        }
+      }
       return data || [];
     },
     enabled,
     staleTime: 1 * 60 * 1000,
+    retry: false, // Don't retry on auth/permission errors
   });
   
   const tickets = conversations; // Use conversations as tickets for compatibility

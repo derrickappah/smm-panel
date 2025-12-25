@@ -44,6 +44,11 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
   const [isLoadingMoreMessages, setIsLoadingMoreMessages] = useState(false);
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  // Pagination state for conversations
+  const [isLoadingMoreConversations, setIsLoadingMoreConversations] = useState(false);
+  const [hasMoreConversations, setHasMoreConversations] = useState(false);
+  const conversationsOffsetRef = useRef(0);
+  const CONVERSATIONS_PAGE_SIZE = 100;
 
   // Refs for real-time subscriptions
   const conversationsChannelRef = useRef<any>(null);
@@ -78,22 +83,59 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
     }
   }, [isAdmin, userRole?.userId]);
 
-  // Load all conversations (admin only)
-  const loadAllConversations = useCallback(async () => {
+  // Load all conversations (admin only) with pagination
+  const loadAllConversations = useCallback(async (reset: boolean = true) => {
     if (!isAdmin) return;
-    setIsLoadingConversations(true);
+    
+    if (reset) {
+      setIsLoadingConversations(true);
+      conversationsOffsetRef.current = 0;
+    } else {
+      setIsLoadingMoreConversations(true);
+    }
+    
     try {
-      const { data, error } = await supabase
-        .from('conversations')
-        .select('*')
-        .order('last_message_at', { ascending: false });
+      // Verify authentication before making queries
+      const { data: { session }, error: authError } = await supabase.auth.getSession();
+      if (authError || !session) {
+        console.warn('Admin not authenticated, cannot load conversations');
+        return;
+      }
 
-      if (error) throw error;
+      const offset = reset ? 0 : conversationsOffsetRef.current;
+      const limit = CONVERSATIONS_PAGE_SIZE;
+      
+      // Load conversations with pagination
+      const { data, error, count } = await supabase
+        .from('conversations')
+        .select('*', { count: 'exact' })
+        .order('last_message_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      // Handle RLS permission errors
+      if (error) {
+        if (error.code === '42501' || error.code === 'PGRST301') {
+          console.error('Permission denied: Admin access required or is_admin() function not working');
+          throw new Error('Permission denied: Admin access required');
+        }
+        throw error;
+      }
+
+      // Check if there are more conversations to load
+      const totalLoaded = offset + (data?.length || 0);
+      setHasMoreConversations(totalLoaded < (count || 0));
+
+      if (!data || data.length === 0) {
+        if (reset) {
+          setConversations([]);
+        }
+        return;
+      }
 
       // Get user profiles separately since foreign keys reference auth.users, not profiles
       const userIds = Array.from(new Set([
-        ...(data || []).map(c => c.user_id),
-        ...(data || []).map(c => c.assigned_to).filter(Boolean)
+        ...data.map(c => c.user_id),
+        ...data.map(c => c.assigned_to).filter(Boolean)
       ]));
 
       let profilesMap = {};
@@ -111,42 +153,81 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
         }
       }
 
-      // Get unread counts for each conversation
-      const conversationsWithUnread = await Promise.all(
-        (data || []).map(async (conv) => {
-          if (!userRole?.userId) {
-            return {
-              ...conv,
-              unread_count: 0,
-              user: profilesMap[conv.user_id] || null,
-              assigned_admin: conv.assigned_to ? (profilesMap[conv.assigned_to] || null) : null,
-            };
-          }
+      // Get all unread counts and most recent unread timestamps in a single query (fixes N+1 problem)
+      let unreadCountMap: Record<string, number> = {};
+      let unreadLatestMap: Record<string, string> = {};
+      if (userRole?.userId) {
+        const conversationIds = data.map(c => c.id);
+        
+        // Single query to get all unread messages for these conversations (with timestamps)
+        const { data: unreadMessages } = await supabase
+          .from('messages')
+          .select('conversation_id, created_at')
+          .in('conversation_id', conversationIds)
+          .is('read_at', null)
+          .neq('sender_id', userRole.userId)
+          .order('created_at', { ascending: false });
+
+        // Build unread count map and most recent unread timestamp map
+        (unreadMessages || []).forEach((msg) => {
+          // Count unread messages
+          unreadCountMap[msg.conversation_id] = (unreadCountMap[msg.conversation_id] || 0) + 1;
           
-          const { count } = await supabase
-            .from('messages')
-            .select('*', { count: 'exact', head: true })
-            .eq('conversation_id', conv.id)
-            .is('read_at', null)
-            .neq('sender_id', userRole.userId);
+          // Track most recent unread message timestamp (messages are already sorted desc)
+          if (!unreadLatestMap[msg.conversation_id]) {
+            unreadLatestMap[msg.conversation_id] = msg.created_at;
+          }
+        });
+      }
 
-          return {
-            ...conv,
-            unread_count: count || 0,
-            user: profilesMap[conv.user_id] || null,
-            assigned_admin: conv.assigned_to ? (profilesMap[conv.assigned_to] || null) : null,
-          };
-        })
-      );
+      // Combine conversations with profiles and unread counts
+      const conversationsWithUnread = data.map((conv) => ({
+        ...conv,
+        unread_count: unreadCountMap[conv.id] || 0,
+        unread_latest_at: unreadLatestMap[conv.id] || null,
+        user: profilesMap[conv.user_id] || null,
+        assigned_admin: conv.assigned_to ? (profilesMap[conv.assigned_to] || null) : null,
+      }));
 
-      setConversations(conversationsWithUnread);
+      // Sort conversations: unread first (by most recent unread), then read (by last_message_at)
+      conversationsWithUnread.sort((a, b) => {
+        // First priority: conversations with unread messages come first
+        if (a.unread_count > 0 && b.unread_count === 0) return -1;
+        if (a.unread_count === 0 && b.unread_count > 0) return 1;
+        
+        // If both have unread, sort by most recent unread message timestamp
+        if (a.unread_count > 0 && b.unread_count > 0) {
+          const aLatest = a.unread_latest_at || a.last_message_at;
+          const bLatest = b.unread_latest_at || b.last_message_at;
+          return new Date(bLatest).getTime() - new Date(aLatest).getTime();
+        }
+        
+        // If neither has unread, sort by last_message_at
+        return new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime();
+      });
+
+      // If reset, replace conversations, otherwise append
+      if (reset) {
+        setConversations(conversationsWithUnread);
+        conversationsOffsetRef.current = conversationsWithUnread.length;
+      } else {
+        setConversations((prev) => [...prev, ...conversationsWithUnread]);
+        conversationsOffsetRef.current += conversationsWithUnread.length;
+      }
     } catch (error: any) {
       console.error('Error loading all conversations:', error);
       toast.error('Failed to load conversations');
     } finally {
       setIsLoadingConversations(false);
+      setIsLoadingMoreConversations(false);
     }
   }, [isAdmin, userRole?.userId]);
+
+  // Load more conversations (pagination)
+  const loadMoreConversations = useCallback(async () => {
+    if (!isAdmin || isLoadingMoreConversations || !hasMoreConversations) return;
+    await loadAllConversations(false);
+  }, [isAdmin, isLoadingMoreConversations, hasMoreConversations, loadAllConversations]);
 
   // Get or create conversation (each user has exactly one conversation)
   const getOrCreateConversation = useCallback(async (): Promise<Conversation | null> => {
@@ -154,12 +235,34 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
     if (!userRole?.userId) return null; // Don't create if user ID is not available
 
     try {
+      // Verify authentication before making queries
+      const { data: { session }, error: authError } = await supabase.auth.getSession();
+      if (authError || !session) {
+        console.warn('User not authenticated, cannot get/create conversation');
+        return null;
+      }
+
+      // Verify that userRole.userId matches the authenticated user
+      if (session.user.id !== userRole.userId) {
+        console.warn('User ID mismatch, cannot get/create conversation');
+        return null;
+      }
+
       // Get the user's single conversation (should only be 0 or 1)
       const { data: existing, error: existingError } = await supabase
         .from('conversations')
         .select('*')
         .eq('user_id', userRole.userId)
         .maybeSingle();
+
+      // Handle RLS permission errors
+      if (existingError) {
+        if (existingError.code === '42501' || existingError.code === 'PGRST301') {
+          console.error('Permission denied: User may not be authenticated correctly');
+          return null;
+        }
+        // For other errors, continue to try creating
+      }
 
       if (existing && !existingError) {
         return existing;
@@ -199,6 +302,11 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
           if (raceConv && !raceError) {
             return raceConv;
           }
+        }
+        // Handle RLS permission errors
+        if (createError.code === '42501' || createError.code === 'PGRST301') {
+          console.error('Permission denied when creating conversation');
+          return null;
         }
         throw createError;
       }
@@ -810,8 +918,11 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
     hasMoreMessages,
     unreadCount,
     isAdmin,
+    isLoadingMoreConversations,
+    hasMoreConversations,
     loadConversations,
     loadAllConversations,
+    loadMoreConversations,
     getOrCreateConversation,
     selectConversation,
     loadMessages,
