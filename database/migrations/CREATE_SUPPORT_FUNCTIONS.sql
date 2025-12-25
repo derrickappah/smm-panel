@@ -54,25 +54,26 @@ CREATE TRIGGER set_message_sender_role_trigger
 -- Grant execute permission on the function
 GRANT EXECUTE ON FUNCTION set_message_sender_role() TO authenticated;
 
--- Function to enforce single open conversation per user
--- This is called before inserting a new conversation
+-- Function to enforce single conversation per user
+-- NOTE: This function is deprecated. Single conversation enforcement is now handled by:
+-- 1. Unique constraint on user_id (see ENFORCE_SINGLE_CONVERSATION_PER_USER.sql)
+-- 2. Trigger enforce_single_conversation_trigger (see ENFORCE_SINGLE_CONVERSATION_PER_USER.sql)
+-- This function is kept for backward compatibility but is no longer used.
 CREATE OR REPLACE FUNCTION enforce_single_open_conversation()
 RETURNS TRIGGER AS $$
 BEGIN
     -- Only enforce for non-admin users
     IF NOT public.is_admin() THEN
-        -- Check if user already has an open conversation
+        -- Check if user already has a conversation
         IF EXISTS (
             SELECT 1 FROM conversations
             WHERE user_id = NEW.user_id
-            AND status = 'open'
             AND id != COALESCE(NEW.id, '00000000-0000-0000-0000-000000000000'::UUID)
         ) THEN
-            -- If inserting, prevent creation of multiple open conversations
-            -- Instead, we'll let the application handle this logic
-            -- This function can be used to check, but we won't block here
-            -- to allow flexibility in the application layer
-            NULL;
+            -- If inserting, prevent creation of multiple conversations
+            IF TG_OP = 'INSERT' THEN
+                RAISE EXCEPTION 'User already has a conversation. Each user can only have one conversation.';
+            END IF;
         END IF;
     END IF;
     
@@ -80,11 +81,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Note: We'll handle single conversation enforcement in the application layer
--- for better user experience and error handling
-
 -- Add comments for documentation
 COMMENT ON FUNCTION update_conversation_timestamp() IS 'Updates conversation timestamps when a message is inserted';
 COMMENT ON FUNCTION set_message_sender_role() IS 'Automatically sets sender_role based on user profile role to prevent privilege escalation';
-COMMENT ON FUNCTION enforce_single_open_conversation() IS 'Helper function to check for single open conversation per user (enforced in application layer)';
+COMMENT ON FUNCTION enforce_single_open_conversation() IS 'DEPRECATED: Single conversation enforcement is now handled by unique constraint and trigger in ENFORCE_SINGLE_CONVERSATION_PER_USER.sql';
 

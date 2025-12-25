@@ -10,10 +10,12 @@ const SupportPageContent = ({ user, onLogout }) => {
   const { currentConversation, conversations, isLoadingConversations, getOrCreateConversation } = useSupport();
 
   useEffect(() => {
-    if (!isLoadingConversations && conversations.length === 0) {
+    // Ensure conversation is created/selected when page loads
+    // The context handles auto-selection, but we ensure it's triggered here too
+    if (!isLoadingConversations && !currentConversation) {
       getOrCreateConversation();
     }
-  }, [isLoadingConversations, conversations.length, getOrCreateConversation]);
+  }, [isLoadingConversations, currentConversation, getOrCreateConversation]);
 
   return (
     <div className="min-h-screen bg-gray-50">

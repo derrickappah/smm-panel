@@ -54,7 +54,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
   const oldestMessageIdRef = useRef<string | null>(null);
   const isAtBottomRef = useRef(true);
 
-  // Load user's conversations
+  // Load user's conversations (should only be 0 or 1 conversation)
   const loadConversations = useCallback(async () => {
     if (isAdmin) return; // Admins use loadAllConversations
     if (!userRole?.userId) return; // Don't query if user ID is not available
@@ -65,10 +65,11 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
         .from('conversations')
         .select('*')
         .eq('user_id', userRole.userId)
-        .order('last_message_at', { ascending: false });
+        .maybeSingle(); // Use maybeSingle since there should only be one conversation
 
       if (error) throw error;
-      setConversations(data || []);
+      const conversation = data || null;
+      setConversations(conversation ? [conversation] : []);
     } catch (error: any) {
       console.error('Error loading conversations:', error);
       toast.error('Failed to load conversations');
@@ -90,10 +91,10 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
       if (error) throw error;
 
       // Get user profiles separately since foreign keys reference auth.users, not profiles
-      const userIds = [...new Set([
+      const userIds = Array.from(new Set([
         ...(data || []).map(c => c.user_id),
         ...(data || []).map(c => c.assigned_to).filter(Boolean)
-      ])];
+      ]));
 
       let profilesMap = {};
       if (userIds.length > 0) {
@@ -147,40 +148,24 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
     }
   }, [isAdmin, userRole?.userId]);
 
-  // Get or create conversation (enforces single open conversation per user)
+  // Get or create conversation (each user has exactly one conversation)
   const getOrCreateConversation = useCallback(async (): Promise<Conversation | null> => {
     if (isAdmin) return null; // Admins don't auto-create conversations
     if (!userRole?.userId) return null; // Don't create if user ID is not available
 
     try {
-      // First, try to get existing open conversation
+      // Get the user's single conversation (should only be 0 or 1)
       const { data: existing, error: existingError } = await supabase
         .from('conversations')
         .select('*')
         .eq('user_id', userRole.userId)
-        .eq('status', 'open')
-        .order('created_at', { ascending: false })
-        .limit(1)
         .maybeSingle();
 
       if (existing && !existingError) {
         return existing;
       }
 
-      // If no open conversation, get the most recent conversation
-      const { data: recent, error: recentError } = await supabase
-        .from('conversations')
-        .select('*')
-        .eq('user_id', userRole.userId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (recent && !recentError) {
-        return recent;
-      }
-
-      // Create new conversation
+      // If no conversation exists, create one
       const { data: newConv, error: createError } = await supabase
         .from('conversations')
         .insert({
@@ -190,11 +175,30 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
         .select()
         .single();
 
-      if (createError) throw createError;
+      // If we get a unique constraint violation, it means another request created it
+      // In that case, fetch the existing conversation
+      if (createError) {
+        if (createError.code === '23505' || createError.message?.includes('unique constraint') || createError.message?.includes('duplicate key')) {
+          // Race condition: conversation was created by another request, fetch it
+          const { data: raceConv, error: raceError } = await supabase
+            .from('conversations')
+            .select('*')
+            .eq('user_id', userRole.userId)
+            .maybeSingle();
+          
+          if (raceConv && !raceError) {
+            return raceConv;
+          }
+        }
+        throw createError;
+      }
       return newConv;
     } catch (error: any) {
       console.error('Error getting/creating conversation:', error);
-      toast.error('Failed to create conversation');
+      // Don't show error toast for unique constraint violations (race condition)
+      if (error.code !== '23505' && !error.message?.includes('unique constraint') && !error.message?.includes('duplicate key')) {
+        toast.error('Failed to create conversation');
+      }
       return null;
     }
   }, [isAdmin, userRole?.userId]);
@@ -311,6 +315,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
         .insert({
           conversation_id: currentConversation.id,
           sender_id: userRole.userId,
+          sender_role: isAdmin ? 'admin' : 'user',
           content: content.trim(),
           attachment_url: attachmentUrl || null,
           attachment_type: attachmentType || null,
@@ -338,7 +343,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
       console.error('Error sending message:', error);
       toast.error('Failed to send message');
     }
-  }, [currentConversation, userRole?.userId]);
+  }, [currentConversation, userRole?.userId, isAdmin]);
 
   // Edit message
   const editMessage = useCallback(async (messageId: string, newContent: string) => {
@@ -731,18 +736,30 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
     };
   }, [userRole?.userId, isAdmin, currentConversation, loadConversations, loadAllConversations, markMessagesAsRead, getUnreadCount]);
 
-  // Auto-open conversation for non-admin users
+  // Auto-select conversation for non-admin users (always select the single conversation)
   useEffect(() => {
-    if (!isAdmin && userRole?.userId && conversations.length === 0 && !isLoadingConversations) {
-      getOrCreateConversation().then((conv) => {
-        if (conv) {
+    if (!isAdmin && userRole?.userId && !isLoadingConversations) {
+      // If we have a conversation but it's not selected (or different), select it
+      if (conversations.length > 0) {
+        const conv = conversations[0];
+        if (conv.id !== currentConversation?.id) {
           setCurrentConversation(conv);
           loadMessages(conv.id);
           markMessagesAsRead(conv.id);
         }
-      });
+      }
+      // If no conversation exists, create one
+      else if (conversations.length === 0 && !currentConversation) {
+        getOrCreateConversation().then((conv) => {
+          if (conv) {
+            setCurrentConversation(conv);
+            loadMessages(conv.id);
+            markMessagesAsRead(conv.id);
+          }
+        });
+      }
     }
-  }, [isAdmin, userRole?.userId, conversations.length, isLoadingConversations, getOrCreateConversation, loadMessages, markMessagesAsRead]);
+  }, [isAdmin, userRole?.userId, conversations, currentConversation?.id, isLoadingConversations, getOrCreateConversation, loadMessages, markMessagesAsRead]);
 
   // Load conversations on mount
   useEffect(() => {
