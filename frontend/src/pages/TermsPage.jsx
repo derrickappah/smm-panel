@@ -35,23 +35,21 @@ const TermsPage = ({ user, onLogout }) => {
         structuredDataArray={[breadcrumbSchema]}
       />
 
-      {/* Header Section */}
-      <section className="bg-gradient-to-br from-indigo-600 to-purple-600 text-white py-8 sm:py-12">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h1 className="text-3xl sm:text-4xl font-bold mb-2">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 md:pt-6 pb-6 sm:pb-8">
+        {/* Header Section */}
+        <div className="mb-6 sm:mb-8 animate-fadeIn">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
             Terms and Conditions
           </h1>
-          <p className="text-indigo-100">
-            Last Updated: {termsData?.updated_at 
+          <p className="text-sm sm:text-base text-gray-600">
+            Last Updated: {termsData?.updated_at
               ? new Date(termsData.updated_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
               : new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
           </p>
         </div>
-      </section>
 
-      {/* Terms Content */}
-      <section className="py-8 sm:py-12">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Terms Content */}
+        <div>
           {isLoading ? (
             <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-12 text-center">
               <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mx-auto mb-4" />
@@ -73,33 +71,8 @@ const TermsPage = ({ user, onLogout }) => {
               </div>
             </div>
           )}
-
-          {/* Action Buttons */}
-          <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
-            {user ? (
-              <Button
-                onClick={() => navigate('/dashboard')}
-                className="bg-indigo-600 hover:bg-indigo-700"
-              >
-                Go to Dashboard
-              </Button>
-            ) : (
-              <Button
-                onClick={() => navigate('/auth')}
-                className="bg-indigo-600 hover:bg-indigo-700"
-              >
-                Sign Up
-              </Button>
-            )}
-            <Button
-              onClick={() => navigate(-1)}
-              variant="outline"
-            >
-              Go Back
-            </Button>
-          </div>
         </div>
-      </section>
+      </div>
     </div>
   );
 };

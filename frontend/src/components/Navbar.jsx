@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { LayoutDashboard, Package, History, Shield, LogOut, Menu, X, User, HelpCircle, Receipt, FileText, MessageCircleQuestion } from 'lucide-react';
+import { Home, Package, History, Shield, LogOut, Menu, X, User, HelpCircle, Receipt, FileText, MessageCircleQuestion } from 'lucide-react';
 
 const Navbar = ({ user, onLogout }) => {
   const navigate = useNavigate();
@@ -9,7 +9,7 @@ const Navbar = ({ user, onLogout }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navItems = [
-    { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/dashboard', label: 'Home', icon: Home },
     { path: '/services', label: 'Services', icon: Package },
     { path: '/orders', label: 'Orders', icon: History },
     { path: '/transactions', label: 'Transactions', icon: Receipt },
