@@ -17,7 +17,7 @@ import type { TicketCategory } from '@/types/support';
 export const TicketForm: React.FC = () => {
   const { createTicket } = useSupport();
   const [category, setCategory] = useState<TicketCategory | ''>('');
-  const [subcategory, setSubcategory] = useState<string>('');
+  const [subcategory, setSubcategory] = useState<string>('none');
   const [orderId, setOrderId] = useState<string>('');
   const [message, setMessage] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -41,14 +41,14 @@ export const TicketForm: React.FC = () => {
         category as TicketCategory,
         orderId.trim() || null,
         message.trim(),
-        subcategory.trim() || null
+        subcategory === 'none' ? null : subcategory.trim() || null
       );
 
       if (ticket) {
         toast.success('Ticket created successfully');
         // Reset form
         setCategory('');
-        setSubcategory('');
+        setSubcategory('none');
         setOrderId('');
         setMessage('');
       } else {
@@ -82,7 +82,7 @@ export const TicketForm: React.FC = () => {
 
       <div className="space-y-2">
         <Label htmlFor="subcategory">Subcategory</Label>
-        <Select value={subcategory || undefined} onValueChange={(value) => setSubcategory(value === 'none' ? '' : value)}>
+        <Select value={subcategory} onValueChange={(value) => setSubcategory(value === 'none' ? 'none' : value)}>
           <SelectTrigger id="subcategory" className="w-full">
             <SelectValue placeholder="Select a subcategory (optional)" />
           </SelectTrigger>
