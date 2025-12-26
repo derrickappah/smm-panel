@@ -140,6 +140,8 @@ const LandingPage = () => {
     { name: 'Twitter', icon: Twitter, color: 'text-sky-500' },
     { name: 'WhatsApp', icon: MessageCircle, color: 'text-green-600' },
     { name: 'Telegram', icon: Send, color: 'text-blue-500' },
+    { name: 'Spotify', icon: Music, color: 'text-green-500' },
+    { name: 'Audio Mark', icon: Music, color: 'text-purple-600' },
   ];
 
   const features = [

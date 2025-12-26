@@ -26,7 +26,9 @@ const PlatformLandingPage = ({ user, onLogout }) => {
     facebook: Facebook,
     twitter: Twitter,
     whatsapp: MessageCircle,
-    telegram: Send
+    telegram: Send,
+    spotify: Music,
+    audiomark: Music
   };
 
   const PlatformIcon = platformIcons[platformName] || TrendingUp;

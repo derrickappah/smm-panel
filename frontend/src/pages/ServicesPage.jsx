@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
 // SMMGen import removed - only using Supabase services
 import Navbar from '@/components/Navbar';
-import { Instagram, Youtube, Facebook, Twitter, ArrowRight, Tag, MessageCircle, Send } from 'lucide-react';
+import { Instagram, Youtube, Facebook, Twitter, ArrowRight, Tag, MessageCircle, Send, Music } from 'lucide-react';
 import SEO from '@/components/SEO';
 import { generateServiceListSchema } from '@/utils/schema';
 import { generatePlatformMetaTags } from '@/utils/metaTags';
@@ -23,7 +23,7 @@ const ServicesPage = ({ user, onLogout }) => {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const platformParam = params.get('platform');
-    if (platformParam && ['instagram', 'tiktok', 'youtube', 'facebook', 'twitter', 'whatsapp', 'telegram'].includes(platformParam.toLowerCase())) {
+    if (platformParam && ['instagram', 'tiktok', 'youtube', 'facebook', 'twitter', 'whatsapp', 'telegram', 'spotify', 'audiomark'].includes(platformParam.toLowerCase())) {
       setSelectedPlatform(platformParam.toLowerCase());
     }
   }, [location.search]);
@@ -37,6 +37,8 @@ const ServicesPage = ({ user, onLogout }) => {
     { id: 'twitter', name: 'Twitter', icon: Twitter, color: 'from-sky-400 to-sky-600' },
     { id: 'whatsapp', name: 'WhatsApp', icon: MessageCircle, color: 'from-green-500 to-green-600' },
     { id: 'telegram', name: 'Telegram', icon: Send, color: 'from-blue-400 to-blue-500' },
+    { id: 'spotify', name: 'Spotify', icon: Music, color: 'from-green-400 to-green-600' },
+    { id: 'audiomark', name: 'Audio Mark', icon: Music, color: 'from-purple-500 to-purple-700' },
   ];
 
   useEffect(() => {
@@ -241,6 +243,10 @@ const ServicesPage = ({ user, onLogout }) => {
                   return 'bg-green-600 text-white border-green-600';
                 case 'telegram':
                   return 'bg-blue-500 text-white border-blue-500';
+                case 'spotify':
+                  return 'bg-green-500 text-white border-green-500';
+                case 'audiomark':
+                  return 'bg-purple-600 text-white border-purple-600';
                 default:
                   return 'bg-indigo-600 text-white border-indigo-600';
               }
