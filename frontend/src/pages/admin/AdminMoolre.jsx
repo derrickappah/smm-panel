@@ -128,7 +128,7 @@ const AdminMoolre = () => {
   const filters = useMemo(() => ({
     startDate: startDate || undefined,
     endDate: endDate || undefined,
-    status: statusFilter,
+    status: statusFilter !== 'all' ? statusFilter : undefined,
     limit: 1000
   }), [startDate, endDate, statusFilter]);
 
@@ -200,11 +200,37 @@ const AdminMoolre = () => {
       });
     }
 
+    // Status filter (client-side fallback)
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(tx => {
+        return tx.status === statusFilter;
+      });
+    }
+
     // Channel filter
     if (channelFilter !== 'all') {
       filtered = filtered.filter(tx => {
         const channel = (tx.channelName || tx.channel || '').toLowerCase();
         return channel === channelFilter.toLowerCase();
+      });
+    }
+
+    // Date range filter (client-side fallback)
+    if (startDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0); // Start of day
+      filtered = filtered.filter(tx => {
+        const txDate = new Date(tx.created_at || tx.updated_at || 0);
+        return txDate >= start;
+      });
+    }
+
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999); // End of day
+      filtered = filtered.filter(tx => {
+        const txDate = new Date(tx.created_at || tx.updated_at || 0);
+        return txDate <= end;
       });
     }
 
@@ -214,7 +240,7 @@ const AdminMoolre = () => {
       const dateB = new Date(b.created_at || 0);
       return dateB - dateA;
     });
-  }, [transactions, searchTerm, channelFilter]);
+  }, [transactions, searchTerm, statusFilter, channelFilter, startDate, endDate]);
 
   const handleManualRefresh = useCallback(() => {
     refetch();
@@ -321,6 +347,54 @@ const AdminMoolre = () => {
     return Array.from(channels).sort();
   }, [transactions]);
 
+  // Calculate statistics from filtered transactions
+  const statistics = useMemo(() => {
+    const stats = {
+      totalTransactions: filteredTransactions.length,
+      totalDeposits: 0,
+      totalPayouts: 0,
+      totalDepositAmount: 0,
+      totalPayoutAmount: 0,
+      successCount: 0,
+      pendingCount: 0,
+      failedCount: 0,
+      successAmount: 0,
+      pendingAmount: 0,
+      failedAmount: 0
+    };
+
+    filteredTransactions.forEach(tx => {
+      const amount = parseFloat(tx.amount || 0);
+      const type = getTransactionType(tx);
+      const status = tx.status || 'pending';
+
+      // Count by type
+      if (type === 'deposit') {
+        stats.totalDeposits++;
+        stats.totalDepositAmount += amount;
+      } else if (type === 'payout') {
+        stats.totalPayouts++;
+        stats.totalPayoutAmount += amount;
+      }
+
+      // Count by status
+      if (status === 'success') {
+        stats.successCount++;
+        stats.successAmount += amount;
+      } else if (status === 'pending') {
+        stats.pendingCount++;
+        stats.pendingAmount += amount;
+      } else if (status === 'failed') {
+        stats.failedCount++;
+        stats.failedAmount += amount;
+      }
+    });
+
+    stats.netAmount = stats.totalDepositAmount - stats.totalPayoutAmount;
+
+    return stats;
+  }, [filteredTransactions]);
+
   return (
     <div className="space-y-6">
       <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
@@ -373,6 +447,114 @@ const AdminMoolre = () => {
               )}
             </Button>
           </div>
+        </div>
+
+        {/* Statistics */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Total Transactions</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{statistics.totalTransactions}</p>
+                </div>
+                <Wallet className="w-8 h-8 text-gray-400" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-600">Total Deposits</p>
+                  <p className="text-2xl font-bold text-blue-600 mt-1">{formatAmount(statistics.totalDepositAmount)}</p>
+                  <p className="text-xs text-gray-500 mt-1">{statistics.totalDeposits} transaction{statistics.totalDeposits !== 1 ? 's' : ''}</p>
+                </div>
+                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                  <span className="text-blue-600 font-bold text-lg">+</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-600">Total Payouts</p>
+                  <p className="text-2xl font-bold text-orange-600 mt-1">{formatAmount(statistics.totalPayoutAmount)}</p>
+                  <p className="text-xs text-gray-500 mt-1">{statistics.totalPayouts} transaction{statistics.totalPayouts !== 1 ? 's' : ''}</p>
+                </div>
+                <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
+                  <span className="text-orange-600 font-bold text-lg">-</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Net Amount</p>
+                  <p className={`text-2xl font-bold mt-1 ${statistics.netAmount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatAmount(statistics.netAmount)}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {statistics.netAmount >= 0 ? 'Positive' : 'Negative'}
+                  </p>
+                </div>
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${statistics.netAmount >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
+                  <span className={`font-bold text-lg ${statistics.netAmount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {statistics.netAmount >= 0 ? '↑' : '↓'}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Status Breakdown */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Successful</p>
+                  <p className="text-xl font-bold text-green-600 mt-1">{statistics.successCount}</p>
+                  <p className="text-xs text-gray-500 mt-1">{formatAmount(statistics.successAmount)}</p>
+                </div>
+                <CheckCircle className="w-6 h-6 text-green-600" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Pending</p>
+                  <p className="text-xl font-bold text-yellow-600 mt-1">{statistics.pendingCount}</p>
+                  <p className="text-xs text-gray-500 mt-1">{formatAmount(statistics.pendingAmount)}</p>
+                </div>
+                <Clock className="w-6 h-6 text-yellow-600" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Failed</p>
+                  <p className="text-xl font-bold text-red-600 mt-1">{statistics.failedCount}</p>
+                  <p className="text-xs text-gray-500 mt-1">{formatAmount(statistics.failedAmount)}</p>
+                </div>
+                <XCircle className="w-6 h-6 text-red-600" />
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Filters */}
