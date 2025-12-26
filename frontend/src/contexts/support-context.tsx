@@ -4,12 +4,15 @@ import { useUserRole } from '@/hooks/useUserRole';
 import { toast } from 'sonner';
 import type {
   Conversation,
+  Ticket,
   Message,
   TypingIndicator,
   AdminNote,
   MessagePriority,
   AttachmentType,
   ConversationStatus,
+  TicketStatus,
+  TicketCategory,
   SupportContextState,
   SupportContextMethods,
 } from '@/types/support';
@@ -34,30 +37,42 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
   const { data: userRole, isLoading: isLoadingUserRole } = useUserRole();
   const isAdmin = userRole?.isAdmin || false;
 
-  // State
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [currentConversation, setCurrentConversation] = useState<Conversation | null>(null);
+  // State - Tickets
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [currentTicket, setCurrentTicket] = useState<Ticket | null>(null);
+  const [isLoadingTickets, setIsLoadingTickets] = useState(false);
+  const [isLoadingMoreTickets, setIsLoadingMoreTickets] = useState(false);
+  const [hasMoreTickets, setHasMoreTickets] = useState(false);
+  const ticketsOffsetRef = useRef(0);
+  const TICKETS_PAGE_SIZE = 100;
+  const currentTicketRef = useRef<Ticket | null>(null);
+
+  // State - Messages (shared between tickets and conversations)
   const [messages, setMessages] = useState<Message[]>([]);
-  const [typingIndicators, setTypingIndicators] = useState<TypingIndicator[]>([]);
-  const [isLoadingConversations, setIsLoadingConversations] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isLoadingMoreMessages, setIsLoadingMoreMessages] = useState(false);
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
-  // Pagination state for conversations
+  const oldestMessageIdRef = useRef<string | null>(null);
+  const isAtBottomRef = useRef(true);
+
+  // State - Conversations (legacy, kept for backward compatibility)
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [currentConversation, setCurrentConversation] = useState<Conversation | null>(null);
+  const [typingIndicators, setTypingIndicators] = useState<TypingIndicator[]>([]);
+  const [isLoadingConversations, setIsLoadingConversations] = useState(false);
   const [isLoadingMoreConversations, setIsLoadingMoreConversations] = useState(false);
   const [hasMoreConversations, setHasMoreConversations] = useState(false);
   const conversationsOffsetRef = useRef(0);
   const CONVERSATIONS_PAGE_SIZE = 100;
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Refs for real-time subscriptions
   const conversationsChannelRef = useRef<any>(null);
+  const ticketsChannelRef = useRef<any>(null);
   const messagesChannelRef = useRef<any>(null);
   const typingChannelRef = useRef<any>(null);
   const notificationsChannelRef = useRef<any>(null);
   const typingTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
-  const oldestMessageIdRef = useRef<string | null>(null);
-  const isAtBottomRef = useRef(true);
   const currentConversationRef = useRef<Conversation | null>(null);
   const presenceHeartbeatRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -375,19 +390,26 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
     }
   }, [isAdmin, userRole?.userId]);
 
-  // Load messages for a conversation
-  const loadMessages = useCallback(async (conversationId: string) => {
+  // Load messages for a conversation or ticket
+  const loadMessages = useCallback(async (ticketIdOrConversationId: string, isTicket: boolean = false) => {
     setIsLoadingMessages(true);
     setHasMoreMessages(false);
     oldestMessageIdRef.current = null;
 
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('messages')
         .select('*')
-        .eq('conversation_id', conversationId)
         .order('created_at', { ascending: false })
         .limit(50);
+
+      if (isTicket) {
+        query = query.eq('ticket_id', ticketIdOrConversationId);
+      } else {
+        query = query.eq('conversation_id', ticketIdOrConversationId);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -397,12 +419,18 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
       if (messagesData.length > 0) {
         oldestMessageIdRef.current = messagesData[0].id;
         // Check if there are more messages
-        const { count } = await supabase
+        let countQuery = supabase
           .from('messages')
           .select('*', { count: 'exact', head: true })
-          .eq('conversation_id', conversationId)
           .lt('created_at', messagesData[0].created_at);
 
+        if (isTicket) {
+          countQuery = countQuery.eq('ticket_id', ticketIdOrConversationId);
+        } else {
+          countQuery = countQuery.eq('conversation_id', ticketIdOrConversationId);
+        }
+
+        const { count } = await countQuery;
         setHasMoreMessages((count || 0) > 0);
       }
     } catch (error: any) {
@@ -413,22 +441,31 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
     }
   }, []);
 
-  // Load more (older) messages
+  // Load more (older) messages (works with both tickets and conversations)
   const loadMoreMessages = useCallback(async () => {
-    if (!currentConversation || !oldestMessageIdRef.current || isLoadingMoreMessages) return;
+    if ((!currentTicket && !currentConversation) || !oldestMessageIdRef.current || isLoadingMoreMessages) return;
 
     setIsLoadingMoreMessages(true);
     try {
       const oldestMessage = messages.find((m) => m.id === oldestMessageIdRef.current);
       if (!oldestMessage) return;
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('messages')
         .select('*')
-        .eq('conversation_id', currentConversation.id)
         .lt('created_at', oldestMessage.created_at)
         .order('created_at', { ascending: false })
         .limit(50);
+
+      if (currentTicket) {
+        query = query.eq('ticket_id', currentTicket.id);
+      } else if (currentConversation) {
+        query = query.eq('conversation_id', currentConversation.id);
+      } else {
+        return;
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -438,12 +475,18 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
         oldestMessageIdRef.current = newMessages[0].id;
 
         // Check if there are more messages
-        const { count } = await supabase
+        let countQuery = supabase
           .from('messages')
           .select('*', { count: 'exact', head: true })
-          .eq('conversation_id', currentConversation.id)
           .lt('created_at', newMessages[0].created_at);
 
+        if (currentTicket) {
+          countQuery = countQuery.eq('ticket_id', currentTicket.id);
+        } else if (currentConversation) {
+          countQuery = countQuery.eq('conversation_id', currentConversation.id);
+        }
+
+        const { count } = await countQuery;
         setHasMoreMessages((count || 0) > 0);
       } else {
         setHasMoreMessages(false);
@@ -454,16 +497,22 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
     } finally {
       setIsLoadingMoreMessages(false);
     }
-  }, [currentConversation, messages, isLoadingMoreMessages]);
+  }, [currentTicket, currentConversation, messages, isLoadingMoreMessages]);
 
-  // Send message
+  // Send message (works with both tickets and conversations)
   const sendMessage = useCallback(async (
     content: string,
     attachmentUrl?: string,
     attachmentType?: AttachmentType
   ) => {
+    // Prioritize ticket over conversation
+    if (currentTicket) {
+      await sendTicketMessage(content, attachmentUrl, attachmentType);
+      return;
+    }
+
     if (!currentConversation) {
-      toast.error('No conversation selected');
+      toast.error('No ticket or conversation selected');
       return;
     }
     if (!userRole?.userId) {
@@ -505,12 +554,12 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
       );
 
       // Mark as read immediately
-      await markMessagesAsRead(currentConversation.id);
+      await markMessagesAsRead(currentConversation.id, false);
     } catch (error: any) {
       console.error('Error sending message:', error);
       toast.error('Failed to send message');
     }
-  }, [currentConversation, userRole?.userId, isAdmin]);
+  }, [currentTicket, currentConversation, userRole?.userId, isAdmin, sendTicketMessage, markMessagesAsRead]);
 
   // Edit message
   const editMessage = useCallback(async (messageId: string, newContent: string) => {
@@ -592,28 +641,49 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
     }
   }, [userRole?.userId, isAdmin]);
 
-  // Mark messages as read
-  const markMessagesAsRead = useCallback(async (conversationId: string) => {
+  // Mark messages as read (for both tickets and conversations)
+  const markMessagesAsRead = useCallback(async (ticketIdOrConversationId: string, isTicket: boolean = false) => {
     try {
-      // Use the SECURITY DEFINER function to mark messages as read
-      const { error } = await supabase.rpc('mark_conversation_messages_read', {
-        p_conversation_id: conversationId,
-      });
+      if (isTicket) {
+        // For tickets, mark messages directly
+        const { error } = await supabase
+          .from('messages')
+          .update({ read_at: new Date().toISOString() })
+          .eq('ticket_id', ticketIdOrConversationId)
+          .is('read_at', null)
+          .neq('sender_id', userRole?.userId || '');
 
-      if (error) throw error;
+        if (error) throw error;
 
-      // Update local messages
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.conversation_id === conversationId && !msg.read_at
-            ? { ...msg, read_at: new Date().toISOString() }
-            : msg
-        )
-      );
+        // Update local messages
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.ticket_id === ticketIdOrConversationId && !msg.read_at && msg.sender_id !== userRole?.userId
+              ? { ...msg, read_at: new Date().toISOString() }
+              : msg
+          )
+        );
+      } else {
+        // Use the SECURITY DEFINER function for conversations
+        const { error } = await supabase.rpc('mark_conversation_messages_read', {
+          p_conversation_id: ticketIdOrConversationId,
+        });
+
+        if (error) throw error;
+
+        // Update local messages
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.conversation_id === ticketIdOrConversationId && !msg.read_at
+              ? { ...msg, read_at: new Date().toISOString() }
+              : msg
+          )
+        );
+      }
     } catch (error: any) {
       console.error('Error marking messages as read:', error);
     }
-  }, []);
+  }, [userRole?.userId]);
 
   // Select conversation and load messages (defined after loadMessages and markMessagesAsRead)
   const selectConversation = useCallback(async (conversationId: string) => {
@@ -848,6 +918,362 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
     }
   }, [isAdmin, userRole?.userId]);
 
+  // ========== TICKET METHODS ==========
+
+  // Load user's tickets
+  const loadTickets = useCallback(async () => {
+    if (isAdmin) return; // Admins use loadAllTickets
+    if (!userRole?.userId) return;
+    
+    setIsLoadingTickets(true);
+    try {
+      const { data, error } = await supabase
+        .from('tickets')
+        .select('*')
+        .eq('user_id', userRole.userId)
+        .order('last_message_at', { ascending: false });
+
+      if (error) throw error;
+      setTickets(data || []);
+    } catch (error: any) {
+      console.error('Error loading tickets:', error);
+      toast.error('Failed to load tickets');
+    } finally {
+      setIsLoadingTickets(false);
+    }
+  }, [isAdmin, userRole?.userId]);
+
+  // Load all tickets (admin only) with pagination
+  const loadAllTickets = useCallback(async (reset: boolean = true) => {
+    if (!isAdmin) return;
+    
+    if (reset) {
+      setIsLoadingTickets(true);
+      ticketsOffsetRef.current = 0;
+    } else {
+      setIsLoadingMoreTickets(true);
+    }
+    
+    try {
+      const { data: { session }, error: authError } = await supabase.auth.getSession();
+      if (authError || !session) {
+        console.warn('Admin not authenticated, cannot load tickets');
+        return;
+      }
+
+      const offset = reset ? 0 : ticketsOffsetRef.current;
+      const limit = TICKETS_PAGE_SIZE;
+      
+      const { data, error, count } = await supabase
+        .from('tickets')
+        .select('*', { count: 'exact' })
+        .order('last_message_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      if (error) {
+        if (error.code === '42501' || error.code === 'PGRST301') {
+          console.error('Permission denied: Admin access required');
+          throw new Error('Permission denied: Admin access required');
+        }
+        throw error;
+      }
+
+      const totalLoaded = offset + (data?.length || 0);
+      setHasMoreTickets(totalLoaded < (count || 0));
+
+      if (!data || data.length === 0) {
+        if (reset) {
+          setTickets([]);
+        }
+        return;
+      }
+
+      // Get user profiles
+      const userIds = Array.from(new Set(data.map(t => t.user_id)));
+      let profilesMap = {};
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, name, email')
+          .in('id', userIds);
+
+        if (profiles) {
+          profilesMap = profiles.reduce((acc, p) => {
+            acc[p.id] = p;
+            return acc;
+          }, {});
+        }
+      }
+
+      const ticketsWithUsers = data.map((ticket) => ({
+        ...ticket,
+        user: profilesMap[ticket.user_id] || null,
+      }));
+
+      // Sort: Pending first, then by last_message_at
+      ticketsWithUsers.sort((a, b) => {
+        if (a.status === 'Pending' && b.status !== 'Pending') return -1;
+        if (a.status !== 'Pending' && b.status === 'Pending') return 1;
+        return new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime();
+      });
+
+      if (reset) {
+        setTickets(ticketsWithUsers);
+        ticketsOffsetRef.current = ticketsWithUsers.length;
+      } else {
+        setTickets((prev) => [...prev, ...ticketsWithUsers]);
+        ticketsOffsetRef.current += ticketsWithUsers.length;
+      }
+    } catch (error: any) {
+      console.error('Error loading all tickets:', error);
+      toast.error('Failed to load tickets');
+    } finally {
+      setIsLoadingTickets(false);
+      setIsLoadingMoreTickets(false);
+    }
+  }, [isAdmin]);
+
+  // Load more tickets (pagination)
+  const loadMoreTickets = useCallback(async () => {
+    if (!isAdmin || isLoadingMoreTickets || !hasMoreTickets) return;
+    await loadAllTickets(false);
+  }, [isAdmin, isLoadingMoreTickets, hasMoreTickets, loadAllTickets]);
+
+  // Create a new ticket
+  const createTicket = useCallback(async (
+    category: TicketCategory,
+    orderId: string | null,
+    message: string,
+    subcategory?: string | null
+  ): Promise<Ticket | null> => {
+    if (!userRole?.userId) {
+      toast.error('User not authenticated');
+      return null;
+    }
+
+    try {
+      const { data: { session }, error: authError } = await supabase.auth.getSession();
+      if (authError || !session) {
+        toast.error('Not authenticated');
+        return null;
+      }
+
+      // Create ticket
+      const { data: ticket, error: ticketError } = await supabase
+        .from('tickets')
+        .insert({
+          user_id: userRole.userId,
+          category,
+          subcategory: subcategory || null,
+          order_id: orderId,
+          status: 'Pending',
+        })
+        .select()
+        .single();
+
+      if (ticketError) throw ticketError;
+      if (!ticket) {
+        toast.error('Failed to create ticket');
+        return null;
+      }
+
+      // Create first message
+      const { error: messageError } = await supabase
+        .from('messages')
+        .insert({
+          ticket_id: ticket.id,
+          sender_id: userRole.userId,
+          sender_role: 'user',
+          content: message.trim(),
+        });
+
+      if (messageError) {
+        // Rollback: delete ticket if message creation fails
+        await supabase.from('tickets').delete().eq('id', ticket.id);
+        throw messageError;
+      }
+
+      // Add ticket to list
+      setTickets((prev) => [ticket, ...prev]);
+      
+      toast.success('Ticket created successfully');
+      return ticket;
+    } catch (error: any) {
+      console.error('Error creating ticket:', error);
+      toast.error(error.message || 'Failed to create ticket');
+      return null;
+    }
+  }, [userRole?.userId]);
+
+  // Select ticket and load messages
+  const selectTicket = useCallback(async (ticketId: string) => {
+    const ticket = tickets.find((t) => t.id === ticketId);
+    if (ticket) {
+      setCurrentTicket(ticket);
+      currentTicketRef.current = ticket;
+      await loadTicketMessages(ticketId);
+      await markMessagesAsRead(ticketId, true);
+    }
+  }, [tickets]);
+
+  // Load messages for a ticket
+  const loadTicketMessages = useCallback(async (ticketId: string) => {
+    setIsLoadingMessages(true);
+    setHasMoreMessages(false);
+    oldestMessageIdRef.current = null;
+
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('ticket_id', ticketId)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+
+      const messagesData = (data || []).reverse(); // Reverse to show oldest first
+      setMessages(messagesData);
+
+      if (messagesData.length > 0) {
+        oldestMessageIdRef.current = messagesData[0].id;
+        // Check if there are more messages
+        const { count } = await supabase
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('ticket_id', ticketId)
+          .lt('created_at', messagesData[0].created_at);
+
+        setHasMoreMessages((count || 0) > 0);
+      }
+    } catch (error: any) {
+      console.error('Error loading ticket messages:', error);
+      toast.error('Failed to load messages');
+    } finally {
+      setIsLoadingMessages(false);
+    }
+  }, []);
+
+  // Close ticket (admin only)
+  const closeTicket = useCallback(async (ticketId: string) => {
+    if (!isAdmin || !userRole?.userId) {
+      toast.error('Only admins can close tickets');
+      return;
+    }
+
+    try {
+      const { error } = await supabase.rpc('close_ticket', {
+        p_ticket_id: ticketId,
+      });
+
+      if (error) throw error;
+
+      // Update ticket in list
+      setTickets((prev) =>
+        prev.map((t) =>
+          t.id === ticketId ? { ...t, status: 'Closed' as TicketStatus } : t
+        )
+      );
+
+      if (currentTicket?.id === ticketId) {
+        setCurrentTicket((prev) => {
+          if (!prev) return null;
+          const updated = { ...prev, status: 'Closed' as TicketStatus };
+          currentTicketRef.current = updated;
+          return updated;
+        });
+      }
+
+      toast.success('Ticket closed');
+    } catch (error: any) {
+      console.error('Error closing ticket:', error);
+      toast.error(error.message || 'Failed to close ticket');
+    }
+  }, [isAdmin, userRole?.userId, currentTicket]);
+
+  // Send message to ticket (with status validation)
+  const sendTicketMessage = useCallback(async (
+    content: string,
+    attachmentUrl?: string,
+    attachmentType?: AttachmentType
+  ) => {
+    if (!currentTicket) {
+      toast.error('No ticket selected');
+      return;
+    }
+    if (!userRole?.userId) {
+      toast.error('User not authenticated');
+      return;
+    }
+
+    // Check if user can send message (status must be 'Replied')
+    if (!isAdmin && currentTicket.status !== 'Replied') {
+      toast.error('Please wait for admin reply before sending another message');
+      return;
+    }
+
+    // Check if ticket is closed
+    if (currentTicket.status === 'Closed') {
+      toast.error('This ticket is closed');
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({
+          ticket_id: currentTicket.id,
+          sender_id: userRole.userId,
+          sender_role: isAdmin ? 'admin' : 'user',
+          content: content.trim(),
+          attachment_url: attachmentUrl || null,
+          attachment_type: attachmentType || null,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Add message to local state
+      setMessages((prev) => {
+        if (prev.some(m => m.id === data.id)) {
+          return prev;
+        }
+        return [...prev, data];
+      });
+
+      // Update ticket in list (status will be updated by trigger)
+      setTickets((prev) =>
+        prev.map((t) =>
+          t.id === currentTicket.id
+            ? { ...t, last_message_at: new Date().toISOString() }
+            : t
+        )
+      );
+
+      // Reload ticket to get updated status
+      const { data: updatedTicket } = await supabase
+        .from('tickets')
+        .select('*')
+        .eq('id', currentTicket.id)
+        .single();
+
+      if (updatedTicket) {
+        setCurrentTicket(updatedTicket);
+        currentTicketRef.current = updatedTicket;
+        setTickets((prev) =>
+          prev.map((t) => (t.id === updatedTicket.id ? updatedTicket : t))
+        );
+      }
+
+      // Mark as read immediately
+      await markMessagesAsRead(currentTicket.id, true);
+    } catch (error: any) {
+      console.error('Error sending ticket message:', error);
+      toast.error(error.message || 'Failed to send message');
+    }
+  }, [currentTicket, userRole?.userId, isAdmin]);
+
   // Real-time subscriptions
   useEffect(() => {
     if (!userRole?.userId) return;
@@ -935,7 +1361,76 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
 
     conversationsChannelRef.current = conversationsChannel;
 
-    // Subscribe to message inserts - listen to all messages to update conversation list
+    // Subscribe to ticket changes
+    const ticketsChannelName = `tickets-changes-${userRole.userId}`;
+    const ticketsChannel = supabase
+      .channel(ticketsChannelName)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tickets',
+          filter: isAdmin ? undefined : `user_id=eq.${userRole.userId}`,
+        },
+        async (payload) => {
+          console.log('Ticket change event:', payload.eventType, payload.new || payload.old);
+          
+          if (payload.eventType === 'INSERT' && payload.new) {
+            const newTicket = payload.new as Ticket;
+            
+            // Fetch user profile for the new ticket
+            if (newTicket.user_id) {
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('id, name, email')
+                .eq('id', newTicket.user_id)
+                .single();
+              
+              const ticketWithUser = {
+                ...newTicket,
+                user: profile || null,
+              };
+              
+              setTickets((prev) => {
+                if (prev.some(t => t.id === ticketWithUser.id)) {
+                  return prev;
+                }
+                return [ticketWithUser, ...prev];
+              });
+            }
+          } else if (payload.eventType === 'UPDATE' && payload.new) {
+            const updatedTicket = payload.new as Ticket;
+            setTickets((prev) =>
+              prev.map((t) =>
+                t.id === updatedTicket.id
+                  ? { ...t, ...updatedTicket }
+                  : t
+              )
+            );
+            
+            // If it's the current ticket, update it
+            const currentTicket = currentTicketRef.current;
+            if (currentTicket?.id === updatedTicket.id) {
+              const updated = { ...currentTicket, ...updatedTicket };
+              setCurrentTicket(updated);
+              currentTicketRef.current = updated;
+            }
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('Tickets subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Tickets subscription active');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('❌ Tickets subscription error');
+        }
+      });
+
+    ticketsChannelRef.current = ticketsChannel;
+
+    // Subscribe to message inserts - listen to all messages to update ticket/conversation list
     const messagesChannel = supabase
       .channel(messagesChannelName)
       .on(
@@ -947,9 +1442,10 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
         },
         async (payload) => {
           const newMessage = payload.new as Message;
-          console.log('New message received:', newMessage.id, 'for conversation:', newMessage.conversation_id);
+          console.log('New message received:', newMessage.id, 'ticket:', newMessage.ticket_id, 'conversation:', newMessage.conversation_id);
           
-          // Use ref to get current conversation (avoids stale closure)
+          // Use refs to get current ticket/conversation (avoids stale closure)
+          const currentTicket = currentTicketRef.current;
           const currentConv = currentConversationRef.current;
           
           // Check if message already exists OR if it's from current user (already added by sendMessage)
@@ -963,6 +1459,11 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
               return prev;
             }
             
+            // If it's for the current ticket, add it
+            if (currentTicket && newMessage.ticket_id === currentTicket.id) {
+              return [...prev, newMessage];
+            }
+            
             // If it's for the current conversation, add it
             if (currentConv && newMessage.conversation_id === currentConv.id) {
               return [...prev, newMessage];
@@ -970,36 +1471,60 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
             return prev;
           });
           
-          // Update conversation's last_message_at in the list
-          setConversations((prev) =>
-            prev.map((conv) =>
-              conv.id === newMessage.conversation_id
-                ? { 
-                    ...conv, 
-                    last_message_at: newMessage.created_at,
-                    // Increment unread count if message is not from current user
-                    unread_count: newMessage.sender_id !== userRole.userId 
-                      ? (conv.unread_count || 0) + 1 
-                      : conv.unread_count
-                  }
-                : conv
-            )
-          );
+          // Update ticket's last_message_at in the list
+          if (newMessage.ticket_id) {
+            setTickets((prev) =>
+              prev.map((t) =>
+                t.id === newMessage.ticket_id
+                  ? { 
+                      ...t, 
+                      last_message_at: newMessage.created_at,
+                    }
+                  : t
+              )
+            );
+            
+            // If it's for the current ticket, handle it
+            if (currentTicket && newMessage.ticket_id === currentTicket.id) {
+              // Auto-mark as read if we're viewing the ticket
+              if (isAtBottomRef.current && newMessage.sender_id !== userRole.userId) {
+                markMessagesAsRead(currentTicket.id, true).catch(console.error);
+              }
+            }
+          }
           
-          // If it's for the current conversation, handle it
-          if (currentConv && newMessage.conversation_id === currentConv.id) {
-            // Auto-mark as read if we're viewing the conversation
-            if (isAtBottomRef.current && newMessage.sender_id !== userRole.userId) {
-              markMessagesAsRead(currentConv.id).catch(console.error);
+          // Update conversation's last_message_at in the list
+          if (newMessage.conversation_id) {
+            setConversations((prev) =>
+              prev.map((conv) =>
+                conv.id === newMessage.conversation_id
+                  ? { 
+                      ...conv, 
+                      last_message_at: newMessage.created_at,
+                      // Increment unread count if message is not from current user
+                      unread_count: newMessage.sender_id !== userRole.userId 
+                        ? (conv.unread_count || 0) + 1 
+                        : conv.unread_count
+                    }
+                  : conv
+              )
+            );
+            
+            // If it's for the current conversation, handle it
+            if (currentConv && newMessage.conversation_id === currentConv.id) {
+              // Auto-mark as read if we're viewing the conversation
+              if (isAtBottomRef.current && newMessage.sender_id !== userRole.userId) {
+                markMessagesAsRead(currentConv.id, false).catch(console.error);
+              }
             }
-          } else {
-            // Show browser notification if tab is hidden and message is not from current user
-            if (newMessage.sender_id !== userRole.userId && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-              new Notification('New support message', {
-                body: newMessage.content.substring(0, 100),
-                icon: '/favicon.svg',
-              });
-            }
+          }
+          
+          // Show browser notification if tab is hidden and message is not from current user
+          if (newMessage.sender_id !== userRole.userId && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+            new Notification('New support message', {
+              body: newMessage.content.substring(0, 100),
+              icon: '/favicon.svg',
+            });
           }
 
           // Update unread count for admins
@@ -1061,6 +1586,9 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
       if (conversationsChannelRef.current) {
         supabase.removeChannel(conversationsChannelRef.current);
       }
+      if (ticketsChannelRef.current) {
+        supabase.removeChannel(ticketsChannelRef.current);
+      }
       if (messagesChannelRef.current) {
         supabase.removeChannel(messagesChannelRef.current);
       }
@@ -1071,7 +1599,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
       typingTimeoutsRef.current.forEach((timeout) => clearTimeout(timeout));
       typingTimeoutsRef.current.clear();
     };
-  }, [userRole?.userId, isAdmin, getUnreadCount]); // Removed currentConversation and other callbacks from deps to prevent recreation
+  }, [userRole?.userId, isAdmin, getUnreadCount, markMessagesAsRead]); // Removed currentConversation and other callbacks from deps to prevent recreation
 
   // Presence heartbeat - updates typing indicator timestamp periodically when user is active
   useEffect(() => {
@@ -1185,7 +1713,25 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
     }
   }, [isAdmin, userRole?.userId, conversations, currentConversation?.id, isLoadingConversations, isLoadingUserRole, getOrCreateConversation, loadMessages, markMessagesAsRead]);
 
-  // Load conversations on mount
+  // Load tickets on mount (prioritize tickets over conversations)
+  useEffect(() => {
+    // Wait for userRole to be loaded
+    if (isLoadingUserRole) {
+      return;
+    }
+    
+    if (userRole?.userId) {
+      console.log('Loading tickets for user:', userRole.userId, 'isAdmin:', isAdmin);
+      if (isAdmin) {
+        loadAllTickets();
+        getUnreadCount().then(setUnreadCount);
+      } else {
+        loadTickets();
+      }
+    }
+  }, [userRole?.userId, isAdmin, isLoadingUserRole, loadTickets, loadAllTickets, getUnreadCount]);
+
+  // Load conversations on mount (legacy, kept for backward compatibility)
   useEffect(() => {
     // Wait for userRole to be loaded
     if (isLoadingUserRole) {
@@ -1196,12 +1742,11 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
       console.log('Loading conversations for user:', userRole.userId, 'isAdmin:', isAdmin);
       if (isAdmin) {
         loadAllConversations();
-        getUnreadCount().then(setUnreadCount);
       } else {
         loadConversations();
       }
     }
-  }, [userRole?.userId, isAdmin, isLoadingUserRole, loadConversations, loadAllConversations, getUnreadCount]);
+  }, [userRole?.userId, isAdmin, isLoadingUserRole, loadConversations, loadAllConversations]);
 
   // Request notification permission
   useEffect(() => {
@@ -1211,29 +1756,49 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
   }, []);
 
   const value: SupportContextType = {
+    // Ticket state
+    tickets,
+    currentTicket,
+    isLoadingTickets,
+    isLoadingMoreTickets,
+    hasMoreTickets,
+    // Conversation state (legacy)
     conversations,
     currentConversation,
-    messages,
     typingIndicators,
     isLoadingConversations,
+    isLoadingMoreConversations,
+    hasMoreConversations,
+    // Shared state
+    messages,
     isLoadingMessages,
     isLoadingMoreMessages,
     hasMoreMessages,
     unreadCount,
     isAdmin,
-    isLoadingMoreConversations,
-    hasMoreConversations,
-    loadConversations,
-    loadAllConversations,
-    loadMoreConversations,
-    getOrCreateConversation,
-    selectConversation,
+    // Ticket methods
+    loadTickets,
+    loadAllTickets,
+    loadMoreTickets,
+    createTicket,
+    selectTicket,
+    loadTicketMessages,
+    sendTicketMessage,
+    closeTicket,
+    // Shared methods
     loadMessages,
     loadMoreMessages,
     sendMessage,
     editMessage,
     deleteMessage,
     markMessagesAsRead,
+    getUnreadCount,
+    // Conversation methods (legacy)
+    loadConversations,
+    loadAllConversations,
+    loadMoreConversations,
+    getOrCreateConversation,
+    selectConversation,
     setTyping,
     updateConversationStatus,
     closeConversation,
@@ -1243,7 +1808,6 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
     removeTag,
     addAdminNote,
     getAdminNotes,
-    getUnreadCount,
   };
 
   return <SupportContext.Provider value={value}>{children}</SupportContext.Provider>;

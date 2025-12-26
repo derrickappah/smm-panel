@@ -1,34 +1,27 @@
-import React, { useEffect } from 'react';
+import React, { useState } from 'react';
 import { SupportProvider, useSupport } from '@/contexts/support-context';
 import { SupportChat } from '@/components/support/SupportChat';
+import { TicketForm } from '@/components/support/TicketForm';
+import { TicketList } from '@/components/support/TicketList';
 import Navbar from '@/components/Navbar';
 import SEO from '@/components/SEO';
 import { Card, CardContent } from '@/components/ui/card';
-import { MessageSquare } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { MessageSquare, FileText, History } from 'lucide-react';
 
 const SupportPageContent = ({ user, onLogout }) => {
-  const { currentConversation, conversations, isLoadingConversations, getOrCreateConversation } = useSupport();
+  const { 
+    tickets, 
+    currentTicket, 
+    isLoadingTickets, 
+    loadTickets,
+    selectTicket 
+  } = useSupport();
+  const [activeTab, setActiveTab] = useState<'new' | 'history'>('new');
 
-  // Note: The context's auto-selection effect handles conversation creation/selection
-  // This useEffect is kept for backwards compatibility but the context should handle it
-  useEffect(() => {
-    // Only trigger if context hasn't already handled it
-    // The context's auto-selection effect is the primary handler
-    if (!isLoadingConversations && !currentConversation && conversations.length === 0) {
-      console.log('SupportPage: Context should handle this, but triggering as fallback...');
-      // Small delay to let context handle it first
-      const timeout = setTimeout(() => {
-        if (!currentConversation && conversations.length === 0) {
-          getOrCreateConversation().then((conv) => {
-            console.log('SupportPage: Fallback conversation result:', conv?.id);
-          }).catch((error) => {
-            console.error('SupportPage: Failed to create conversation:', error);
-          });
-        }
-      }, 500);
-      return () => clearTimeout(timeout);
-    }
-  }, [isLoadingConversations, currentConversation, conversations.length, getOrCreateConversation]);
+  React.useEffect(() => {
+    loadTickets();
+  }, [loadTickets]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -44,24 +37,78 @@ const SupportPageContent = ({ user, onLogout }) => {
         {/* Hero Header */}
         <div className="text-center mb-6 sm:mb-8 lg:mb-12 animate-fadeIn">
           <div className="flex items-center justify-center mb-4">
-            <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center">
-              <MessageSquare className="w-8 h-8 text-indigo-600" />
+            <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center">
+              <MessageSquare className="w-8 h-8 text-purple-600" />
             </div>
           </div>
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2 sm:mb-4">
             Support Center
           </h1>
           <p className="text-sm sm:text-base lg:text-lg text-gray-600 max-w-2xl mx-auto">
-            We're here to help! Chat with our support team for immediate assistance.
+            Create a ticket to get help with your orders and account issues.
           </p>
         </div>
 
-        {/* Main Chat Area */}
-        <Card className="h-[600px] sm:h-[700px]">
-          <CardContent className="p-0 h-full">
-            <SupportChat />
-          </CardContent>
-        </Card>
+        {/* Tab Buttons */}
+        <div className="flex gap-4 mb-4">
+          <Button
+            onClick={() => setActiveTab('new')}
+            className={`flex-1 ${
+              activeTab === 'new'
+                ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+            }`}
+          >
+            <FileText className="w-4 h-4 mr-2" />
+            New Ticket
+          </Button>
+          <Button
+            onClick={() => setActiveTab('history')}
+            className={`flex-1 ${
+              activeTab === 'history'
+                ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+            }`}
+          >
+            <History className="w-4 h-4 mr-2" />
+            Ticket History
+          </Button>
+        </div>
+
+        {/* Main Content Area */}
+        {activeTab === 'new' ? (
+          <Card className="min-h-[600px]">
+            <CardContent className="p-0 h-full">
+              <TicketForm />
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Ticket List */}
+            <Card className="lg:col-span-1 h-[600px]">
+              <CardContent className="p-0 h-full">
+                {isLoadingTickets ? (
+                  <div className="flex items-center justify-center h-full">
+                    <p className="text-gray-500">Loading tickets...</p>
+                  </div>
+                ) : (
+                  <TicketList
+                    tickets={tickets}
+                    currentTicketId={currentTicket?.id || null}
+                    onSelectTicket={selectTicket}
+                  />
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Chat Area */}
+            <Card className="lg:col-span-2 h-[600px]">
+              <CardContent className="p-0 h-full">
+                <SupportChat />
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     </div>
   );

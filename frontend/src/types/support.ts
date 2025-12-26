@@ -1,6 +1,8 @@
 // TypeScript interfaces for the support chat system
 
 export type ConversationStatus = 'open' | 'closed' | 'resolved';
+export type TicketStatus = 'Pending' | 'Replied' | 'Closed';
+export type TicketCategory = 'Refill' | 'Cancel' | 'Speed Up' | 'Restart' | 'Fake Complete';
 export type MessagePriority = 'low' | 'medium' | 'high' | 'urgent';
 export type SenderRole = 'user' | 'admin';
 export type AttachmentType = 'image' | 'file';
@@ -31,9 +33,28 @@ export interface Conversation {
   tags?: string[];
 }
 
+export interface Ticket {
+  id: string;
+  user_id: string;
+  category: TicketCategory;
+  subcategory?: string | null;
+  order_id?: string | null;
+  status: TicketStatus;
+  created_at: string;
+  updated_at: string;
+  last_message_at: string;
+  // Optional fields populated by joins
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+  };
+}
+
 export interface Message {
   id: string;
-  conversation_id: string;
+  conversation_id?: string | null;
+  ticket_id?: string | null;
   sender_id: string;
   sender_role: SenderRole;
   content: string;
@@ -135,32 +156,51 @@ export interface MessagePagination {
 }
 
 export interface SupportContextState {
-  conversations: Conversation[];
-  currentConversation: Conversation | null;
+  // Ticket-based support
+  tickets: Ticket[];
+  currentTicket: Ticket | null;
   messages: Message[];
-  typingIndicators: TypingIndicator[];
-  isLoadingConversations: boolean;
+  isLoadingTickets: boolean;
   isLoadingMessages: boolean;
   isLoadingMoreMessages: boolean;
   hasMoreMessages: boolean;
   unreadCount: number;
   isAdmin: boolean;
+  isLoadingMoreTickets: boolean;
+  hasMoreTickets: boolean;
+  // Legacy conversation support (deprecated, kept for backward compatibility)
+  conversations: Conversation[];
+  currentConversation: Conversation | null;
+  typingIndicators: TypingIndicator[];
+  isLoadingConversations: boolean;
   isLoadingMoreConversations: boolean;
   hasMoreConversations: boolean;
 }
 
 export interface SupportContextMethods {
+  // Ticket-based methods
+  loadTickets: () => Promise<void>;
+  loadAllTickets: (reset?: boolean) => Promise<void>;
+  loadMoreTickets: () => Promise<void>;
+  createTicket: (category: TicketCategory, orderId: string | null, message: string, subcategory?: string | null) => Promise<Ticket | null>;
+  selectTicket: (ticketId: string) => Promise<void>;
+  loadTicketMessages: (ticketId: string) => Promise<void>;
+  sendTicketMessage: (content: string, attachmentUrl?: string, attachmentType?: AttachmentType) => Promise<void>;
+  closeTicket: (ticketId: string) => Promise<void>;
+  // Message methods (work with both tickets and conversations)
+  loadMessages: (ticketIdOrConversationId: string, isTicket?: boolean) => Promise<void>;
+  loadMoreMessages: () => Promise<void>;
+  sendMessage: (content: string, attachmentUrl?: string, attachmentType?: AttachmentType) => Promise<void>;
+  editMessage: (messageId: string, newContent: string) => Promise<void>;
+  deleteMessage: (messageId: string) => Promise<void>;
+  markMessagesAsRead: (ticketIdOrConversationId: string, isTicket?: boolean) => Promise<void>;
+  getUnreadCount: () => Promise<number>;
+  // Legacy conversation methods (deprecated)
   loadConversations: () => Promise<void>;
   loadAllConversations: (reset?: boolean) => Promise<void>;
   loadMoreConversations: () => Promise<void>;
   getOrCreateConversation: () => Promise<Conversation | null>;
   selectConversation: (conversationId: string) => Promise<void>;
-  loadMessages: (conversationId: string) => Promise<void>;
-  loadMoreMessages: () => Promise<void>;
-  sendMessage: (content: string, attachmentUrl?: string, attachmentType?: AttachmentType) => Promise<void>;
-  editMessage: (messageId: string, newContent: string) => Promise<void>;
-  deleteMessage: (messageId: string) => Promise<void>;
-  markMessagesAsRead: (conversationId: string) => Promise<void>;
   setTyping: (conversationId: string, isTyping: boolean) => Promise<void>;
   updateConversationStatus: (conversationId: string, status: ConversationStatus) => Promise<void>;
   closeConversation: (conversationId: string) => Promise<void>;
@@ -170,7 +210,6 @@ export interface SupportContextMethods {
   removeTag: (conversationId: string, tag: string) => Promise<void>;
   addAdminNote: (conversationId: string, note: string) => Promise<void>;
   getAdminNotes: (conversationId: string) => Promise<AdminNote[]>;
-  getUnreadCount: () => Promise<number>;
 }
 
 export interface FileUploadResult {

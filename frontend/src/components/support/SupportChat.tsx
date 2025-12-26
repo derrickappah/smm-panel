@@ -13,6 +13,7 @@ import type { AttachmentType } from '@/types/support';
 
 export const SupportChat: React.FC = () => {
   const {
+    currentTicket,
     currentConversation,
     messages,
     isLoadingMessages,
@@ -21,7 +22,9 @@ export const SupportChat: React.FC = () => {
     loadMoreMessages,
     sendMessage,
     setTyping,
+    isLoadingTickets,
     isLoadingConversations,
+    isAdmin,
   } = useSupport();
 
   const [messageContent, setMessageContent] = useState('');
@@ -71,13 +74,24 @@ export const SupportChat: React.FC = () => {
         return;
       }
 
-      if (!currentConversation) {
-        toast.error('No conversation selected');
+      // Check ticket status if using tickets
+      if (currentTicket) {
+        if (!isAdmin && currentTicket.status !== 'Replied') {
+          toast.error('Please wait for admin reply before sending another message');
+          return;
+        }
+        if (currentTicket.status === 'Closed') {
+          toast.error('This ticket is closed');
+          return;
+        }
+      }
+
+      if (!currentTicket && !currentConversation) {
+        toast.error('No ticket or conversation selected');
         return;
       }
 
       // If there's an attachment but no text, use a minimal placeholder
-      // The placeholder will be hidden in the UI when attachment is displayed
       const content = messageContent.trim() || (attachmentUrl ? ' ' : '');
       await sendMessage(content, attachmentUrl || undefined, attachmentType || undefined);
 
@@ -87,21 +101,22 @@ export const SupportChat: React.FC = () => {
       setAttachmentType(null);
       setShowFileUpload(false);
 
-      // Clear typing indicator
-      if (typingTimeoutRef.current) {
+      // Clear typing indicator (only for conversations)
+      if (currentConversation && typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
+        await setTyping(currentConversation.id, false);
       }
-      await setTyping(currentConversation.id, false);
     },
-    [messageContent, attachmentUrl, attachmentType, currentConversation, sendMessage, setTyping]
+    [messageContent, attachmentUrl, attachmentType, currentTicket, currentConversation, sendMessage, setTyping, isAdmin]
   );
 
-  // Handle typing indicator
+  // Handle typing indicator (only for conversations)
   const handleInputChange = useCallback(
     (value: string) => {
       setMessageContent(value);
 
-      if (!currentConversation) return;
+      // Only set typing for conversations, not tickets
+      if (!currentConversation || currentTicket) return;
 
       // Clear existing timeout
       if (typingTimeoutRef.current) {
@@ -118,19 +133,36 @@ export const SupportChat: React.FC = () => {
         setTyping(currentConversation.id, false);
       }
     },
-    [currentConversation, setTyping]
+    [currentConversation, currentTicket, setTyping]
   );
 
-  if (!currentConversation) {
+  // Determine if input should be disabled
+  const isInputDisabled = currentTicket
+    ? (!isAdmin && currentTicket.status !== 'Replied') || currentTicket.status === 'Closed'
+    : false;
+
+  // Get status message
+  const getStatusMessage = () => {
+    if (!currentTicket) return null;
+    if (currentTicket.status === 'Pending') {
+      return 'Waiting for admin reply...';
+    }
+    if (currentTicket.status === 'Closed') {
+      return 'This ticket is closed';
+    }
+    return null;
+  };
+
+  if (!currentTicket && !currentConversation) {
     return (
       <div className="flex items-center justify-center h-full text-gray-500">
-        {isLoadingConversations ? (
+        {(isLoadingTickets || isLoadingConversations) ? (
           <div className="flex flex-col items-center gap-2">
-            <div className="w-6 h-6 border-2 border-gray-300 border-t-indigo-600 rounded-full animate-spin"></div>
-            <p>Loading conversation...</p>
+            <div className="w-6 h-6 border-2 border-gray-300 border-t-purple-600 rounded-full animate-spin"></div>
+            <p>Loading...</p>
           </div>
         ) : (
-          <p>Select a conversation to start chatting</p>
+          <p>Select a ticket to view messages</p>
         )}
       </div>
     );
@@ -179,17 +211,24 @@ export const SupportChat: React.FC = () => {
                 <MessageBubble message={message} />
               </div>
             ))}
-            <TypingIndicator />
+            {!currentTicket && <TypingIndicator />}
             <div ref={messagesEndRef} />
           </>
         )}
       </div>
 
+      {/* Status Message */}
+      {getStatusMessage() && (
+        <div className="border-t border-gray-200 p-4 flex-shrink-0 bg-yellow-50 border-yellow-200">
+          <p className="text-sm text-yellow-700 text-center">{getStatusMessage()}</p>
+        </div>
+      )}
+
       {/* File Upload */}
-      {showFileUpload && currentConversation && (
+      {showFileUpload && (currentTicket || currentConversation) && (
         <div className="border-t border-gray-200 p-4 flex-shrink-0">
           <FileUpload
-            conversationId={currentConversation.id}
+            conversationId={currentConversation?.id || currentTicket?.id}
             onUploadComplete={handleFileUploadComplete}
           />
         </div>
@@ -219,6 +258,7 @@ export const SupportChat: React.FC = () => {
             variant="outline"
             size="sm"
             onClick={() => setShowFileUpload(!showFileUpload)}
+            disabled={isInputDisabled}
             className="h-10 w-10 p-0 flex-shrink-0 touch-manipulation"
             aria-label="Attach file"
           >
@@ -227,14 +267,15 @@ export const SupportChat: React.FC = () => {
           <Input
             ref={inputRef}
             type="text"
-            placeholder="Type your message..."
+            placeholder={isInputDisabled ? getStatusMessage() || "Type your message..." : "Type your message..."}
             value={messageContent}
             onChange={(e) => handleInputChange(e.target.value)}
+            disabled={isInputDisabled}
             className="flex-1 min-h-[2.5rem]"
           />
           <Button 
             type="submit" 
-            disabled={!messageContent.trim() && !attachmentUrl}
+            disabled={isInputDisabled || (!messageContent.trim() && !attachmentUrl)}
             className="h-10 w-10 p-0 flex-shrink-0 touch-manipulation"
             aria-label="Send message"
           >

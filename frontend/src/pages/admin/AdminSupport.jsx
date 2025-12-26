@@ -1,50 +1,48 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SupportProvider, useSupport } from '@/contexts/support-context';
 import { AdminSupportChat } from '@/components/support/admin/AdminSupportChat';
-import { ConversationsList } from '@/components/support/admin/ConversationsList';
-import { ConversationSearch } from '@/components/support/admin/ConversationSearch';
+import { TicketsList } from '@/components/support/admin/TicketsList';
 
 const AdminSupportContent = () => {
   const {
-    conversations,
-    currentConversation,
-    loadAllConversations,
-    loadMoreConversations,
-    selectConversation,
-    setPriority,
-    assignConversation,
-    addTag,
-    removeTag,
-    updateConversationStatus,
-    hasMoreConversations,
-    isLoadingMoreConversations,
+    tickets,
+    currentTicket,
+    loadAllTickets,
+    loadMoreTickets,
+    selectTicket,
+    hasMoreTickets,
+    isLoadingMoreTickets,
   } = useSupport();
 
-  // Ensure conversations is always an array
-  const safeConversations = Array.isArray(conversations) ? conversations : [];
+  // Ensure tickets is always an array
+  const safeTickets = Array.isArray(tickets) ? tickets : [];
 
-  const [filters, setFilters] = useState({});
+  const [filters, setFilters] = useState({
+    status: 'all' as 'Pending' | 'Replied' | 'Closed' | 'all',
+    category: 'all' as string | 'all',
+    search: '',
+  });
   const [mobileView, setMobileView] = useState('list');
   const userNavigatedBackRef = useRef(false);
 
   useEffect(() => {
-    loadAllConversations();
-  }, [loadAllConversations]);
+    loadAllTickets();
+  }, [loadAllTickets]);
 
-  // If no conversation selected and we're in chat view on mobile, go back to list
+  // If no ticket selected and we're in chat view on mobile, go back to list
   useEffect(() => {
-    if (!currentConversation && mobileView === 'chat') {
+    if (!currentTicket && mobileView === 'chat') {
       const isMobile = window.matchMedia('(max-width: 767px)').matches;
       if (isMobile) {
         setMobileView('list');
         userNavigatedBackRef.current = false;
       }
     }
-  }, [currentConversation, mobileView]);
+  }, [currentTicket, mobileView]);
 
-  const handleSelectConversation = (conversationId: string) => {
-    selectConversation(conversationId);
-    // On mobile, switch to chat view when a conversation is selected
+  const handleSelectTicket = (ticketId: string) => {
+    selectTicket(ticketId);
+    // On mobile, switch to chat view when a ticket is selected
     const isMobile = window.matchMedia('(max-width: 767px)').matches;
     if (isMobile) {
       setMobileView('chat');
@@ -67,18 +65,17 @@ const AdminSupportContent = () => {
         {mobileView === 'list' ? (
           <div className="w-full flex flex-col bg-white">
             <div className="p-4 border-b border-gray-200">
-              <h2 className="text-lg font-semibold">Conversations</h2>
+              <h2 className="text-lg font-semibold">Tickets</h2>
             </div>
-            <ConversationSearch filters={filters} onFiltersChange={setFilters} />
             <div className="flex-1 min-h-0 overflow-hidden">
-              <ConversationsList
-                conversations={safeConversations}
-                currentConversationId={currentConversation?.id || null}
-                onSelectConversation={handleSelectConversation}
+              <TicketsList
+                tickets={safeTickets}
+                currentTicketId={currentTicket?.id || null}
+                onSelectTicket={handleSelectTicket}
                 filters={filters}
-                hasMoreConversations={hasMoreConversations}
-                isLoadingMoreConversations={isLoadingMoreConversations}
-                onLoadMore={loadMoreConversations}
+                hasMoreTickets={hasMoreTickets}
+                isLoadingMoreTickets={isLoadingMoreTickets}
+                onLoadMore={loadMoreTickets}
               />
             </div>
           </div>
@@ -91,21 +88,20 @@ const AdminSupportContent = () => {
 
       {/* Desktop View - Side-by-side layout */}
       <div className="hidden md:flex flex-1 min-h-0">
-        {/* Sidebar - Conversations List */}
+        {/* Sidebar - Tickets List */}
         <div className="md:w-80 border-r border-gray-200 flex flex-col bg-white">
           <div className="p-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold">Conversations</h2>
+            <h2 className="text-lg font-semibold">Tickets</h2>
           </div>
-          <ConversationSearch filters={filters} onFiltersChange={setFilters} />
           <div className="flex-1 min-h-0 overflow-hidden">
-            <ConversationsList
-              conversations={safeConversations}
-              currentConversationId={currentConversation?.id || null}
-              onSelectConversation={selectConversation}
+            <TicketsList
+              tickets={safeTickets}
+              currentTicketId={currentTicket?.id || null}
+              onSelectTicket={selectTicket}
               filters={filters}
-              hasMoreConversations={hasMoreConversations}
-              isLoadingMoreConversations={isLoadingMoreConversations}
-              onLoadMore={loadMoreConversations}
+              hasMoreTickets={hasMoreTickets}
+              isLoadingMoreTickets={isLoadingMoreTickets}
+              onLoadMore={loadMoreTickets}
             />
           </div>
         </div>
