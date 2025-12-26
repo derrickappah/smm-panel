@@ -5,6 +5,9 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { format } from 'date-fns';
 import { 
   RefreshCw, 
   Search,
@@ -14,7 +17,7 @@ import {
   XCircle,
   Wallet,
   Filter,
-  Calendar
+  Calendar as CalendarIcon
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
@@ -54,11 +57,9 @@ const fetchMoolreTransactions = async (filters = {}) => {
           'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify({
-          startDate: filters.startDate,
-          endDate: filters.endDate,
-          status: filters.status !== 'all' ? filters.status : undefined,
           limit: filters.limit || 1000,
           offset: filters.offset || 0
+          // Removed API-level date and status filters - doing all filtering client-side
         })
       });
 
@@ -119,20 +120,23 @@ const AdminMoolre = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [channelFilter, setChannelFilter] = useState('all');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [dateRange, setDateRange] = useState({ from: undefined, to: undefined });
   const [isPolling, setIsPolling] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(null);
 
-  // Build filters object
+  // Convert date range to string format for API
+  const startDate = dateRange.from ? format(dateRange.from, 'yyyy-MM-dd') : '';
+  const endDate = dateRange.to ? format(dateRange.to, 'yyyy-MM-dd') : '';
+
+  // Build filters object - Don't filter at API level, do all filtering client-side
+  // This ensures we have all data to work with and filters work properly
   const filters = useMemo(() => ({
-    startDate: startDate || undefined,
-    endDate: endDate || undefined,
-    status: statusFilter !== 'all' ? statusFilter : undefined,
     limit: 1000
-  }), [startDate, endDate, statusFilter]);
+    // Removed API-level filtering - we'll do all filtering client-side
+  }), []);
 
   // Fetch transactions with React Query
+  // Note: We fetch all transactions and filter client-side for better UX
   const { 
     data, 
     isLoading, 
@@ -140,7 +144,7 @@ const AdminMoolre = () => {
     refetch,
     dataUpdatedAt 
   } = useQuery({
-    queryKey: ['moolre', 'transactions', filters],
+    queryKey: ['moolre', 'transactions'],
     queryFn: () => fetchMoolreTransactions(filters),
     enabled: true,
     refetchInterval: isPolling ? POLLING_INTERVAL : false,
@@ -200,37 +204,56 @@ const AdminMoolre = () => {
       });
     }
 
-    // Status filter (client-side fallback)
+    // Status filter (client-side)
     if (statusFilter !== 'all') {
       filtered = filtered.filter(tx => {
-        return tx.status === statusFilter;
+        // Normalize status for comparison
+        const txStatus = (tx.status || '').toLowerCase().trim();
+        const filterStatus = statusFilter.toLowerCase().trim();
+        return txStatus === filterStatus;
       });
     }
 
     // Channel filter
     if (channelFilter !== 'all') {
       filtered = filtered.filter(tx => {
-        const channel = (tx.channelName || tx.channel || '').toLowerCase();
-        return channel === channelFilter.toLowerCase();
+        const channel = (tx.channelName || tx.channel || '').toLowerCase().trim();
+        const filterChannel = channelFilter.toLowerCase().trim();
+        // Allow partial matching for channel names
+        return channel === filterChannel || channel.includes(filterChannel) || filterChannel.includes(channel);
       });
     }
 
-    // Date range filter (client-side fallback)
-    if (startDate) {
-      const start = new Date(startDate);
+    // Date range filter (client-side)
+    if (dateRange.from) {
+      const start = new Date(dateRange.from);
       start.setHours(0, 0, 0, 0); // Start of day
       filtered = filtered.filter(tx => {
-        const txDate = new Date(tx.created_at || tx.updated_at || 0);
-        return txDate >= start;
+        if (!tx.created_at && !tx.updated_at) return false;
+        try {
+          const txDate = new Date(tx.created_at || tx.updated_at);
+          // Check if date is valid
+          if (isNaN(txDate.getTime())) return false;
+          return txDate >= start;
+        } catch (e) {
+          return false;
+        }
       });
     }
 
-    if (endDate) {
-      const end = new Date(endDate);
+    if (dateRange.to) {
+      const end = new Date(dateRange.to);
       end.setHours(23, 59, 59, 999); // End of day
       filtered = filtered.filter(tx => {
-        const txDate = new Date(tx.created_at || tx.updated_at || 0);
-        return txDate <= end;
+        if (!tx.created_at && !tx.updated_at) return false;
+        try {
+          const txDate = new Date(tx.created_at || tx.updated_at);
+          // Check if date is valid
+          if (isNaN(txDate.getTime())) return false;
+          return txDate <= end;
+        } catch (e) {
+          return false;
+        }
       });
     }
 
@@ -240,7 +263,7 @@ const AdminMoolre = () => {
       const dateB = new Date(b.created_at || 0);
       return dateB - dateA;
     });
-  }, [transactions, searchTerm, statusFilter, channelFilter, startDate, endDate]);
+  }, [transactions, searchTerm, statusFilter, channelFilter, dateRange]);
 
   const handleManualRefresh = useCallback(() => {
     refetch();
@@ -566,76 +589,107 @@ const AdminMoolre = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  placeholder="Search by reference, ID, payer, username, or email..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
+            <div className="space-y-4">
+              {/* First Row: Search and Dropdowns */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Search */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <Input
+                    placeholder="Search by reference, ID, payer, username, or email..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+
+                {/* Status Filter */}
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Filter by status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    <SelectItem value="success">Success</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="failed">Failed</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* Channel Filter */}
+                <Select value={channelFilter} onValueChange={setChannelFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Filter by channel" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Channels</SelectItem>
+                    {uniqueChannels.map(channel => (
+                      <SelectItem key={channel} value={channel}>
+                        {channel}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
-              {/* Status Filter */}
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Filter by status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="success">Success</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="failed">Failed</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {/* Channel Filter */}
-              <Select value={channelFilter} onValueChange={setChannelFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Filter by channel" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Channels</SelectItem>
-                  {uniqueChannels.map(channel => (
-                    <SelectItem key={channel} value={channel}>
-                      {channel}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {/* Date Range */}
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-gray-400" />
-                <Input
-                  type="date"
-                  placeholder="Start date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="flex-1"
-                />
-                <span className="text-gray-400">to</span>
-                <Input
-                  type="date"
-                  placeholder="End date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="flex-1"
-                />
+              {/* Date Range - Calendar Picker */}
+              <div className="border border-gray-200 rounded-lg p-4 bg-gray-50/50">
+                <div className="flex items-center gap-2 mb-3">
+                  <CalendarIcon className="w-4 h-4 text-gray-500" />
+                  <label className="text-sm font-medium text-gray-700">Date Range</label>
+                </div>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start text-left font-normal bg-white hover:bg-gray-50"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dateRange.from ? (
+                        dateRange.to ? (
+                          <>
+                            {format(dateRange.from, 'MMM dd, yyyy')} - {format(dateRange.to, 'MMM dd, yyyy')}
+                          </>
+                        ) : (
+                          format(dateRange.from, 'MMM dd, yyyy')
+                        )
+                      ) : (
+                        <span className="text-gray-500">Pick a date range</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="range"
+                      defaultMonth={dateRange.from}
+                      selected={dateRange}
+                      onSelect={setDateRange}
+                      numberOfMonths={2}
+                      className="rounded-md border"
+                    />
+                  </PopoverContent>
+                </Popover>
+                {(dateRange.from || dateRange.to) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="mt-2 text-xs"
+                    onClick={() => setDateRange({ from: undefined, to: undefined })}
+                  >
+                    Clear dates
+                  </Button>
+                )}
               </div>
             </div>
 
             {/* Clear Filters */}
-            {(searchTerm || statusFilter !== 'all' || channelFilter !== 'all' || startDate || endDate) && (
+            {(searchTerm || statusFilter !== 'all' || channelFilter !== 'all' || dateRange.from || dateRange.to) && (
               <Button
                 onClick={() => {
                   setSearchTerm('');
                   setStatusFilter('all');
                   setChannelFilter('all');
-                  setStartDate('');
-                  setEndDate('');
+                  setDateRange({ from: undefined, to: undefined });
                 }}
                 variant="ghost"
                 size="sm"
@@ -708,7 +762,7 @@ const AdminMoolre = () => {
               <div className="text-center py-12">
                 <Wallet className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <p className="text-gray-600">No transactions found</p>
-                {searchTerm || statusFilter !== 'all' || channelFilter !== 'all' || startDate || endDate ? (
+                {searchTerm || statusFilter !== 'all' || channelFilter !== 'all' || dateRange.from || dateRange.to ? (
                   <p className="text-sm text-gray-500 mt-2">Try adjusting your filters</p>
                 ) : null}
               </div>
