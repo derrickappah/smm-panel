@@ -42,9 +42,9 @@ const DashboardPromotionPackages = ({ packages, onPackageSelect, user }) => {
       
       const scrollLeft = container.scrollLeft;
       const containerWidth = container.clientWidth;
-      const cardWidth = 280 + 16; // min-w-[280px] + gap-4
+      const cardWidth = 180 + 16; // min-w-[180px] + gap-4
       const singleSetWidth = displayPackages.length * cardWidth;
-      const centerOffset = (containerWidth - 280) / 2 - 24; // 24px is px-6 padding
+      const centerOffset = (containerWidth - 180) / 2 - 24; // 24px is px-6 padding
 
       // If scrolled past the end of second set (entering third set), reset to middle (second set)
       if (scrollLeft >= singleSetWidth * 2 - centerOffset) {
@@ -68,12 +68,12 @@ const DashboardPromotionPackages = ({ packages, onPackageSelect, user }) => {
 
     // Initialize scroll position to center first card of middle set
     const initializeScroll = () => {
-      const cardWidth = 280 + 16;
+      const cardWidth = 180 + 16;
       const singleSetWidth = displayPackages.length * cardWidth;
       const containerWidth = container.clientWidth;
       if (containerWidth > 0) {
         // Center the first card of the middle set
-        const centerOffset = (containerWidth - 280) / 2 - 24; // 24px is px-6 padding
+        const centerOffset = (containerWidth - 180) / 2 - 24; // 24px is px-6 padding
         container.scrollLeft = singleSetWidth + centerOffset;
       }
     };
@@ -105,7 +105,7 @@ const DashboardPromotionPackages = ({ packages, onPackageSelect, user }) => {
         {infinitePackages.map((pkg, index) => (
           <div
             key={`${pkg.id}-${index}`}
-            className="bg-white border-2 border-purple-300 rounded-lg p-4 shadow-sm hover:shadow-md transition-all hover:border-purple-400 min-w-[280px] snap-center flex-shrink-0 sm:min-w-0 sm:snap-none"
+            className="bg-white border-2 border-purple-300 rounded-lg p-3 shadow-sm hover:shadow-md transition-all hover:border-purple-400 min-w-[180px] snap-center flex-shrink-0 sm:min-w-0 sm:snap-none"
           >
             <div className="flex items-start justify-between mb-3">
               <div className="flex items-center gap-2">
@@ -115,12 +115,12 @@ const DashboardPromotionPackages = ({ packages, onPackageSelect, user }) => {
                 </span>
               </div>
               <div className="text-right">
-                <p className="text-xl font-bold text-purple-600">{pkg.price} GHS</p>
+                <p className="text-lg font-bold text-purple-600">{pkg.price} GHS</p>
                 <p className="text-xs text-gray-500">Fixed Price</p>
               </div>
             </div>
             
-            <h3 className="text-base font-semibold text-gray-900 mb-2 line-clamp-1">
+            <h3 className="text-sm font-semibold text-gray-900 mb-2 line-clamp-1">
               {pkg.name}
             </h3>
             

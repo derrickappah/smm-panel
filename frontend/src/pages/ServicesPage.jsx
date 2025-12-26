@@ -94,9 +94,9 @@ const ServicesPage = ({ user, onLogout }) => {
       
       const scrollLeft = container.scrollLeft;
       const containerWidth = container.clientWidth;
-      const cardWidth = 280 + 16; // min-w-[280px] + gap-4
+      const cardWidth = 180 + 16; // min-w-[180px] + gap-4
       const singleSetWidth = filteredPackages.length * cardWidth;
-      const centerOffset = (containerWidth - 280) / 2 - 16; // 16px is px-4 padding
+      const centerOffset = (containerWidth - 180) / 2 - 16; // 16px is px-4 padding
 
       // If scrolled past the end of second set (entering third set), reset to middle (second set)
       if (scrollLeft >= singleSetWidth * 2 - centerOffset) {
@@ -120,12 +120,12 @@ const ServicesPage = ({ user, onLogout }) => {
 
     // Initialize scroll position to center first card of middle set
     const initializeScroll = () => {
-      const cardWidth = 280 + 16;
+      const cardWidth = 180 + 16;
       const singleSetWidth = filteredPackages.length * cardWidth;
       const containerWidth = container.clientWidth;
       if (containerWidth > 0) {
         // Center the first card of the middle set
-        const centerOffset = (containerWidth - 280) / 2 - 16; // 16px is px-4 padding
+        const centerOffset = (containerWidth - 180) / 2 - 16; // 16px is px-4 padding
         container.scrollLeft = singleSetWidth + centerOffset;
       }
     };
@@ -282,7 +282,7 @@ const ServicesPage = ({ user, onLogout }) => {
                     }
                   }}
                   tabIndex={0}
-                  className="bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-purple-300 rounded-lg p-5 sm:p-6 shadow-sm hover:shadow-md hover:border-purple-400 cursor-pointer transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 min-w-[280px] snap-center flex-shrink-0 sm:min-w-0 sm:snap-none"
+                  className="bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-purple-300 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md hover:border-purple-400 cursor-pointer transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 min-w-[180px] snap-center flex-shrink-0 sm:min-w-0 sm:snap-none"
                   style={{ animationDelay: `${(index % filteredPackages.length) * 0.05}s` }}
                 >
                   <div className="flex items-start justify-between mb-4">
@@ -293,11 +293,11 @@ const ServicesPage = ({ user, onLogout }) => {
                       </span>
                     </div>
                     <div className="text-right">
-                      <p className="text-xl sm:text-2xl font-bold text-purple-600">{pkg.price} GHS</p>
+                      <p className="text-lg sm:text-xl font-bold text-purple-600">{pkg.price} GHS</p>
                       <p className="text-xs text-gray-600">Fixed Price</p>
                     </div>
                   </div>
-                  <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-2">
+                  <h3 className="text-sm sm:text-base font-bold text-gray-900 mb-2">
                     {pkg.name}
                   </h3>
                   <p className="text-sm text-gray-600 mb-4 line-clamp-2">{pkg.description || 'Special promotion package'}</p>
