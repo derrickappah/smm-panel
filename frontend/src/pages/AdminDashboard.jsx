@@ -8,7 +8,7 @@ import SEO from '@/components/SEO';
 import { 
   Users, ShoppingCart, DollarSign, Package, Wallet, Receipt, 
   MessageSquare, UserPlus, RefreshCw, BarChart3, Menu, X, LayoutDashboard, Tag,
-  ChevronLeft, ChevronRight, FileText, Server, HelpCircle, CreditCard
+  ChevronLeft, ChevronRight, FileText, Server, HelpCircle, CreditCard, Scale
 } from 'lucide-react';
 import { useAdminOrders } from '@/hooks/useAdminOrders';
 import { useAdminDeposits } from '@/hooks/useAdminDeposits';
@@ -34,6 +34,7 @@ const AdminSMMCost = lazy(() => import('@/pages/admin/AdminSMMCost'));
 const AdminSMMGen = lazy(() => import('@/pages/admin/AdminSMMGen'));
 const AdminMoolre = lazy(() => import('@/pages/admin/AdminMoolre'));
 const AdminFAQ = lazy(() => import('@/pages/admin/AdminFAQ'));
+const AdminTerms = lazy(() => import('@/pages/admin/AdminTerms'));
 
 // Loading fallback component
 const ComponentLoader = () => (
@@ -76,7 +77,8 @@ const AdminDashboard = memo(({ user, onLogout }) => {
         'smmcost': 'smmcost',
         'smmgen': 'smmgen',
         'moolre': 'moolre',
-        'faq': 'faq'
+        'faq': 'faq',
+        'terms': 'terms'
       };
       return sectionMap[section] || 'dashboard';
     }
@@ -337,6 +339,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     { id: 'referrals', label: 'Referrals', icon: UserPlus },
     { id: 'activity-logs', label: 'Activity Logs', icon: FileText },
     { id: 'faq', label: 'FAQ', icon: HelpCircle },
+    { id: 'terms', label: 'Terms & Conditions', icon: Scale },
     { id: 'smmcost', label: 'SMMCost', icon: Server },
     { id: 'smmgen', label: 'SMMGen', icon: Server },
     { id: 'moolre', label: 'Moolre', icon: CreditCard },
@@ -774,6 +777,13 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                 <TabsContent value="faq" className="lg:mt-0 w-full max-w-full">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminFAQ />
+                  </Suspense>
+                </TabsContent>
+
+                {/* Terms & Conditions Section */}
+                <TabsContent value="terms" className="lg:mt-0 w-full max-w-full">
+                  <Suspense fallback={<ComponentLoader />}>
+                    <AdminTerms />
                   </Suspense>
                 </TabsContent>
               </div>

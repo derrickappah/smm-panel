@@ -4,10 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { supabase, isConfigured } from '@/lib/supabase';
 import { logLoginAttempt } from '@/lib/activityLogger';
 import SEO from '@/components/SEO';
+import TermsDialog from '@/components/TermsDialog';
 
 // Email validation function with TLD validation
 const isValidEmail = (email) => {
@@ -123,6 +125,8 @@ const AuthPage = () => {
   const [referralCode, setReferralCode] = useState('');
   const [manualReferralCode, setManualReferralCode] = useState('');
   const [showReferralCode, setShowReferralCode] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [termsDialogOpen, setTermsDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -204,6 +208,12 @@ const AuthPage = () => {
         return;
       }
 
+      if (!isLogin && !termsAccepted) {
+        toast.error('Please accept the Terms and Conditions to continue');
+        setLoading(false);
+        return;
+      }
+
       if (isLogin) {
         // LOGIN
         const { data, error } = await supabase.auth.signInWithPassword({
@@ -273,6 +283,7 @@ const AuthPage = () => {
           const signupMetadata = {
             name: formData.name.trim(),
             phone_number: normalizedPhone,
+            terms_accepted_at: new Date().toISOString(),
           };
 
           // Add referral code to metadata if provided (manual input takes precedence)
@@ -581,6 +592,35 @@ const AuthPage = () => {
               </div>
             )}
 
+            {!isLogin && (
+              <div className="flex items-start space-x-3">
+                <Checkbox
+                  id="terms"
+                  checked={termsAccepted}
+                  onCheckedChange={(checked) => setTermsAccepted(checked)}
+                  className="mt-1"
+                />
+                <div className="flex-1">
+                  <Label
+                    htmlFor="terms"
+                    className="text-sm text-gray-700 cursor-pointer"
+                  >
+                    I agree to the{' '}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setTermsDialogOpen(true);
+                      }}
+                      className="text-indigo-600 hover:text-indigo-700 underline font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 rounded"
+                    >
+                      Terms and Conditions
+                    </button>
+                  </Label>
+                </div>
+              </div>
+            )}
+
             <Button
               type="submit"
               disabled={loading}
@@ -600,6 +640,12 @@ const AuthPage = () => {
           </button>
         </p>
       </div>
+
+      <TermsDialog
+        open={termsDialogOpen}
+        onOpenChange={setTermsDialogOpen}
+        onAccept={() => setTermsAccepted(true)}
+      />
     </div>
   );
 };
