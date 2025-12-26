@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -13,6 +13,7 @@ import {
 import { useSupport } from '@/contexts/support-context';
 import { toast } from 'sonner';
 import type { TicketCategory } from '@/types/support';
+import { ticketSubcategories, getSubcategoriesForCategory } from '@/data/ticketSubcategories';
 
 export const TicketForm: React.FC = () => {
   const { createTicket } = useSupport();
@@ -21,12 +22,39 @@ export const TicketForm: React.FC = () => {
   const [orderId, setOrderId] = useState<string>('');
   const [message, setMessage] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [orderIdError, setOrderIdError] = useState<string>('');
+
+  // Get subcategories for selected category
+  const availableSubcategories = useMemo(() => {
+    return getSubcategoriesForCategory(category);
+  }, [category]);
+
+  // Validate order_id when category changes
+  React.useEffect(() => {
+    if (category === 'order' && !orderId.trim()) {
+      setOrderIdError('Order ID is required for order-related tickets');
+    } else {
+      setOrderIdError('');
+    }
+  }, [category, orderId]);
+
+  const handleCategoryChange = (value: string) => {
+    setCategory(value as TicketCategory);
+    setSubcategory('none'); // Reset subcategory when category changes
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!category) {
       toast.error('Please select a category');
+      return;
+    }
+
+    // Validate order_id for order category
+    if (category === 'order' && !orderId.trim()) {
+      setOrderIdError('Order ID is required for order-related tickets');
+      toast.error('Order ID is required for order-related tickets');
       return;
     }
 
@@ -51,6 +79,7 @@ export const TicketForm: React.FC = () => {
         setSubcategory('none');
         setOrderId('');
         setMessage('');
+        setOrderIdError('');
       } else {
         toast.error('Failed to create ticket');
       }
@@ -62,46 +91,67 @@ export const TicketForm: React.FC = () => {
     }
   };
 
+  const isFormValid = category && message.trim() && (category !== 'order' || orderId.trim());
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4 p-6">
       <div className="space-y-2">
         <Label htmlFor="category">Category</Label>
-        <Select value={category} onValueChange={(value) => setCategory(value as TicketCategory)}>
+        <Select value={category} onValueChange={handleCategoryChange}>
           <SelectTrigger id="category" className="w-full">
             <SelectValue placeholder="Select a category" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="Refill">Refill</SelectItem>
-            <SelectItem value="Cancel">Cancel</SelectItem>
-            <SelectItem value="Speed Up">Speed Up</SelectItem>
-            <SelectItem value="Restart">Restart</SelectItem>
-            <SelectItem value="Fake Complete">Fake Complete</SelectItem>
+            <SelectItem value="order">Order</SelectItem>
+            <SelectItem value="payment">Payment</SelectItem>
+            <SelectItem value="account">Account</SelectItem>
+            <SelectItem value="complaint">Complaint</SelectItem>
+            <SelectItem value="other">Other</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="subcategory">Subcategory</Label>
-        <Select value={subcategory} onValueChange={(value) => setSubcategory(value === 'none' ? 'none' : value)}>
-          <SelectTrigger id="subcategory" className="w-full">
-            <SelectValue placeholder="Select a subcategory (optional)" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">None</SelectItem>
-            <SelectItem value="Refill">Refill</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      {category && availableSubcategories.length > 0 && (
+        <div className="space-y-2">
+          <Label htmlFor="subcategory">Subcategory</Label>
+          <Select value={subcategory} onValueChange={(value) => setSubcategory(value === 'none' ? 'none' : value)}>
+            <SelectTrigger id="subcategory" className="w-full">
+              <SelectValue placeholder="Select a subcategory (optional)" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">None</SelectItem>
+              {availableSubcategories.map((sub) => (
+                <SelectItem key={sub} value={sub}>
+                  {sub}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       <div className="space-y-2">
-        <Label htmlFor="orderId">Order ID</Label>
+        <Label htmlFor="orderId">
+          Order ID {category === 'order' && <span className="text-red-500">*</span>}
+        </Label>
         <Input
           id="orderId"
           type="text"
-          placeholder="example: 10867110,10867210,10867500"
+          placeholder={category === 'order' ? 'Required: e.g., 10867110,10867210,10867500' : 'example: 10867110,10867210,10867500'}
           value={orderId}
-          onChange={(e) => setOrderId(e.target.value)}
+          onChange={(e) => {
+            setOrderId(e.target.value);
+            if (category === 'order' && !e.target.value.trim()) {
+              setOrderIdError('Order ID is required for order-related tickets');
+            } else {
+              setOrderIdError('');
+            }
+          }}
+          className={orderIdError ? 'border-red-500' : ''}
         />
+        {orderIdError && (
+          <p className="text-sm text-red-500">{orderIdError}</p>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -118,7 +168,7 @@ export const TicketForm: React.FC = () => {
 
       <Button
         type="submit"
-        disabled={isSubmitting || !category || !message.trim()}
+        disabled={isSubmitting || !isFormValid}
         className="w-full bg-purple-600 hover:bg-purple-700 text-white"
       >
         {isSubmitting ? 'Submitting...' : 'Submit ticket'}

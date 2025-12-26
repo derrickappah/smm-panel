@@ -6,6 +6,10 @@ import { useSupport } from '@/contexts/support-context';
 import type { Ticket } from '@/types/support';
 import { format } from 'date-fns';
 
+const formatCategory = (category: string): string => {
+  return category.charAt(0).toUpperCase() + category.slice(1);
+};
+
 interface TicketHeaderProps {
   ticket: Ticket;
   onBackToList?: () => void;
@@ -29,7 +33,7 @@ export const TicketHeader: React.FC<TicketHeaderProps> = ({ ticket, onBackToList
             <StatusBadge status={ticket.status} />
           </div>
           <div className="space-y-1 text-sm text-gray-600">
-            <p><span className="font-medium">Category:</span> {ticket.category}</p>
+            <p><span className="font-medium">Category:</span> {formatCategory(ticket.category)}</p>
             {ticket.subcategory && (
               <p><span className="font-medium">Subcategory:</span> {ticket.subcategory}</p>
             )}

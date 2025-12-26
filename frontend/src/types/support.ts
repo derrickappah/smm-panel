@@ -2,7 +2,7 @@
 
 export type ConversationStatus = 'open' | 'closed' | 'resolved';
 export type TicketStatus = 'Pending' | 'Replied' | 'Closed';
-export type TicketCategory = 'Refill' | 'Cancel' | 'Speed Up' | 'Restart' | 'Fake Complete';
+export type TicketCategory = 'order' | 'payment' | 'account' | 'complaint' | 'other';
 export type MessagePriority = 'low' | 'medium' | 'high' | 'urgent';
 export type SenderRole = 'user' | 'admin';
 export type AttachmentType = 'image' | 'file';

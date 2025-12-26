@@ -5,6 +5,10 @@ import { StatusBadge } from '../StatusBadge';
 import { formatDistanceToNow } from 'date-fns';
 import type { Ticket } from '@/types/support';
 
+const formatCategory = (category: string): string => {
+  return category.charAt(0).toUpperCase() + category.slice(1);
+};
+
 interface TicketsListProps {
   tickets: Ticket[];
   currentTicketId: string | null;
@@ -90,8 +94,13 @@ export const TicketsList: React.FC<TicketsListProps> = ({
                       <StatusBadge status={ticket.status} />
                     </div>
                     <p className="text-sm font-semibold text-gray-900">
-                      {ticket.category}
+                      {formatCategory(ticket.category)}
                     </p>
+                    {ticket.subcategory && (
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {ticket.subcategory}
+                      </p>
+                    )}
                     {ticket.user && (
                       <p className="text-xs text-gray-600 mt-1">
                         {ticket.user.name || ticket.user.email}

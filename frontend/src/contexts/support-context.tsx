@@ -1134,6 +1134,12 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
       return null;
     }
 
+    // Validate order_id is required for order category
+    if (category === 'order' && (!orderId || !orderId.trim())) {
+      toast.error('Order ID is required for order-related tickets');
+      return null;
+    }
+
     try {
       const { data: { session }, error: authError } = await supabase.auth.getSession();
       if (authError || !session) {
