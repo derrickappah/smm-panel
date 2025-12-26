@@ -40,3 +40,4 @@ COMMENT ON COLUMN support_tickets.tags IS 'Array of tags for flexible categoriza
 
 
 
+

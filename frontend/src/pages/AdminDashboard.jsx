@@ -8,7 +8,7 @@ import SEO from '@/components/SEO';
 import { 
   Users, ShoppingCart, DollarSign, Package, Wallet, Receipt, 
   MessageSquare, UserPlus, RefreshCw, BarChart3, Menu, X, LayoutDashboard, Tag,
-  ChevronLeft, ChevronRight, FileText, Server, HelpCircle, CreditCard, Scale
+  ChevronLeft, ChevronRight, FileText, Server, HelpCircle, CreditCard, Scale, Bell, Video
 } from 'lucide-react';
 import { useAdminOrders } from '@/hooks/useAdminOrders';
 import { useAdminDeposits } from '@/hooks/useAdminDeposits';
@@ -35,6 +35,8 @@ const AdminSMMGen = lazy(() => import('@/pages/admin/AdminSMMGen'));
 const AdminMoolre = lazy(() => import('@/pages/admin/AdminMoolre'));
 const AdminFAQ = lazy(() => import('@/pages/admin/AdminFAQ'));
 const AdminTerms = lazy(() => import('@/pages/admin/AdminTerms'));
+const AdminUpdates = lazy(() => import('@/pages/admin/AdminUpdates'));
+const AdminVideoTutorials = lazy(() => import('@/pages/admin/AdminVideoTutorials'));
 
 // Loading fallback component
 const ComponentLoader = () => (
@@ -78,7 +80,9 @@ const AdminDashboard = memo(({ user, onLogout }) => {
         'smmgen': 'smmgen',
         'moolre': 'moolre',
         'faq': 'faq',
-        'terms': 'terms'
+        'terms': 'terms',
+        'updates': 'updates',
+        'video-tutorials': 'video-tutorials'
       };
       return sectionMap[section] || 'dashboard';
     }
@@ -340,6 +344,8 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     { id: 'activity-logs', label: 'Activity Logs', icon: FileText },
     { id: 'faq', label: 'FAQ', icon: HelpCircle },
     { id: 'terms', label: 'Terms & Conditions', icon: Scale },
+    { id: 'updates', label: 'Updates', icon: Bell },
+    { id: 'video-tutorials', label: 'Video Tutorials', icon: Video },
     { id: 'smmcost', label: 'SMMCost', icon: Server },
     { id: 'smmgen', label: 'SMMGen', icon: Server },
     { id: 'moolre', label: 'Moolre', icon: CreditCard },
@@ -784,6 +790,20 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                 <TabsContent value="terms" className="lg:mt-0 w-full max-w-full">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminTerms />
+                  </Suspense>
+                </TabsContent>
+
+                {/* Updates Section */}
+                <TabsContent value="updates" className="lg:mt-0 w-full max-w-full">
+                  <Suspense fallback={<ComponentLoader />}>
+                    <AdminUpdates />
+                  </Suspense>
+                </TabsContent>
+
+                {/* Video Tutorials Section */}
+                <TabsContent value="video-tutorials" className="lg:mt-0 w-full max-w-full">
+                  <Suspense fallback={<ComponentLoader />}>
+                    <AdminVideoTutorials />
                   </Suspense>
                 </TabsContent>
               </div>

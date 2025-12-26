@@ -109,3 +109,4 @@ GRANT EXECUTE ON FUNCTION increment_kb_article_views(UUID) TO anon;
 
 
 
+

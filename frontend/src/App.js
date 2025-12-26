@@ -32,6 +32,7 @@ const GuidePage = lazy(() => import("@/pages/guides/GuidePage"));
 const AboutPage = lazy(() => import("@/pages/AboutPage"));
 const PricingPage = lazy(() => import("@/pages/PricingPage"));
 const TermsPage = lazy(() => import("@/pages/TermsPage"));
+const FAQPage = lazy(() => import("@/pages/FAQPage"));
 
 // Loading fallback component - Skeleton loader
 const PageLoader = () => (
@@ -643,6 +644,30 @@ function App() {
                 }
               />
               <Route
+                path="/admin/updates"
+                element={
+                  user?.role === 'admin' ? (
+                    <AdminDashboard user={user} onLogout={logout} />
+                  ) : user ? (
+                    <Navigate to="/dashboard" />
+                  ) : (
+                    <Navigate to="/auth" />
+                  )
+                }
+              />
+              <Route
+                path="/admin/video-tutorials"
+                element={
+                  user?.role === 'admin' ? (
+                    <AdminDashboard user={user} onLogout={logout} />
+                  ) : user ? (
+                    <Navigate to="/dashboard" />
+                  ) : (
+                    <Navigate to="/auth" />
+                  )
+                }
+              />
+              <Route
                 path="/support"
                 element={<SupportPage user={user} onLogout={logout} />}
               />
@@ -695,6 +720,10 @@ function App() {
               <Route
                 path="/terms"
                 element={<TermsPage user={user} onLogout={logout} />}
+              />
+              <Route
+                path="/faq"
+                element={<FAQPage user={user} onLogout={logout} />}
               />
               </Routes>
             </Suspense>
