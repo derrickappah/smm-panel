@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 import { useTerms } from '@/hooks/useTerms';
+import { formatTermsText } from '@/utils/formatText';
 
 const TermsDialog = ({ open, onOpenChange, onAccept }) => {
   const { data: termsData, isLoading } = useTerms();
@@ -38,8 +39,8 @@ const TermsDialog = ({ open, onOpenChange, onAccept }) => {
               )}
               
               {termsData?.content ? (
-                <div className="whitespace-pre-wrap text-gray-700 leading-relaxed text-sm">
-                  {termsData.content}
+                <div className="text-gray-700 leading-relaxed text-sm">
+                  {formatTermsText(termsData.content)}
                 </div>
               ) : (
                 <p className="text-gray-500 italic">Terms and conditions content not available.</p>

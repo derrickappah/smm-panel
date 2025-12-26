@@ -6,6 +6,7 @@ import { generateBreadcrumbSchema } from '@/utils/schema';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 import { useTerms } from '@/hooks/useTerms';
+import { formatTermsText } from '@/utils/formatText';
 
 const TermsPage = ({ user, onLogout }) => {
   const navigate = useNavigate();
@@ -57,9 +58,11 @@ const TermsPage = ({ user, onLogout }) => {
             </div>
           ) : (
             <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6 sm:p-8 lg:p-10">
-              <div className="prose prose-sm sm:prose-base max-w-none whitespace-pre-wrap">
+              <div className="prose prose-sm sm:prose-base max-w-none">
                 {termsData?.content ? (
-                  <p className="text-gray-700 leading-relaxed">{termsData.content}</p>
+                  <div className="text-gray-700 leading-relaxed">
+                    {formatTermsText(termsData.content)}
+                  </div>
                 ) : (
                   <p className="text-gray-500 italic">Terms and conditions content not available.</p>
                 )}

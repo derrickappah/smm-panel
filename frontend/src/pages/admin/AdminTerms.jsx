@@ -88,7 +88,16 @@ const AdminTerms = () => {
           />
           <p className="mt-2 text-xs text-gray-500">
             This content will be displayed to users during signup and on the /terms page. 
-            Use plain text formatting. Line breaks will be preserved.
+            <br />
+            <strong>Formatting options:</strong>
+            <br />
+            • Use <code className="bg-gray-100 px-1 rounded">**text**</code> for <strong>bold text</strong>
+            <br />
+            • Use <code className="bg-gray-100 px-1 rounded"># Header</code> for main headers (large and bold)
+            <br />
+            • Use <code className="bg-gray-100 px-1 rounded">## Subheader</code> for subheaders (bold)
+            <br />
+            • Line breaks will be preserved
           </p>
         </div>
 
