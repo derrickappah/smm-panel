@@ -277,11 +277,11 @@ const AdminDashboard = memo(({ user, onLogout }) => {
         return { open_tickets: 0, pending_deposits: pendingDeposits };
       }
 
-      // Count distinct conversations with unread messages
+      // Count total unread messages (not conversations)
       const [unreadMessagesResult, depositsResult] = await Promise.all([
         supabase
           .from('messages')
-          .select('conversation_id')
+          .select('id')
           .is('read_at', null)
           .neq('sender_id', user.id),
         supabase
@@ -291,12 +291,10 @@ const AdminDashboard = memo(({ user, onLogout }) => {
           .eq('status', 'pending')
       ]);
 
-      // Count unique conversations with unread messages (not total message count)
-      const unreadConversationIds = unreadMessagesResult.error && unreadMessagesResult.error.code !== '42P01'
-        ? []
-        : [...new Set((unreadMessagesResult.data || []).map(m => m.conversation_id).filter(Boolean))];
-      
-      const openTickets = unreadConversationIds.length;
+      // Count total unread messages
+      const openTickets = unreadMessagesResult.error && unreadMessagesResult.error.code !== '42P01'
+        ? 0
+        : (unreadMessagesResult.data?.length || 0);
       
       const pendingDeposits = depositsResult.error && depositsResult.error.code !== '42P01'
         ? 0

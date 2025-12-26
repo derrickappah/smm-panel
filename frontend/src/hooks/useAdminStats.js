@@ -42,9 +42,9 @@ export const useAdminStats = (options = {}) => {
   const { data: deposits = [], isLoading: depositsLoading } = useAdminDeposits({ enabled, useInfinite: false });
   const { data: services = [], isLoading: servicesLoading } = useAdminServices({ enabled });
   
-  // Fetch conversations instead of tickets
-  const { data: conversations = [], isLoading: ticketsLoading } = useQuery({
-    queryKey: ['admin', 'conversations', 'stats'],
+  // Fetch unread messages instead of conversations
+  const { data: unreadMessages = [], isLoading: ticketsLoading } = useQuery({
+    queryKey: ['admin', 'unread-messages', 'stats', dateRangeStart, dateRangeEnd],
     queryFn: async () => {
       // Check authentication first
       const { data: { session }, error: authError } = await supabase.auth.getSession();
@@ -52,10 +52,28 @@ export const useAdminStats = (options = {}) => {
         throw new Error('Authentication required');
       }
 
-      const { data, error } = await supabase
-        .from('conversations')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const userId = session.user.id;
+
+      // Build query for unread messages (not sent by admin)
+      let query = supabase
+        .from('messages')
+        .select('id, created_at')
+        .is('read_at', null)
+        .neq('sender_id', userId);
+
+      // Apply date range filter if provided
+      if (dateRangeStart) {
+        const start = new Date(dateRangeStart);
+        start.setHours(0, 0, 0, 0);
+        query = query.gte('created_at', start.toISOString());
+      }
+      if (dateRangeEnd) {
+        const end = new Date(dateRangeEnd);
+        end.setHours(23, 59, 59, 999);
+        query = query.lte('created_at', end.toISOString());
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false });
       
       // Handle RLS permission errors (403)
       if (error) {
@@ -73,14 +91,14 @@ export const useAdminStats = (options = {}) => {
     retry: false, // Don't retry on auth/permission errors
   });
   
-  const tickets = conversations; // Use conversations as tickets for compatibility
+  const tickets = []; // Keep for compatibility but not used for counting
 
   // Only show loading if we have no data at all - allow partial data to display
   const isLoading = (usersLoading && users.length === 0) || 
                     (ordersLoading && orders.length === 0) || 
                     (depositsLoading && deposits.length === 0) || 
                     (servicesLoading && services.length === 0) || 
-                    (ticketsLoading && tickets.length === 0);
+                    (ticketsLoading && unreadMessages.length === 0);
 
   // Calculate stats immediately using useMemo (optimized single-pass calculation)
   const stats = useMemo(() => {
@@ -168,20 +186,11 @@ export const useAdminStats = (options = {}) => {
         else if (o.refund_status === 'failed' && inRange) failedRefunds++;
       });
 
-      // Single-pass calculation for conversations (optimized)
-      let openTickets = 0;
-      let inProgressTickets = 0;
-      let resolvedTickets = 0;
+      // Count unread messages (already filtered by date range in query)
+      const openTickets = (unreadMessages || []).length;
+      const inProgressTickets = 0; // Not applicable for message count
+      const resolvedTickets = 0; // Not applicable for message count
       const currentTickets = [];
-      
-      (tickets || []).forEach(t => {
-        if (!isDateInRange(t.created_at, dateRangeStart, dateRangeEnd)) return;
-        currentTickets.push(t);
-        
-        if (t.status === 'open') openTickets++;
-        else if (t.status === 'closed') resolvedTickets++;
-        else if (t.status === 'resolved') resolvedTickets++;
-      });
 
       // Single-pass calculation for users (optimized)
       let usersToday = 0;
@@ -272,7 +281,7 @@ export const useAdminStats = (options = {}) => {
         total_shares_sent: totalSharesSent,
         total_subscribers_sent: totalSubscribersSent,
       };
-  }, [users, orders, deposits, services, tickets, dateRangeStart, dateRangeEnd]);
+  }, [users, orders, deposits, services, unreadMessages, dateRangeStart, dateRangeEnd]);
 
   return {
     data: stats,
