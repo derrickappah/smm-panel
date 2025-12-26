@@ -15,24 +15,25 @@ export const formatTermsText = (text) => {
   return lines.map((line, index) => {
     let formattedLine = line;
 
-    // Handle headers
-    if (line.trim().startsWith('## ')) {
-      // Subheader (##)
-      const content = line.replace(/^##\s+/, '');
+    // Handle headers - check for ## or # at the start (with or without space)
+    const trimmedLine = line.trim();
+    if (trimmedLine.startsWith('##')) {
+      // Subheader (##) - remove ## and any following space
+      const content = trimmedLine.replace(/^##\s*/, '');
       return (
         <h3 key={index} className="text-lg font-bold text-gray-900 mt-6 mb-3">
           {formatBoldText(content)}
         </h3>
       );
-    } else if (line.trim().startsWith('# ')) {
-      // Main header (#)
-      const content = line.replace(/^#\s+/, '');
+    } else if (trimmedLine.startsWith('#')) {
+      // Main header (#) - remove # and any following space
+      const content = trimmedLine.replace(/^#\s*/, '');
       return (
         <h2 key={index} className="text-xl font-bold text-gray-900 mt-8 mb-4">
           {formatBoldText(content)}
         </h2>
       );
-    } else if (line.trim() === '') {
+    } else if (trimmedLine === '') {
       // Empty line
       return <br key={index} />;
     } else {

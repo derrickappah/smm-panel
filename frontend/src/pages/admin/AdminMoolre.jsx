@@ -248,6 +248,47 @@ const AdminMoolre = () => {
     }
   };
 
+  const getTransactionType = (tx) => {
+    // Check txtype field from Moolre API
+    // txtype: 1 = Payment/Deposit (money coming in), 2 = Payout/Withdrawal (money going out)
+    const txtype = tx.txtype || tx.type;
+    
+    // If txtype is explicitly 2, it's a payout
+    if (txtype === 2 || txtype === '2' || txtype === 'payout' || txtype === 'withdrawal') {
+      return 'payout';
+    }
+    
+    // If txtype is 1 or 'payment' or 'deposit', it's a deposit
+    if (txtype === 1 || txtype === '1' || txtype === 'payment' || txtype === 'deposit') {
+      return 'deposit';
+    }
+    
+    // Fallback: If there's a payee (money going out), it's likely a payout
+    // If there's a payer (money coming in), it's likely a deposit
+    if (tx.payee && !tx.payer) {
+      return 'payout';
+    }
+    
+    // Default to deposit (most common case for our use case)
+    return 'deposit';
+  };
+
+  const getTypeBadge = (tx) => {
+    const type = getTransactionType(tx);
+    if (type === 'payout') {
+      return (
+        <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100">
+          Payout
+        </Badge>
+      );
+    }
+    return (
+      <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">
+        Deposit
+      </Badge>
+    );
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     try {
@@ -495,6 +536,7 @@ const AdminMoolre = () => {
                   <thead>
                     <tr className="border-b border-gray-200">
                       <th className="text-left p-3 font-semibold text-sm text-gray-700">Reference</th>
+                      <th className="text-left p-3 font-semibold text-sm text-gray-700">Type</th>
                       <th className="text-left p-3 font-semibold text-sm text-gray-700">Amount</th>
                       <th className="text-left p-3 font-semibold text-sm text-gray-700">Status</th>
                       <th className="text-left p-3 font-semibold text-sm text-gray-700">Username</th>
@@ -518,6 +560,9 @@ const AdminMoolre = () => {
                               <span className="text-xs text-gray-500">ID: {tx.id}</span>
                             )}
                           </div>
+                        </td>
+                        <td className="p-3">
+                          {getTypeBadge(tx)}
                         </td>
                         <td className="p-3">
                           <span className="font-semibold">{formatAmount(tx.amount, tx.currency)}</span>
