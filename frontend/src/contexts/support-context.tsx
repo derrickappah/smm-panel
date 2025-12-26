@@ -499,6 +499,133 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
     }
   }, [currentTicket, currentConversation, messages, isLoadingMoreMessages]);
 
+  // Mark messages as read (for both tickets and conversations) - MUST be defined before sendTicketMessage
+  const markMessagesAsRead = useCallback(async (ticketIdOrConversationId: string, isTicket: boolean = false) => {
+    try {
+      if (isTicket) {
+        // For tickets, mark messages directly
+        const { error } = await supabase
+          .from('messages')
+          .update({ read_at: new Date().toISOString() })
+          .eq('ticket_id', ticketIdOrConversationId)
+          .is('read_at', null)
+          .neq('sender_id', userRole?.userId || '');
+
+        if (error) throw error;
+
+        // Update local messages
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.ticket_id === ticketIdOrConversationId && !msg.read_at && msg.sender_id !== userRole?.userId
+              ? { ...msg, read_at: new Date().toISOString() }
+              : msg
+          )
+        );
+      } else {
+        // Use the SECURITY DEFINER function for conversations
+        const { error } = await supabase.rpc('mark_conversation_messages_read', {
+          p_conversation_id: ticketIdOrConversationId,
+        });
+
+        if (error) throw error;
+
+        // Update local messages
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.conversation_id === ticketIdOrConversationId && !msg.read_at
+              ? { ...msg, read_at: new Date().toISOString() }
+              : msg
+          )
+        );
+      }
+    } catch (error: any) {
+      console.error('Error marking messages as read:', error);
+    }
+  }, [userRole?.userId]);
+
+  // Send message to ticket (with status validation) - MUST be defined before sendMessage
+  const sendTicketMessage = useCallback(async (
+    content: string,
+    attachmentUrl?: string,
+    attachmentType?: AttachmentType
+  ) => {
+    if (!currentTicket) {
+      toast.error('No ticket selected');
+      return;
+    }
+    if (!userRole?.userId) {
+      toast.error('User not authenticated');
+      return;
+    }
+
+    // Check if user can send message (status must be 'Replied')
+    if (!isAdmin && currentTicket.status !== 'Replied') {
+      toast.error('Please wait for admin reply before sending another message');
+      return;
+    }
+
+    // Check if ticket is closed
+    if (currentTicket.status === 'Closed') {
+      toast.error('This ticket is closed');
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({
+          ticket_id: currentTicket.id,
+          sender_id: userRole.userId,
+          sender_role: isAdmin ? 'admin' : 'user',
+          content: content.trim(),
+          attachment_url: attachmentUrl || null,
+          attachment_type: attachmentType || null,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Add message to local state
+      setMessages((prev) => {
+        if (prev.some(m => m.id === data.id)) {
+          return prev;
+        }
+        return [...prev, data];
+      });
+
+      // Update ticket in list (status will be updated by trigger)
+      setTickets((prev) =>
+        prev.map((t) =>
+          t.id === currentTicket.id
+            ? { ...t, last_message_at: new Date().toISOString() }
+            : t
+        )
+      );
+
+      // Reload ticket to get updated status
+      const { data: updatedTicket } = await supabase
+        .from('tickets')
+        .select('*')
+        .eq('id', currentTicket.id)
+        .single();
+
+      if (updatedTicket) {
+        setCurrentTicket(updatedTicket);
+        currentTicketRef.current = updatedTicket;
+        setTickets((prev) =>
+          prev.map((t) => (t.id === updatedTicket.id ? updatedTicket : t))
+        );
+      }
+
+      // Mark as read immediately
+      await markMessagesAsRead(currentTicket.id, true);
+    } catch (error: any) {
+      console.error('Error sending ticket message:', error);
+      toast.error(error.message || 'Failed to send message');
+    }
+  }, [currentTicket, userRole?.userId, isAdmin, markMessagesAsRead]);
+
   // Send message (works with both tickets and conversations)
   const sendMessage = useCallback(async (
     content: string,
@@ -640,50 +767,6 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
       toast.error('Failed to delete message');
     }
   }, [userRole?.userId, isAdmin]);
-
-  // Mark messages as read (for both tickets and conversations)
-  const markMessagesAsRead = useCallback(async (ticketIdOrConversationId: string, isTicket: boolean = false) => {
-    try {
-      if (isTicket) {
-        // For tickets, mark messages directly
-        const { error } = await supabase
-          .from('messages')
-          .update({ read_at: new Date().toISOString() })
-          .eq('ticket_id', ticketIdOrConversationId)
-          .is('read_at', null)
-          .neq('sender_id', userRole?.userId || '');
-
-        if (error) throw error;
-
-        // Update local messages
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.ticket_id === ticketIdOrConversationId && !msg.read_at && msg.sender_id !== userRole?.userId
-              ? { ...msg, read_at: new Date().toISOString() }
-              : msg
-          )
-        );
-      } else {
-        // Use the SECURITY DEFINER function for conversations
-        const { error } = await supabase.rpc('mark_conversation_messages_read', {
-          p_conversation_id: ticketIdOrConversationId,
-        });
-
-        if (error) throw error;
-
-        // Update local messages
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.conversation_id === ticketIdOrConversationId && !msg.read_at
-              ? { ...msg, read_at: new Date().toISOString() }
-              : msg
-          )
-        );
-      }
-    } catch (error: any) {
-      console.error('Error marking messages as read:', error);
-    }
-  }, [userRole?.userId]);
 
   // Select conversation and load messages (defined after loadMessages and markMessagesAsRead)
   const selectConversation = useCallback(async (conversationId: string) => {
@@ -1191,89 +1274,6 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
     }
   }, [isAdmin, userRole?.userId, currentTicket]);
 
-  // Send message to ticket (with status validation)
-  const sendTicketMessage = useCallback(async (
-    content: string,
-    attachmentUrl?: string,
-    attachmentType?: AttachmentType
-  ) => {
-    if (!currentTicket) {
-      toast.error('No ticket selected');
-      return;
-    }
-    if (!userRole?.userId) {
-      toast.error('User not authenticated');
-      return;
-    }
-
-    // Check if user can send message (status must be 'Replied')
-    if (!isAdmin && currentTicket.status !== 'Replied') {
-      toast.error('Please wait for admin reply before sending another message');
-      return;
-    }
-
-    // Check if ticket is closed
-    if (currentTicket.status === 'Closed') {
-      toast.error('This ticket is closed');
-      return;
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from('messages')
-        .insert({
-          ticket_id: currentTicket.id,
-          sender_id: userRole.userId,
-          sender_role: isAdmin ? 'admin' : 'user',
-          content: content.trim(),
-          attachment_url: attachmentUrl || null,
-          attachment_type: attachmentType || null,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Add message to local state
-      setMessages((prev) => {
-        if (prev.some(m => m.id === data.id)) {
-          return prev;
-        }
-        return [...prev, data];
-      });
-
-      // Update ticket in list (status will be updated by trigger)
-      setTickets((prev) =>
-        prev.map((t) =>
-          t.id === currentTicket.id
-            ? { ...t, last_message_at: new Date().toISOString() }
-            : t
-        )
-      );
-
-      // Reload ticket to get updated status
-      const { data: updatedTicket } = await supabase
-        .from('tickets')
-        .select('*')
-        .eq('id', currentTicket.id)
-        .single();
-
-      if (updatedTicket) {
-        setCurrentTicket(updatedTicket);
-        currentTicketRef.current = updatedTicket;
-        setTickets((prev) =>
-          prev.map((t) => (t.id === updatedTicket.id ? updatedTicket : t))
-        );
-      }
-
-      // Mark as read immediately
-      await markMessagesAsRead(currentTicket.id, true);
-    } catch (error: any) {
-      console.error('Error sending ticket message:', error);
-      toast.error(error.message || 'Failed to send message');
-    }
-  }, [currentTicket, userRole?.userId, isAdmin]);
-
   // Real-time subscriptions
   useEffect(() => {
     if (!userRole?.userId) return;
@@ -1757,7 +1757,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
 
   const value: SupportContextType = {
     // Ticket state
-    tickets,
+    tickets: Array.isArray(tickets) ? tickets : [],
     currentTicket,
     isLoadingTickets,
     isLoadingMoreTickets,

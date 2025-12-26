@@ -18,8 +18,8 @@ const AdminSupportContent = () => {
   const safeTickets = Array.isArray(tickets) ? tickets : [];
 
   const [filters, setFilters] = useState({
-    status: 'all' as 'Pending' | 'Replied' | 'Closed' | 'all',
-    category: 'all' as string | 'all',
+    status: 'all',
+    category: 'all',
     search: '',
   });
   const [mobileView, setMobileView] = useState('list');
@@ -40,7 +40,7 @@ const AdminSupportContent = () => {
     }
   }, [currentTicket, mobileView]);
 
-  const handleSelectTicket = (ticketId: string) => {
+  const handleSelectTicket = (ticketId) => {
     selectTicket(ticketId);
     // On mobile, switch to chat view when a ticket is selected
     const isMobile = window.matchMedia('(max-width: 767px)').matches;

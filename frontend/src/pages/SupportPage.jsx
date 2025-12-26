@@ -17,7 +17,7 @@ const SupportPageContent = ({ user, onLogout }) => {
     loadTickets,
     selectTicket 
   } = useSupport();
-  const [activeTab, setActiveTab] = useState<'new' | 'history'>('new');
+  const [activeTab, setActiveTab] = useState('new');
 
   React.useEffect(() => {
     loadTickets();
@@ -93,7 +93,7 @@ const SupportPageContent = ({ user, onLogout }) => {
                   </div>
                 ) : (
                   <TicketList
-                    tickets={tickets}
+                    tickets={Array.isArray(tickets) ? tickets : []}
                     currentTicketId={currentTicket?.id || null}
                     onSelectTicket={selectTicket}
                   />

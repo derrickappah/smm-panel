@@ -82,12 +82,12 @@ export const TicketForm: React.FC = () => {
 
       <div className="space-y-2">
         <Label htmlFor="subcategory">Subcategory</Label>
-        <Select value={subcategory} onValueChange={setSubcategory}>
+        <Select value={subcategory || undefined} onValueChange={(value) => setSubcategory(value === 'none' ? '' : value)}>
           <SelectTrigger id="subcategory" className="w-full">
             <SelectValue placeholder="Select a subcategory (optional)" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">None</SelectItem>
+            <SelectItem value="none">None</SelectItem>
             <SelectItem value="Refill">Refill</SelectItem>
           </SelectContent>
         </Select>
