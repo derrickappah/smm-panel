@@ -92,26 +92,12 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
     return data?.pages?.[0]?.total || allDeposits.length;
   }, [data, allDeposits.length]);
 
-  // Load all pages when there are no filters (to show accurate total count)
-  useEffect(() => {
-    if (!isLoading && hasNextPage && !isFetchingNextPage && !debouncedSearch && statusFilter === 'all' && !dateFilter) {
-      // Load all remaining pages to get accurate total count
-      fetchNextPage();
-    }
-  }, [isLoading, hasNextPage, isFetchingNextPage, debouncedSearch, statusFilter, dateFilter, fetchNextPage]);
-
-  // Load more pages when needed for pagination with filters
+  // Load all pages immediately after initial load
   useEffect(() => {
     if (!isLoading && hasNextPage && !isFetchingNextPage) {
-      const currentPageData = allDeposits.length;
-      const neededData = page * ITEMS_PER_PAGE;
-      
-      // If we need more data than we have, fetch next page
-      if (neededData > currentPageData) {
-        fetchNextPage();
-      }
+      fetchNextPage();
     }
-  }, [page, allDeposits.length, hasNextPage, isFetchingNextPage, isLoading, fetchNextPage]);
+  }, [isLoading, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // Subscribe to real-time updates for deposits
   useEffect(() => {

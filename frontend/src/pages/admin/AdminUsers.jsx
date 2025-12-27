@@ -60,6 +60,13 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
     return data?.pages?.[0]?.total || allUsers.length;
   }, [data, allUsers.length]);
 
+  // Load all pages immediately after initial load
+  useEffect(() => {
+    if (!isLoading && hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [isLoading, hasNextPage, isFetchingNextPage, fetchNextPage]);
+
   // Filter and sort users
   const filteredUsers = useMemo(() => {
     let filtered = [...allUsers];

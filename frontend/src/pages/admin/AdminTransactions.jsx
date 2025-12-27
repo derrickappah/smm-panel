@@ -46,6 +46,13 @@ const AdminTransactions = memo(({ onRefresh, refreshing = false, getBalanceCheck
     return data?.pages?.[0]?.total || allTransactions.length;
   }, [data, allTransactions.length]);
 
+  // Load all pages immediately after initial load
+  useEffect(() => {
+    if (!isLoading && hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [isLoading, hasNextPage, isFetchingNextPage, fetchNextPage]);
+
   const filteredTransactions = useMemo(() => {
     let filtered = [...allTransactions];
 

@@ -90,6 +90,13 @@ const AdminActivityLogs = memo(({ onRefresh, refreshing = false }) => {
     return data?.pages?.[0]?.total || allLogs.length;
   }, [data, allLogs.length]);
 
+  // Load all pages immediately after initial load
+  useEffect(() => {
+    if (!isLoading && hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [isLoading, hasNextPage, isFetchingNextPage, fetchNextPage]);
+
   const handleViewDetails = useCallback((log) => {
     setSelectedLog(log);
     setIsDetailsOpen(true);

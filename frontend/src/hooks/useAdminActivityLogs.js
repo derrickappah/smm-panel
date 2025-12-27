@@ -2,7 +2,7 @@ import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useUserRole } from './useUserRole';
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 1000;
 
 // Fetch activity logs with filters and pagination
 const fetchActivityLogs = async ({ pageParam = 0, filters = {} }) => {

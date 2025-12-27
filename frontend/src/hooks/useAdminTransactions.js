@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { useUserRole } from './useUserRole';
 import { toast } from 'sonner';
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 1000;
 
 const fetchTransactions = async ({ pageParam = 0 }) => {
   const from = pageParam * PAGE_SIZE;
