@@ -49,6 +49,7 @@ export interface Ticket {
     name: string;
     email: string;
   };
+  unread_count?: number;
 }
 
 export interface Message {

@@ -22,6 +22,9 @@ const AdminSupportContent = () => {
     status: 'all',
     category: 'all',
     subcategory: 'all',
+    unread: 'all',
+    unreplied: 'all',
+    sortBy: 'date-desc',
     search: '',
   });
   const [mobileView, setMobileView] = useState('list');

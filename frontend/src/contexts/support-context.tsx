@@ -1088,9 +1088,30 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
         }
       }
 
+      // Get unread message counts for tickets
+      const ticketIds = data.map(t => t.id);
+      let unreadCountMap: Record<string, number> = {};
+      if (ticketIds.length > 0 && userRole?.userId) {
+        const { data: unreadMessages } = await supabase
+          .from('messages')
+          .select('ticket_id')
+          .in('ticket_id', ticketIds)
+          .is('read_at', null)
+          .neq('sender_id', userRole.userId);
+
+        if (unreadMessages) {
+          unreadMessages.forEach((msg) => {
+            if (msg.ticket_id) {
+              unreadCountMap[msg.ticket_id] = (unreadCountMap[msg.ticket_id] || 0) + 1;
+            }
+          });
+        }
+      }
+
       const ticketsWithUsers = data.map((ticket) => ({
         ...ticket,
         user: profilesMap[ticket.user_id] || null,
+        unread_count: unreadCountMap[ticket.id] || 0,
       }));
 
       // Sort: Pending first, then by last_message_at
@@ -1114,7 +1135,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
       setIsLoadingTickets(false);
       setIsLoadingMoreTickets(false);
     }
-  }, [isAdmin]);
+  }, [isAdmin, userRole?.userId]);
 
   // Load more tickets (pagination)
   const loadMoreTickets = useCallback(async () => {

@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '../StatusBadge';
 import { formatDistanceToNow } from 'date-fns';
 import type { Ticket } from '@/types/support';
+import type { SortOption } from './TicketFilters';
 
 const formatCategory = (category: string): string => {
   return category.charAt(0).toUpperCase() + category.slice(1);
@@ -17,6 +18,9 @@ interface TicketsListProps {
     status?: 'Pending' | 'Replied' | 'Closed' | 'all';
     category?: string | 'all';
     subcategory?: string | 'all';
+    unread?: 'all' | 'unread' | 'read';
+    unreplied?: 'all' | 'unreplied' | 'replied';
+    sortBy?: SortOption;
     search?: string;
   };
   hasMoreTickets?: boolean;
@@ -33,8 +37,9 @@ export const TicketsList: React.FC<TicketsListProps> = ({
   isLoadingMoreTickets = false,
   onLoadMore,
 }) => {
-  const filteredTickets = useMemo(() => {
-    return tickets.filter((ticket) => {
+  const filteredAndSortedTickets = useMemo(() => {
+    // First, filter tickets
+    let filtered = tickets.filter((ticket) => {
       // Status filter
       if (filters.status && filters.status !== 'all' && ticket.status !== filters.status) {
         return false;
@@ -48,6 +53,28 @@ export const TicketsList: React.FC<TicketsListProps> = ({
       // Subcategory filter
       if (filters.subcategory && filters.subcategory !== 'all' && ticket.subcategory !== filters.subcategory) {
         return false;
+      }
+
+      // Unread filter
+      if (filters.unread && filters.unread !== 'all') {
+        const hasUnread = (ticket.unread_count || 0) > 0;
+        if (filters.unread === 'unread' && !hasUnread) {
+          return false;
+        }
+        if (filters.unread === 'read' && hasUnread) {
+          return false;
+        }
+      }
+
+      // Unreplied filter
+      if (filters.unreplied && filters.unreplied !== 'all') {
+        const isUnreplied = ticket.status === 'Pending';
+        if (filters.unreplied === 'unreplied' && !isUnreplied) {
+          return false;
+        }
+        if (filters.unreplied === 'replied' && isUnreplied) {
+          return false;
+        }
       }
 
       // Search filter
@@ -64,9 +91,41 @@ export const TicketsList: React.FC<TicketsListProps> = ({
 
       return true;
     });
+
+    // Then, sort tickets
+    const sortBy = filters.sortBy || 'date-desc';
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'date-desc':
+          return new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime();
+        case 'date-asc':
+          return new Date(a.last_message_at).getTime() - new Date(b.last_message_at).getTime();
+        case 'status':
+          // Pending first, then Replied, then Closed
+          const statusOrder = { 'Pending': 0, 'Replied': 1, 'Closed': 2 };
+          const statusDiff = (statusOrder[a.status] || 3) - (statusOrder[b.status] || 3);
+          if (statusDiff !== 0) return statusDiff;
+          // If same status, sort by date
+          return new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime();
+        case 'unread-desc':
+          const unreadDiff = (b.unread_count || 0) - (a.unread_count || 0);
+          if (unreadDiff !== 0) return unreadDiff;
+          // If same unread count, sort by date
+          return new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime();
+        case 'unread-asc':
+          const unreadDiffAsc = (a.unread_count || 0) - (b.unread_count || 0);
+          if (unreadDiffAsc !== 0) return unreadDiffAsc;
+          // If same unread count, sort by date
+          return new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime();
+        default:
+          return new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime();
+      }
+    });
+
+    return filtered;
   }, [tickets, filters]);
 
-  if (filteredTickets.length === 0) {
+  if (filteredAndSortedTickets.length === 0) {
     return (
       <div className="p-4 text-center text-gray-500">
         <p>No tickets found</p>
@@ -77,7 +136,7 @@ export const TicketsList: React.FC<TicketsListProps> = ({
   return (
     <div className="h-full overflow-y-auto overscroll-contain" style={{ scrollbarWidth: 'thin' }}>
       <div className="space-y-2 p-2">
-        {filteredTickets.map((ticket) => (
+        {filteredAndSortedTickets.map((ticket) => (
           <Card
             key={ticket.id}
             className={`cursor-pointer transition-colors touch-manipulation ${
@@ -98,6 +157,11 @@ export const TicketsList: React.FC<TicketsListProps> = ({
                         #{ticket.id.slice(0, 8)}
                       </p>
                       <StatusBadge status={ticket.status} />
+                      {ticket.unread_count && ticket.unread_count > 0 && (
+                        <Badge variant="destructive" className="text-xs">
+                          {ticket.unread_count}
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-sm font-semibold text-gray-900">
                       {formatCategory(ticket.category)}
