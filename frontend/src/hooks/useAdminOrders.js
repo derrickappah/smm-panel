@@ -7,7 +7,7 @@ import { useUserRole } from './useUserRole';
 import { queryClient } from '@/lib/queryClient';
 import { toast } from 'sonner';
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 1000;
 
 // Background function to check SMMGen statuses (non-blocking)
 // Now uses the optimized batch utility with last_status_check filtering

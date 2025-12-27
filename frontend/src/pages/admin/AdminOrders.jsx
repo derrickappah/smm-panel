@@ -81,26 +81,13 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
     return data?.pages?.[0]?.total || allOrders.length;
   }, [data, allOrders.length]);
 
-  // Load all pages when there are no filters (to show accurate total count)
-  useEffect(() => {
-    if (!isLoading && hasNextPage && !isFetchingNextPage && !debouncedSearch && statusFilter === 'all' && !dateFilter) {
-      // Load all remaining pages to get accurate total count
-      fetchNextPage();
-    }
-  }, [isLoading, hasNextPage, isFetchingNextPage, debouncedSearch, statusFilter, dateFilter, fetchNextPage]);
-
-  // Load more pages when needed for pagination with filters
+  // Load all pages immediately after initial load (regardless of filters)
   useEffect(() => {
     if (!isLoading && hasNextPage && !isFetchingNextPage) {
-      const currentPageData = allOrders.length;
-      const neededData = page * ITEMS_PER_PAGE;
-      
-      // If we need more data than we have, fetch next page
-      if (neededData > currentPageData) {
-        fetchNextPage();
-      }
+      // Fetch all remaining pages immediately
+      fetchNextPage();
     }
-  }, [page, allOrders.length, hasNextPage, isFetchingNextPage, isLoading, fetchNextPage]);
+  }, [isLoading, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const filteredOrders = useMemo(() => {
     let filtered = [...allOrders];
