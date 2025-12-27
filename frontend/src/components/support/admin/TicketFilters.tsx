@@ -47,9 +47,9 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
   };
 
   return (
-    <div className="space-y-4 p-4 border-b border-gray-200">
+    <div className="space-y-3 p-3 border-b border-gray-200 bg-gray-50">
       {/* Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-2 gap-2">
         {/* Status filter */}
         <div>
           <label className="text-xs font-medium text-gray-700 mb-1 block flex items-center gap-1">
@@ -62,7 +62,7 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
               onFiltersChange({ ...filters, status: value === 'all' ? 'all' : (value as TicketStatus) })
             }
           >
-            <SelectTrigger>
+            <SelectTrigger className="h-8 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -81,7 +81,7 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
             value={selectedCategory}
             onValueChange={handleCategoryChange}
           >
-            <SelectTrigger>
+            <SelectTrigger className="h-8 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -105,7 +105,7 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
             }
             disabled={selectedCategory === 'all' || availableSubcategories.length === 0}
           >
-            <SelectTrigger>
+            <SelectTrigger className="h-8 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -128,7 +128,7 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
               onFiltersChange({ ...filters, unread: value as 'all' | 'unread' | 'read' })
             }
           >
-            <SelectTrigger>
+            <SelectTrigger className="h-8 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -148,7 +148,7 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
               onFiltersChange({ ...filters, unreplied: value as 'all' | 'unreplied' | 'replied' })
             }
           >
-            <SelectTrigger>
+            <SelectTrigger className="h-8 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -161,10 +161,10 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
       </div>
 
       {/* Sort */}
-      <div className="flex items-center gap-2">
-        <label className="text-xs font-medium text-gray-700 flex items-center gap-1">
+      <div className="flex items-center gap-2 pt-1">
+        <label className="text-xs font-medium text-gray-700 flex items-center gap-1 whitespace-nowrap">
           <ArrowUpDown className="w-3 h-3" />
-          Sort By
+          Sort:
         </label>
         <Select
           value={filters.sortBy || 'date-desc'}
@@ -172,7 +172,7 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
             onFiltersChange({ ...filters, sortBy: value as SortOption })
           }
         >
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="h-8 text-xs flex-1">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
