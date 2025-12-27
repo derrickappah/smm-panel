@@ -16,6 +16,7 @@ interface TicketsListProps {
   filters?: {
     status?: 'Pending' | 'Replied' | 'Closed' | 'all';
     category?: string | 'all';
+    subcategory?: string | 'all';
     search?: string;
   };
   hasMoreTickets?: boolean;
@@ -41,6 +42,11 @@ export const TicketsList: React.FC<TicketsListProps> = ({
 
       // Category filter
       if (filters.category && filters.category !== 'all' && ticket.category !== filters.category) {
+        return false;
+      }
+
+      // Subcategory filter
+      if (filters.subcategory && filters.subcategory !== 'all' && ticket.subcategory !== filters.subcategory) {
         return false;
       }
 

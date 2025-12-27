@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { SupportProvider, useSupport } from '@/contexts/support-context';
 import { AdminSupportChat } from '@/components/support/admin/AdminSupportChat';
 import { TicketsList } from '@/components/support/admin/TicketsList';
+import { TicketFilters } from '@/components/support/admin/TicketFilters';
 
 const AdminSupportContent = () => {
   const {
@@ -20,6 +21,7 @@ const AdminSupportContent = () => {
   const [filters, setFilters] = useState({
     status: 'all',
     category: 'all',
+    subcategory: 'all',
     search: '',
   });
   const [mobileView, setMobileView] = useState('list');
@@ -67,6 +69,7 @@ const AdminSupportContent = () => {
             <div className="p-4 border-b border-gray-200">
               <h2 className="text-lg font-semibold">Tickets</h2>
             </div>
+            <TicketFilters filters={filters} onFiltersChange={setFilters} />
             <div className="flex-1 min-h-0 overflow-hidden">
               <TicketsList
                 tickets={safeTickets}
@@ -93,6 +96,7 @@ const AdminSupportContent = () => {
           <div className="p-4 border-b border-gray-200">
             <h2 className="text-lg font-semibold">Tickets</h2>
           </div>
+          <TicketFilters filters={filters} onFiltersChange={setFilters} />
           <div className="flex-1 min-h-0 overflow-hidden">
             <TicketsList
               tickets={safeTickets}
