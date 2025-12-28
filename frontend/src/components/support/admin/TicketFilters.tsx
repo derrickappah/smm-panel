@@ -47,7 +47,7 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
   };
 
   return (
-    <div className="space-y-3 p-3 border-b border-gray-200 bg-gray-50">
+    <div className="space-y-3 p-3 border-b border-gray-200 bg-gray-50" data-testid="ticket-filters">
       {/* Filters */}
       <div className="grid grid-cols-2 md:grid-cols-2 gap-2">
         {/* Status filter */}
