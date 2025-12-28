@@ -42,9 +42,9 @@ export const useAdminStats = (options = {}) => {
   const { data: deposits = [], isLoading: depositsLoading } = useAdminDeposits({ enabled, useInfinite: false });
   const { data: services = [], isLoading: servicesLoading } = useAdminServices({ enabled });
   
-  // Fetch unread messages instead of conversations
-  const { data: unreadMessages = [], isLoading: ticketsLoading } = useQuery({
-    queryKey: ['admin', 'unread-messages', 'stats', dateRangeStart, dateRangeEnd],
+  // Fetch pending tickets
+  const { data: pendingTickets = [], isLoading: ticketsLoading } = useQuery({
+    queryKey: ['admin', 'pending-tickets', 'stats', dateRangeStart, dateRangeEnd],
     queryFn: async () => {
       // Check authentication first
       const { data: { session }, error: authError } = await supabase.auth.getSession();
@@ -52,14 +52,11 @@ export const useAdminStats = (options = {}) => {
         throw new Error('Authentication required');
       }
 
-      const userId = session.user.id;
-
-      // Build query for unread messages (not sent by admin)
+      // Build query for pending tickets
       let query = supabase
-        .from('messages')
+        .from('tickets')
         .select('id, created_at')
-        .is('read_at', null)
-        .neq('sender_id', userId);
+        .eq('status', 'Pending');
 
       // Apply date range filter if provided
       if (dateRangeStart) {
@@ -98,7 +95,7 @@ export const useAdminStats = (options = {}) => {
                     (ordersLoading && orders.length === 0) || 
                     (depositsLoading && deposits.length === 0) || 
                     (servicesLoading && services.length === 0) || 
-                    (ticketsLoading && unreadMessages.length === 0);
+                    (ticketsLoading && pendingTickets.length === 0);
 
   // Calculate stats immediately using useMemo (optimized single-pass calculation)
   const stats = useMemo(() => {
@@ -186,10 +183,10 @@ export const useAdminStats = (options = {}) => {
         else if (o.refund_status === 'failed' && inRange) failedRefunds++;
       });
 
-      // Count unread messages (already filtered by date range in query)
-      const openTickets = (unreadMessages || []).length;
-      const inProgressTickets = 0; // Not applicable for message count
-      const resolvedTickets = 0; // Not applicable for message count
+      // Count pending tickets (already filtered by date range in query)
+      const openTickets = (pendingTickets || []).length;
+      const inProgressTickets = 0; // Not applicable for ticket count
+      const resolvedTickets = 0; // Not applicable for ticket count
       const currentTickets = [];
 
       // Single-pass calculation for users (optimized)
@@ -281,7 +278,7 @@ export const useAdminStats = (options = {}) => {
         total_shares_sent: totalSharesSent,
         total_subscribers_sent: totalSubscribersSent,
       };
-  }, [users, orders, deposits, services, unreadMessages, dateRangeStart, dateRangeEnd]);
+  }, [users, orders, deposits, services, pendingTickets, dateRangeStart, dateRangeEnd]);
 
   return {
     data: stats,

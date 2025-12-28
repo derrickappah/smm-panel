@@ -256,7 +256,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     }
   }, [queryClient]);
 
-  // Get stats for unread conversations badge and pending deposits
+  // Get stats for pending tickets badge and pending deposits
   const { data: stats = {}, isLoading: isLoadingStats } = useQuery({
     queryKey: ['admin', 'stats', 'conversations'],
     queryFn: async () => {
@@ -277,13 +277,12 @@ const AdminDashboard = memo(({ user, onLogout }) => {
         return { open_tickets: 0, pending_deposits: pendingDeposits };
       }
 
-      // Count total unread messages (not conversations)
-      const [unreadMessagesResult, depositsResult] = await Promise.all([
+      // Count pending tickets
+      const [pendingTicketsResult, depositsResult] = await Promise.all([
         supabase
-          .from('messages')
+          .from('tickets')
           .select('id')
-          .is('read_at', null)
-          .neq('sender_id', user.id),
+          .eq('status', 'Pending'),
         supabase
           .from('transactions')
           .select('status')
@@ -291,10 +290,10 @@ const AdminDashboard = memo(({ user, onLogout }) => {
           .eq('status', 'pending')
       ]);
 
-      // Count total unread messages
-      const openTickets = unreadMessagesResult.error && unreadMessagesResult.error.code !== '42P01'
+      // Count pending tickets
+      const openTickets = pendingTicketsResult.error && pendingTicketsResult.error.code !== '42P01'
         ? 0
-        : (unreadMessagesResult.data?.length || 0);
+        : (pendingTicketsResult.data?.length || 0);
       
       const pendingDeposits = depositsResult.error && depositsResult.error.code !== '42P01'
         ? 0
