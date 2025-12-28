@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Filter, ArrowUpDown } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Button } from '@/components/ui/button';
+import { Filter, ArrowUpDown, ChevronDown, ChevronUp } from 'lucide-react';
 import type { TicketStatus, TicketCategory } from '@/types/support';
 import { ticketSubcategories, getSubcategoriesForCategory } from '@/data/ticketSubcategories';
 
@@ -31,6 +33,7 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
   filters,
   onFiltersChange,
 }) => {
+  const [isOpen, setIsOpen] = useState(false);
   const selectedCategory = filters.category || 'all';
   const availableSubcategories = selectedCategory !== 'all' 
     ? getSubcategoriesForCategory(selectedCategory as TicketCategory)
@@ -46,8 +49,38 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
     });
   };
 
+  // Check if any filters are active (not 'all')
+  const hasActiveFilters = 
+    filters.status !== 'all' ||
+    filters.category !== 'all' ||
+    filters.subcategory !== 'all' ||
+    filters.unread !== 'all' ||
+    filters.unreplied !== 'all' ||
+    filters.sortBy !== 'date-desc';
+
   return (
-    <div className="space-y-3 p-3 border-b border-gray-200 bg-gray-50" data-testid="ticket-filters">
+    <Collapsible open={isOpen} onOpenChange={setIsOpen} className="border-b border-gray-200 bg-gray-50">
+      <CollapsibleTrigger asChild>
+        <Button
+          variant="ghost"
+          className="w-full justify-between p-3 h-auto hover:bg-gray-100"
+          data-testid="ticket-filters"
+        >
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4" />
+            <span className="text-sm font-medium">Filters & Sort</span>
+            {hasActiveFilters && (
+              <span className="w-2 h-2 bg-purple-500 rounded-full" />
+            )}
+          </div>
+          {isOpen ? (
+            <ChevronUp className="w-4 h-4" />
+          ) : (
+            <ChevronDown className="w-4 h-4" />
+          )}
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="space-y-3 px-3 pb-3">
       {/* Filters */}
       <div className="grid grid-cols-2 md:grid-cols-2 gap-2">
         {/* Status filter */}
@@ -184,7 +217,8 @@ export const TicketFilters: React.FC<TicketFiltersProps> = ({
           </SelectContent>
         </Select>
       </div>
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 };
 
