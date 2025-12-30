@@ -3135,6 +3135,205 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         const pkg = promotionPackages.find(p => p.id === orderForm.package_id);
         if (!pkg) throw new Error('Promotion package not found');
 
+        // Handle combo packages
+        if (pkg.is_combo && pkg.combo_package_ids && pkg.combo_package_ids.length > 0) {
+          // Get component packages
+          const componentPackages = pkg.combo_package_ids
+            .map(packageId => promotionPackages.find(p => p.id === packageId))
+            .filter(p => p !== undefined);
+
+          if (componentPackages.length === 0) {
+            throw new Error('Combo package components not found');
+          }
+
+          // Calculate total cost for all component packages
+          let totalCost = 0;
+          const orderPromises = [];
+          const smmgenServiceIds = pkg.combo_smmgen_service_ids || [];
+
+          // Idempotency check for combo packages: Check if orders with the same parameters already exist
+          const { data: existingComboOrders } = await supabase
+            .from('orders')
+            .select('id, smmgen_order_id, promotion_package_id, created_at')
+            .eq('user_id', authUser.id)
+            .eq('link', orderForm.link.trim())
+            .in('promotion_package_id', componentPackages.map(p => p.id))
+            .gte('created_at', new Date(Date.now() - 60000).toISOString()) // Last 60 seconds
+            .order('created_at', { ascending: false });
+
+          if (existingComboOrders && existingComboOrders.length > 0) {
+            // Check if all component packages have existing orders
+            const existingPackageIds = new Set(existingComboOrders.map(o => o.promotion_package_id));
+            const allPackagesExist = componentPackages.every(p => existingPackageIds.has(p.id));
+            
+            if (allPackagesExist) {
+              const hasValidSmmgenIds = existingComboOrders.some(
+                o => o.smmgen_order_id && o.smmgen_order_id !== "order not placed at smm gen"
+              );
+              
+              if (hasValidSmmgenIds) {
+                console.log('Duplicate combo package order detected - orders already exist');
+                toast.warning('Combo package order already placed. Please check your order history.');
+                return;
+              }
+              
+              console.warn('Duplicate combo package order detected but SMMGen orders failed previously. Allowing retry.');
+            }
+          }
+
+          for (let i = 0; i < componentPackages.length; i++) {
+            const componentPackage = componentPackages[i];
+            const componentCost = componentPackage.price;
+            totalCost += componentCost;
+
+            // Place SMMGen order if package has SMMGen ID
+            let smmgenOrderId = null;
+            const smmgenServiceId = smmgenServiceIds[i] || componentPackage.smmgen_service_id;
+            
+            if (smmgenServiceId) {
+              console.log(`Attempting to place SMMGen order for ${componentPackage.name}:`, {
+                serviceId: smmgenServiceId,
+                link: orderForm.link,
+                quantity: componentPackage.quantity
+              });
+              
+              try {
+                const smmgenResponse = await placeSMMGenOrder(
+                  smmgenServiceId,
+                  orderForm.link,
+                  componentPackage.quantity
+                );
+                
+                console.log(`SMMGen API response for ${componentPackage.name}:`, smmgenResponse);
+                
+                if (smmgenResponse === null) {
+                  console.warn(`SMMGen returned null for ${componentPackage.name} - backend unavailable or not configured`);
+                } else if (smmgenResponse) {
+                  // Check if SMMGen returned an error response
+                  if (smmgenResponse.error) {
+                    console.warn(`SMMGen returned error for ${componentPackage.name}:`, smmgenResponse.error);
+                    smmgenOrderId = null;
+                  } else {
+                    smmgenOrderId = smmgenResponse.order || 
+                                   smmgenResponse.order_id || 
+                                   smmgenResponse.orderId || 
+                                   smmgenResponse.id || 
+                                   null;
+                    console.log(`SMMGen order response for ${componentPackage.name}:`, smmgenResponse);
+                    console.log(`SMMGen order ID extracted:`, smmgenOrderId);
+                  }
+                }
+              } catch (smmgenError) {
+                console.error(`SMMGen order error caught for ${componentPackage.name}:`, smmgenError);
+                if (!smmgenError.message?.includes('Failed to fetch') && 
+                    !smmgenError.message?.includes('ERR_CONNECTION_REFUSED') &&
+                    !smmgenError.message?.includes('Backend proxy server not running')) {
+                  console.error(`SMMGen order failed for ${componentPackage.name}:`, smmgenError);
+                }
+              }
+              
+              if (smmgenOrderId === null) {
+                smmgenOrderId = "order not placed at smm gen";
+                console.log(`SMMGen order failed for ${componentPackage.name} - setting failure message:`, smmgenOrderId);
+              } else {
+                console.log(`SMMGen order successful for ${componentPackage.name} - order ID:`, smmgenOrderId);
+              }
+            } else {
+              console.log(`Component package ${componentPackage.name} does not have SMMGen service ID - skipping SMMGen order placement`);
+              smmgenOrderId = "order not placed at smm gen";
+            }
+
+            // Convert SMMGen order ID to string if it's a number (database expects TEXT)
+            const smmgenOrderIdString = smmgenOrderId !== null && smmgenOrderId !== undefined 
+              ? String(smmgenOrderId) 
+              : null;
+
+            // Create order record for this component
+            orderPromises.push(
+              supabase.from('orders').insert({
+                user_id: authUser.id,
+                promotion_package_id: componentPackage.id,
+                link: orderForm.link,
+                quantity: componentPackage.quantity,
+                total_cost: componentCost,
+                status: 'pending',
+                smmgen_order_id: smmgenOrderIdString
+              }).select('*').single()
+            );
+          }
+
+          // Check balance (use displayUser to allow immediate orders after deposit)
+          if (displayUser.balance < totalCost) {
+            throw new Error('Insufficient balance');
+          }
+
+          // Create all orders
+          const orderResults = await Promise.all(orderPromises);
+          const orderErrors = orderResults.filter(r => r.error);
+          
+          if (orderErrors.length > 0) {
+            throw new Error(`Failed to create some orders: ${orderErrors[0].error.message}`);
+          }
+
+          // Deduct balance (use displayUser to reflect optimistic balance)
+          const newBalanceAfterOrder = displayUser.balance - totalCost;
+          const { error: balanceError } = await supabase
+            .from('profiles')
+            .update({ balance: newBalanceAfterOrder })
+            .eq('id', authUser.id);
+
+          if (balanceError) throw balanceError;
+          
+          // Update optimistic balance immediately
+          setOptimisticBalance(newBalanceAfterOrder);
+
+          // Record transaction for combo package order (balance subtraction)
+          // Create one transaction record for the total cost
+          const { data: transactionData, error: transactionError } = await supabase
+            .from('transactions')
+            .insert({
+              user_id: authUser.id,
+              amount: totalCost,
+              type: 'order',
+              status: 'approved',
+              order_id: orderResults[0]?.data?.id || null // Link to first order in combo
+            })
+            .select()
+            .single();
+
+          if (transactionError) {
+            console.warn('Failed to create transaction record for combo package order:', transactionError);
+          } else if (transactionData) {
+            // Link the transaction_id to the balance_audit_log entry
+            const { data: auditLogEntry } = await supabase
+              .from('balance_audit_log')
+              .select('id')
+              .eq('user_id', authUser.id)
+              .is('transaction_id', null)
+              .eq('change_amount', -totalCost)
+              .gte('created_at', new Date(Date.now() - 5000).toISOString())
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            
+            if (auditLogEntry) {
+              await supabase
+                .from('balance_audit_log')
+                .update({ transaction_id: transactionData.id })
+                .eq('id', auditLogEntry.id);
+            }
+          }
+
+          toast.success(`Combo package order placed successfully! ${componentPackages.length} orders created.`);
+          setOrderForm({ service_id: '', package_id: '', link: '', quantity: '' });
+          await onUpdateUser();
+          fetchRecentOrders().catch((error) => {
+            console.error('Error fetching recent orders:', error);
+          });
+          return;
+        }
+
+        // Regular (non-combo) package handling
         // Use fixed quantity and price from package
         const quantity = pkg.quantity;
         const totalCost = pkg.price;

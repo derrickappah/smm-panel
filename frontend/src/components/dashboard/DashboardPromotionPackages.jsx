@@ -108,11 +108,16 @@ const DashboardPromotionPackages = ({ packages, onPackageSelect, user }) => {
             className="bg-white border-2 border-purple-300 rounded-lg p-3 shadow-sm hover:shadow-md transition-all hover:border-purple-400 min-w-[180px] snap-center flex-shrink-0 sm:min-w-0 sm:snap-none"
           >
             <div className="flex items-start justify-between mb-3">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <Tag className="w-4 h-4 text-purple-600" />
                 <span className="text-xs font-medium px-2 py-1 bg-purple-100 text-purple-700 rounded">
                   {pkg.platform}
                 </span>
+                {pkg.is_combo && (
+                  <span className="text-xs font-medium px-2 py-1 bg-indigo-100 text-indigo-700 rounded">
+                    Combo
+                  </span>
+                )}
               </div>
               <div className="text-right">
                 <p className="text-lg font-bold text-purple-600">{pkg.price} GHS</p>
@@ -125,6 +130,11 @@ const DashboardPromotionPackages = ({ packages, onPackageSelect, user }) => {
             </h3>
             
             <div className="space-y-1 mb-4">
+              {pkg.is_combo && pkg.combo_package_ids && (
+                <p className="text-xs text-indigo-600 font-medium">
+                  Includes {pkg.combo_package_ids.length} package{pkg.combo_package_ids.length !== 1 ? 's' : ''}
+                </p>
+              )}
               <p className="text-sm text-gray-600">
                 <span className="font-medium">Quantity:</span> {formatQuantity(pkg.quantity)}
               </p>

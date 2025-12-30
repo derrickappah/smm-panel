@@ -27,7 +27,10 @@ const AdminPromotionPackages = memo(() => {
     description: '',
     smmgen_service_id: '',
     enabled: true,
-    display_order: '0'
+    display_order: '0',
+    is_combo: false,
+    combo_package_ids: [],
+    combo_smmgen_service_ids: []
   });
 
   const debouncedSearch = useDebounce(packageSearch, 300);
@@ -54,7 +57,14 @@ const AdminPromotionPackages = memo(() => {
         description: packageForm.description || null,
         smmgen_service_id: packageForm.smmgen_service_id || null,
         enabled: Boolean(packageForm.enabled !== false),
-        display_order: parseInt(packageForm.display_order) || 0
+        display_order: parseInt(packageForm.display_order) || 0,
+        is_combo: packageForm.is_combo || false,
+        combo_package_ids: packageForm.is_combo && packageForm.combo_package_ids.length > 0 
+          ? packageForm.combo_package_ids 
+          : null,
+        combo_smmgen_service_ids: packageForm.is_combo && packageForm.combo_smmgen_service_ids.length > 0
+          ? packageForm.combo_smmgen_service_ids
+          : null
       });
 
       setPackageForm({
@@ -66,7 +76,10 @@ const AdminPromotionPackages = memo(() => {
         description: '',
         smmgen_service_id: '',
         enabled: true,
-        display_order: '0'
+        display_order: '0',
+        is_combo: false,
+        combo_package_ids: [],
+        combo_smmgen_service_ids: []
       });
     } catch (error) {
       // Error handled by mutation
@@ -309,6 +322,75 @@ const AdminPromotionPackages = memo(() => {
             <p className="text-xs text-gray-500 mt-1">Enter the SMMGen API service ID for integration</p>
           </div>
           
+          {/* Combo Package Options */}
+          <div className="space-y-4 p-4 border border-gray-200 rounded-lg bg-gray-50">
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="is_combo"
+                checked={packageForm.is_combo}
+                onChange={(e) => setPackageForm({ ...packageForm, is_combo: e.target.checked })}
+                className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+              />
+              <Label htmlFor="is_combo" className="text-sm font-medium text-gray-900">
+                This is a combo package (combines multiple packages)
+              </Label>
+            </div>
+            
+            {packageForm.is_combo && (
+              <div className="space-y-3 mt-3">
+                <div>
+                  <Label className="text-sm font-medium">Component Packages</Label>
+                  <p className="text-xs text-gray-500 mb-2">Select the packages to include in this combo</p>
+                  <div className="max-h-40 overflow-y-auto border border-gray-200 rounded p-2 bg-white">
+                    {packages.filter(p => !p.is_combo).map((pkg) => (
+                      <div key={pkg.id} className="flex items-center space-x-2 py-1">
+                        <input
+                          type="checkbox"
+                          checked={packageForm.combo_package_ids?.includes(pkg.id)}
+                          onChange={(e) => {
+                            const currentIds = packageForm.combo_package_ids || [];
+                            if (e.target.checked) {
+                              setPackageForm({
+                                ...packageForm,
+                                combo_package_ids: [...currentIds, pkg.id]
+                              });
+                            } else {
+                              setPackageForm({
+                                ...packageForm,
+                                combo_package_ids: currentIds.filter(id => id !== pkg.id)
+                              });
+                            }
+                          }}
+                          className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                        />
+                        <Label className="text-sm text-gray-700">
+                          {pkg.name} ({pkg.platform} - {pkg.price} GHS)
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                <div>
+                  <Label className="text-sm font-medium">SMMGen Service IDs (comma-separated)</Label>
+                  <Input
+                    placeholder="123, 456 (one for each component package)"
+                    value={packageForm.combo_smmgen_service_ids?.join(', ') || ''}
+                    onChange={(e) => {
+                      const ids = e.target.value.split(',').map(id => id.trim()).filter(id => id);
+                      setPackageForm({ ...packageForm, combo_smmgen_service_ids: ids });
+                    }}
+                    className="mt-1"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Enter SMMGen service IDs in the same order as component packages
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+          
           {/* Enabled Package Option */}
           <div className="flex items-center space-x-2 p-4 border border-gray-200 rounded-lg bg-green-50">
             <input
@@ -378,6 +460,7 @@ const AdminPromotionPackages = memo(() => {
                 {editingPackage?.id === pkg.id ? (
                   <PackageEditForm 
                     pkg={pkg} 
+                    packages={packages}
                     onSave={(updates) => handleUpdatePackage(pkg.id, updates)}
                     onCancel={() => setEditingPackage(null)}
                   />
@@ -386,6 +469,11 @@ const AdminPromotionPackages = memo(() => {
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
                         <h3 className="text-lg font-semibold text-gray-900">{pkg.name}</h3>
+                        {pkg.is_combo && (
+                          <span className="px-2 py-1 text-xs font-medium bg-indigo-100 text-indigo-700 rounded">
+                            Combo
+                          </span>
+                        )}
                         {pkg.enabled === false && (
                           <span className="px-2 py-1 text-xs font-medium bg-gray-200 text-gray-700 rounded">
                             Disabled
@@ -395,6 +483,11 @@ const AdminPromotionPackages = memo(() => {
                       <div className="space-y-1 text-sm text-gray-600">
                         <p><span className="font-medium">Platform:</span> {pkg.platform}</p>
                         <p><span className="font-medium">Service Type:</span> {pkg.service_type}</p>
+                        {pkg.is_combo && pkg.combo_package_ids && (
+                          <p className="text-indigo-600 font-medium">
+                            Includes {pkg.combo_package_ids.length} package{pkg.combo_package_ids.length !== 1 ? 's' : ''}
+                          </p>
+                        )}
                         <p><span className="font-medium">Quantity:</span> {formatQuantity(pkg.quantity)} ({pkg.quantity.toLocaleString()})</p>
                         <p><span className="font-medium">Price:</span> {pkg.price} GHS</p>
                         {pkg.description && <p><span className="font-medium">Description:</span> {pkg.description}</p>}
@@ -445,7 +538,7 @@ const AdminPromotionPackages = memo(() => {
 });
 
 // Package Edit Form Component
-const PackageEditForm = ({ pkg, onSave, onCancel }) => {
+const PackageEditForm = ({ pkg, onSave, onCancel, packages = [] }) => {
   const [formData, setFormData] = useState({
     name: pkg.name,
     platform: pkg.platform,
@@ -455,7 +548,10 @@ const PackageEditForm = ({ pkg, onSave, onCancel }) => {
     description: pkg.description || '',
     smmgen_service_id: pkg.smmgen_service_id || '',
     enabled: pkg.enabled === true,
-    display_order: pkg.display_order || 0
+    display_order: pkg.display_order || 0,
+    is_combo: pkg.is_combo || false,
+    combo_package_ids: pkg.combo_package_ids || [],
+    combo_smmgen_service_ids: pkg.combo_smmgen_service_ids || []
   });
 
   const handleSubmit = (e) => {
@@ -469,7 +565,14 @@ const PackageEditForm = ({ pkg, onSave, onCancel }) => {
       description: formData.description || null,
       smmgen_service_id: formData.smmgen_service_id || null,
       enabled: Boolean(formData.enabled !== false),
-      display_order: parseInt(formData.display_order) || 0
+      display_order: parseInt(formData.display_order) || 0,
+      is_combo: formData.is_combo || false,
+      combo_package_ids: formData.is_combo && formData.combo_package_ids.length > 0 
+        ? formData.combo_package_ids 
+        : null,
+      combo_smmgen_service_ids: formData.is_combo && formData.combo_smmgen_service_ids.length > 0
+        ? formData.combo_smmgen_service_ids
+        : null
     });
   };
 
@@ -551,6 +654,76 @@ const PackageEditForm = ({ pkg, onSave, onCancel }) => {
           onChange={(e) => setFormData({ ...formData, smmgen_service_id: e.target.value })}
         />
       </div>
+      
+      {/* Combo Package Options */}
+      <div className="space-y-4 p-4 border border-gray-200 rounded-lg bg-gray-50">
+        <div className="flex items-center space-x-2">
+          <input
+            type="checkbox"
+            id="is_combo-edit"
+            checked={formData.is_combo}
+            onChange={(e) => setFormData({ ...formData, is_combo: e.target.checked })}
+            className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+          />
+          <Label htmlFor="is_combo-edit" className="text-sm font-medium text-gray-900">
+            This is a combo package (combines multiple packages)
+          </Label>
+        </div>
+        
+        {formData.is_combo && (
+          <div className="space-y-3 mt-3">
+            <div>
+              <Label className="text-sm font-medium">Component Packages</Label>
+              <p className="text-xs text-gray-500 mb-2">Select the packages to include in this combo</p>
+              <div className="max-h-40 overflow-y-auto border border-gray-200 rounded p-2 bg-white">
+                {packages.filter(p => !p.is_combo && p.id !== pkg.id).map((pkgItem) => (
+                  <div key={pkgItem.id} className="flex items-center space-x-2 py-1">
+                    <input
+                      type="checkbox"
+                      checked={formData.combo_package_ids?.includes(pkgItem.id)}
+                      onChange={(e) => {
+                        const currentIds = formData.combo_package_ids || [];
+                        if (e.target.checked) {
+                          setFormData({
+                            ...formData,
+                            combo_package_ids: [...currentIds, pkgItem.id]
+                          });
+                        } else {
+                          setFormData({
+                            ...formData,
+                            combo_package_ids: currentIds.filter(id => id !== pkgItem.id)
+                          });
+                        }
+                      }}
+                      className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                    />
+                    <Label className="text-sm text-gray-700">
+                      {pkgItem.name} ({pkgItem.platform} - {pkgItem.price} GHS)
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            <div>
+              <Label className="text-sm font-medium">SMMGen Service IDs (comma-separated)</Label>
+              <Input
+                placeholder="123, 456 (one for each component package)"
+                value={formData.combo_smmgen_service_ids?.join(', ') || ''}
+                onChange={(e) => {
+                  const ids = e.target.value.split(',').map(id => id.trim()).filter(id => id);
+                  setFormData({ ...formData, combo_smmgen_service_ids: ids });
+                }}
+                className="mt-1"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Enter SMMGen service IDs in the same order as component packages
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+      
       <div className="flex items-center space-x-2">
         <input
           type="checkbox"
