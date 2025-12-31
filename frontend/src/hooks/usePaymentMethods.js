@@ -4,12 +4,12 @@ import { supabase } from '@/lib/supabase';
 export const usePaymentMethods = () => {
   const [depositMethod, setDepositMethod] = useState(null);
   const [paymentMethodSettings, setPaymentMethodSettings] = useState({
-    paystack_enabled: true,
-    manual_enabled: true,
-    hubtel_enabled: true,
-    korapay_enabled: true,
-    moolre_enabled: true,
-    moolre_web_enabled: true
+    paystack_enabled: false,
+    manual_enabled: false,
+    hubtel_enabled: false,
+    korapay_enabled: false,
+    moolre_enabled: false,
+    moolre_web_enabled: false
   });
   const [minDepositSettings, setMinDepositSettings] = useState({
     paystack_min: 10,
@@ -50,8 +50,8 @@ export const usePaymentMethods = () => {
       
       if (error) {
         console.warn('Error fetching payment method settings:', error);
-        // On error, use default settings and set default method
-        setDepositMethod('paystack');
+        // On error, keep methods disabled and don't set a default method
+        setDepositMethod(null);
         return;
       }
 
@@ -61,12 +61,12 @@ export const usePaymentMethods = () => {
           settings[setting.key] = setting.value;
         });
         const newSettings = {
-          paystack_enabled: settings.payment_method_paystack_enabled !== 'false',
-          manual_enabled: settings.payment_method_manual_enabled !== 'false',
-          hubtel_enabled: settings.payment_method_hubtel_enabled !== 'false',
-          korapay_enabled: settings.payment_method_korapay_enabled !== 'false',
-          moolre_enabled: settings.payment_method_moolre_enabled !== 'false',
-          moolre_web_enabled: settings.payment_method_moolre_web_enabled !== 'false'
+          paystack_enabled: settings.payment_method_paystack_enabled === 'true',
+          manual_enabled: settings.payment_method_manual_enabled === 'true',
+          hubtel_enabled: settings.payment_method_hubtel_enabled === 'true',
+          korapay_enabled: settings.payment_method_korapay_enabled === 'true',
+          moolre_enabled: settings.payment_method_moolre_enabled === 'true',
+          moolre_web_enabled: settings.payment_method_moolre_web_enabled === 'true'
         };
         setPaymentMethodSettings(newSettings);
         
@@ -108,14 +108,14 @@ export const usePaymentMethods = () => {
           setDepositMethod(null);
         }
       } else {
-        // No data returned, use defaults
-        console.warn('No payment method settings found, using defaults');
-        setDepositMethod('paystack');
+        // No data returned, keep methods disabled
+        console.warn('No payment method settings found, keeping methods disabled');
+        setDepositMethod(null);
       }
     } catch (error) {
       console.error('Error fetching payment method settings:', error);
-      // Default to paystack if settings can't be fetched
-      setDepositMethod('paystack');
+      // Keep methods disabled if settings can't be fetched
+      setDepositMethod(null);
     }
   }, []);
 
