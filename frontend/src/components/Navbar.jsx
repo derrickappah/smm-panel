@@ -14,7 +14,7 @@ const Navbar = ({ user, onLogout }) => {
     { path: '/orders', label: 'Orders', icon: History },
     { path: '/transactions', label: 'Transactions', icon: Receipt },
     { path: '/support', label: 'Support', icon: HelpCircle },
-    { path: '/faq', label: 'FAQ', icon: MessageCircleQuestion },
+    { path: '/faq', label: 'FAQ and Update', icon: MessageCircleQuestion },
     { path: '/terms', label: 'Terms', icon: FileText },
   ];
 
