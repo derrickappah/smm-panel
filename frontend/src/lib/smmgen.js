@@ -213,6 +213,48 @@ export const fetchSMMGenServices = async () => {
 };
 
 /**
+ * Check if an error message indicates a duplicate/active order error
+ * @param {string} errorMessage - Error message to check
+ * @returns {boolean} True if error is a duplicate/active order error
+ */
+export const isDuplicateOrderError = (errorMessage) => {
+  if (!errorMessage || typeof errorMessage !== 'string') {
+    return false;
+  }
+  
+  const errorMessageLower = errorMessage.toLowerCase();
+  return errorMessageLower.includes('duplicate') || 
+         errorMessageLower.includes('already exists') ||
+         errorMessageLower.includes('already placed') ||
+         errorMessageLower.includes('active order') ||
+         errorMessageLower.includes('wait until');
+};
+
+/**
+ * Get user-friendly error message for duplicate/active order errors
+ * @param {string} errorMessage - Original error message from SMMGen
+ * @returns {string} User-friendly error message
+ */
+export const getDuplicateOrderErrorMessage = (errorMessage) => {
+  if (!errorMessage || typeof errorMessage !== 'string') {
+    return 'An order with this link already exists. Please check your order history.';
+  }
+  
+  const errorMessageLower = errorMessage.toLowerCase();
+  
+  if (errorMessageLower.includes('active order') || errorMessageLower.includes('wait until')) {
+    return 'You already have an active order with this link. Please wait until it completes.';
+  }
+  
+  if (errorMessageLower.includes('duplicate') || errorMessageLower.includes('already exists')) {
+    return 'An order with this link already exists. Please check your order history.';
+  }
+  
+  // Return original message if we can't map it
+  return errorMessage;
+};
+
+/**
  * Extract order ID from SMMGen API response
  * Matches the extraction logic used in API endpoints to ensure consistency
  * @param {Object} response - API response object
@@ -450,9 +492,14 @@ export const placeSMMGenOrder = async (serviceId, link, quantity, retryCount = 0
         }
         
         // Don't retry on client errors (4xx-like errors in response body)
-        if (errorMessage.toLowerCase().includes('duplicate') || 
-            errorMessage.toLowerCase().includes('already exists') ||
-            errorMessage.toLowerCase().includes('invalid')) {
+        // Check for duplicate/active order errors
+        const errorMessageLower = errorMessage.toLowerCase();
+        if (errorMessageLower.includes('duplicate') || 
+            errorMessageLower.includes('already exists') ||
+            errorMessageLower.includes('already placed') ||
+            errorMessageLower.includes('active order') ||
+            errorMessageLower.includes('wait until') ||
+            errorMessageLower.includes('invalid')) {
           throw new Error(errorMessage);
         }
       }

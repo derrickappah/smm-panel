@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
-import { placeSMMGenOrder, extractSMMGenOrderId } from '@/lib/smmgen';
+import { placeSMMGenOrder, extractSMMGenOrderId, isDuplicateOrderError, getDuplicateOrderErrorMessage } from '@/lib/smmgen';
 import { placeSMMCostOrder, extractSMMCostOrderId } from '@/lib/smmcost';
 import { saveOrderStatusHistory } from '@/lib/orderStatusHistory';
 import { normalizePhoneNumber } from '@/utils/phoneUtils';
@@ -3211,7 +3211,19 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                 } else if (smmgenResponse) {
                   // Check if SMMGen returned an error response
                   if (smmgenResponse.error) {
-                    console.warn(`SMMGen returned error for ${componentPackage.name}:`, smmgenResponse.error);
+                    const errorMessage = smmgenResponse.error;
+                    console.warn(`SMMGen returned error for ${componentPackage.name}:`, errorMessage);
+                    
+                    // Check if it's a duplicate/active order error
+                    if (isDuplicateOrderError(errorMessage)) {
+                      const userFriendlyMessage = getDuplicateOrderErrorMessage(errorMessage);
+                      toast.error(userFriendlyMessage);
+                      console.log(`Duplicate/active order detected for ${componentPackage.name} - preventing combo order creation`);
+                      setIsSubmitting(false);
+                      setLoading(false);
+                      return; // Prevent combo order creation
+                    }
+                    
                     smmgenOrderId = null;
                   } else {
                     // Use standardized extraction utility that matches API endpoint logic
@@ -3222,6 +3234,17 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                 }
               } catch (smmgenError) {
                 console.error(`SMMGen order error caught for ${componentPackage.name}:`, smmgenError);
+                
+                // Handle duplicate/active order errors - prevent combo order creation
+                if (isDuplicateOrderError(smmgenError.message)) {
+                  const userFriendlyMessage = getDuplicateOrderErrorMessage(smmgenError.message);
+                  toast.error(userFriendlyMessage);
+                  console.log(`Duplicate/active order error for ${componentPackage.name} - preventing combo order creation`);
+                  setIsSubmitting(false);
+                  setLoading(false);
+                  return; // Prevent combo order creation
+                }
+                
                 if (!smmgenError.message?.includes('Failed to fetch') && 
                     !smmgenError.message?.includes('ERR_CONNECTION_REFUSED') &&
                     !smmgenError.message?.includes('Backend proxy server not running')) {
@@ -3390,7 +3413,19 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             } else if (smmgenResponse) {
               // Check if SMMGen returned an error response
               if (smmgenResponse.error) {
-                console.warn('SMMGen returned error for package:', smmgenResponse.error);
+                const errorMessage = smmgenResponse.error;
+                console.warn('SMMGen returned error for package:', errorMessage);
+                
+                // Check if it's a duplicate/active order error
+                if (isDuplicateOrderError(errorMessage)) {
+                  const userFriendlyMessage = getDuplicateOrderErrorMessage(errorMessage);
+                  toast.error(userFriendlyMessage);
+                  console.log('Duplicate/active order detected for package - preventing order creation');
+                  setIsSubmitting(false);
+                  setLoading(false);
+                  return; // Prevent order creation
+                }
+                
                 // Don't extract order ID from error responses
                 smmgenOrderId = null;
               } else {
@@ -3402,6 +3437,17 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             }
           } catch (smmgenError) {
             console.error('SMMGen order error caught for package:', smmgenError);
+            
+            // Handle duplicate/active order errors - prevent order creation
+            if (isDuplicateOrderError(smmgenError.message)) {
+              const userFriendlyMessage = getDuplicateOrderErrorMessage(smmgenError.message);
+              toast.error(userFriendlyMessage);
+              console.log('Duplicate/active order error for package - preventing order creation');
+              setIsSubmitting(false);
+              setLoading(false);
+              return; // Prevent order creation
+            }
+            
             if (!smmgenError.message?.includes('Failed to fetch') && 
                 !smmgenError.message?.includes('ERR_CONNECTION_REFUSED') &&
                 !smmgenError.message?.includes('Backend proxy server not running')) {
@@ -3592,7 +3638,19 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               } else if (smmgenResponse) {
                 // Check if SMMGen returned an error response
                 if (smmgenResponse.error) {
-                  console.warn(`SMMGen returned error for ${componentService.name}:`, smmgenResponse.error);
+                  const errorMessage = smmgenResponse.error;
+                  console.warn(`SMMGen returned error for ${componentService.name}:`, errorMessage);
+                  
+                  // Check if it's a duplicate/active order error
+                  if (isDuplicateOrderError(errorMessage)) {
+                    const userFriendlyMessage = getDuplicateOrderErrorMessage(errorMessage);
+                    toast.error(userFriendlyMessage);
+                    console.log(`Duplicate/active order detected for ${componentService.name} - preventing combo order creation`);
+                    setIsSubmitting(false);
+                    setLoading(false);
+                    return; // Prevent combo order creation
+                  }
+                  
                   smmgenOrderId = null;
                 } else {
                   // Use standardized extraction utility that matches API endpoint logic
@@ -3603,6 +3661,17 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               }
             } catch (smmgenError) {
               console.error(`SMMGen order error caught for ${componentService.name}:`, smmgenError);
+              
+              // Handle duplicate/active order errors - prevent combo order creation
+              if (isDuplicateOrderError(smmgenError.message)) {
+                const userFriendlyMessage = getDuplicateOrderErrorMessage(smmgenError.message);
+                toast.error(userFriendlyMessage);
+                console.log(`Duplicate/active order error for ${componentService.name} - preventing combo order creation`);
+                setIsSubmitting(false);
+                setLoading(false);
+                return; // Prevent combo order creation
+              }
+              
               if (!smmgenError.message?.includes('Failed to fetch') && 
                   !smmgenError.message?.includes('ERR_CONNECTION_REFUSED') &&
                   !smmgenError.message?.includes('Backend proxy server not running')) {
@@ -3858,7 +3927,19 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           } else if (smmgenResponse) {
             // Check if SMMGen returned an error response
             if (smmgenResponse.error) {
-              console.warn('SMMGen returned error:', smmgenResponse.error);
+              const errorMessage = smmgenResponse.error;
+              console.warn('SMMGen returned error:', errorMessage);
+              
+              // Check if it's a duplicate/active order error
+              if (isDuplicateOrderError(errorMessage)) {
+                const userFriendlyMessage = getDuplicateOrderErrorMessage(errorMessage);
+                toast.error(userFriendlyMessage);
+                console.log('Duplicate/active order detected - preventing order creation');
+                setIsSubmitting(false);
+                setLoading(false);
+                return; // Prevent order creation
+              }
+              
               // Don't extract order ID from error responses
               smmgenOrderId = null;
             } else {
@@ -3870,6 +3951,16 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           }
         } catch (smmgenError) {
           console.error('SMMGen order error caught:', smmgenError);
+          
+          // Handle duplicate/active order errors - prevent order creation
+          if (isDuplicateOrderError(smmgenError.message)) {
+            const userFriendlyMessage = getDuplicateOrderErrorMessage(smmgenError.message);
+            toast.error(userFriendlyMessage);
+            console.log('Duplicate/active order error - preventing order creation');
+            setIsSubmitting(false);
+            setLoading(false);
+            return; // Prevent order creation
+          }
           
           // Handle 404 errors specifically - provide helpful message
           if (smmgenError.status === 404 || smmgenError.isConfigurationError) {
