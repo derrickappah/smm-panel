@@ -39,7 +39,7 @@ const fetchUserDetails = async (userId) => {
   // Fetch orders with service details
   const { data: orders, error: ordersError } = await supabase
     .from('orders')
-    .select('id, service_id, promotion_package_id, link, quantity, total_cost, status, created_at, completed_at, smmgen_order_id, services(name, platform, service_type), promotion_packages(name, platform, service_type)')
+    .select('id, service_id, promotion_package_id, link, quantity, total_cost, status, created_at, completed_at, smmgen_order_id, smmcost_order_id, services(name, platform, service_type), promotion_packages(name, platform, service_type)')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
 

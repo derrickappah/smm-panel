@@ -1,11 +1,14 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useUserDetails } from '@/hooks/useUserDetails';
 import { Wallet, ShoppingCart, Receipt, User, Mail, Phone, Calendar, DollarSign } from 'lucide-react';
+import OrderDetailsDialog from './OrderDetailsDialog';
 
 const UserDetailsDialog = ({ userId, open, onOpenChange }) => {
   const { data, isLoading, error } = useUserDetails(userId, { enabled: open && !!userId });
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [isOrderDetailsOpen, setIsOrderDetailsOpen] = useState(false);
 
   const user = data?.profile;
   const deposits = data?.deposits || [];
@@ -39,6 +42,44 @@ const UserDetailsDialog = ({ userId, open, onOpenChange }) => {
     );
   };
 
+  // Helper function to get Order ID based on priority
+  const getOrderId = (order) => {
+    // Check if smmcost_order_id exists and is valid (not "order not placed at smmcost")
+    const hasSmmcost = order.smmcost_order_id && 
+      String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost" &&
+      order.smmcost_order_id > 0;
+    
+    // Check if smmgen_order_id exists and is valid (not internal UUID or "order not placed")
+    const isInternalUuid = order.smmgen_order_id === order.id;
+    const hasSmmgen = order.smmgen_order_id && 
+      order.smmgen_order_id !== "order not placed at smm gen" && 
+      !isInternalUuid;
+    
+    if (hasSmmcost) {
+      return { id: order.smmcost_order_id, type: 'smmcost' };
+    } else if (hasSmmgen) {
+      return { id: order.smmgen_order_id, type: 'smmgen' };
+    } else {
+      // Fallback to truncated UUID
+      return { id: order.id.slice(0, 8), type: 'uuid' };
+    }
+  };
+
+  // Get Order ID display value
+  const getOrderIdDisplay = (order) => {
+    const orderIdInfo = getOrderId(order);
+    if (orderIdInfo.type === 'uuid' && !order.smmcost_order_id && !order.smmgen_order_id) {
+      return 'order not placed';
+    }
+    return orderIdInfo.id;
+  };
+
+  // Handle order click
+  const handleOrderClick = (order) => {
+    setSelectedOrder(order);
+    setIsOrderDetailsOpen(true);
+  };
+
   if (error) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -55,6 +96,7 @@ const UserDetailsDialog = ({ userId, open, onOpenChange }) => {
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-full max-w-7xl max-h-[95vh] flex flex-col p-0 overflow-hidden sm:max-w-7xl">
         <DialogHeader className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 bg-gradient-to-r from-indigo-50 to-purple-50 flex-shrink-0">
@@ -248,10 +290,18 @@ const UserDetailsDialog = ({ userId, open, onOpenChange }) => {
                           {orders.map((order) => {
                             const serviceName = order.services?.name || order.promotion_packages?.name || 'N/A';
                             const platform = order.services?.platform || order.promotion_packages?.platform || '';
+                            const orderIdDisplay = getOrderIdDisplay(order);
                             return (
-                              <div key={order.id} className="p-3 space-y-2">
+                              <div 
+                                key={order.id} 
+                                onClick={() => handleOrderClick(order)}
+                                className="p-3 space-y-2 hover:bg-indigo-50 transition-colors cursor-pointer"
+                              >
                                 <div className="flex items-center justify-between">
                                   <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-medium text-gray-500 mb-1">
+                                      <span className="font-semibold">Order ID:</span> {orderIdDisplay}
+                                    </p>
                                     <p className="text-sm font-semibold text-gray-900 truncate">{serviceName}</p>
                                     {platform && (
                                       <p className="text-xs text-gray-500">{platform}</p>
@@ -274,6 +324,7 @@ const UserDetailsDialog = ({ userId, open, onOpenChange }) => {
                         <table className="w-full">
                           <thead className="bg-gradient-to-r from-gray-50 to-gray-100 border-b-2 border-gray-200 sticky top-0 z-20">
                             <tr>
+                              <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap">Order ID</th>
                               <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap">Service</th>
                               <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap">Quantity</th>
                               <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap">Cost</th>
@@ -285,8 +336,16 @@ const UserDetailsDialog = ({ userId, open, onOpenChange }) => {
                             {orders.map((order) => {
                               const serviceName = order.services?.name || order.promotion_packages?.name || 'N/A';
                               const platform = order.services?.platform || order.promotion_packages?.platform || '';
+                              const orderIdDisplay = getOrderIdDisplay(order);
                               return (
-                                <tr key={order.id} className="hover:bg-gray-50 transition-colors">
+                                <tr 
+                                  key={order.id} 
+                                  onClick={() => handleOrderClick(order)}
+                                  className="hover:bg-indigo-50 transition-colors cursor-pointer"
+                                >
+                                  <td className="px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap">
+                                    {orderIdDisplay}
+                                  </td>
                                   <td className="px-4 py-3 text-sm">
                                     <div>
                                       <p className="font-semibold text-gray-900">{serviceName}</p>
@@ -420,6 +479,16 @@ const UserDetailsDialog = ({ userId, open, onOpenChange }) => {
         </div>
       </DialogContent>
     </Dialog>
+    
+    {/* Order Details Dialog - Separate modal overlay */}
+    {selectedOrder && (
+      <OrderDetailsDialog
+        order={selectedOrder}
+        open={isOrderDetailsOpen}
+        onOpenChange={setIsOrderDetailsOpen}
+      />
+    )}
+    </>
   );
 };
 
