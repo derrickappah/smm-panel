@@ -221,7 +221,7 @@ export const useAdminOrders = (options = {}) => {
     searchTerm = '',
     statusFilter = 'all',
     dateFilter = '',
-    page = 1 // Add page parameter for direct pagination
+    page = undefined // Default to undefined - if provided (even if 1), it's a display page request
   } = options;
   
   // Check role at hook level (cached)
@@ -251,12 +251,14 @@ export const useAdminOrders = (options = {}) => {
     });
   }
 
-  // For stats (when no filters and useInfinite: false), use fetchAllOrders which returns array
+  // For stats (when no filters and useInfinite: false and no page param), use fetchAllOrders which returns array
   // For paginated queries (with filters or page specified), use fetchOrders which returns { data, total }
-  const hasFilters = searchTerm || statusFilter !== 'all' || dateFilter || (page && page !== 1);
+  // Check if this is a display page request (has page parameter) vs stats request (no page)
+  const isDisplayPage = page !== undefined && page !== null;
+  const hasFilters = searchTerm || statusFilter !== 'all' || dateFilter;
   
-  if (!useInfinite && !hasFilters) {
-    // This is the stats case - return array directly
+  if (!useInfinite && !hasFilters && !isDisplayPage) {
+    // Stats case - no page parameter provided, return array directly
     return useQuery({
       queryKey: ['admin', 'orders', 'all', { checkSMMGenStatus }],
       queryFn: () => fetchAllOrders(checkSMMGenStatus),
@@ -269,10 +271,10 @@ export const useAdminOrders = (options = {}) => {
 
   // For paginated queries (server-side filtering), fetch specific page
   return useQuery({
-    queryKey: ['admin', 'orders', 'paginated', { checkSMMGenStatus, searchTerm, statusFilter, dateFilter, page }],
+    queryKey: ['admin', 'orders', 'paginated', { checkSMMGenStatus, searchTerm, statusFilter, dateFilter, page: page || 1 }],
     queryFn: async () => {
       const result = await fetchOrders({ 
-        pageParam: (page || 1) - 1, // Convert 1-based page to 0-based pageParam, default to page 1
+        pageParam: (page || 1) - 1, // Convert 1-based page to 0-based pageParam, default to page 1 if not provided
         checkSMMGenStatus,
         searchTerm,
         statusFilter,
