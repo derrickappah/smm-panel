@@ -7,9 +7,11 @@ import ResponsiveTable from '@/components/admin/ResponsiveTable';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, RefreshCw, Filter, AlertCircle, RotateCcw, Tag } from 'lucide-react';
+import { Search, RefreshCw, Filter, AlertCircle, RotateCcw, Tag, CheckCircle2 } from 'lucide-react';
 import { processManualRefund } from '@/lib/refunds';
 import { toast } from 'sonner';
+import { supabase } from '@/lib/supabase';
+import { checkOrdersStatusBatch } from '@/lib/orderStatusCheck';
 
 const ITEMS_PER_PAGE = 50;
 const VIRTUAL_SCROLL_THRESHOLD = 100;
@@ -19,6 +21,8 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('');
   const [page, setPage] = useState(1);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
+  const [hasAutoChecked, setHasAutoChecked] = useState(false);
 
   const debouncedSearch = useDebounce(searchTerm, 300);
 
@@ -46,6 +50,115 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
 
   const updateOrderMutation = useUpdateOrder();
   const reorderMutation = useReorderToSMMGen();
+
+  // Fetch all pending/processing/in-progress orders from database
+  const fetchPendingOrders = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('id, user_id, service_id, promotion_package_id, link, quantity, total_cost, status, smmgen_order_id, smmcost_order_id, created_at, completed_at, refund_status, last_status_check, services(name, platform, service_type, smmgen_service_id, smmcost_service_id), promotion_packages(name, platform, service_type, smmgen_service_id), profiles(name, email, phone_number)')
+        .in('status', ['pending', 'processing', 'in progress'])
+        .not('status', 'eq', 'completed')
+        .not('status', 'eq', 'refunded')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching pending orders:', error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Failed to fetch pending orders:', error);
+      return [];
+    }
+  }, []);
+
+  // Handle checking pending orders status from panels
+  const handleCheckPendingOrders = useCallback(async () => {
+    if (isCheckingStatus) return; // Prevent multiple simultaneous checks
+
+    setIsCheckingStatus(true);
+
+    try {
+      // Fetch all pending/processing/in-progress orders
+      const pendingOrders = await fetchPendingOrders();
+
+      if (pendingOrders.length === 0) {
+        toast.info('No pending orders to check');
+        setIsCheckingStatus(false);
+        return;
+      }
+
+      // Debounce query invalidations to avoid too frequent updates
+      let invalidationTimeout = null;
+      const debouncedInvalidation = () => {
+        if (invalidationTimeout) {
+          clearTimeout(invalidationTimeout);
+        }
+        invalidationTimeout = setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ['admin', 'orders'] });
+        }, 500); // Debounce to 500ms
+      };
+
+      // Check orders status with high concurrency and bypassed interval
+      const result = await checkOrdersStatusBatch(pendingOrders, {
+        concurrency: 12, // High concurrency (10-15 range)
+        minIntervalMinutes: 0, // Bypass interval check for manual/admin checks
+        onStatusUpdate: (orderId, newStatus, oldStatus) => {
+          // Real-time UI updates via debounced query invalidation
+          debouncedInvalidation();
+        },
+        onProgress: (checked, total) => {
+          // Progress callback if needed in future
+          console.log(`Status check progress: ${checked}/${total}`);
+        }
+      });
+
+      // Clear any pending invalidation and do final refresh
+      if (invalidationTimeout) {
+        clearTimeout(invalidationTimeout);
+      }
+      queryClient.invalidateQueries({ queryKey: ['admin', 'orders'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
+
+      // Show summary toast notification
+      const errorCount = result.errors?.length || 0;
+      if (errorCount > 0) {
+        toast.warning(
+          `Status check complete: Checked ${result.checked} orders, updated ${result.updated}, ${errorCount} errors`,
+          { duration: 5000 }
+        );
+      } else {
+        toast.success(
+          `Status check complete: Checked ${result.checked} orders, updated ${result.updated}`,
+          { duration: 4000 }
+        );
+      }
+
+      // Refresh parent component if callback provided
+      if (onRefresh) {
+        onRefresh();
+      }
+    } catch (error) {
+      console.error('Error checking pending orders:', error);
+      toast.error('Failed to check pending orders: ' + (error.message || 'Unknown error'));
+    } finally {
+      setIsCheckingStatus(false);
+    }
+  }, [isCheckingStatus, fetchPendingOrders, queryClient, onRefresh]);
+
+  // Auto-trigger status check on component mount (only once)
+  useEffect(() => {
+    if (!hasAutoChecked && !isLoading) {
+      setHasAutoChecked(true);
+      // Run in background after a short delay to let page load
+      const timer = setTimeout(() => {
+        handleCheckPendingOrders();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [hasAutoChecked, isLoading, handleCheckPendingOrders]);
 
   // Get orders from current page (regular query returns { data: [...], total: ... })
   const paginatedOrders = useMemo(() => {
@@ -657,6 +770,16 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
             >
               <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
               Refresh
+            </Button>
+            <Button
+              onClick={handleCheckPendingOrders}
+              disabled={isCheckingStatus || refreshing}
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-2 min-h-[44px]"
+            >
+              <CheckCircle2 className={`w-4 h-4 ${isCheckingStatus ? 'animate-spin' : ''}`} />
+              {isCheckingStatus ? 'Checking...' : 'Check Pending Orders'}
             </Button>
           </div>
         </div>

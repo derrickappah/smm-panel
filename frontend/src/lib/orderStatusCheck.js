@@ -76,7 +76,8 @@ export const shouldCheckOrder = (order, minIntervalMinutes = 5) => {
   }
 
   // Skip if checked recently (within minIntervalMinutes)
-  if (order.last_status_check) {
+  // If minIntervalMinutes is 0, bypass the interval check (for manual/admin checks)
+  if (minIntervalMinutes > 0 && order.last_status_check) {
     const lastCheck = new Date(order.last_status_check);
     const now = new Date();
     const minutesSinceCheck = (now - lastCheck) / (1000 * 60);
