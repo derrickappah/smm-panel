@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
-import { placeSMMGenOrder } from '@/lib/smmgen';
-import { placeSMMCostOrder } from '@/lib/smmcost';
+import { placeSMMGenOrder, extractSMMGenOrderId } from '@/lib/smmgen';
+import { placeSMMCostOrder, extractSMMCostOrderId } from '@/lib/smmcost';
 import { saveOrderStatusHistory } from '@/lib/orderStatusHistory';
 import { normalizePhoneNumber } from '@/utils/phoneUtils';
 import Navbar from '@/components/Navbar';
@@ -3214,11 +3214,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                     console.warn(`SMMGen returned error for ${componentPackage.name}:`, smmgenResponse.error);
                     smmgenOrderId = null;
                   } else {
-                    smmgenOrderId = smmgenResponse.order || 
-                                   smmgenResponse.order_id || 
-                                   smmgenResponse.orderId || 
-                                   smmgenResponse.id || 
-                                   null;
+                    // Use standardized extraction utility that matches API endpoint logic
+                    smmgenOrderId = extractSMMGenOrderId(smmgenResponse);
                     console.log(`SMMGen order response for ${componentPackage.name}:`, smmgenResponse);
                     console.log(`SMMGen order ID extracted:`, smmgenOrderId);
                   }
@@ -3397,11 +3394,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                 // Don't extract order ID from error responses
                 smmgenOrderId = null;
               } else {
-                smmgenOrderId = smmgenResponse.order || 
-                               smmgenResponse.order_id || 
-                               smmgenResponse.orderId || 
-                               smmgenResponse.id || 
-                               null;
+                // Use standardized extraction utility that matches API endpoint logic
+                smmgenOrderId = extractSMMGenOrderId(smmgenResponse);
                 console.log('SMMGen order response for package:', smmgenResponse);
                 console.log('SMMGen order ID extracted:', smmgenOrderId);
               }
@@ -3596,14 +3590,16 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                 console.warn(`SMMGen returned null for ${componentService.name} - backend unavailable or not configured`);
                 // Mark as failure since we attempted but couldn't place the order
               } else if (smmgenResponse) {
-                // SMMGen API might return order ID in different fields
-                smmgenOrderId = smmgenResponse.order || 
-                               smmgenResponse.order_id || 
-                               smmgenResponse.orderId || 
-                               smmgenResponse.id || 
-                               null;
-                console.log(`SMMGen order response for ${componentService.name}:`, smmgenResponse);
-                console.log(`SMMGen order ID extracted:`, smmgenOrderId);
+                // Check if SMMGen returned an error response
+                if (smmgenResponse.error) {
+                  console.warn(`SMMGen returned error for ${componentService.name}:`, smmgenResponse.error);
+                  smmgenOrderId = null;
+                } else {
+                  // Use standardized extraction utility that matches API endpoint logic
+                  smmgenOrderId = extractSMMGenOrderId(smmgenResponse);
+                  console.log(`SMMGen order response for ${componentService.name}:`, smmgenResponse);
+                  console.log(`SMMGen order ID extracted:`, smmgenOrderId);
+                }
               }
             } catch (smmgenError) {
               console.error(`SMMGen order error caught for ${componentService.name}:`, smmgenError);
@@ -3778,84 +3774,38 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             // Mark as failure since we attempted but couldn't place the order
             // Leave as null, will be set to failure message in final check below
           } else if (smmcostResponse) {
-            // Check if SMMCost returned an error response (check both error field and message field)
-            // Also check nested response object if it exists
-            const nestedResponse = smmcostResponse.response || smmcostResponse.data || smmcostResponse.Response || smmcostResponse.Data;
-            const errorValue = smmcostResponse.error || 
-                             smmcostResponse.message || 
-                             smmcostResponse.Error || 
-                             smmcostResponse.Message ||
-                             (nestedResponse && (nestedResponse.error || nestedResponse.message || nestedResponse.Error || nestedResponse.Message));
-            const hasError = errorValue !== undefined && errorValue !== null;
-            
-            console.log('SMMCost error detection:', {
-              errorValue,
-              hasError,
-              errorField: smmcostResponse.error,
-              messageField: smmcostResponse.message
-            });
-            
-            // Also check if the error message contains common error keywords
-            const errorString = String(errorValue || '').toLowerCase();
-            const hasErrorKeywords = errorString.includes('error') || 
-                                    errorString.includes('incorrect') ||
-                                    errorString.includes('invalid') ||
-                                    errorString.includes('failed') ||
-                                    errorString.includes('not found');
-            
-            console.log('SMMCost error keyword check:', {
-              errorString,
-              hasErrorKeywords,
-              includesIncorrect: errorString.includes('incorrect')
-            });
-            
-            if (hasError || hasErrorKeywords) {
-              const errorMsg = errorValue || 'Unknown error';
+            // Check if SMMCost returned an error response
+            // Only check actual error fields, not keywords in message strings
+            if (smmcostResponse.error) {
+              const errorMsg = smmcostResponse.error || 'Unknown error';
               console.warn('SMMCost returned error - DETECTED:', errorMsg, 'Full response:', smmcostResponse);
               console.warn('Setting smmcostOrderId to null due to error');
               // Don't extract order ID from error responses
-              // Leave as null, will be set to failure message in final check below
               smmcostOrderId = null;
             } else {
-              // Double-check: if error exists, don't extract order ID
-              if (smmcostResponse.error || smmcostResponse.message) {
-                console.warn('SMMCost response has error field, skipping order ID extraction:', smmcostResponse);
-                smmcostOrderId = null;
-              } else {
-                // SMMCost API might return order ID in different fields
-                const extracted =
-                  smmcostResponse.order ||
-                  smmcostResponse.order_id ||
-                  smmcostResponse.orderId ||
-                  smmcostResponse.id ||
-                  null;
-
-                // Store as TEXT so we can also store failure messages
-                if (extracted !== null && extracted !== undefined) {
-                  const orderIdString = String(extracted);
-                  // Basic sanity check: if not numeric or <= 0, treat as failure
-                  const num = parseInt(orderIdString, 10);
-                  if (!isNaN(num) && num > 0) {
-                    smmcostOrderId = orderIdString;
-                  } else {
-                    // Invalid order ID, treat as failure
-                    smmcostOrderId = null;
-                  }
-                } else {
-                  // No order ID found, treat as failure
-                  smmcostOrderId = null;
-                }
-              }
+              // Use standardized extraction utility that matches API endpoint logic
+              smmcostOrderId = extractSMMCostOrderId(smmcostResponse);
               console.log('SMMCost order response:', smmcostResponse);
               console.log('SMMCost order ID extracted:', smmcostOrderId);
             }
           }
         } catch (smmcostError) {
           console.error('SMMCost order error caught:', smmcostError);
+          
+          // Handle 404 errors specifically - provide helpful message
+          if (smmcostError.status === 404 || smmcostError.isConfigurationError) {
+            console.error('SMMCost API endpoint not found. Make sure serverless functions are running:', {
+              error: smmcostError.message,
+              hint: 'Run "vercel dev" in the project root to start serverless functions locally'
+            });
+            toast.error('API endpoint not found. Please ensure serverless functions are running (use "vercel dev").');
+          }
+          
           // Only log actual API errors, not connection failures (which are handled gracefully)
           if (!smmcostError.message?.includes('Failed to fetch') && 
               !smmcostError.message?.includes('ERR_CONNECTION_REFUSED') &&
-              !smmcostError.message?.includes('Backend proxy server not running')) {
+              !smmcostError.message?.includes('Backend proxy server not running') &&
+              !smmcostError.isConfigurationError) {
             console.error('SMMCost order failed:', smmcostError);
             
             // If SMMCost API key is not configured, continue with local order only
@@ -3912,22 +3862,29 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               // Don't extract order ID from error responses
               smmgenOrderId = null;
             } else {
-                // SMMGen API might return order ID in different fields (expecting string)
-              smmgenOrderId = smmgenResponse.order || 
-                             smmgenResponse.order_id || 
-                             smmgenResponse.orderId || 
-                             smmgenResponse.id || 
-                             null;
+              // Use standardized extraction utility that matches API endpoint logic
+              smmgenOrderId = extractSMMGenOrderId(smmgenResponse);
               console.log('SMMGen order response:', smmgenResponse);
               console.log('SMMGen order ID extracted:', smmgenOrderId);
             }
           }
         } catch (smmgenError) {
           console.error('SMMGen order error caught:', smmgenError);
+          
+          // Handle 404 errors specifically - provide helpful message
+          if (smmgenError.status === 404 || smmgenError.isConfigurationError) {
+            console.error('SMMGen API endpoint not found. Make sure serverless functions are running:', {
+              error: smmgenError.message,
+              hint: 'Run "vercel dev" in the project root to start serverless functions locally'
+            });
+            toast.error('API endpoint not found. Please ensure serverless functions are running (use "vercel dev").');
+          }
+          
           // Only log actual API errors, not connection failures (which are handled gracefully)
           if (!smmgenError.message?.includes('Failed to fetch') && 
               !smmgenError.message?.includes('ERR_CONNECTION_REFUSED') &&
-              !smmgenError.message?.includes('Backend proxy server not running')) {
+              !smmgenError.message?.includes('Backend proxy server not running') &&
+              !smmgenError.isConfigurationError) {
             console.error('SMMGen order failed:', smmgenError);
           }
             // Continue with local order creation
@@ -3991,6 +3948,18 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       });
 
       if (!orderResponse.ok) {
+        // Handle 404 specifically - likely means serverless functions aren't running
+        if (orderResponse.status === 404) {
+          const errorMessage = 'Order placement API endpoint not found (404). Make sure you\'re running "vercel dev" to start serverless functions, or the endpoint is deployed correctly.';
+          console.error('Order placement API 404 Error - Serverless functions may not be running:', {
+            status: orderResponse.status,
+            url: '/api/place-order',
+            hint: 'Run "vercel dev" in the project root to start serverless functions locally'
+          });
+          toast.error('API endpoint not found. Please ensure serverless functions are running (use "vercel dev").');
+          throw new Error(errorMessage);
+        }
+
         const errorData = await orderResponse.json().catch(() => ({ error: 'Unknown error' }));
         const errorMessage = errorData.error || 'Failed to place order';
         const errorDetails = errorData.details ? ` - ${errorData.details}` : '';

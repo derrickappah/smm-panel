@@ -201,6 +201,65 @@ export const fetchSMMCostServices = async () => {
 };
 
 /**
+ * Extract order ID from SMMCost API response
+ * Matches the extraction logic used in API endpoints to ensure consistency
+ * @param {Object} response - API response object
+ * @returns {string|number|null} Extracted order ID or null if not found
+ */
+export const extractSMMCostOrderId = (response) => {
+  if (!response || typeof response !== 'object') {
+    return null;
+  }
+
+  // Check for order ID in various formats (matches API endpoint logic)
+  const orderId = response.order || 
+                 response.order_id || 
+                 response.orderId || 
+                 response.id ||
+                 response.Order ||
+                 response.OrderID ||
+                 response.OrderId ||
+                 (response.data && (response.data.order || response.data.order_id || response.data.id)) ||
+                 null;
+
+  // Validate order ID - must be truthy and not empty string
+  // For SMMCost, order IDs are typically numeric and must be > 0
+  if (orderId !== null && orderId !== undefined && orderId !== '') {
+    // Convert to string for consistency
+    const orderIdString = String(orderId);
+    // Validate: must parse to a positive integer
+    const num = parseInt(orderIdString, 10);
+    if (!isNaN(num) && num > 0) {
+      // Log extraction for debugging
+      console.log('SMMCost Order ID extracted:', {
+        orderId: orderIdString,
+        orderIdType: typeof orderId,
+        extractedFrom: Object.keys(response).find(key => {
+          const val = response[key];
+          return val === orderId || (response.data && response.data[key] === orderId);
+        }) || 'nested'
+      });
+      return orderIdString;
+    } else {
+      // Invalid order ID (zero, negative, or non-numeric)
+      console.warn('SMMCost order ID validation failed - invalid value:', {
+        orderId,
+        orderIdString,
+        parsedNumber: num
+      });
+    }
+  }
+
+  // Log failure with full response for debugging
+  console.warn('SMMCost response does not contain order ID in expected format:', {
+    response,
+    checkedFields: ['order', 'order_id', 'orderId', 'id', 'Order', 'OrderID', 'OrderId', 'data.order', 'data.order_id', 'data.id']
+  });
+
+  return null;
+};
+
+/**
  * Place order to SMMCost API with retry logic and comprehensive error handling
  * @param {number|string} serviceId - SMMCost service ID (numeric)
  * @param {string} link - Target URL
@@ -295,6 +354,20 @@ export const placeSMMCostOrder = async (serviceId, link, quantity, retryCount = 
       });
 
       if (!response.ok) {
+        // Handle 404 specifically - likely means serverless functions aren't running
+        if (response.status === 404) {
+          const errorMessage = `API endpoint not found (404). Make sure you're running 'vercel dev' to start serverless functions, or the endpoint is deployed correctly.`;
+          const fullError = new Error(errorMessage);
+          fullError.status = response.status;
+          fullError.isConfigurationError = true;
+          console.error('SMMCost API 404 Error - Serverless functions may not be running:', {
+            status: response.status,
+            url: apiUrl,
+            hint: 'Run "vercel dev" in the project root to start serverless functions locally'
+          });
+          throw fullError;
+        }
+
         let errorData;
         try {
           errorData = await response.json();
@@ -352,20 +425,13 @@ export const placeSMMCostOrder = async (serviceId, link, quantity, retryCount = 
       // Log full response for debugging
       console.log('SMMCost API Full Response:', JSON.stringify(data, null, 2));
 
-      // Validate response structure - check for order ID in various formats (expecting numeric)
-      const orderId = data.order || 
-                     data.order_id || 
-                     data.orderId || 
-                     data.id ||
-                     data.Order ||
-                     data.OrderID ||
-                     data.OrderId ||
-                     (data.data && (data.data.order || data.data.order_id || data.data.id)) ||
-                     null;
+      // Extract order ID using standardized utility function
+      const orderId = extractSMMCostOrderId(data);
 
       // Check for error in response even if status was 200
-      if (data.error || data.message?.toLowerCase().includes('error')) {
-        const errorMessage = data.error || data.message || 'Unknown error from SMMCost';
+      // Only check actual error fields, not keywords in message strings
+      if (data.error) {
+        const errorMessage = data.error || 'Unknown error from SMMCost';
         console.error('SMMCost returned error in response body:', {
           error: errorMessage,
           response: data,
@@ -387,14 +453,7 @@ export const placeSMMCostOrder = async (serviceId, link, quantity, retryCount = 
         }
       }
 
-      if (!orderId) {
-        console.warn('SMMCost response does not contain order ID in expected format:', {
-          response: data,
-          checkedFields: ['order', 'order_id', 'orderId', 'id', 'Order', 'OrderID', 'OrderId', 'data.order', 'data.order_id', 'data.id']
-        });
-        // Don't throw - return the response anyway, let the caller handle it
-      } else {
-        console.log('SMMCost Order ID extracted:', orderId);
+      if (orderId) {
         // Log successful order placement
         console.log('SMMCost order successfully placed:', {
           orderId,

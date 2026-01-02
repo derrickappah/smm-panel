@@ -213,6 +213,51 @@ export const fetchSMMGenServices = async () => {
 };
 
 /**
+ * Extract order ID from SMMGen API response
+ * Matches the extraction logic used in API endpoints to ensure consistency
+ * @param {Object} response - API response object
+ * @returns {string|number|null} Extracted order ID or null if not found
+ */
+export const extractSMMGenOrderId = (response) => {
+  if (!response || typeof response !== 'object') {
+    return null;
+  }
+
+  // Check for order ID in various formats (matches API endpoint logic)
+  const orderId = response.order || 
+                 response.order_id || 
+                 response.orderId || 
+                 response.id ||
+                 response.Order ||
+                 response.OrderID ||
+                 response.OrderId ||
+                 (response.data && (response.data.order || response.data.order_id || response.data.id)) ||
+                 null;
+
+  // Validate order ID - must be truthy and not empty string
+  if (orderId !== null && orderId !== undefined && orderId !== '') {
+    // Log extraction for debugging
+    console.log('SMMGen Order ID extracted:', {
+      orderId,
+      orderIdType: typeof orderId,
+      extractedFrom: Object.keys(response).find(key => {
+        const val = response[key];
+        return val === orderId || (response.data && response.data[key] === orderId);
+      }) || 'nested'
+    });
+    return orderId;
+  }
+
+  // Log failure with full response for debugging
+  console.warn('SMMGen response does not contain order ID in expected format:', {
+    response,
+    checkedFields: ['order', 'order_id', 'orderId', 'id', 'Order', 'OrderID', 'OrderId', 'data.order', 'data.order_id', 'data.id']
+  });
+
+  return null;
+};
+
+/**
  * Place an order via SMMGen API with retry logic and comprehensive error handling
  * @param {string} serviceId - SMMGen service ID
  * @param {string} link - Target URL/link
@@ -306,6 +351,20 @@ export const placeSMMGenOrder = async (serviceId, link, quantity, retryCount = 0
       });
 
       if (!response.ok) {
+        // Handle 404 specifically - likely means serverless functions aren't running
+        if (response.status === 404) {
+          const errorMessage = `API endpoint not found (404). Make sure you're running 'vercel dev' to start serverless functions, or the endpoint is deployed correctly.`;
+          const fullError = new Error(errorMessage);
+          fullError.status = response.status;
+          fullError.isConfigurationError = true;
+          console.error('SMMGen API 404 Error - Serverless functions may not be running:', {
+            status: response.status,
+            url: apiUrl,
+            hint: 'Run "vercel dev" in the project root to start serverless functions locally'
+          });
+          throw fullError;
+        }
+
         let errorData;
         try {
           errorData = await response.json();
@@ -370,20 +429,13 @@ export const placeSMMGenOrder = async (serviceId, link, quantity, retryCount = 0
       // Log full response for debugging
       console.log('SMMGen API Full Response:', JSON.stringify(data, null, 2));
 
-      // Validate response structure - check for order ID in various formats
-      const orderId = data.order || 
-                     data.order_id || 
-                     data.orderId || 
-                     data.id ||
-                     data.Order ||
-                     data.OrderID ||
-                     data.OrderId ||
-                     (data.data && (data.data.order || data.data.order_id || data.data.id)) ||
-                     null;
+      // Extract order ID using standardized utility function
+      const orderId = extractSMMGenOrderId(data);
 
       // Check for error in response even if status was 200
-      if (data.error || data.message?.toLowerCase().includes('error')) {
-        const errorMessage = data.error || data.message || 'Unknown error from SMMGen';
+      // Only check actual error fields, not keywords in message strings
+      if (data.error) {
+        const errorMessage = data.error || 'Unknown error from SMMGen';
         console.error('SMMGen returned error in response body:', {
           error: errorMessage,
           response: data,
@@ -405,14 +457,7 @@ export const placeSMMGenOrder = async (serviceId, link, quantity, retryCount = 0
         }
       }
 
-      if (!orderId) {
-        console.warn('SMMGen response does not contain order ID in expected format:', {
-          response: data,
-          checkedFields: ['order', 'order_id', 'orderId', 'id', 'Order', 'OrderID', 'OrderId', 'data.order', 'data.order_id', 'data.id']
-        });
-        // Don't throw - return the response anyway, let the caller handle it
-      } else {
-        console.log('SMMGen Order ID extracted:', orderId);
+      if (orderId) {
         // Log successful order placement to help track duplicates
         console.log('SMMGen order successfully placed:', {
           orderId,
