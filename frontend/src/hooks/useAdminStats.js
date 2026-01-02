@@ -38,7 +38,11 @@ export const useAdminStats = (options = {}) => {
   // Fetch ALL data needed for stats in parallel - no limits, optimized pagination
   // All data is fetched efficiently using batched pagination for maximum performance
   const { data: users = [], isLoading: usersLoading } = useAdminUsers({ enabled, useInfinite: false });
-  const { data: orders = [], isLoading: ordersLoading } = useAdminOrders({ enabled, useInfinite: false, checkSMMGenStatus: false });
+  // useAdminOrders with useInfinite: false and no filters returns array directly (fetchAllOrders)
+  // With filters, it returns { data: [...], total: ... } structure
+  const { data: ordersData, isLoading: ordersLoading } = useAdminOrders({ enabled, useInfinite: false, checkSMMGenStatus: false });
+  // Handle both array and { data, total } structures
+  const orders = Array.isArray(ordersData) ? ordersData : (ordersData?.data || []);
   const { data: deposits = [], isLoading: depositsLoading } = useAdminDeposits({ enabled, useInfinite: false });
   const { data: services = [], isLoading: servicesLoading } = useAdminServices({ enabled });
   

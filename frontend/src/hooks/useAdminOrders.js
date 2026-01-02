@@ -80,21 +80,26 @@ const fetchOrders = async ({
     
     // For profile fields, find matching user IDs and include them in the search
     try {
-      const { data: matchingProfiles } = await supabase
+      const { data: matchingProfiles, error: profileError } = await supabase
         .from('profiles')
         .select('id')
         .or(`name.ilike.${searchPattern},email.ilike.${searchPattern},phone_number.ilike.${searchPattern}`);
       
-      const matchingUserIds = matchingProfiles?.map(p => p.id) || [];
-      
-      // Combine order field search with user ID matches
-      if (matchingUserIds.length > 0) {
-        // Build OR condition: order fields match OR user_id matches
-        // Use individual user_id.eq conditions in the OR clause
-        const userIdConditions = matchingUserIds.map(id => `user_id.eq.${id}`).join(',');
-        query = query.or(`${orderFieldsSearch},${userIdConditions}`);
-      } else {
+      if (profileError) {
+        console.warn('Profile search error, using order fields only:', profileError);
         query = query.or(orderFieldsSearch);
+      } else {
+        const matchingUserIds = matchingProfiles?.map(p => p.id) || [];
+        
+        // Combine order field search with user ID matches
+        if (matchingUserIds.length > 0) {
+          // Build OR condition: order fields match OR user_id matches
+          // Use individual user_id.eq conditions in the OR clause
+          const userIdConditions = matchingUserIds.map(id => `user_id.eq.${id}`).join(',');
+          query = query.or(`${orderFieldsSearch},${userIdConditions}`);
+        } else {
+          query = query.or(orderFieldsSearch);
+        }
       }
     } catch (profileSearchError) {
       // If profile search fails, fall back to order fields only
@@ -246,12 +251,28 @@ export const useAdminOrders = (options = {}) => {
     });
   }
 
+  // For stats (when no filters and useInfinite: false), use fetchAllOrders which returns array
+  // For paginated queries (with filters or page specified), use fetchOrders which returns { data, total }
+  const hasFilters = searchTerm || statusFilter !== 'all' || dateFilter || (page && page !== 1);
+  
+  if (!useInfinite && !hasFilters) {
+    // This is the stats case - return array directly
+    return useQuery({
+      queryKey: ['admin', 'orders', 'all', { checkSMMGenStatus }],
+      queryFn: () => fetchAllOrders(checkSMMGenStatus),
+      enabled: queryEnabled,
+      staleTime: 2 * 60 * 1000, // 2 minutes - increased for better caching
+      gcTime: 5 * 60 * 1000, // 5 minutes - keep in cache longer
+      placeholderData: (previousData) => previousData, // Show stale data while fetching
+    });
+  }
+
   // For paginated queries (server-side filtering), fetch specific page
   return useQuery({
     queryKey: ['admin', 'orders', 'paginated', { checkSMMGenStatus, searchTerm, statusFilter, dateFilter, page }],
     queryFn: async () => {
       const result = await fetchOrders({ 
-        pageParam: page - 1, // Convert 1-based page to 0-based pageParam
+        pageParam: (page || 1) - 1, // Convert 1-based page to 0-based pageParam, default to page 1
         checkSMMGenStatus,
         searchTerm,
         statusFilter,
