@@ -14,37 +14,6 @@ import { toast } from 'sonner';
 const ITEMS_PER_PAGE = 50;
 const VIRTUAL_SCROLL_THRESHOLD = 100;
 
-// Helper function to normalize phone numbers by removing formatting characters
-const normalizePhoneNumber = (phone) => {
-  if (!phone) return '';
-  // Remove all non-digit characters (spaces, dashes, plus signs, parentheses, etc.)
-  return phone.toString().replace(/\D/g, '');
-};
-
-// Helper function to normalize URLs for better search matching
-const normalizeUrl = (url) => {
-  if (!url) return '';
-  try {
-    let normalized = url.toString().toLowerCase().trim();
-    // Remove protocol (http://, https://)
-    normalized = normalized.replace(/^https?:\/\//, '');
-    // Remove www.
-    normalized = normalized.replace(/^www\./, '');
-    // Remove trailing slash
-    normalized = normalized.replace(/\/$/, '');
-    // Try to decode URL encoding, but catch errors for malformed URLs
-    try {
-      normalized = decodeURIComponent(normalized);
-    } catch (e) {
-      // If decoding fails, use the normalized version without decoding
-    }
-    return normalized;
-  } catch (e) {
-    // If any error occurs, return the original URL in lowercase
-    return url.toString().toLowerCase();
-  }
-};
-
 const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -55,151 +24,42 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
 
   const queryClient = useQueryClient();
 
+  // Reset page to 1 when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, statusFilter, dateFilter]);
+
   const { 
     data, 
     isLoading, 
-    fetchNextPage, 
-    hasNextPage,
-    isFetchingNextPage,
+    isFetching,
     refetch
   } = useAdminOrders({ 
     enabled: true, 
-    useInfinite: true,
-    checkSMMGenStatus: true
+    useInfinite: false, // Use regular query for server-side pagination
+    checkSMMGenStatus: false, // Disable by default for better performance - can be enabled later if needed
+    searchTerm: debouncedSearch,
+    statusFilter: statusFilter,
+    dateFilter: dateFilter,
+    page: page // Pass current page
   });
 
   const updateOrderMutation = useUpdateOrder();
   const reorderMutation = useReorderToSMMGen();
 
-  const allOrders = useMemo(() => {
-    if (!data?.pages) return [];
-    return data.pages.flatMap(page => page.data || []);
+  // Get orders from current page (regular query returns { data: [...], total: ... })
+  const paginatedOrders = useMemo(() => {
+    return data?.data || [];
   }, [data]);
 
-  // Get total count from first page
+  // Get total count from server response
   const totalCount = useMemo(() => {
-    return data?.pages?.[0]?.total || allOrders.length;
-  }, [data, allOrders.length]);
+    return data?.total || 0;
+  }, [data]);
 
-  // Load all pages immediately after initial load (regardless of filters)
-  useEffect(() => {
-    if (!isLoading && hasNextPage && !isFetchingNextPage) {
-      // Fetch all remaining pages immediately
-      fetchNextPage();
-    }
-  }, [isLoading, hasNextPage, isFetchingNextPage, fetchNextPage]);
-
-  const filteredOrders = useMemo(() => {
-    let filtered = [...allOrders];
-
-    if (debouncedSearch) {
-      const searchLower = debouncedSearch.toLowerCase().trim();
-      // Normalize search term for phone number matching (remove non-digits)
-      const searchNormalized = normalizePhoneNumber(debouncedSearch);
-      // Normalize search term for URL matching
-      const searchUrlNormalized = normalizeUrl(debouncedSearch);
-      
-      filtered = filtered.filter(order => {
-        if (!order) return false;
-        
-        // Convert order ID to string explicitly (database UUID)
-        const orderId = String(order.id || '').toLowerCase();
-        // Panel order IDs (what users see in "Order No" column)
-        const smmcostOrderId = String(order.smmcost_order_id || '').toLowerCase();
-        const smmgenOrderId = String(order.smmgen_order_id || '').toLowerCase();
-        // Get user name - handle both object and array formats, trim whitespace
-        const profileName = order.profiles?.name || 
-                          (Array.isArray(order.profiles) && order.profiles[0]?.name) || 
-                          '';
-        const userName = profileName ? String(profileName).toLowerCase().trim() : '';
-        // Get user email - handle both object and array formats
-        const profileEmail = order.profiles?.email || 
-                            (Array.isArray(order.profiles) && order.profiles[0]?.email) || 
-                            '';
-        const userEmail = profileEmail ? String(profileEmail).toLowerCase().trim() : '';
-        // Get phone number - handle both object and array formats
-        const profilePhone = order.profiles?.phone_number || 
-                            (Array.isArray(order.profiles) && order.profiles[0]?.phone_number) || 
-                            '';
-        const userPhone = profilePhone ? String(profilePhone).toLowerCase().trim() : '';
-        const userPhoneNormalized = normalizePhoneNumber(userPhone);
-        const serviceName = (order.promotion_package_id 
-          ? order.promotion_packages?.name || ''
-          : order.services?.name || '').toLowerCase();
-        
-        // Get link - check original first, then normalized
-        const orderLink = order.link ? String(order.link).toLowerCase().trim() : '';
-        const orderLinkNormalized = order.link ? normalizeUrl(order.link) : '';
-        
-        // For links, check multiple ways:
-        // 1. Direct substring match on original link
-        // 2. Normalized match (handles protocol/www/trailing slash differences)
-        const linkMatches = orderLink && (
-          orderLink.includes(searchLower) || 
-          orderLink === searchLower ||
-          (searchUrlNormalized && orderLinkNormalized && (
-            orderLinkNormalized.includes(searchUrlNormalized) ||
-            orderLinkNormalized === searchUrlNormalized ||
-            searchUrlNormalized.includes(orderLinkNormalized)
-          ))
-        );
-        
-        // Check name with both substring and exact match
-        const nameMatches = userName && (
-          userName.includes(searchLower) || 
-          userName === searchLower
-        );
-        
-        return orderId.includes(searchLower) || 
-               smmcostOrderId.includes(searchLower) ||
-               smmgenOrderId.includes(searchLower) ||
-               nameMatches ||
-               userEmail.includes(searchLower) ||
-               userPhone.includes(searchLower) ||
-               (searchNormalized && userPhoneNormalized && userPhoneNormalized.includes(searchNormalized)) ||
-               serviceName.includes(searchLower) ||
-               linkMatches;
-      });
-    }
-
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(order => {
-        if (statusFilter === 'refunded') {
-          return order.refund_status === 'succeeded';
-        }
-        if (statusFilter === 'failed_to_smmgen') {
-          // Show orders without SMMGen ID that are not completed or cancelled
-          return !order.smmgen_order_id && !order.smmcost_order_id && 
-                 order.status !== 'completed' && 
-                 order.status !== 'cancelled' &&
-                 order.status !== 'refunded';
-        }
-        return order.status === statusFilter;
-      });
-    }
-
-    if (dateFilter) {
-      const filterDate = new Date(dateFilter);
-      filterDate.setHours(0, 0, 0, 0);
-      const filterDateEnd = new Date(filterDate);
-      filterDateEnd.setHours(23, 59, 59, 999);
-      
-      filtered = filtered.filter(order => {
-        const orderDate = new Date(order.created_at);
-        return orderDate >= filterDate && orderDate <= filterDateEnd;
-      });
-    }
-
-    return filtered;
-  }, [allOrders, debouncedSearch, statusFilter, dateFilter]);
-
-  const paginatedOrders = useMemo(() => {
-    const startIndex = (page - 1) * ITEMS_PER_PAGE;
-    return filteredOrders.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredOrders, page]);
-
-  const totalPages = Math.ceil(filteredOrders.length / ITEMS_PER_PAGE);
-  const displayTotal = filteredOrders.length;
+  // Calculate total pages from server-provided total count
+  const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
+  const displayTotal = totalCount;
 
   const handleOrderStatusUpdate = useCallback(async (orderId, newStatus) => {
     try {
@@ -777,7 +637,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
     );
   }
 
-  const useVirtualScroll = filteredOrders.length > VIRTUAL_SCROLL_THRESHOLD;
+  const useVirtualScroll = paginatedOrders.length > VIRTUAL_SCROLL_THRESHOLD;
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm w-full max-w-full overflow-hidden">
@@ -823,7 +683,10 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                 className="w-full h-12 text-base"
               />
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <Select value={statusFilter} onValueChange={(value) => {
+              setStatusFilter(value);
+              setPage(1);
+            }}>
               <SelectTrigger className="w-full sm:w-48 min-h-[44px]">
                 <Filter className="w-4 h-4 mr-2" />
                 <SelectValue />
@@ -845,7 +708,13 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
         </div>
       </div>
 
-      {filteredOrders.length === 0 ? (
+      {isLoading && paginatedOrders.length === 0 ? (
+        <div className="space-y-2">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="h-24 bg-gray-200 rounded animate-pulse"></div>
+          ))}
+        </div>
+      ) : paginatedOrders.length === 0 ? (
         <p className="text-gray-600 text-center py-8">No orders found</p>
       ) : (
         <>
@@ -863,8 +732,8 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
           <div className="flex items-center justify-between mt-4">
             <div className="text-sm text-gray-600">
               Showing {(page - 1) * ITEMS_PER_PAGE + 1} to {Math.min(page * ITEMS_PER_PAGE, displayTotal)} of {displayTotal} orders
-              {hasNextPage && !isFetchingNextPage && (
-                <span className="ml-2 text-xs text-gray-500">(Loading more...)</span>
+              {isFetching && (
+                <span className="ml-2 text-xs text-gray-500">(Loading...)</span>
               )}
             </div>
             <div className="flex items-center gap-2">

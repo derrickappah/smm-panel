@@ -7,7 +7,7 @@ import { useUserRole } from './useUserRole';
 import { queryClient } from '@/lib/queryClient';
 import { toast } from 'sonner';
 
-const PAGE_SIZE = 1000;
+const PAGE_SIZE = 50; // Reduced from 1000 to match ITEMS_PER_PAGE in component
 
 // Background function to check SMMGen statuses (non-blocking)
 // Now uses the optimized batch utility with last_status_check filtering
@@ -27,18 +27,89 @@ const checkSMMGenStatusesInBackground = async (ordersToCheck) => {
   console.log(`Completed background SMMGen status check: ${result.checked} checked, ${result.updated} updated, ${result.errors.length} errors`);
 };
 
-// Fetch orders with pagination
-const fetchOrders = async ({ pageParam = 0, checkSMMGenStatus = false }) => {
+// Fetch orders with pagination and server-side filtering
+const fetchOrders = async ({ 
+  pageParam = 0, 
+  checkSMMGenStatus = false,
+  searchTerm = '',
+  statusFilter = 'all',
+  dateFilter = ''
+}) => {
   const from = pageParam * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
 
-  const { data, error, count } = await supabase
+  // Build the base query
+  let query = supabase
     .from('orders')
     .select('id, user_id, service_id, promotion_package_id, link, quantity, total_cost, status, smmgen_order_id, smmcost_order_id, created_at, completed_at, refund_status, last_status_check, services(name, platform, service_type, smmgen_service_id, smmcost_service_id), promotion_packages(name, platform, service_type, smmgen_service_id), profiles(name, email, phone_number)', { count: 'exact' })
-    .order('created_at', { ascending: false })
-    .range(from, to);
+    .order('created_at', { ascending: false });
+
+  // Apply status filter
+  if (statusFilter !== 'all') {
+    if (statusFilter === 'refunded') {
+      query = query.eq('refund_status', 'succeeded');
+    } else if (statusFilter === 'failed_to_smmgen') {
+      // Orders without SMMGen ID that are not completed or cancelled
+      query = query.is('smmgen_order_id', null)
+                   .is('smmcost_order_id', null)
+                   .not('status', 'in', '(completed,cancelled,refunded)');
+    } else {
+      query = query.eq('status', statusFilter);
+    }
+  }
+
+  // Apply date filter
+  if (dateFilter) {
+    const filterDate = new Date(dateFilter);
+    filterDate.setHours(0, 0, 0, 0);
+    const filterDateEnd = new Date(filterDate);
+    filterDateEnd.setHours(23, 59, 59, 999);
+    
+    query = query.gte('created_at', filterDate.toISOString())
+                 .lte('created_at', filterDateEnd.toISOString());
+  }
+
+  // Apply search filter (text search across multiple fields)
+  if (searchTerm && searchTerm.trim()) {
+    const searchPattern = `%${searchTerm.trim()}%`;
+    
+    // Search order fields directly (id, panel IDs, link)
+    // Note: Profile fields (name, email, phone) require a separate query to find matching user IDs
+    // For now, we'll search order fields server-side. Profile search can be added as an enhancement.
+    const orderFieldsSearch = `id.ilike.${searchPattern},smmgen_order_id.ilike.${searchPattern},smmcost_order_id.ilike.${searchPattern},link.ilike.${searchPattern}`;
+    
+    // For profile fields, find matching user IDs and include them in the search
+    try {
+      const { data: matchingProfiles } = await supabase
+        .from('profiles')
+        .select('id')
+        .or(`name.ilike.${searchPattern},email.ilike.${searchPattern},phone_number.ilike.${searchPattern}`);
+      
+      const matchingUserIds = matchingProfiles?.map(p => p.id) || [];
+      
+      // Combine order field search with user ID matches
+      if (matchingUserIds.length > 0) {
+        // Build OR condition: order fields match OR user_id matches
+        // Use individual user_id.eq conditions in the OR clause
+        const userIdConditions = matchingUserIds.map(id => `user_id.eq.${id}`).join(',');
+        query = query.or(`${orderFieldsSearch},${userIdConditions}`);
+      } else {
+        query = query.or(orderFieldsSearch);
+      }
+    } catch (profileSearchError) {
+      // If profile search fails, fall back to order fields only
+      console.warn('Profile search failed, using order fields only:', profileSearchError);
+      query = query.or(orderFieldsSearch);
+    }
+  }
+
+  // Apply pagination
+  query = query.range(from, to);
+
+  const { data, error, count } = await query;
 
   if (error) {
+    console.error('Error fetching orders:', error);
     if (error.code === '42501' || error.message?.includes('permission') || error.message?.includes('policy')) {
       toast.error('RLS Policy Error: Cannot view all orders. Please run database/fixes/FIX_ADMIN_RLS.sql in Supabase SQL Editor.');
     }
@@ -46,8 +117,19 @@ const fetchOrders = async ({ pageParam = 0, checkSMMGenStatus = false }) => {
   }
 
   let finalOrders = data || [];
+  
+  // Debug logging
+  console.log('fetchOrders result:', { 
+    pageParam, 
+    finalOrdersCount: finalOrders.length, 
+    totalCount: count,
+    searchTerm,
+    statusFilter,
+    dateFilter
+  });
 
   // Check SMMGen status if requested (non-blocking - runs in background)
+  // Only check visible orders to reduce overhead
   if (checkSMMGenStatus && finalOrders.length > 0) {
     // Filter to only orders that need status checking using the utility function
     // This now includes last_status_check filtering
@@ -127,7 +209,15 @@ const fetchAllOrders = async (checkSMMGenStatus = false) => {
 };
 
 export const useAdminOrders = (options = {}) => {
-  const { enabled = true, useInfinite = false, checkSMMGenStatus = false } = options;
+  const { 
+    enabled = true, 
+    useInfinite = false, 
+    checkSMMGenStatus = false,
+    searchTerm = '',
+    statusFilter = 'all',
+    dateFilter = '',
+    page = 1 // Add page parameter for direct pagination
+  } = options;
   
   // Check role at hook level (cached)
   const { data: userRole, isLoading: roleLoading } = useUserRole();
@@ -137,23 +227,43 @@ export const useAdminOrders = (options = {}) => {
   const queryEnabled = enabled && !roleLoading && isAdmin;
 
   if (useInfinite) {
+    // For infinite query, still use pageParam but with filters
     return useInfiniteQuery({
-      queryKey: ['admin', 'orders', { checkSMMGenStatus }],
-      queryFn: ({ pageParam }) => fetchOrders({ pageParam, checkSMMGenStatus }),
+      queryKey: ['admin', 'orders', 'infinite', { checkSMMGenStatus, searchTerm, statusFilter, dateFilter }],
+      queryFn: ({ pageParam }) => fetchOrders({ 
+        pageParam, 
+        checkSMMGenStatus,
+        searchTerm,
+        statusFilter,
+        dateFilter
+      }),
       getNextPageParam: (lastPage) => lastPage.nextPage,
       initialPageParam: 0,
       enabled: queryEnabled,
       staleTime: 1 * 60 * 1000, // 1 minute - orders change frequently
       gcTime: 3 * 60 * 1000, // 3 minutes
+      placeholderData: (previousData) => previousData, // Show stale data while fetching
     });
   }
 
+  // For paginated queries (server-side filtering), fetch specific page
   return useQuery({
-    queryKey: ['admin', 'orders', 'all', { checkSMMGenStatus }],
-    queryFn: () => fetchAllOrders(checkSMMGenStatus),
+    queryKey: ['admin', 'orders', 'paginated', { checkSMMGenStatus, searchTerm, statusFilter, dateFilter, page }],
+    queryFn: async () => {
+      const result = await fetchOrders({ 
+        pageParam: page - 1, // Convert 1-based page to 0-based pageParam
+        checkSMMGenStatus,
+        searchTerm,
+        statusFilter,
+        dateFilter
+      });
+      // Return the result directly - it already has { data, total } structure
+      return result;
+    },
     enabled: queryEnabled,
-    staleTime: 2 * 60 * 1000, // 2 minutes - increased for better caching
-    gcTime: 5 * 60 * 1000, // 5 minutes - keep in cache longer
+    staleTime: 1 * 60 * 1000, // 1 minute - orders change frequently
+    gcTime: 3 * 60 * 1000, // 3 minutes
+    placeholderData: (previousData) => previousData, // Show stale data while fetching
   });
 };
 
