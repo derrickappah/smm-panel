@@ -47,12 +47,16 @@ const fetchOrders = async ({
   // Apply status filter
   if (statusFilter !== 'all') {
     if (statusFilter === 'refunded') {
-      query = query.eq('refund_status', 'succeeded');
+      // Check both status='refunded' OR refund_status='succeeded' (for backward compatibility)
+      query = query.or('status.eq.refunded,refund_status.eq.succeeded');
+    } else if (statusFilter === 'canceled') {
+      // Handle both spellings: canceled and cancelled (for backward compatibility)
+      query = query.or('status.eq.canceled,status.eq.cancelled');
     } else if (statusFilter === 'failed_to_smmgen') {
       // Orders without SMMGen ID that are not completed or cancelled
       query = query.is('smmgen_order_id', null)
                    .is('smmcost_order_id', null)
-                   .not('status', 'in', '(completed,cancelled,refunded)');
+                   .not('status', 'in', '(completed,cancelled,canceled,refunded)');
     } else {
       query = query.eq('status', statusFilter);
     }
@@ -295,6 +299,18 @@ export const useUpdateOrder = () => {
 
   return useMutation({
     mutationFn: async ({ orderId, updates }) => {
+      // Get current order to find previous status
+      const { data: currentOrder } = await supabase
+        .from('orders')
+        .select('status')
+        .eq('id', orderId)
+        .single();
+
+      // Get current user ID for status history
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id || null;
+
+      // Update the order
       const { data, error } = await supabase
         .from('orders')
         .update(updates)
@@ -303,6 +319,22 @@ export const useUpdateOrder = () => {
         .single();
 
       if (error) throw error;
+
+      // Save status history if status is being updated
+      if (updates.status && currentOrder?.status && updates.status !== currentOrder.status) {
+        await saveOrderStatusHistory(
+          orderId,
+          updates.status,
+          'manual',
+          null,
+          currentOrder.status,
+          userId
+        ).catch(err => {
+          // Don't fail the update if history save fails
+          console.warn('Failed to save order status history:', err);
+        });
+      }
+
       return data;
     },
     onMutate: async ({ orderId, updates }) => {
@@ -349,19 +381,17 @@ export const useUpdateOrder = () => {
           });
         }
 
-        // Handle query with data property
-        if (oldData.data) {
-          if (Array.isArray(oldData.data)) {
-            return {
-              ...oldData,
-              data: oldData.data.map((order) => {
-                if (order.id === orderId) {
-                  return { ...order, ...updates };
-                }
-                return order;
-              }),
-            };
-          }
+        // Handle paginated query structure: { data: [...], total: ... }
+        if (oldData.data && Array.isArray(oldData.data)) {
+          return {
+            ...oldData,
+            data: oldData.data.map((order) => {
+              if (order.id === orderId) {
+                return { ...order, ...updates };
+              }
+              return order;
+            }),
+          };
         }
 
         return oldData;
@@ -379,7 +409,7 @@ export const useUpdateOrder = () => {
       }
       toast.error(error.message || 'Failed to update order');
     },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
       // Invalidate queries to ensure data consistency (refetch in background)
       queryClient.invalidateQueries({ queryKey: ['admin', 'orders'] });
       queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
