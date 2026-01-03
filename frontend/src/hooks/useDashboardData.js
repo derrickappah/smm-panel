@@ -121,27 +121,50 @@ const fetchAllPendingOrders = async () => {
 // Check all pending orders status in the background
 const checkAllPendingOrdersStatus = async (queryClient) => {
   try {
-    // Fetch all pending orders for the current user
-    const pendingOrders = await fetchAllPendingOrders();
-    
-    if (pendingOrders.length === 0) {
-      console.log('No pending orders to check');
-      return;
+    let maxIterations = 10; // Prevent infinite loops
+    let iteration = 0;
+    let hasUpdates = true;
+
+    // Keep checking until there are no pending orders or no updates
+    while (hasUpdates && iteration < maxIterations) {
+      iteration++;
+      
+      // Fetch all pending orders for the current user
+      const pendingOrders = await fetchAllPendingOrders();
+      
+      if (pendingOrders.length === 0) {
+        console.log('No pending orders to check');
+        break;
+      }
+
+      console.log(`Checking status for ${pendingOrders.length} pending orders in background (iteration ${iteration})`);
+      
+      // Check orders status using batch utility
+      // Use minIntervalMinutes: 0 to bypass interval check and check all pending orders
+      const result = await checkOrdersStatusBatch(pendingOrders, {
+        concurrency: 5, // Moderate concurrency for background checks
+        minIntervalMinutes: 0 // Bypass interval check to check all pending orders on dashboard load
+      });
+
+      console.log(`Background status check complete: ${result.checked} checked, ${result.updated} updated, ${result.errors.length} errors`);
+
+      // Invalidate recent orders query to trigger refetch and update UI
+      if (result.updated > 0) {
+        queryClient.invalidateQueries({ queryKey: ['recentOrders'] });
+      }
+
+      // If no orders were updated, stop checking
+      // Also stop if no orders were checked (all were filtered out)
+      if (result.updated === 0 || result.checked === 0) {
+        hasUpdates = false;
+      } else {
+        // Small delay before next iteration to allow database updates to propagate
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
     }
 
-    console.log(`Checking status for ${pendingOrders.length} pending orders in background`);
-    
-    // Check orders status using batch utility
-    const result = await checkOrdersStatusBatch(pendingOrders, {
-      concurrency: 5, // Moderate concurrency for background checks
-      minIntervalMinutes: 5 // Respect the 5-minute interval
-    });
-
-    console.log(`Background status check complete: ${result.checked} checked, ${result.updated} updated, ${result.errors.length} errors`);
-
-    // Invalidate recent orders query to trigger refetch and update UI
-    if (result.updated > 0) {
-      queryClient.invalidateQueries({ queryKey: ['recentOrders'] });
+    if (iteration >= maxIterations) {
+      console.log(`Reached maximum iterations (${maxIterations}) for status checking`);
     }
   } catch (error) {
     // Silent error handling - only log to console
