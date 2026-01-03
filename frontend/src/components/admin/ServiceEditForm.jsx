@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-const ServiceEditForm = ({ service, onSave, onCancel }) => {
+const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
   const [formData, setFormData] = useState({
     platform: service.platform,
     service_type: service.service_type,
@@ -25,6 +25,24 @@ const ServiceEditForm = ({ service, onSave, onCancel }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    
+    // Validation: Minimum 2 services required for combo
+    if (formData.is_combo && formData.combo_service_ids.length < 2) {
+      alert('A combo service must include at least 2 component services.');
+      return;
+    }
+    
+    // Validation: Circular dependency check
+    if (formData.is_combo && formData.combo_service_ids.length > 0) {
+      for (const selectedServiceId of formData.combo_service_ids) {
+        const selectedService = services.find(s => s.id === selectedServiceId);
+        if (selectedService && selectedService.combo_service_ids && selectedService.combo_service_ids.includes(service.id)) {
+          alert(`Circular dependency detected: The selected service "${selectedService.name}" already includes this service in its combo. Please remove it to prevent circular references.`);
+          return;
+        }
+      }
+    }
+    
     const updateData = {
       platform: formData.platform,
       service_type: formData.service_type,
@@ -175,6 +193,78 @@ const ServiceEditForm = ({ service, onSave, onCancel }) => {
           Enabled (visible to users)
         </Label>
       </div>
+      
+      {/* Combo Service Options */}
+      <div className="space-y-4 p-4 border border-gray-200 rounded-lg bg-gray-50">
+        <div className="flex items-center space-x-2">
+          <input
+            type="checkbox"
+            id="edit_is_combo"
+            checked={formData.is_combo}
+            onChange={(e) => setFormData({ ...formData, is_combo: e.target.checked })}
+            className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+          />
+          <Label htmlFor="edit_is_combo" className="text-sm font-medium text-gray-900">
+            This is a combo service (combines multiple services)
+          </Label>
+        </div>
+        
+        {formData.is_combo && (
+          <div className="space-y-3 mt-3">
+            <div>
+              <Label className="text-sm font-medium">Component Services</Label>
+              <p className="text-xs text-gray-500 mb-2">Select the services to include in this combo</p>
+              <div className="max-h-40 overflow-y-auto border border-gray-200 rounded p-2 bg-white">
+                {services
+                  .filter(s => !s.is_combo && s.id !== service.id)
+                  .map((serviceItem) => (
+                    <div key={serviceItem.id} className="flex items-center space-x-2 py-1">
+                      <input
+                        type="checkbox"
+                        checked={formData.combo_service_ids?.includes(serviceItem.id)}
+                        onChange={(e) => {
+                          const currentIds = formData.combo_service_ids || [];
+                          if (e.target.checked) {
+                            setFormData({
+                              ...formData,
+                              combo_service_ids: [...currentIds, serviceItem.id]
+                            });
+                          } else {
+                            setFormData({
+                              ...formData,
+                              combo_service_ids: currentIds.filter(id => id !== serviceItem.id)
+                            });
+                          }
+                        }}
+                        className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                      />
+                      <Label className="text-sm text-gray-700">
+                        {serviceItem.name} ({serviceItem.platform} - ₵{serviceItem.rate}/1000)
+                      </Label>
+                    </div>
+                  ))}
+              </div>
+            </div>
+            
+            <div>
+              <Label className="text-sm font-medium">SMMGen Service IDs (comma-separated)</Label>
+              <Input
+                placeholder="123, 456 (one for each component service)"
+                value={formData.combo_smmgen_service_ids?.join(', ') || ''}
+                onChange={(e) => {
+                  const ids = e.target.value.split(',').map(id => id.trim()).filter(id => id);
+                  setFormData({ ...formData, combo_smmgen_service_ids: ids });
+                }}
+                className="mt-1"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Enter SMMGen service IDs in the same order as component services
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+      
       <div className="flex gap-2">
         <Button type="submit" size="sm">Save</Button>
         <Button type="button" variant="outline" size="sm" onClick={onCancel}>Cancel</Button>

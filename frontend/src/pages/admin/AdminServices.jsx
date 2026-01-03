@@ -28,7 +28,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 
 // Sortable Service Item Component
-const SortableServiceItem = memo(({ service, editingService, onEdit, onToggle, onDelete, updateServicePending, deleteServicePending, onSave, onCancel }) => {
+const SortableServiceItem = memo(({ service, editingService, onEdit, onToggle, onDelete, updateServicePending, deleteServicePending, onSave, onCancel, services }) => {
   const {
     attributes,
     listeners,
@@ -57,6 +57,7 @@ const SortableServiceItem = memo(({ service, editingService, onEdit, onToggle, o
       {editingService?.id === service.id ? (
         <ServiceEditForm 
           service={service} 
+          services={services}
           onSave={onSave}
           onCancel={onCancel}
         />
@@ -670,6 +671,7 @@ const AdminServices = memo(() => {
                 {editingService?.id === service.id ? (
                   <ServiceEditForm 
                     service={service} 
+                    services={services}
                     onSave={(updates) => handleUpdateService(service.id, updates)}
                     onCancel={() => setEditingService(null)}
                   />
@@ -784,6 +786,7 @@ const AdminServices = memo(() => {
                   <SortableServiceItem
                     key={service.id}
                     service={service}
+                    services={services}
                     editingService={editingService}
                     onEdit={setEditingService}
                     onToggle={handleToggleService}

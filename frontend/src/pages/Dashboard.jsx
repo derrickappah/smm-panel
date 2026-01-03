@@ -3603,6 +3603,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         let totalCost = 0;
         const orderPromises = [];
         const smmgenServiceIds = service.combo_smmgen_service_ids || [];
+        const smmgenOrderResults = []; // Track SMMGen order results for each component
 
         // Idempotency check for combo services: Check if orders with the same parameters already exist
         const { data: existingComboOrders } = await supabase
@@ -3642,6 +3643,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
           // Place SMMGen order if service has SMMGen ID
           let smmgenOrderId = null;
+          let smmgenOrderSuccess = false;
+          let smmgenOrderError = null;
           const smmgenServiceId = smmgenServiceIds[i] || componentService.smmgen_service_id;
           
           if (smmgenServiceId) {
@@ -3662,7 +3665,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               
               if (smmgenResponse === null) {
                 console.warn(`SMMGen returned null for ${componentService.name} - backend unavailable or not configured`);
-                // Mark as failure since we attempted but couldn't place the order
+                smmgenOrderError = 'Backend unavailable or not configured';
               } else if (smmgenResponse) {
                 // Check if SMMGen returned an error response
                 if (smmgenResponse.error) {
@@ -3672,17 +3675,18 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                   // Check if it's a duplicate/active order error
                   if (isDuplicateOrderError(errorMessage)) {
                     const userFriendlyMessage = getDuplicateOrderErrorMessage(errorMessage);
-                    toast.error(userFriendlyMessage);
-                    console.log(`Duplicate/active order detected for ${componentService.name} - preventing combo order creation`);
-                    setIsSubmitting(false);
-                    setLoading(false);
-                    return; // Prevent combo order creation
+                    smmgenOrderError = userFriendlyMessage;
+                    console.log(`Duplicate/active order detected for ${componentService.name} - will create order locally but SMMGen order failed`);
+                    // Don't return - continue with creating the order locally
+                  } else {
+                    smmgenOrderError = errorMessage;
                   }
                   
                   smmgenOrderId = null;
                 } else {
                   // Use standardized extraction utility that matches API endpoint logic
                   smmgenOrderId = extractSMMGenOrderId(smmgenResponse);
+                  smmgenOrderSuccess = true;
                   console.log(`SMMGen order response for ${componentService.name}:`, smmgenResponse);
                   console.log(`SMMGen order ID extracted:`, smmgenOrderId);
                 }
@@ -3690,14 +3694,14 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             } catch (smmgenError) {
               console.error(`SMMGen order error caught for ${componentService.name}:`, smmgenError);
               
-              // Handle duplicate/active order errors - prevent combo order creation
+              // Handle duplicate/active order errors - log but continue with order creation
               if (isDuplicateOrderError(smmgenError.message)) {
                 const userFriendlyMessage = getDuplicateOrderErrorMessage(smmgenError.message);
-                toast.error(userFriendlyMessage);
-                console.log(`Duplicate/active order error for ${componentService.name} - preventing combo order creation`);
-                setIsSubmitting(false);
-                setLoading(false);
-                return; // Prevent combo order creation
+                smmgenOrderError = userFriendlyMessage;
+                console.log(`Duplicate/active order error for ${componentService.name} - will create order locally but SMMGen order failed`);
+                // Don't return - continue with creating the order locally
+              } else {
+                smmgenOrderError = smmgenError.message || 'Unknown error';
               }
               
               if (!smmgenError.message?.includes('Failed to fetch') && 
@@ -3720,6 +3724,13 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             // Set failure message to prevent database trigger from overwriting with order ID
             smmgenOrderId = "order not placed at smm gen";
           }
+
+          // Track SMMGen order result for this component
+          smmgenOrderResults.push({
+            serviceName: componentService.name,
+            success: smmgenOrderSuccess,
+            error: smmgenOrderError
+          });
 
           // Create order record for this component
           orderPromises.push(
@@ -3800,7 +3811,18 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           }
         }
 
-        toast.success(`Combo order placed successfully! ${componentServices.length} orders created.`);
+        // Determine success message based on SMMGen order results
+        const successfulSmmgenOrders = smmgenOrderResults.filter(r => r.success).length;
+        const failedSmmgenOrders = smmgenOrderResults.filter(r => !r.success && r.error).length;
+        
+        if (failedSmmgenOrders === 0) {
+          toast.success(`Combo order placed successfully! ${componentServices.length} orders created.`);
+        } else if (successfulSmmgenOrders > 0) {
+          toast.success(`Combo order placed! ${componentServices.length} orders created. ${successfulSmmgenOrders} SMMGen orders successful, ${failedSmmgenOrders} had issues.`);
+        } else {
+          toast.success(`Combo order placed! ${componentServices.length} orders created locally. SMMGen orders had issues but orders were saved.`);
+        }
+        
         setOrderForm({ service_id: '', link: '', quantity: '' });
         await onUpdateUser();
         fetchRecentOrders().catch((error) => {
