@@ -83,6 +83,72 @@ const fetchRecentOrders = async () => {
   return orders;
 };
 
+// Fetch all pending orders for the current user
+const fetchAllPendingOrders = async () => {
+  const { data: { user: authUser } } = await supabase.auth.getUser();
+  if (!authUser) return [];
+
+  const { data, error } = await supabase
+    .from('orders')
+    .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, created_at, completed_at, refund_status, total_cost, last_status_check, promotion_packages(name, platform, service_type)')
+    .eq('user_id', authUser.id)
+    .neq('status', 'completed')
+    .neq('status', 'refunded')
+    .order('created_at', { ascending: false });
+  
+  if (error) {
+    if (error.code === 'PGRST301' || error.message?.includes('500') || error.message?.includes('Internal Server Error')) {
+      console.warn('Orders table may not exist or RLS policy issue:', error.message);
+      return [];
+    }
+    throw error;
+  }
+  
+  // Filter orders that have valid panel order IDs
+  const orders = (data || []).filter(order => {
+    const isInternalUuid = order.smmgen_order_id === order.id;
+    const hasSmmgenId = order.smmgen_order_id && 
+                       order.smmgen_order_id !== "order not placed at smm gen" && 
+                       !isInternalUuid;
+    const hasSmmcostId = order.smmcost_order_id && 
+                        String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost";
+    return hasSmmgenId || hasSmmcostId;
+  });
+
+  return orders;
+};
+
+// Check all pending orders status in the background
+const checkAllPendingOrdersStatus = async (queryClient) => {
+  try {
+    // Fetch all pending orders for the current user
+    const pendingOrders = await fetchAllPendingOrders();
+    
+    if (pendingOrders.length === 0) {
+      console.log('No pending orders to check');
+      return;
+    }
+
+    console.log(`Checking status for ${pendingOrders.length} pending orders in background`);
+    
+    // Check orders status using batch utility
+    const result = await checkOrdersStatusBatch(pendingOrders, {
+      concurrency: 5, // Moderate concurrency for background checks
+      minIntervalMinutes: 5 // Respect the 5-minute interval
+    });
+
+    console.log(`Background status check complete: ${result.checked} checked, ${result.updated} updated, ${result.errors.length} errors`);
+
+    // Invalidate recent orders query to trigger refetch and update UI
+    if (result.updated > 0) {
+      queryClient.invalidateQueries({ queryKey: ['recentOrders'] });
+    }
+  } catch (error) {
+    // Silent error handling - only log to console
+    console.error('Error checking pending orders status:', error);
+  }
+};
+
 export const useDashboardData = () => {
   const queryClient = useQueryClient();
 
@@ -120,6 +186,11 @@ export const useDashboardData = () => {
     enabled: !!supabase.auth.getUser(), // Only fetch if user is authenticated
   });
 
+  // Function to check all pending orders status (wrapped with queryClient)
+  const checkAllPendingOrdersStatusWrapper = () => {
+    return checkAllPendingOrdersStatus(queryClient);
+  };
+
   return {
     services,
     recentOrders,
@@ -129,6 +200,7 @@ export const useDashboardData = () => {
     ordersError,
     fetchServices: refetchServices,
     fetchRecentOrders: refetchRecentOrders,
+    checkAllPendingOrdersStatus: checkAllPendingOrdersStatusWrapper,
   };
 };
 

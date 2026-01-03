@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
@@ -25,7 +25,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
   const location = useLocation();
   
   // Use custom hooks
-  const { services, recentOrders, fetchServices, fetchRecentOrders } = useDashboardData();
+  const { services, recentOrders, fetchServices, fetchRecentOrders, checkAllPendingOrdersStatus } = useDashboardData();
   const { data: promotionPackages = [] } = usePromotionPackages();
   const { 
     depositMethod, 
@@ -113,6 +113,34 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
   useEffect(() => {
     setIsPollingDeposit(isPolling);
   }, [isPolling]);
+
+  // Ref to prevent multiple simultaneous status checks
+  const statusCheckInProgress = useRef(false);
+
+  // Auto-check all pending orders status when dashboard loads
+  useEffect(() => {
+    // Only check if user is authenticated and check is not already in progress
+    if (user && !statusCheckInProgress.current && checkAllPendingOrdersStatus) {
+      statusCheckInProgress.current = true;
+      
+      // Run check in background (non-blocking)
+      checkAllPendingOrdersStatus()
+        .then(() => {
+          // Reset flag after check completes (with a small delay to prevent rapid re-checks)
+          setTimeout(() => {
+            statusCheckInProgress.current = false;
+          }, 1000);
+        })
+        .catch((error) => {
+          // Log error but don't interrupt user experience
+          console.error('Error in background order status check:', error);
+          // Reset flag even on error
+          setTimeout(() => {
+            statusCheckInProgress.current = false;
+          }, 1000);
+        });
+    }
+  }, [user, checkAllPendingOrdersStatus]);
 
   // Paystack public key - should be in environment variable
   const paystackPublicKey = process.env.REACT_APP_PAYSTACK_PUBLIC_KEY || 'pk_test_xxxxxxxxxxxxx';
