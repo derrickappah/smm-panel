@@ -7,6 +7,7 @@ import { SpeedInsights } from "@vercel/speed-insights/react";
 import { Analytics } from "@vercel/analytics/react";
 import SupabaseSetup from "@/components/SupabaseSetup";
 import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { supabase, isConfigured } from "@/lib/supabase";
 import { queryClient } from "@/lib/queryClient";
 import * as serviceWorkerRegistration from "./serviceWorkerRegistration";
@@ -357,11 +358,12 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <HelmetProvider>
-        <div className="App">
-          <Toaster position="top-right" />
-          <BrowserRouter>
-            <Suspense fallback={<PageLoader />}>
-              <Routes>
+        <TooltipProvider>
+          <div className="App">
+            <Toaster position="top-right" />
+            <BrowserRouter>
+              <Suspense fallback={<PageLoader />}>
+                <Routes>
               <Route path="/" element={user ? <Navigate to={user?.role === 'admin' ? '/admin/dashboard' : '/dashboard'} /> : <LandingPage />} />
               <Route path="/auth" element={user ? <Navigate to={user?.role === 'admin' ? '/admin/dashboard' : '/dashboard'} /> : <AuthPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
@@ -726,11 +728,12 @@ function App() {
                 element={<FAQPage user={user} onLogout={logout} />}
               />
               </Routes>
-            </Suspense>
-          </BrowserRouter>
-          <SpeedInsights />
-          <Analytics />
-        </div>
+              </Suspense>
+            </BrowserRouter>
+            <SpeedInsights />
+            <Analytics />
+          </div>
+        </TooltipProvider>
       </HelmetProvider>
     </QueryClientProvider>
   );

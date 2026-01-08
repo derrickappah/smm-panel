@@ -2,6 +2,7 @@ import React, { useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tag, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const DashboardPromotionPackages = ({ packages, onPackageSelect, user }) => {
   const navigate = useNavigate();
@@ -139,7 +140,14 @@ const DashboardPromotionPackages = ({ packages, onPackageSelect, user }) => {
                 <span className="font-medium">Quantity:</span> {formatQuantity(pkg.quantity)}
               </p>
               {pkg.description && (
-                <p className="text-xs text-gray-500 line-clamp-2">{pkg.description}</p>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <p className="text-xs text-gray-500 line-clamp-2 cursor-help">{pkg.description}</p>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="max-w-xs text-xs">{pkg.description}</p>
+                  </TooltipContent>
+                </Tooltip>
               )}
             </div>
             

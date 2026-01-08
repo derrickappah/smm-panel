@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from '@/lib/supabase';
 // SMMGen import removed - only using Supabase services
 import Navbar from '@/components/Navbar';
@@ -306,7 +307,14 @@ const ServicesPage = ({ user, onLogout }) => {
                   <h3 className="text-sm sm:text-base font-bold text-gray-900 mb-2">
                     {pkg.name}
                   </h3>
-                  <p className="text-sm text-gray-600 mb-4 line-clamp-2">{pkg.description || 'Special promotion package'}</p>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <p className="text-sm text-gray-600 mb-4 line-clamp-2 cursor-help">{pkg.description || 'Special promotion package'}</p>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="max-w-xs text-xs">{pkg.description || 'Special promotion package'}</p>
+                    </TooltipContent>
+                  </Tooltip>
                   <div className="flex justify-between items-center text-xs text-gray-600 pt-4 border-t border-purple-200">
                     <div>
                       <span className="font-medium">Quantity: {formatQuantity(pkg.quantity)}</span>
