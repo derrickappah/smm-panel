@@ -289,7 +289,7 @@ const ServicesPage = ({ user, onLogout }) => {
                     }
                   }}
                   tabIndex={0}
-                  className="bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-purple-300 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md hover:border-purple-400 cursor-pointer transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 min-w-[180px] snap-center flex-shrink-0 sm:min-w-0 sm:snap-none"
+                  className="bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-purple-300 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md hover:border-purple-400 cursor-pointer transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 w-[280px] min-w-[280px] snap-center flex-shrink-0 sm:w-auto sm:min-w-0 sm:snap-none"
                   style={{ animationDelay: `${(index % filteredPackages.length) * 0.05}s` }}
                 >
                   <div className="flex items-start justify-between mb-4">
@@ -309,7 +309,7 @@ const ServicesPage = ({ user, onLogout }) => {
                   </h3>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <p className="text-sm text-gray-600 mb-4 line-clamp-2 cursor-help">{pkg.description || 'Special promotion package'}</p>
+                      <p className="text-sm text-gray-600 mb-4 line-clamp-2 break-words cursor-help">{pkg.description || 'Special promotion package'}</p>
                     </TooltipTrigger>
                     <TooltipContent>
                       <p className="max-w-xs text-xs">{pkg.description || 'Special promotion package'}</p>

@@ -493,7 +493,12 @@ const AdminPromotionPackages = memo(() => {
                         )}
                         <p><span className="font-medium">Quantity:</span> {formatQuantity(pkg.quantity)} ({pkg.quantity.toLocaleString()})</p>
                         <p><span className="font-medium">Price:</span> {pkg.price} GHS</p>
-                        {pkg.description && <p><span className="font-medium">Description:</span> {pkg.description}</p>}
+                        {pkg.description && (
+                          <div className="flex gap-1">
+                            <span className="font-medium whitespace-nowrap">Description:</span>
+                            <span className="line-clamp-2 break-words text-gray-600">{pkg.description}</span>
+                          </div>
+                        )}
                         {pkg.smmgen_service_id && <p><span className="font-medium">SMMGen ID:</span> {pkg.smmgen_service_id}</p>}
                         <p><span className="font-medium">Display Order:</span> {pkg.display_order}</p>
                       </div>

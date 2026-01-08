@@ -106,7 +106,7 @@ const DashboardPromotionPackages = ({ packages, onPackageSelect, user }) => {
         {infinitePackages.map((pkg, index) => (
           <div
             key={`${pkg.id}-${index}`}
-            className="bg-white border-2 border-purple-300 rounded-lg p-3 shadow-sm hover:shadow-md transition-all hover:border-purple-400 min-w-[180px] snap-center flex-shrink-0 sm:min-w-0 sm:snap-none"
+            className="bg-white border-2 border-purple-300 rounded-lg p-3 shadow-sm hover:shadow-md transition-all hover:border-purple-400 w-[280px] min-w-[280px] snap-center flex-shrink-0 sm:w-auto sm:min-w-0 sm:snap-none"
           >
             <div className="flex items-start justify-between mb-3">
               <div className="flex items-center gap-2 flex-wrap">
@@ -142,7 +142,7 @@ const DashboardPromotionPackages = ({ packages, onPackageSelect, user }) => {
               {pkg.description && (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <p className="text-xs text-gray-500 line-clamp-2 cursor-help">{pkg.description}</p>
+                    <p className="text-xs text-gray-500 line-clamp-2 break-words cursor-help">{pkg.description}</p>
                   </TooltipTrigger>
                   <TooltipContent>
                     <p className="max-w-xs text-xs">{pkg.description}</p>
