@@ -18,6 +18,7 @@ const VIRTUAL_SCROLL_THRESHOLD = 100;
 
 const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchType, setSearchType] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('');
   const [page, setPage] = useState(1);
@@ -31,7 +32,14 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
   // Reset page to 1 when filters change
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, statusFilter, dateFilter]);
+  }, [debouncedSearch, searchType, statusFilter, dateFilter]);
+
+  // Reset searchType to 'all' when search input is cleared
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setSearchType('all');
+    }
+  }, [searchTerm]);
 
   const { 
     data, 
@@ -43,6 +51,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
     useInfinite: false, // Use regular query for server-side pagination
     checkSMMGenStatus: false, // Disable by default for better performance - can be enabled later if needed
     searchTerm: debouncedSearch,
+    searchType: searchType,
     statusFilter: statusFilter,
     dateFilter: dateFilter,
     page: page // Pass current page
@@ -784,14 +793,35 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
           </div>
         </div>
         <div className="flex flex-col gap-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <Input
-              placeholder="Search by order ID, username, email, phone, service, or link..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-11 h-12 text-base"
-            />
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Select 
+              value={searchType} 
+              onValueChange={(value) => {
+                setSearchType(value);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-48 min-h-[44px]">
+                <SelectValue placeholder="Search type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="service_name">Service Name</SelectItem>
+                <SelectItem value="package_name">Package Name</SelectItem>
+                <SelectItem value="order_id">Order ID</SelectItem>
+                <SelectItem value="user_info">User Info</SelectItem>
+                <SelectItem value="link">Link</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <Input
+                placeholder="Search by order ID, username, email, phone, service name, package name, or link..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-11 h-12 text-base"
+              />
+            </div>
           </div>
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="flex-1">
@@ -838,7 +868,13 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
           ))}
         </div>
       ) : paginatedOrders.length === 0 ? (
-        <p className="text-gray-600 text-center py-8">No orders found</p>
+        <p className="text-gray-600 text-center py-8">
+          {searchType === 'service_name' && debouncedSearch
+            ? `No orders found for service: ${debouncedSearch}`
+            : searchType === 'package_name' && debouncedSearch
+            ? `No orders found for package: ${debouncedSearch}`
+            : 'No orders found'}
+        </p>
       ) : (
         <>
           <ResponsiveTable

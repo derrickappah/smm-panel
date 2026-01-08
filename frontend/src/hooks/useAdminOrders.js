@@ -32,6 +32,7 @@ const fetchOrders = async ({
   pageParam = 0, 
   checkSMMGenStatus = false,
   searchTerm = '',
+  searchType = 'all',
   statusFilter = 'all',
   dateFilter = ''
 }) => {
@@ -73,42 +74,197 @@ const fetchOrders = async ({
                  .lte('created_at', filterDateEnd.toISOString());
   }
 
-  // Apply search filter (text search across multiple fields)
+  // Apply search filter based on search type
   if (searchTerm && searchTerm.trim()) {
-    const searchPattern = `%${searchTerm.trim()}%`;
+    const trimmedSearch = searchTerm.trim();
+    const searchPattern = `%${trimmedSearch}%`;
     
-    // Search order fields directly (id, panel IDs, link)
-    // Note: Profile fields (name, email, phone) require a separate query to find matching user IDs
-    // For now, we'll search order fields server-side. Profile search can be added as an enhancement.
-    const orderFieldsSearch = `id.ilike.${searchPattern},smmgen_order_id.ilike.${searchPattern},smmcost_order_id.ilike.${searchPattern},link.ilike.${searchPattern}`;
-    
-    // For profile fields, find matching user IDs and include them in the search
-    try {
-      const { data: matchingProfiles, error: profileError } = await supabase
-        .from('profiles')
-        .select('id')
-        .or(`name.ilike.${searchPattern},email.ilike.${searchPattern},phone_number.ilike.${searchPattern}`);
-      
-      if (profileError) {
-        console.warn('Profile search error, using order fields only:', profileError);
-        query = query.or(orderFieldsSearch);
-      } else {
-        const matchingUserIds = matchingProfiles?.map(p => p.id) || [];
+    if (searchType === 'service_name') {
+      // Search by service name (exact full match, case-insensitive)
+      try {
+        // Fetch services and filter for exact match (case-insensitive) in memory
+        // This ensures exact full match rather than pattern matching
+        const { data: allServices, error: serviceError } = await supabase
+          .from('services')
+          .select('id, name');
         
-        // Combine order field search with user ID matches
-        if (matchingUserIds.length > 0) {
-          // Build OR condition: order fields match OR user_id matches
-          // Use individual user_id.eq conditions in the OR clause
-          const userIdConditions = matchingUserIds.map(id => `user_id.eq.${id}`).join(',');
-          query = query.or(`${orderFieldsSearch},${userIdConditions}`);
+        if (serviceError) {
+          console.warn('Service search error:', serviceError);
+          // Return empty result if service search fails
+          return { data: [], nextPage: undefined, total: 0 };
+        }
+        
+        // Filter for exact match (case-insensitive)
+        const matchingServices = (allServices || []).filter(s => 
+          s.name && s.name.toLowerCase().trim() === trimmedSearch.toLowerCase().trim()
+        );
+        
+        const matchingServiceIds = matchingServices.map(s => s.id);
+        
+        if (matchingServiceIds.length > 0) {
+          query = query.in('service_id', matchingServiceIds);
         } else {
-          query = query.or(orderFieldsSearch);
+          // No matching services found, return empty result
+          return { data: [], nextPage: undefined, total: 0 };
+        }
+      } catch (serviceSearchError) {
+        console.warn('Service search failed:', serviceSearchError);
+        return { data: [], nextPage: undefined, total: 0 };
+      }
+    } else if (searchType === 'package_name') {
+      // Search by package name (exact full match, case-insensitive)
+      try {
+        // Fetch packages and filter for exact match (case-insensitive) in memory
+        // This ensures exact full match rather than pattern matching
+        const { data: allPackages, error: packageError } = await supabase
+          .from('promotion_packages')
+          .select('id, name');
+        
+        if (packageError) {
+          console.warn('Package search error:', packageError);
+          // Return empty result if package search fails
+          return { data: [], nextPage: undefined, total: 0 };
+        }
+        
+        // Filter for exact match (case-insensitive)
+        const matchingPackages = (allPackages || []).filter(p => 
+          p.name && p.name.toLowerCase().trim() === trimmedSearch.toLowerCase().trim()
+        );
+        
+        const matchingPackageIds = matchingPackages.map(p => p.id);
+        
+        if (matchingPackageIds.length > 0) {
+          query = query.in('promotion_package_id', matchingPackageIds);
+        } else {
+          // No matching packages found, return empty result
+          return { data: [], nextPage: undefined, total: 0 };
+        }
+      } catch (packageSearchError) {
+        console.warn('Package search failed:', packageSearchError);
+        return { data: [], nextPage: undefined, total: 0 };
+      }
+    } else if (searchType === 'order_id') {
+      // Search only by order ID and panel IDs
+      const orderFieldsSearch = `id.ilike.${searchPattern},smmgen_order_id.ilike.${searchPattern},smmcost_order_id.ilike.${searchPattern}`;
+      query = query.or(orderFieldsSearch);
+    } else if (searchType === 'user_info') {
+      // Search only by user name, email, phone
+      try {
+        const { data: matchingProfiles, error: profileError } = await supabase
+          .from('profiles')
+          .select('id')
+          .or(`name.ilike.${searchPattern},email.ilike.${searchPattern},phone_number.ilike.${searchPattern}`);
+        
+        if (profileError) {
+          console.warn('Profile search error:', profileError);
+          query = query.eq('user_id', '00000000-0000-0000-0000-000000000000'); // Return no results
+        } else {
+          const matchingUserIds = matchingProfiles?.map(p => p.id) || [];
+          
+          if (matchingUserIds.length > 0) {
+            query = query.in('user_id', matchingUserIds);
+          } else {
+            // No matching users found, return empty result
+            return { data: [], nextPage: undefined, total: 0 };
+          }
+        }
+      } catch (profileSearchError) {
+        console.warn('Profile search failed:', profileSearchError);
+        query = query.eq('user_id', '00000000-0000-0000-0000-000000000000'); // Return no results
+      }
+    } else if (searchType === 'link') {
+      // Search only by link
+      query = query.ilike('link', searchPattern);
+    } else {
+      // "all" - Search all fields including service/package names
+      const orderFieldsSearch = `id.ilike.${searchPattern},smmgen_order_id.ilike.${searchPattern},smmcost_order_id.ilike.${searchPattern},link.ilike.${searchPattern}`;
+      
+      // Search services and packages for matching names
+      let matchingServiceIds = [];
+      let matchingPackageIds = [];
+      
+      try {
+        const { data: matchingServices } = await supabase
+          .from('services')
+          .select('id')
+          .ilike('name', searchPattern);
+        matchingServiceIds = matchingServices?.map(s => s.id) || [];
+      } catch (e) {
+        console.warn('Service search in "all" mode failed:', e);
+      }
+      
+      try {
+        const { data: matchingPackages } = await supabase
+          .from('promotion_packages')
+          .select('id')
+          .ilike('name', searchPattern);
+        matchingPackageIds = matchingPackages?.map(p => p.id) || [];
+      } catch (e) {
+        console.warn('Package search in "all" mode failed:', e);
+      }
+      
+      // For profile fields, find matching user IDs
+      try {
+        const { data: matchingProfiles, error: profileError } = await supabase
+          .from('profiles')
+          .select('id')
+          .or(`name.ilike.${searchPattern},email.ilike.${searchPattern},phone_number.ilike.${searchPattern}`);
+        
+        if (profileError) {
+          console.warn('Profile search error, using order fields only:', profileError);
+          // Build OR condition with order fields, service IDs, and package IDs
+          const conditions = [orderFieldsSearch];
+          
+          if (matchingServiceIds.length > 0) {
+            conditions.push(...matchingServiceIds.map(id => `service_id.eq.${id}`));
+          }
+          
+          if (matchingPackageIds.length > 0) {
+            conditions.push(...matchingPackageIds.map(id => `promotion_package_id.eq.${id}`));
+          }
+          
+          if (conditions.length > 0) {
+            query = query.or(conditions.join(','));
+          }
+        } else {
+            const matchingUserIds = matchingProfiles?.map(p => p.id) || [];
+            
+            // Build OR condition: order fields OR user_id OR service_id OR promotion_package_id
+            const conditions = [orderFieldsSearch];
+            
+            if (matchingUserIds.length > 0) {
+              conditions.push(...matchingUserIds.map(id => `user_id.eq.${id}`));
+            }
+            
+            if (matchingServiceIds.length > 0) {
+              conditions.push(...matchingServiceIds.map(id => `service_id.eq.${id}`));
+            }
+            
+            if (matchingPackageIds.length > 0) {
+              conditions.push(...matchingPackageIds.map(id => `promotion_package_id.eq.${id}`));
+            }
+            
+            if (conditions.length > 0) {
+              query = query.or(conditions.join(','));
+            }
+          }
+      } catch (profileSearchError) {
+        // If profile search fails, fall back to order fields, services, and packages
+        console.warn('Profile search failed, using order fields, services, and packages only:', profileSearchError);
+        const conditions = [orderFieldsSearch];
+        
+        if (matchingServiceIds.length > 0) {
+          conditions.push(...matchingServiceIds.map(id => `service_id.eq.${id}`));
+        }
+        
+        if (matchingPackageIds.length > 0) {
+          conditions.push(...matchingPackageIds.map(id => `promotion_package_id.eq.${id}`));
+        }
+        
+        if (conditions.length > 0) {
+          query = query.or(conditions.join(','));
         }
       }
-    } catch (profileSearchError) {
-      // If profile search fails, fall back to order fields only
-      console.warn('Profile search failed, using order fields only:', profileSearchError);
-      query = query.or(orderFieldsSearch);
     }
   }
 
@@ -133,6 +289,7 @@ const fetchOrders = async ({
     finalOrdersCount: finalOrders.length, 
     totalCount: count,
     searchTerm,
+    searchType,
     statusFilter,
     dateFilter
   });
@@ -223,6 +380,7 @@ export const useAdminOrders = (options = {}) => {
     useInfinite = false, 
     checkSMMGenStatus = false,
     searchTerm = '',
+    searchType = 'all',
     statusFilter = 'all',
     dateFilter = '',
     page = undefined // Default to undefined - if provided (even if 1), it's a display page request
@@ -238,11 +396,12 @@ export const useAdminOrders = (options = {}) => {
   if (useInfinite) {
     // For infinite query, still use pageParam but with filters
     return useInfiniteQuery({
-      queryKey: ['admin', 'orders', 'infinite', { checkSMMGenStatus, searchTerm, statusFilter, dateFilter }],
+      queryKey: ['admin', 'orders', 'infinite', { checkSMMGenStatus, searchTerm, searchType, statusFilter, dateFilter }],
       queryFn: ({ pageParam }) => fetchOrders({ 
         pageParam, 
         checkSMMGenStatus,
         searchTerm,
+        searchType,
         statusFilter,
         dateFilter
       }),
@@ -259,7 +418,7 @@ export const useAdminOrders = (options = {}) => {
   // For paginated queries (with filters or page specified), use fetchOrders which returns { data, total }
   // Check if this is a display page request (has page parameter) vs stats request (no page)
   const isDisplayPage = page !== undefined && page !== null;
-  const hasFilters = searchTerm || statusFilter !== 'all' || dateFilter;
+  const hasFilters = searchTerm || searchType !== 'all' || statusFilter !== 'all' || dateFilter;
   
   if (!useInfinite && !hasFilters && !isDisplayPage) {
     // Stats case - no page parameter provided, return array directly
@@ -275,12 +434,13 @@ export const useAdminOrders = (options = {}) => {
 
   // For paginated queries (server-side filtering), fetch specific page
   return useQuery({
-    queryKey: ['admin', 'orders', 'paginated', { checkSMMGenStatus, searchTerm, statusFilter, dateFilter, page: page || 1 }],
+    queryKey: ['admin', 'orders', 'paginated', { checkSMMGenStatus, searchTerm, searchType, statusFilter, dateFilter, page: page || 1 }],
     queryFn: async () => {
       const result = await fetchOrders({ 
         pageParam: (page || 1) - 1, // Convert 1-based page to 0-based pageParam, default to page 1 if not provided
         checkSMMGenStatus,
         searchTerm,
+        searchType,
         statusFilter,
         dateFilter
       });
