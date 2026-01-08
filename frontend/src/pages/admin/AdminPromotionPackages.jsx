@@ -3,6 +3,7 @@ import { useAdminPromotionPackages, useCreatePromotionPackage, useUpdatePromotio
 import { useDebounce } from '@/hooks/useDebounce';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, RefreshCw, Edit, Trash2, Power, PowerOff, Tag } from 'lucide-react';
@@ -306,10 +307,12 @@ const AdminPromotionPackages = memo(() => {
           </div>
           <div>
             <Label>Description</Label>
-            <Input
+            <Textarea
               placeholder="Package description (optional)"
               value={packageForm.description}
               onChange={(e) => setPackageForm({ ...packageForm, description: e.target.value })}
+              rows={4}
+              className="resize-y"
             />
           </div>
           <div>
@@ -642,9 +645,11 @@ const PackageEditForm = ({ pkg, onSave, onCancel, packages = [] }) => {
       </div>
       <div>
         <Label>Description</Label>
-        <Input
+        <Textarea
           value={formData.description}
           onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+          rows={4}
+          className="resize-y"
         />
       </div>
       <div>
