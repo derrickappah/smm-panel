@@ -41,6 +41,14 @@ if (isConfigured) {
       }),
       signOut: () => Promise.resolve({ error: null }),
       getUser: () => Promise.resolve({ data: { user: null }, error: null }),
+      resetPasswordForEmail: () => Promise.resolve({ 
+        data: null, 
+        error: { message: 'Supabase not configured. Please update .env file with your Supabase credentials.' } 
+      }),
+      updateUser: () => Promise.resolve({ 
+        data: null, 
+        error: { message: 'Supabase not configured. Please update .env file with your Supabase credentials.' } 
+      }),
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } })
     },
     from: () => ({

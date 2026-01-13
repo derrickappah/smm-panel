@@ -1,4 +1,4 @@
-import React, { memo, useState, useMemo, useCallback, useEffect } from 'react';
+import React, { memo, useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAdminOrders, useUpdateOrder, useReorderToSMMGen } from '@/hooks/useAdminOrders';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -24,6 +24,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
   const [page, setPage] = useState(1);
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
   const [hasAutoChecked, setHasAutoChecked] = useState(false);
+  const autoCheckTimerRef = useRef(null);
 
   const debouncedSearch = useDebounce(searchTerm, 300);
 
@@ -63,37 +64,64 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
   // Fetch all pending/processing/in-progress orders from database
   const fetchPendingOrders = useCallback(async () => {
     try {
+      console.log('[AdminOrders] Fetching pending orders for status check...');
       const { data, error } = await supabase
         .from('orders')
-        .select('id, user_id, service_id, promotion_package_id, link, quantity, total_cost, status, smmgen_order_id, smmcost_order_id, created_at, completed_at, refund_status, last_status_check, services(name, platform, service_type, smmgen_service_id, smmcost_service_id), promotion_packages(name, platform, service_type, smmgen_service_id), profiles(name, email, phone_number)')
+        .select('id, user_id, service_id, promotion_package_id, link, quantity, total_cost, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, created_at, completed_at, refund_status, last_status_check, services(name, platform, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id), promotion_packages(name, platform, service_type, smmgen_service_id), profiles(name, email, phone_number)')
         .in('status', ['pending', 'processing', 'in progress'])
         .not('status', 'eq', 'completed')
         .not('status', 'eq', 'refunded')
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching pending orders:', error);
+        console.error('[AdminOrders] Error fetching pending orders:', error);
         throw error;
       }
 
-      return data || [];
+      const orders = data || [];
+      const jbsmmpanelOrders = orders.filter(o => o.jbsmmpanel_order_id);
+      
+      console.log('[AdminOrders] Fetched pending orders:', {
+        total: orders.length,
+        jbsmmpanelOrders: jbsmmpanelOrders.length,
+        jbsmmpanelOrderDetails: jbsmmpanelOrders.map(o => ({
+          id: o.id,
+          jbsmmpanel_order_id: o.jbsmmpanel_order_id,
+          status: o.status,
+          last_status_check: o.last_status_check
+        }))
+      });
+
+      return orders;
     } catch (error) {
-      console.error('Failed to fetch pending orders:', error);
+      console.error('[AdminOrders] Failed to fetch pending orders:', error);
       return [];
     }
   }, []);
 
   // Handle checking pending orders status from panels
   const handleCheckPendingOrders = useCallback(async () => {
-    if (isCheckingStatus) return; // Prevent multiple simultaneous checks
+    console.log('[AdminOrders] ===== handleCheckPendingOrders CALLED =====', { 
+      isCheckingStatus,
+      timestamp: new Date().toISOString()
+    });
+    
+    if (isCheckingStatus) {
+      console.log('[AdminOrders] Status check already in progress, skipping');
+      return; // Prevent multiple simultaneous checks
+    }
 
+    console.log('[AdminOrders] Setting isCheckingStatus to true...');
     setIsCheckingStatus(true);
+    console.log('[AdminOrders] Starting status check...');
 
     try {
       // Fetch all pending/processing/in-progress orders
       const pendingOrders = await fetchPendingOrders();
+      console.log('[AdminOrders] Fetched pending orders:', pendingOrders.length);
 
       if (pendingOrders.length === 0) {
+        console.log('[AdminOrders] No pending orders to check');
         toast.info('No pending orders to check');
         setIsCheckingStatus(false);
         return;
@@ -111,18 +139,32 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
       };
 
       // Check orders status with high concurrency and bypassed interval
+      console.log('[AdminOrders] Calling checkOrdersStatusBatch with:', {
+        orderCount: pendingOrders.length,
+        jbsmmpanelOrders: pendingOrders.filter(o => o.jbsmmpanel_order_id).length,
+        orderIds: pendingOrders.map(o => o.id),
+        jbsmmpanelOrderIds: pendingOrders.filter(o => o.jbsmmpanel_order_id).map(o => ({
+          orderId: o.id,
+          jbsmmpanel_order_id: o.jbsmmpanel_order_id,
+          status: o.status
+        }))
+      });
+      
       const result = await checkOrdersStatusBatch(pendingOrders, {
         concurrency: 12, // High concurrency (10-15 range)
         minIntervalMinutes: 0, // Bypass interval check for manual/admin checks
         onStatusUpdate: (orderId, newStatus, oldStatus) => {
+          console.log('[AdminOrders] Status updated:', { orderId, newStatus, oldStatus });
           // Real-time UI updates via debounced query invalidation
           debouncedInvalidation();
         },
         onProgress: (checked, total) => {
           // Progress callback if needed in future
-          console.log(`Status check progress: ${checked}/${total}`);
+          console.log(`[AdminOrders] Status check progress: ${checked}/${total}`);
         }
       });
+      
+      console.log('[AdminOrders] Status check result:', result);
 
       // Clear any pending invalidation and do final refresh
       if (invalidationTimeout) {
@@ -150,23 +192,66 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
         onRefresh();
       }
     } catch (error) {
-      console.error('Error checking pending orders:', error);
+      console.error('[AdminOrders] ===== ERROR checking pending orders =====', {
+        error,
+        errorMessage: error.message,
+        errorStack: error.stack,
+        errorName: error.name
+      });
       toast.error('Failed to check pending orders: ' + (error.message || 'Unknown error'));
     } finally {
+      console.log('[AdminOrders] Status check complete, setting isCheckingStatus to false');
       setIsCheckingStatus(false);
     }
   }, [isCheckingStatus, fetchPendingOrders, queryClient, onRefresh]);
 
   // Auto-trigger status check on component mount (only once)
   useEffect(() => {
-    if (!hasAutoChecked && !isLoading) {
-      setHasAutoChecked(true);
+    console.log('[AdminOrders] Auto-check effect:', { hasAutoChecked, isLoading, timerExists: !!autoCheckTimerRef.current });
+    
+    // Only set up timer if we haven't checked yet and data is loaded
+    if (!hasAutoChecked && !isLoading && !autoCheckTimerRef.current) {
+      console.log('[AdminOrders] Auto-triggering status check...');
+      
       // Run in background after a short delay to let page load
-      const timer = setTimeout(() => {
-        handleCheckPendingOrders();
-      }, 1000);
-      return () => clearTimeout(timer);
+      autoCheckTimerRef.current = setTimeout(() => {
+        console.log('[AdminOrders] ===== TIMER FIRED =====');
+        console.log('[AdminOrders] handleCheckPendingOrders type:', typeof handleCheckPendingOrders);
+        
+        // Mark as checked BEFORE calling to prevent re-triggering
+        setHasAutoChecked(true);
+        autoCheckTimerRef.current = null;
+        
+        if (typeof handleCheckPendingOrders === 'function') {
+          console.log('[AdminOrders] Calling handleCheckPendingOrders...');
+          try {
+            const result = handleCheckPendingOrders();
+            console.log('[AdminOrders] handleCheckPendingOrders returned:', result);
+            if (result && typeof result.then === 'function') {
+              result.then(
+                (res) => console.log('[AdminOrders] handleCheckPendingOrders promise resolved:', res),
+                (err) => console.error('[AdminOrders] handleCheckPendingOrders promise rejected:', err)
+              );
+            }
+          } catch (error) {
+            console.error('[AdminOrders] Error calling handleCheckPendingOrders from timer:', error);
+          }
+        } else {
+          console.error('[AdminOrders] handleCheckPendingOrders is not a function!');
+        }
+      }, 500); // Reduced from 1000ms to 500ms
+      
+      console.log('[AdminOrders] Timer set with ID:', autoCheckTimerRef.current, 'will fire in 500ms');
     }
+    
+    // Cleanup: only clear timer if component unmounts
+    return () => {
+      if (autoCheckTimerRef.current) {
+        console.log('[AdminOrders] Cleaning up auto-check timer on unmount:', autoCheckTimerRef.current);
+        clearTimeout(autoCheckTimerRef.current);
+        autoCheckTimerRef.current = null;
+      }
+    };
   }, [hasAutoChecked, isLoading, handleCheckPendingOrders]);
 
   // Get orders from current page (regular query returns { data: [...], total: ... })
@@ -368,14 +453,19 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
             // Get service info to check if it has panel IDs
             const serviceHasSmmcost = order.services?.smmcost_service_id && order.services.smmcost_service_id > 0;
             const serviceHasSmmgen = order.services?.smmgen_service_id;
+            const serviceHasJbsmmpanel = order.services?.jbsmmpanel_service_id && order.services.jbsmmpanel_service_id > 0;
             
-            // Prioritize SMMCost if both exist
+            // Prioritize: SMMCost > JB SMM Panel > SMMGen
             const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id > 0;
+            const hasJbsmmpanel = order.jbsmmpanel_order_id && String(order.jbsmmpanel_order_id).toLowerCase() !== "order not placed at jbsmmpanel";
             const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
             
             if (hasSmmcost) {
               // SMMCost order ID exists and is valid
               return <p className="font-medium text-gray-900 text-sm">{order.smmcost_order_id}</p>;
+            } else if (hasJbsmmpanel) {
+              // JB SMM Panel order ID exists and is valid
+              return <p className="font-medium text-gray-900 text-sm">{order.jbsmmpanel_order_id}</p>;
             } else if (hasSmmgen) {
               // SMMGen order ID exists and is valid
               return <p className="font-medium text-gray-900 text-sm">{order.smmgen_order_id}</p>;
@@ -387,6 +477,14 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                 <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMGen</p>
               </div>
               );
+            } else if (String(order.jbsmmpanel_order_id || '').toLowerCase() === "order not placed at jbsmmpanel") {
+              // Order failed at JB SMM Panel
+              return (
+                <div className="flex items-center gap-1">
+                  <AlertCircle className="w-4 h-4 text-red-500" />
+                  <p className="text-xs text-red-600 italic font-medium">Order not placed at JBSMMPanel</p>
+                </div>
+              );
             } else if (serviceHasSmmcost && !hasSmmcost) {
               // Service has SMMCost ID but order doesn't - order failed at SMMCost
               return (
@@ -395,7 +493,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                   <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMCost</p>
                 </div>
               );
-            } else if (order.smmcost_order_id === null && order.smmgen_order_id === null) {
+            } else if (order.smmcost_order_id === null && order.jbsmmpanel_order_id === null && order.smmgen_order_id === null) {
               // No order IDs at all
               return (
                 <div className="flex items-center gap-1">
@@ -418,19 +516,26 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
           {(() => {
             // Show which panel(s) have IDs
             const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id > 0;
+            const hasJbsmmpanel = order.jbsmmpanel_order_id && String(order.jbsmmpanel_order_id).toLowerCase() !== "order not placed at jbsmmpanel";
             const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
             
-            if (hasSmmcost && hasSmmgen) {
+            const panelIds = [];
+            if (hasSmmcost) panelIds.push(`SMMCost: ${order.smmcost_order_id}`);
+            if (hasJbsmmpanel) panelIds.push(`JBSMMPanel: ${order.jbsmmpanel_order_id}`);
+            if (hasSmmgen) panelIds.push(`SMMGen: ${order.smmgen_order_id}`);
+            
+            if (panelIds.length > 1) {
               return (
                 <div className="text-xs">
-                  <p className="text-gray-900">SMMCost: {order.smmcost_order_id}</p>
-                  <p className="text-gray-600 mt-0.5">SMMGen: {order.smmgen_order_id}</p>
+                  {panelIds.map((id, index) => (
+                    <p key={index} className={index === 0 ? "text-gray-900" : "text-gray-600 mt-0.5"}>
+                      {id}
+                    </p>
+                  ))}
                 </div>
               );
-            } else if (hasSmmcost) {
-              return <p className="text-xs text-gray-600">SMMCost: {order.smmcost_order_id}</p>;
-            } else if (hasSmmgen) {
-              return <p className="text-xs text-gray-600">SMMGen: {order.smmgen_order_id}</p>;
+            } else if (panelIds.length === 1) {
+              return <p className="text-xs text-gray-600">{panelIds[0]}</p>;
             } else {
               return <p className="text-xs text-gray-400 italic">None</p>;
             }
@@ -572,13 +677,17 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               // Get service info to check if it has panel IDs
               const serviceHasSmmcost = order.services?.smmcost_service_id && order.services.smmcost_service_id > 0;
               const serviceHasSmmgen = order.services?.smmgen_service_id;
+              const serviceHasJbsmmpanel = order.services?.jbsmmpanel_service_id && order.services.jbsmmpanel_service_id > 0;
               
-              // Prioritize SMMCost if both exist
+              // Prioritize: SMMCost > JB SMM Panel > SMMGen
               const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id > 0;
+              const hasJbsmmpanel = order.jbsmmpanel_order_id && String(order.jbsmmpanel_order_id).toLowerCase() !== "order not placed at jbsmmpanel";
               const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
               
               if (hasSmmcost) {
                 return <p className="font-semibold text-gray-900 text-base">Order No: {order.smmcost_order_id}</p>;
+              } else if (hasJbsmmpanel) {
+                return <p className="font-semibold text-gray-900 text-base">Order No: {order.jbsmmpanel_order_id}</p>;
               } else if (hasSmmgen) {
                 return <p className="font-semibold text-gray-900 text-base">Order No: {order.smmgen_order_id}</p>;
               } else if (order.smmgen_order_id === "order not placed at smm gen") {
@@ -588,6 +697,14 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                   <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMGen</p>
                 </div>
                 );
+              } else if (String(order.jbsmmpanel_order_id || '').toLowerCase() === "order not placed at jbsmmpanel") {
+                // Order failed at JB SMM Panel
+                return (
+                  <div className="flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-4 h-4 text-red-500" />
+                    <p className="text-xs text-red-600 italic font-medium">Order not placed at JBSMMPanel</p>
+                  </div>
+                );
               } else if (serviceHasSmmcost && !hasSmmcost) {
                 // Service has SMMCost ID but order doesn't - order failed at SMMCost
                 return (
@@ -596,7 +713,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                     <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMCost</p>
                   </div>
                 );
-              } else if (order.smmcost_order_id === null && order.smmgen_order_id === null) {
+              } else if (order.smmcost_order_id === null && order.jbsmmpanel_order_id === null && order.smmgen_order_id === null) {
                 return (
                   <div className="flex items-center gap-1 mt-1">
                     <AlertCircle className="w-4 h-4 text-orange-500" />
@@ -615,19 +732,22 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
             {(() => {
               // Show which panel(s) have IDs
               const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id > 0;
+              const hasJbsmmpanel = order.jbsmmpanel_order_id && String(order.jbsmmpanel_order_id).toLowerCase() !== "order not placed at jbsmmpanel";
               const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
               
-              if (hasSmmcost && hasSmmgen) {
+              const panelIds = [];
+              if (hasSmmcost) panelIds.push(`SMMCost: ${order.smmcost_order_id}`);
+              if (hasJbsmmpanel) panelIds.push(`JBSMMPanel: ${order.jbsmmpanel_order_id}`);
+              if (hasSmmgen) panelIds.push(`SMMGen: ${order.smmgen_order_id}`);
+              
+              if (panelIds.length > 0) {
                 return (
                   <div className="text-xs text-gray-600 mt-1">
-                    <p>SMMCost: {order.smmcost_order_id}</p>
-                    <p>SMMGen: {order.smmgen_order_id}</p>
-              </div>
+                    {panelIds.map((id, index) => (
+                      <p key={index}>{id}</p>
+                    ))}
+                  </div>
                 );
-              } else if (hasSmmcost) {
-                return <p className="text-xs text-gray-600 mt-1">SMMCost: {order.smmcost_order_id}</p>;
-              } else if (hasSmmgen) {
-                return <p className="text-xs text-gray-600 mt-1">SMMGen: {order.smmgen_order_id}</p>;
               }
               return null;
             })()}

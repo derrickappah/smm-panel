@@ -138,14 +138,26 @@ const ResetPasswordPage = () => {
 
       if (error) {
         console.error('Password reset error:', error);
-        // Don't reveal if email exists or not for security
-        toast.error('Failed to send reset email. Please try again.');
+        
+        // Check for rate limit errors (429 status code or rate limit in message)
+        const isRateLimit = error.status === 429 || 
+                           error.message?.toLowerCase().includes('rate limit') ||
+                           error.message?.toLowerCase().includes('rate limit exceeded');
+        
+        if (isRateLimit) {
+          toast.error('Too many password reset requests. Please wait a few minutes before trying again.');
+        } else {
+          // Don't reveal if email exists or not for security
+          toast.error('Failed to send reset email. Please try again.');
+        }
+        
         setLoading(false);
         return;
       }
 
       setEmailSent(true);
       toast.success('Password reset email sent! Please check your inbox.');
+      setLoading(false);
     } catch (error) {
       console.error('Password reset exception:', error);
       toast.error('An unexpected error occurred. Please try again.');
@@ -199,6 +211,8 @@ const ResetPasswordPage = () => {
       }
 
       toast.success('Password updated successfully! You can now login with your new password.');
+      
+      setLoading(false);
       
       // Sign out the recovery session so user can log in with new password
       await supabase.auth.signOut();

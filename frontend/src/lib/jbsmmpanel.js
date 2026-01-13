@@ -599,7 +599,7 @@ export const getJBSMMPanelOrderStatus = async (orderId, retryCount = 0) => {
   }
 
   try {
-    const { backendUrl, isConfigured } = await getJBSMMPanelConfig();
+    const { backendUrl, isConfigured, useServerlessFunctions } = await getJBSMMPanelConfig();
 
     if (!isConfigured) {
       console.warn('JB SMM Panel backend not configured. Skipping status check.');
@@ -608,11 +608,14 @@ export const getJBSMMPanelOrderStatus = async (orderId, retryCount = 0) => {
 
     const apiUrl = await buildApiUrl('status');
     
-    console.log('JB SMM Panel Status Request:', {
+    console.log('[jbsmmpanel] Status Request:', {
       attempt: retryCount + 1,
       maxRetries: MAX_RETRIES,
       orderId: orderIdNum,
       apiUrl,
+      backendUrl,
+      useServerlessFunctions,
+      isConfigured,
       timestamp: new Date().toISOString()
     });
 
@@ -644,12 +647,29 @@ export const getJBSMMPanelOrderStatus = async (orderId, retryCount = 0) => {
         
         const errorMessage = errorData.error || errorData.message || `Status check failed: ${response.status}`;
         
+        // Log detailed error information
+        console.error('[jbsmmpanel] Status API error:', {
+          orderId: orderIdNum,
+          apiUrl,
+          status: response.status,
+          statusText: response.statusText,
+          errorData,
+          errorMessage,
+          retryCount,
+          maxRetries: MAX_RETRIES
+        });
+        
         // Retry on server errors
         if (response.status >= 500 && retryCount < MAX_RETRIES) {
           const delay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
           console.warn(`JB SMM Panel status server error (${response.status}), retrying in ${delay}ms...`);
           await new Promise(resolve => setTimeout(resolve, delay));
           return getJBSMMPanelOrderStatus(orderId, retryCount + 1);
+        }
+        
+        // For 404 errors, provide more context
+        if (response.status === 404) {
+          throw new Error(`API endpoint not found (404): ${apiUrl}. Please verify the serverless function is deployed.`);
         }
         
         throw new Error(errorMessage);
@@ -660,6 +680,17 @@ export const getJBSMMPanelOrderStatus = async (orderId, retryCount = 0) => {
       return data;
     } catch (fetchError) {
       clearTimeout(timeoutId);
+      
+      // Log fetch errors with more detail
+      console.error('[jbsmmpanel] Status fetch error:', {
+        orderId: orderIdNum,
+        apiUrl,
+        errorName: fetchError.name,
+        errorMessage: fetchError.message,
+        errorStack: fetchError.stack,
+        retryCount,
+        maxRetries: MAX_RETRIES
+      });
       
       if (fetchError.name === 'AbortError') {
         if (retryCount < MAX_RETRIES) {

@@ -42,7 +42,7 @@ const fetchOrders = async ({
   // Build the base query
   let query = supabase
     .from('orders')
-    .select('id, user_id, service_id, promotion_package_id, link, quantity, total_cost, status, smmgen_order_id, smmcost_order_id, created_at, completed_at, refund_status, last_status_check, services(name, platform, service_type, smmgen_service_id, smmcost_service_id), promotion_packages(name, platform, service_type, smmgen_service_id), profiles(name, email, phone_number)', { count: 'exact' })
+    .select('id, user_id, service_id, promotion_package_id, link, quantity, total_cost, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, created_at, completed_at, refund_status, last_status_check, services(name, platform, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id), promotion_packages(name, platform, service_type, smmgen_service_id), profiles(name, email, phone_number)', { count: 'exact' })
     .order('created_at', { ascending: false });
 
   // Apply status filter
@@ -145,7 +145,7 @@ const fetchOrders = async ({
       }
     } else if (searchType === 'order_id') {
       // Search only by order ID and panel IDs
-      const orderFieldsSearch = `id.ilike.${searchPattern},smmgen_order_id.ilike.${searchPattern},smmcost_order_id.ilike.${searchPattern}`;
+      const orderFieldsSearch = `id.ilike.${searchPattern},smmgen_order_id.ilike.${searchPattern},smmcost_order_id.ilike.${searchPattern},jbsmmpanel_order_id.ilike.${searchPattern}`;
       query = query.or(orderFieldsSearch);
     } else if (searchType === 'user_info') {
       // Search only by user name, email, phone
@@ -177,7 +177,7 @@ const fetchOrders = async ({
       query = query.ilike('link', searchPattern);
     } else {
       // "all" - Search all fields including service/package names
-      const orderFieldsSearch = `id.ilike.${searchPattern},smmgen_order_id.ilike.${searchPattern},smmcost_order_id.ilike.${searchPattern},link.ilike.${searchPattern}`;
+      const orderFieldsSearch = `id.ilike.${searchPattern},smmgen_order_id.ilike.${searchPattern},smmcost_order_id.ilike.${searchPattern},jbsmmpanel_order_id.ilike.${searchPattern},link.ilike.${searchPattern}`;
       
       // Search services and packages for matching names
       let matchingServiceIds = [];
@@ -340,7 +340,7 @@ const fetchAllOrders = async (checkSMMGenStatus = false) => {
     
     const { data, error } = await supabase
       .from('orders')
-      .select('id, user_id, service_id, promotion_package_id, link, quantity, total_cost, status, smmgen_order_id, smmcost_order_id, created_at, completed_at, refund_status, last_status_check, services(name, platform, service_type, smmgen_service_id, smmcost_service_id), promotion_packages(name, platform, service_type, smmgen_service_id), profiles(name, email, phone_number)')
+      .select('id, user_id, service_id, promotion_package_id, link, quantity, total_cost, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, created_at, completed_at, refund_status, last_status_check, services(name, platform, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id), promotion_packages(name, platform, service_type, smmgen_service_id), profiles(name, email, phone_number)')
       .order('created_at', { ascending: false })
       .range(from, to);
 

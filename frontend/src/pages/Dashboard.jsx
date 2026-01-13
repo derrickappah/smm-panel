@@ -120,13 +120,22 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
   // Auto-check all pending orders status when dashboard loads
   useEffect(() => {
+    console.log('Dashboard useEffect - Status check trigger:', {
+      hasUser: !!user,
+      statusCheckInProgress: statusCheckInProgress.current,
+      hasCheckFunction: !!checkAllPendingOrdersStatus,
+      userId: user?.id
+    });
+    
     // Only check if user is authenticated and check is not already in progress
     if (user && !statusCheckInProgress.current && checkAllPendingOrdersStatus) {
+      console.log('Starting status check from Dashboard...');
       statusCheckInProgress.current = true;
       
       // Run check in background (non-blocking)
       checkAllPendingOrdersStatus()
         .then(() => {
+          console.log('Status check completed successfully');
           // Reset flag after check completes (with a small delay to prevent rapid re-checks)
           setTimeout(() => {
             statusCheckInProgress.current = false;
@@ -140,6 +149,10 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             statusCheckInProgress.current = false;
           }, 1000);
         });
+    } else {
+      console.log('Status check skipped:', {
+        reason: !user ? 'no user' : statusCheckInProgress.current ? 'already in progress' : !checkAllPendingOrdersStatus ? 'no function' : 'unknown'
+      });
     }
   }, [user, checkAllPendingOrdersStatus]);
 

@@ -108,18 +108,24 @@ const fetchRecentOrders = async () => {
 
 // Fetch all pending orders for the current user
 const fetchAllPendingOrders = async () => {
+  console.log('fetchAllPendingOrders called');
   const { data: { user: authUser } } = await supabase.auth.getUser();
-  if (!authUser) return [];
+  if (!authUser) {
+    console.log('No authenticated user, returning empty array');
+    return [];
+  }
 
+  console.log('Fetching orders from database for user:', authUser.id);
   const { data, error } = await supabase
     .from('orders')
-    .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, created_at, completed_at, refund_status, total_cost, last_status_check, promotion_packages(name, platform, service_type)')
+    .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, created_at, completed_at, refund_status, total_cost, last_status_check, promotion_packages(name, platform, service_type)')
     .eq('user_id', authUser.id)
     .neq('status', 'completed')
     .neq('status', 'refunded')
     .order('created_at', { ascending: false });
   
   if (error) {
+    console.error('Error fetching orders:', error);
     if (error.code === 'PGRST301' || error.message?.includes('500') || error.message?.includes('Internal Server Error')) {
       console.warn('Orders table may not exist or RLS policy issue:', error.message);
       return [];
@@ -127,7 +133,18 @@ const fetchAllPendingOrders = async () => {
     throw error;
   }
   
-  // Filter orders that have valid panel order IDs
+  console.log('Raw orders from database:', {
+    count: data?.length || 0,
+    orders: (data || []).map(o => ({
+      id: o.id,
+      status: o.status,
+      jbsmmpanel_order_id: o.jbsmmpanel_order_id,
+      smmgen_order_id: o.smmgen_order_id,
+      smmcost_order_id: o.smmcost_order_id
+    }))
+  });
+  
+  // Filter orders that have valid panel order IDs (including JB SMM Panel)
   const orders = (data || []).filter(order => {
     const isInternalUuid = order.smmgen_order_id === order.id;
     const hasSmmgenId = order.smmgen_order_id && 
@@ -135,7 +152,40 @@ const fetchAllPendingOrders = async () => {
                        !isInternalUuid;
     const hasSmmcostId = order.smmcost_order_id && 
                         String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost";
-    return hasSmmgenId || hasSmmcostId;
+    // JB SMM Panel validation: handle both string and number types, check for error strings
+    const jbsmmpanelId = order.jbsmmpanel_order_id;
+    const hasJbsmmpanelId = jbsmmpanelId && 
+      String(jbsmmpanelId).toLowerCase() !== "order not placed at jbsmmpanel" &&
+      Number(jbsmmpanelId) > 0;
+    
+    const shouldInclude = hasSmmgenId || hasSmmcostId || hasJbsmmpanelId;
+    
+    if (jbsmmpanelId) {
+      console.log('Filtering JB SMM Panel order:', {
+        orderId: order.id,
+        jbsmmpanelId,
+        jbsmmpanelIdType: typeof jbsmmpanelId,
+        jbsmmpanelIdString: String(jbsmmpanelId),
+        lowerCase: String(jbsmmpanelId).toLowerCase(),
+        isErrorString: String(jbsmmpanelId).toLowerCase() === "order not placed at jbsmmpanel",
+        numberValue: Number(jbsmmpanelId),
+        hasJbsmmpanelId,
+        shouldInclude
+      });
+    }
+    
+    return shouldInclude;
+  });
+
+  console.log('Filtered orders:', {
+    count: orders.length,
+    orders: orders.map(o => ({
+      id: o.id,
+      status: o.status,
+      jbsmmpanel_order_id: o.jbsmmpanel_order_id,
+      smmgen_order_id: o.smmgen_order_id,
+      smmcost_order_id: o.smmcost_order_id
+    }))
   });
 
   return orders;
@@ -143,17 +193,32 @@ const fetchAllPendingOrders = async () => {
 
 // Check all pending orders status in the background
 const checkAllPendingOrdersStatus = async (queryClient) => {
+  console.log('checkAllPendingOrdersStatus called', { hasQueryClient: !!queryClient });
   try {
     let maxIterations = 10; // Prevent infinite loops
     let iteration = 0;
     let hasUpdates = true;
 
+    console.log('Starting status check loop...');
+
     // Keep checking until there are no pending orders or no updates
     while (hasUpdates && iteration < maxIterations) {
       iteration++;
+      console.log(`Status check iteration ${iteration}`);
       
       // Fetch all pending orders for the current user
+      console.log('Fetching all pending orders...');
       const pendingOrders = await fetchAllPendingOrders();
+      console.log('Fetched pending orders:', {
+        count: pendingOrders.length,
+        orders: pendingOrders.map(o => ({
+          id: o.id,
+          status: o.status,
+          jbsmmpanel_order_id: o.jbsmmpanel_order_id,
+          smmgen_order_id: o.smmgen_order_id,
+          smmcost_order_id: o.smmcost_order_id
+        }))
+      });
       
       if (pendingOrders.length === 0) {
         console.log('No pending orders to check');
@@ -164,6 +229,7 @@ const checkAllPendingOrdersStatus = async (queryClient) => {
       
       // Check orders status using batch utility
       // Use minIntervalMinutes: 0 to bypass interval check and check all pending orders
+      console.log('Calling checkOrdersStatusBatch...');
       const result = await checkOrdersStatusBatch(pendingOrders, {
         concurrency: 5, // Moderate concurrency for background checks
         minIntervalMinutes: 0 // Bypass interval check to check all pending orders on dashboard load

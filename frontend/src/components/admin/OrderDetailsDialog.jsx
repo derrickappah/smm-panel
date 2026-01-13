@@ -43,14 +43,21 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
       String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost" &&
       order.smmcost_order_id > 0;
     
+    // Check if jbsmmpanel_order_id exists and is valid
+    const hasJbsmmpanel = order.jbsmmpanel_order_id && 
+      String(order.jbsmmpanel_order_id).toLowerCase() !== "order not placed at jbsmmpanel";
+    
     // Check if smmgen_order_id exists and is valid (not internal UUID or "order not placed")
     const isInternalUuid = order.smmgen_order_id === order.id;
     const hasSmmgen = order.smmgen_order_id && 
       order.smmgen_order_id !== "order not placed at smm gen" && 
       !isInternalUuid;
     
+    // Priority: SMMCost > JB SMM Panel > SMMGen
     if (hasSmmcost) {
       return { id: order.smmcost_order_id, type: 'smmcost' };
+    } else if (hasJbsmmpanel) {
+      return { id: order.jbsmmpanel_order_id, type: 'jbsmmpanel' };
     } else if (hasSmmgen) {
       return { id: order.smmgen_order_id, type: 'smmgen' };
     } else {
@@ -62,7 +69,7 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
   // Get Order ID display value
   const getOrderIdDisplay = (order) => {
     const orderIdInfo = getOrderId(order);
-    if (orderIdInfo.type === 'uuid' && !order.smmcost_order_id && !order.smmgen_order_id) {
+    if (orderIdInfo.type === 'uuid' && !order.smmcost_order_id && !order.jbsmmpanel_order_id && !order.smmgen_order_id) {
       return 'order not placed';
     }
     return orderIdInfo.id;
@@ -78,6 +85,8 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
   const hasSmmcost = order.smmcost_order_id && 
     String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost" &&
     order.smmcost_order_id > 0;
+  const hasJbsmmpanel = order.jbsmmpanel_order_id && 
+    String(order.jbsmmpanel_order_id).toLowerCase() !== "order not placed at jbsmmpanel";
   const isInternalUuid = order.smmgen_order_id === order.id;
   const hasSmmgen = order.smmgen_order_id && 
     order.smmgen_order_id !== "order not placed at smm gen" && 
@@ -105,6 +114,9 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
                   </p>
                   {orderIdInfo.type === 'smmcost' && (
                     <p className="text-xs text-gray-500 mt-1">SMMCost Order ID</p>
+                  )}
+                  {orderIdInfo.type === 'jbsmmpanel' && (
+                    <p className="text-xs text-gray-500 mt-1">JBSMMPanel Order ID</p>
                   )}
                   {orderIdInfo.type === 'smmgen' && (
                     <p className="text-xs text-gray-500 mt-1">SMMGen Order ID</p>
@@ -203,19 +215,25 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
                     <span className="text-sm font-mono font-bold text-gray-900">{order.smmcost_order_id}</span>
                   </div>
                 )}
+                {hasJbsmmpanel && (
+                  <div className="flex items-center justify-between p-2 bg-orange-50 rounded-lg">
+                    <span className="text-sm font-medium text-gray-700">JBSMMPanel:</span>
+                    <span className="text-sm font-mono font-bold text-gray-900">{order.jbsmmpanel_order_id}</span>
+                  </div>
+                )}
                 {hasSmmgen && (
                   <div className="flex items-center justify-between p-2 bg-blue-50 rounded-lg">
                     <span className="text-sm font-medium text-gray-700">SMMGen:</span>
                     <span className="text-sm font-mono font-bold text-gray-900">{order.smmgen_order_id}</span>
                   </div>
                 )}
-                {hasSmmcost && hasSmmgen && (
+                {(hasSmmcost || hasJbsmmpanel || hasSmmgen) && (hasSmmcost && hasJbsmmpanel || hasSmmcost && hasSmmgen || hasJbsmmpanel && hasSmmgen) && (
                   <div className="flex items-center justify-between p-2 bg-purple-50 rounded-lg">
-                    <span className="text-sm font-medium text-gray-700">Both panels active</span>
-                    <span className="text-xs text-gray-500">SMMCost prioritized</span>
+                    <span className="text-sm font-medium text-gray-700">Multiple panels active</span>
+                    <span className="text-xs text-gray-500">SMMCost > JBSMMPanel > SMMGen priority</span>
                   </div>
                 )}
-                {!hasSmmcost && !hasSmmgen && (
+                {!hasSmmcost && !hasJbsmmpanel && !hasSmmgen && (
                   <div className="flex items-center gap-2 p-2 bg-red-50 rounded-lg">
                     <AlertCircle className="w-4 h-4 text-red-500" />
                     <span className="text-sm text-red-600 italic font-medium">order not placed</span>
