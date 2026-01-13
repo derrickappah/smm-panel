@@ -4,6 +4,7 @@
 import { supabase } from './supabase';
 import { getSMMGenOrderStatus } from './smmgen';
 import { getSMMCostOrderStatus } from './smmcost';
+import { getJBSMMPanelOrderStatus } from './jbsmmpanel';
 import { saveOrderStatusHistory } from './orderStatusHistory';
 
 /**
@@ -51,22 +52,45 @@ const mapSMMCostStatus = (smmcostStatus) => {
 };
 
 /**
+ * Map JB SMM Panel status to our status format (same mapping as SMMGen/SMMCost)
+ * @param {string} jbsmmpanelStatus - Status from JB SMM Panel API
+ * @returns {string|null} Mapped status or null if unknown
+ */
+const mapJBSMMPanelStatus = (jbsmmpanelStatus) => {
+  if (!jbsmmpanelStatus) return null;
+  
+  const statusString = String(jbsmmpanelStatus).trim();
+  const statusLower = statusString.toLowerCase();
+  
+  if (statusLower === 'pending' || statusLower.includes('pending')) return 'pending';
+  if (statusLower === 'in progress' || statusLower.includes('in progress')) return 'in progress';
+  if (statusLower === 'completed' || statusLower.includes('completed')) return 'completed';
+  if (statusLower === 'partial' || statusLower.includes('partial')) return 'partial';
+  if (statusLower === 'processing' || statusLower.includes('processing')) return 'processing';
+  if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower.includes('cancel')) return 'canceled';
+  if (statusLower === 'refunds' || statusLower.includes('refund')) return 'refunds';
+  
+  return null;
+};
+
+/**
  * Check if an order should be checked for status updates
  * @param {Object} order - Order object
  * @param {number} minIntervalMinutes - Minimum minutes since last check (default: 5)
  * @returns {boolean} True if order should be checked
  */
 export const shouldCheckOrder = (order, minIntervalMinutes = 5) => {
-  // Check if order has SMMGen or SMMCost order ID (smmcost_order_id is now TEXT)
+  // Check if order has SMMGen, SMMCost, or JB SMM Panel order ID
   // Ignore smmgen_order_id if it's the internal UUID (set by trigger)
   const isInternalUuid = order.smmgen_order_id === order.id;
   const hasSmmgenId = order.smmgen_order_id && 
                      order.smmgen_order_id !== "order not placed at smm gen" && 
                      !isInternalUuid; // Ignore if it's just the internal UUID
   const hasSmmcostId = order.smmcost_order_id && String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost";
+  const hasJbsmmpanelId = order.jbsmmpanel_order_id && order.jbsmmpanel_order_id > 0; // JB SMM Panel uses numeric IDs
   
-  // Skip if no valid order ID from either panel
-  if (!hasSmmgenId && !hasSmmcostId) {
+  // Skip if no valid order ID from any panel
+  if (!hasSmmgenId && !hasSmmcostId && !hasJbsmmpanelId) {
     return false;
   }
 
@@ -110,23 +134,30 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
     let mappedStatus = null;
     let panelSource = null;
 
-    // Check if order has SMMGen or SMMCost order ID (smmcost_order_id is now TEXT)
+    // Check if order has SMMGen, SMMCost, or JB SMM Panel order ID
     // Ignore smmgen_order_id if it's the internal UUID (set by trigger)
     const isInternalUuid = order.smmgen_order_id === order.id;
     const hasSmmgenId = order.smmgen_order_id && 
                        order.smmgen_order_id !== "order not placed at smm gen" && 
                        !isInternalUuid; // Ignore if it's just the internal UUID
     const hasSmmcostId = order.smmcost_order_id && String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost";
+    const hasJbsmmpanelId = order.jbsmmpanel_order_id && order.jbsmmpanel_order_id > 0; // JB SMM Panel uses numeric IDs
 
-    // Prioritize SMMCost if both exist, otherwise use whichever is available
+    // Prioritize: SMMCost > JB SMM Panel > SMMGen
     if (hasSmmcostId) {
       // Get status from SMMCost (parse the order ID since it's stored as TEXT but API expects a number)
       statusData = await getSMMCostOrderStatus(parseInt(order.smmcost_order_id, 10));
       const smmcostStatus = statusData?.status || statusData?.Status;
       mappedStatus = mapSMMCostStatus(smmcostStatus);
       panelSource = 'smmcost';
+    } else if (hasJbsmmpanelId) {
+      // Get status from JB SMM Panel
+      statusData = await getJBSMMPanelOrderStatus(order.jbsmmpanel_order_id);
+      const jbsmmpanelStatus = statusData?.status || statusData?.Status;
+      mappedStatus = mapJBSMMPanelStatus(jbsmmpanelStatus);
+      panelSource = 'jbsmmpanel';
     } else if (hasSmmgenId) {
-    // Get status from SMMGen
+      // Get status from SMMGen
       statusData = await getSMMGenOrderStatus(order.smmgen_order_id);
       const smmgenStatus = statusData?.status || statusData?.Status;
       mappedStatus = mapSMMGenStatus(smmgenStatus);
@@ -187,7 +218,8 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
       error: error.message,
       orderId: order.id,
       smmgenOrderId: order.smmgen_order_id,
-      smmcostOrderId: order.smmcost_order_id
+      smmcostOrderId: order.smmcost_order_id,
+      jbsmmpanelOrderId: order.jbsmmpanel_order_id
     });
     result.error = error.message;
   }
