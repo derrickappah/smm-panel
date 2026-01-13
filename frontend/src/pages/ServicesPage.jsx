@@ -51,7 +51,7 @@ const ServicesPage = ({ user, onLogout }) => {
     try {
       // Fetch services from Supabase only
       // Only fetch enabled services for users
-      let query = supabase.from('services').select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only').eq('enabled', true);
+      let query = supabase.from('services').select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only').eq('enabled', true);
       
       if (selectedPlatform !== 'all') {
         query = query.eq('platform', selectedPlatform);
