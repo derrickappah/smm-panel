@@ -209,6 +209,7 @@ const AdminJBSMMPanel = () => {
 
       let successCount = 0;
       let errorCount = 0;
+      let skippedCount = 0;
 
       // Helper function to normalize platform to valid database values
       const normalizePlatform = (platform) => {
@@ -316,6 +317,7 @@ const AdminJBSMMPanel = () => {
 
             if (existing) {
               addLog(`Service "${serviceData.name}" already exists, skipping...`);
+              skippedCount++;
               continue;
             }
           }
@@ -356,8 +358,17 @@ const AdminJBSMMPanel = () => {
         }
       }
 
-      addLog(`Import completed: ${successCount} successful, ${errorCount} failed`);
-      toast.success(`Imported ${successCount} services successfully`);
+      addLog(`Import completed: ${successCount} successful, ${errorCount} failed, ${skippedCount} skipped (already exist)`);
+      
+      if (successCount > 0) {
+        toast.success(`Imported ${successCount} services successfully`);
+      } else if (skippedCount > 0) {
+        toast.info(`${skippedCount} services were skipped because they already exist`);
+      } else if (errorCount > 0) {
+        toast.error(`${errorCount} services failed to import`);
+      } else {
+        toast.warning('No services were imported');
+      }
       
       if (errorCount > 0) {
         toast.warning(`${errorCount} services failed to import`);
