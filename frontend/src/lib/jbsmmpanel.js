@@ -186,9 +186,21 @@ export const fetchJBSMMPanelServices = async () => {
 
     const data = await response.json();
     
+    // Check for error in response
+    if (data.error) {
+      console.warn('JB SMM Panel API returned error:', data.error);
+      return [];
+    }
+    
     // Validate response structure
     if (!Array.isArray(data) && (!data.services || !Array.isArray(data.services))) {
-      console.warn('JB SMM Panel API returned unexpected response format:', data);
+      console.warn('JB SMM Panel API returned unexpected response format. Expected array or object with services array. Received:', {
+        type: typeof data,
+        isArray: Array.isArray(data),
+        hasServices: data && typeof data === 'object' && 'services' in data,
+        keys: data && typeof data === 'object' ? Object.keys(data) : null,
+        sample: data
+      });
       return [];
     }
 

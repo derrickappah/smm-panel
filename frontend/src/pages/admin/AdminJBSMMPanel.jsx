@@ -140,8 +140,15 @@ const AdminJBSMMPanel = () => {
     try {
       const balanceData = await getJBSMMPanelBalance();
       
-      // Extract balance from response format: { balance, currency }
-      let balanceValue = balanceData?.balance || null;
+      // Extract balance from various possible response formats
+      // Common field names: balance, amount, current_balance, balance_amount, etc.
+      let balanceValue = balanceData?.balance || 
+                        balanceData?.amount || 
+                        balanceData?.current_balance || 
+                        balanceData?.balance_amount ||
+                        balanceData?.data?.balance ||
+                        balanceData?.data?.amount ||
+                        null;
       
       // Convert to number if it's a string
       if (balanceValue !== null && balanceValue !== undefined) {
