@@ -65,25 +65,39 @@ const AdminJBSMMPanel = () => {
         }
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        setConnectionStatus('success');
-        setConnectionMessage('Successfully connected to JB SMM Panel API');
-        toast.success('Connection test successful');
-      } else {
-        let errorData;
-        try {
-          errorData = await response.json();
-        } catch (parseError) {
-          errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
-        }
-        
-        const errorMessage = errorData.error || errorData.message || 'Connection test failed';
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        setConnectionStatus('error');
+        setConnectionMessage(`HTTP ${response.status}: ${response.statusText}`);
+        toast.error('Connection test failed: Invalid response from server');
+        return;
+      }
+      
+      // Check for errors in response body (API might return errors with 200 status)
+      if (data && data.error) {
+        const errorMessage = data.error || 'Connection test failed';
         setConnectionStatus('error');
         setConnectionMessage(errorMessage);
         
         // Show helpful message if API is not configured
-        if (errorData.configIssue || errorMessage.includes('not configured')) {
+        if (data.configIssue || errorMessage.includes('not configured')) {
+          toast.error('JB SMM Panel API is not configured. Please set JBSMMPANEL_API_KEY and JBSMMPANEL_API_URL in Vercel environment variables.');
+        } else {
+          toast.error(`Connection test failed: ${errorMessage}`);
+        }
+      } else if (response.ok && data && !data.error) {
+        setConnectionStatus('success');
+        setConnectionMessage('Successfully connected to JB SMM Panel API');
+        toast.success('Connection test successful');
+      } else {
+        const errorMessage = data?.error || data?.message || `HTTP ${response.status}: ${response.statusText}`;
+        setConnectionStatus('error');
+        setConnectionMessage(errorMessage);
+        
+        // Show helpful message if API is not configured
+        if (data?.configIssue || errorMessage.includes('not configured')) {
           toast.error('JB SMM Panel API is not configured. Please set JBSMMPANEL_API_KEY and JBSMMPANEL_API_URL in Vercel environment variables.');
         } else {
           toast.error(`Connection test failed: ${errorMessage}`);

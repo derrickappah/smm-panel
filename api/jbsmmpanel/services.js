@@ -96,6 +96,16 @@ export default async function handler(req, res) {
       // Log full response for debugging
       console.log('JB SMM Panel API Full Response:', JSON.stringify(data, null, 2));
 
+      // Check for errors in response body (API might return errors with 200 status)
+      if (data && typeof data === 'object' && data.error) {
+        console.error('JB SMM Panel Services API returned error in response:', data.error);
+        return res.status(400).json({ 
+          error: data.error || 'Incorrect request',
+          details: data,
+          apiError: true
+        });
+      }
+
       // Validate response structure
       if (typeof data !== 'object' || data === null) {
         console.error('JB SMM Panel returned invalid response format:', typeof data);
