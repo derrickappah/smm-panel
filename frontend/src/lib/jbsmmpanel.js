@@ -380,25 +380,41 @@ export const placeJBSMMPanelOrder = async (serviceId, link, quantity, retryCount
           throw fullError;
         }
 
+        // Read response text first to get full error details
+        let responseText;
+        try {
+          responseText = await response.text();
+        } catch (textError) {
+          responseText = `Failed to read response: ${textError.message}`;
+        }
+
         let errorData;
         try {
-          errorData = await response.json();
+          errorData = JSON.parse(responseText);
         } catch (parseError) {
-          errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
+          // If not JSON, use the raw text
+          errorData = { 
+            error: `HTTP ${response.status}: ${response.statusText}`,
+            rawResponse: responseText.substring(0, 500)
+          };
         }
         
         const errorMessage = errorData.error || errorData.message || `Order failed: ${response.status}`;
         const fullError = new Error(errorMessage);
         fullError.status = response.status;
         fullError.responseData = errorData;
+        fullError.rawResponse = responseText;
         
         console.error('JB SMM Panel API Error Response:', {
           status: response.status,
+          statusText: response.statusText,
           errorMessage,
           errorData,
+          rawResponse: responseText.substring(0, 500),
           serviceId: serviceIdNum,
           link,
-          quantity
+          quantity,
+          url: apiUrl
         });
         
         // Check for duplicate order errors - don't retry these
@@ -411,7 +427,13 @@ export const placeJBSMMPanelOrder = async (serviceId, link, quantity, retryCount
         }
         
         // For 4xx errors (client errors), don't retry - these are permanent failures
+        // This includes 400 Bad Request which indicates the API rejected the request
         if (response.status >= 400 && response.status < 500) {
+          console.error('JB SMM Panel client error (4xx) - not retrying:', {
+            status: response.status,
+            error: errorMessage,
+            details: errorData
+          });
           throw fullError;
         }
         

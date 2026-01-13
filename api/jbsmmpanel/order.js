@@ -109,66 +109,117 @@ export default async function handler(req, res) {
       // Call JB SMM Panel API
       // Using POST with action parameter
       // API requires x-www-form-urlencoded format, not JSON
+      const requestBody = new URLSearchParams({
+        key: JBSMMPANEL_API_KEY,
+        action: 'add',
+        service: serviceId.toString(),
+        link: link.trim(),
+        quantity: quantityNum.toString()
+      }).toString();
+
+      // Log the exact request being sent (without API key for security)
+      console.log('JB SMM Panel API Request Details:', {
+        url: JBSMMPANEL_API_URL,
+        method: 'POST',
+        contentType: 'application/x-www-form-urlencoded',
+        bodyLength: requestBody.length,
+        bodyPreview: requestBody.replace(/key=[^&]+/, 'key=***REDACTED***'),
+        service: serviceId,
+        link: link.trim(),
+        quantity: quantityNum,
+        timestamp: new Date().toISOString()
+      });
+
       const response = await fetch(JBSMMPANEL_API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded'
         },
-        body: new URLSearchParams({
-          key: JBSMMPANEL_API_KEY,
-          action: 'add',
-          service: serviceId.toString(),
-          link: link.trim(),
-          quantity: quantityNum.toString()
-        }).toString(),
+        body: requestBody,
         signal: controller.signal
       });
 
       clearTimeout(timeoutId);
 
-      // Log response status
-      console.log('JB SMM Panel API Response:', {
+      // Log response status and headers
+      const responseHeaders = {};
+      response.headers.forEach((value, key) => {
+        responseHeaders[key] = value;
+      });
+
+      console.log('JB SMM Panel API Response Status:', {
         status: response.status,
         statusText: response.statusText,
-        ok: response.ok
+        ok: response.ok,
+        headers: responseHeaders,
+        contentType: response.headers.get('content-type')
+      });
+
+      // Read response text first to log it, then parse as JSON
+      const responseText = await response.text();
+      console.log('JB SMM Panel API Raw Response:', {
+        status: response.status,
+        statusText: response.statusText,
+        contentType: response.headers.get('content-type'),
+        bodyLength: responseText.length,
+        bodyPreview: responseText.substring(0, 500) // First 500 chars
       });
 
       if (!response.ok) {
         let errorData;
         try {
-          errorData = await response.json();
+          errorData = JSON.parse(responseText);
         } catch (parseError) {
-          errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
+          // If not JSON, use the raw text as error
+          errorData = { 
+            error: `HTTP ${response.status}: ${response.statusText}`,
+            rawResponse: responseText.substring(0, 200) // First 200 chars of raw response
+          };
         }
 
-        console.error('JB SMM Panel API Error:', {
+        console.error('JB SMM Panel API Error Response:', {
           status: response.status,
+          statusText: response.statusText,
           errorData,
+          rawResponse: responseText,
           service: serviceId,
           link: link.trim(),
-          quantity: quantityNum
+          quantity: quantityNum,
+          requestBody: requestBody.replace(/key=[^&]+/, 'key=***REDACTED***')
         });
 
         return res.status(response.status).json({ 
           error: errorData.error || errorData.message || `Failed to place order: ${response.status}`,
           status: response.status,
-          details: errorData
+          details: errorData,
+          rawResponse: responseText.substring(0, 500) // Include raw response for debugging
         });
       }
 
       let data;
       try {
-        data = await response.json();
+        data = JSON.parse(responseText);
       } catch (parseError) {
-        console.error('JB SMM Panel Response Parse Error:', parseError);
+        console.error('JB SMM Panel Response Parse Error:', {
+          error: parseError.message,
+          rawResponse: responseText,
+          contentType: response.headers.get('content-type'),
+          status: response.status
+        });
         return res.status(500).json({ 
           error: 'Invalid JSON response from JB SMM Panel API',
-          parseError: parseError.message
+          parseError: parseError.message,
+          rawResponse: responseText.substring(0, 500)
         });
       }
 
       // Log full response for debugging
-      console.log('JB SMM Panel API Full Response:', JSON.stringify(data, null, 2));
+      console.log('JB SMM Panel API Parsed Response:', {
+        data: JSON.stringify(data, null, 2),
+        dataType: typeof data,
+        isArray: Array.isArray(data),
+        keys: data && typeof data === 'object' ? Object.keys(data) : null
+      });
 
       // Check for errors in response body (API might return errors with 200 status)
       if (data && typeof data === 'object' && data.error) {

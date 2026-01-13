@@ -3990,7 +3990,13 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             }
           }
         } catch (jbsmmpanelError) {
-          console.error('JB SMM Panel order error caught:', jbsmmpanelError);
+          console.error('JB SMM Panel order error caught:', {
+            error: jbsmmpanelError,
+            message: jbsmmpanelError.message,
+            status: jbsmmpanelError.status,
+            responseData: jbsmmpanelError.responseData,
+            stack: jbsmmpanelError.stack
+          });
           
           // Handle 404 errors specifically - provide helpful message
           if (jbsmmpanelError.status === 404 || jbsmmpanelError.isConfigurationError) {
@@ -4001,9 +4007,23 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             toast.error('API endpoint not found. Please ensure serverless functions are running (use "vercel dev").');
           }
           
+          // Handle 400 errors (bad request) - these are API errors from JB SMM panel
+          if (jbsmmpanelError.status === 400 || (jbsmmpanelError.responseData && jbsmmpanelError.responseData.error)) {
+            const errorMessage = jbsmmpanelError.responseData?.error || jbsmmpanelError.message || 'Invalid request to JB SMM Panel';
+            console.error('JB SMM Panel API returned 400 error:', {
+              error: errorMessage,
+              details: jbsmmpanelError.responseData,
+              serviceId: service.jbsmmpanel_service_id,
+              link: orderForm.link,
+              quantity: quantity
+            });
+            toast.error(`JB SMM Panel order failed: ${errorMessage}`);
+            // Continue with local order creation but log the failure clearly
+          }
+          
           // Only log actual API errors, not connection failures (which are handled gracefully)
           if (!jbsmmpanelError.message?.includes('Failed to fetch') && 
-              !jbsmmpanelError.message?.includes('ERR_CONNECTION_REFUSED') &&
+              !jbsmmpanelError.message?.includes('ERR_CONNECTION_REFUSED') && 
               !jbsmmpanelError.message?.includes('Backend proxy server not running') &&
               !jbsmmpanelError.isConfigurationError) {
             console.error('JB SMM Panel order failed:', jbsmmpanelError);
@@ -4011,6 +4031,9 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             // If JB SMM Panel API key is not configured, continue with local order only
             if (jbsmmpanelError.message?.includes('API key not configured')) {
               toast.warning('JB SMM Panel API not configured. Order created locally.');
+            } else if (jbsmmpanelError.status !== 400) {
+              // Only show generic error for non-400 errors (400 errors already handled above)
+              toast.warning(`JB SMM Panel order failed: ${jbsmmpanelError.message || 'Unknown error'}. Order created locally.`);
             }
             // Continue with local order creation - leave jbsmmpanelOrderId as null, will be set in final check
           }
@@ -4023,9 +4046,18 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         console.log('JB SMM Panel final check - jbsmmpanelOrderId value:', jbsmmpanelOrderId, 'type:', typeof jbsmmpanelOrderId);
         if (jbsmmpanelOrderId === null || jbsmmpanelOrderId === undefined) {
           jbsmmpanelOrderId = "order not placed at jbsmmpanel";
-          console.log('JB SMM Panel order failed - setting failure message:', jbsmmpanelOrderId);
+          console.warn('JB SMM Panel order failed - setting failure message:', jbsmmpanelOrderId, {
+            serviceId: service.jbsmmpanel_service_id,
+            link: orderForm.link,
+            quantity: quantity,
+            note: 'Order will be saved internally but not placed at JB SMM Panel'
+          });
         } else {
-          console.log('JB SMM Panel order successful - order ID:', jbsmmpanelOrderId);
+          console.log('JB SMM Panel order successful - order ID:', jbsmmpanelOrderId, {
+            serviceId: service.jbsmmpanel_service_id,
+            link: orderForm.link,
+            quantity: quantity
+          });
         }
         // Note: smmgenOrderId remains null since we're using JB SMM Panel, not SMMGen
       } else {
