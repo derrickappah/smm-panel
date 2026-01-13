@@ -210,6 +210,8 @@ const PlatformLandingPage = ({ user, onLogout }) => {
             {serviceTypes.map((type) => {
               const typeServices = services.filter(s => s.service_type === type);
               const minRate = Math.min(...typeServices.map(s => s.rate));
+              const minRateService = typeServices.find(s => s.rate === minRate);
+              const rateUnit = minRateService?.rate_unit || 1000;
               const ServiceTypeIcon = getServiceTypeIcon(type);
               const typeDisplay = getServiceTypeDisplay(type);
 
@@ -231,7 +233,7 @@ const PlatformLandingPage = ({ user, onLogout }) => {
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <p className="text-xl font-bold text-indigo-600">From ₵{minRate}</p>
-                      <p className="text-xs text-gray-500">per 1000</p>
+                      <p className="text-xs text-gray-500">per {rateUnit}</p>
                     </div>
                     <ArrowRight className="w-5 h-5 text-gray-400" />
                   </div>

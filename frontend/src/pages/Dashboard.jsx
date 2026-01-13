@@ -3562,7 +3562,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       // Get service details - fetch fresh from database to ensure we have latest data including smmcost_service_id
       const { data: serviceData, error: serviceError } = await supabase
         .from('services')
-        .select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only')
+        .select('id, name, description, rate, rate_unit, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only')
         .eq('id', orderForm.service_id)
         .single();
       
@@ -3641,7 +3641,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
         for (let i = 0; i < componentServices.length; i++) {
           const componentService = componentServices[i];
-          const componentCost = (quantity / 1000) * componentService.rate;
+          const rateUnit = componentService.rate_unit || 1000;
+          const componentCost = (quantity / rateUnit) * componentService.rate;
           totalCost += componentCost;
 
           // Place SMMGen order if service has SMMGen ID
@@ -3836,7 +3837,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
       // Regular (non-combo) service handling
       // Calculate cost
-      const totalCost = (quantity / 1000) * service.rate;
+      const rateUnit = service.rate_unit || 1000;
+      const totalCost = (quantity / rateUnit) * service.rate;
 
       // Check balance (use displayUser to allow immediate orders after deposit)
       if (displayUser.balance < totalCost) {

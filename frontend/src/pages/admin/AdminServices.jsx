@@ -111,7 +111,7 @@ const SortableServiceItem = memo(({ service, editingService, onEdit, onToggle, o
                 {service.platform} • {service.service_type}
               </p>
               <p className={`text-sm ${service.enabled === false ? 'text-gray-400' : 'text-gray-600'}`}>
-                Rate: ₵{service.rate}/1K • Qty: {service.min_quantity}-{service.max_quantity}
+                Rate: ₵{service.rate}/{service.rate_unit || 1000} • Qty: {service.min_quantity}-{service.max_quantity}
               </p>
               {service.is_combo && service.combo_service_ids && (
                 <p className="text-xs text-purple-600 mt-1">
@@ -203,6 +203,7 @@ const AdminServices = memo(() => {
     service_type: '',
     name: '',
     rate: '',
+    rate_unit: '1000',
     min_quantity: '',
     max_quantity: '',
     description: '',
@@ -259,6 +260,7 @@ const AdminServices = memo(() => {
         service_type: serviceForm.service_type,
         name: serviceForm.name,
         rate: parseFloat(serviceForm.rate),
+        rate_unit: parseInt(serviceForm.rate_unit) || 1000,
         min_quantity: parseInt(serviceForm.min_quantity),
         max_quantity: parseInt(serviceForm.max_quantity),
         description: serviceForm.description,
@@ -281,6 +283,7 @@ const AdminServices = memo(() => {
         service_type: '',
         name: '',
         rate: '',
+        rate_unit: '1000',
         min_quantity: '',
         max_quantity: '',
         description: '',
@@ -458,9 +461,9 @@ const AdminServices = memo(() => {
               required
             />
           </div>
-          <div className="grid md:grid-cols-3 gap-4">
+          <div className="grid md:grid-cols-4 gap-4">
             <div>
-              <Label>Rate (per 1000)</Label>
+              <Label>Rate</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -469,6 +472,18 @@ const AdminServices = memo(() => {
                 onChange={(e) => setServiceForm({ ...serviceForm, rate: e.target.value })}
                 required
               />
+            </div>
+            <div>
+              <Label>Rate Unit</Label>
+              <Input
+                type="number"
+                min="1"
+                placeholder="1000"
+                value={serviceForm.rate_unit}
+                onChange={(e) => setServiceForm({ ...serviceForm, rate_unit: e.target.value })}
+                required
+              />
+              <p className="text-xs text-gray-500 mt-1">Per quantity (e.g., 1000, 500, 100)</p>
             </div>
             <div>
               <Label>Min Quantity</Label>
@@ -732,7 +747,7 @@ const AdminServices = memo(() => {
                         {service.platform} • {service.service_type}
                       </p>
                       <p className={`text-sm ${service.enabled === false ? 'text-gray-400' : 'text-gray-600'}`}>
-                        Rate: ₵{service.rate}/1K • Qty: {service.min_quantity}-{service.max_quantity}
+                        Rate: ₵{service.rate}/{service.rate_unit || 1000} • Qty: {service.min_quantity}-{service.max_quantity}
                       </p>
                       {service.is_combo && service.combo_service_ids && (
                         <p className="text-xs text-purple-600 mt-1">

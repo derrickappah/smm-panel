@@ -99,7 +99,7 @@ const PricingPreview = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('services')
-        .select('id, name, rate, platform, service_type, min_quantity, max_quantity')
+        .select('id, name, rate, rate_unit, platform, service_type, min_quantity, max_quantity')
         .eq('enabled', true)
         .order('rate', { ascending: true }); // Order by price ascending
 

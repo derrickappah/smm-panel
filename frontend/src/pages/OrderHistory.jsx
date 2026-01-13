@@ -40,7 +40,7 @@ const OrderHistory = ({ user, onLogout }) => {
           .order('created_at', { ascending: false }),
         supabase
           .from('services')
-          .select('id, name, description, rate, platform, min_quantity, max_quantity, service_type')
+          .select('id, name, description, rate, rate_unit, platform, min_quantity, max_quantity, service_type')
       ]);
 
       if (ordersRes.error) throw ordersRes.error;

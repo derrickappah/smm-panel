@@ -20,7 +20,7 @@ const PricingPage = ({ user, onLogout }) => {
     try {
       const { data, error } = await supabase
         .from('services')
-        .select('id, platform, service_type, name, rate, min_quantity, max_quantity')
+        .select('id, platform, service_type, name, rate, rate_unit, min_quantity, max_quantity')
         .eq('enabled', true)
         .order('platform', { ascending: true })
         .order('rate', { ascending: true })
@@ -111,7 +111,7 @@ const PricingPage = ({ user, onLogout }) => {
                                 Service
                               </th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Price per 1000
+                                Price per Unit
                               </th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Quantity Range
@@ -132,6 +132,7 @@ const PricingPage = ({ user, onLogout }) => {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="text-sm font-bold text-indigo-600">₵{service.rate}</div>
+                                  <div className="text-xs text-gray-500">per {service.rate_unit || 1000}</div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                                   {service.min_quantity?.toLocaleString()} - {service.max_quantity?.toLocaleString()}

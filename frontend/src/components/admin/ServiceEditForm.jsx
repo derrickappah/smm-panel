@@ -11,6 +11,7 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
     service_type: service.service_type,
     name: service.name,
     rate: service.rate,
+    rate_unit: service.rate_unit || 1000,
     min_quantity: service.min_quantity,
     max_quantity: service.max_quantity,
     description: service.description || '',
@@ -49,6 +50,7 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
       service_type: formData.service_type,
       name: formData.name,
       rate: parseFloat(formData.rate),
+      rate_unit: parseInt(formData.rate_unit) || 1000,
       min_quantity: parseInt(formData.min_quantity),
       max_quantity: parseInt(formData.max_quantity),
       description: formData.description || null,
@@ -107,9 +109,9 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
           required
         />
       </div>
-      <div className="grid md:grid-cols-3 gap-4">
+      <div className="grid md:grid-cols-4 gap-4">
         <div>
-          <Label>Rate (per 1000)</Label>
+          <Label>Rate</Label>
           <Input
             type="number"
             step="0.01"
@@ -117,6 +119,17 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
             onChange={(e) => setFormData({ ...formData, rate: e.target.value })}
             required
           />
+        </div>
+        <div>
+          <Label>Rate Unit</Label>
+          <Input
+            type="number"
+            min="1"
+            value={formData.rate_unit}
+            onChange={(e) => setFormData({ ...formData, rate_unit: e.target.value })}
+            required
+          />
+          <p className="text-xs text-gray-500 mt-1">Per quantity (e.g., 1000, 500, 100)</p>
         </div>
         <div>
           <Label>Min Quantity</Label>
@@ -251,7 +264,7 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
                         className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                       />
                       <Label className="text-sm text-gray-700">
-                        {serviceItem.name} ({serviceItem.platform} - ₵{serviceItem.rate}/1000)
+                        {serviceItem.name} ({serviceItem.platform} - ₵{serviceItem.rate}/{serviceItem.rate_unit || 1000})
                       </Label>
                     </div>
                   ))}

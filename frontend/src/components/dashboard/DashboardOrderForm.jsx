@@ -79,17 +79,20 @@ const DashboardOrderForm = React.memo(({
         .filter(s => s !== undefined);
       
       if (componentServices.length === 0) {
-        return ((quantity / 1000) * selectedService.rate).toFixed(2);
+        const rateUnit = selectedService.rate_unit || 1000;
+        return ((quantity / rateUnit) * selectedService.rate).toFixed(2);
       }
       
       const totalCost = componentServices.reduce((sum, componentService) => {
-        return sum + ((quantity / 1000) * componentService.rate);
+        const rateUnit = componentService.rate_unit || 1000;
+        return sum + ((quantity / rateUnit) * componentService.rate);
       }, 0);
       
       return totalCost.toFixed(2);
     }
     
-    return ((quantity / 1000) * selectedService.rate).toFixed(2);
+    const rateUnit = selectedService.rate_unit || 1000;
+    return ((quantity / rateUnit) * selectedService.rate).toFixed(2);
   }, [selectedService, selectedPackage, orderForm.quantity, sortedServices]);
 
   const handleServiceSearchChange = useCallback((e) => {
@@ -329,7 +332,7 @@ const DashboardOrderForm = React.memo(({
                               )}
                             </div>
                             <span className="text-xs text-gray-500">
-                              {service.platform && `${service.platform} • `}₵{service.rate}/1000
+                              {service.platform && `${service.platform} • `}₵{service.rate}/{service.rate_unit || 1000}
                               {service.is_combo && service.combo_service_ids && (
                                 <span className="ml-2 text-purple-600">
                                   ({service.combo_service_ids.length} services)
@@ -376,7 +379,7 @@ const DashboardOrderForm = React.memo(({
                 Selected: {selectedService.name}
               </p>
               <p className="text-xs text-gray-600 mt-0.5">
-                ₵{selectedService.rate}/1000
+                ₵{selectedService.rate}/{selectedService.rate_unit || 1000}
               </p>
             </div>
           )}
@@ -437,7 +440,7 @@ const DashboardOrderForm = React.memo(({
                       return componentService ? (
                         <li key={serviceId} className="flex items-center gap-1.5">
                           <span className="w-1 h-1 bg-purple-500 rounded-full"></span>
-                          {componentService.name} (₵{componentService.rate}/1000)
+                          {componentService.name} (₵{componentService.rate}/{componentService.rate_unit || 1000})
                         </li>
                       ) : null;
                     })}

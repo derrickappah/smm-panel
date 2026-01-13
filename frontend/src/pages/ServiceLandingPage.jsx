@@ -243,7 +243,7 @@ const ServiceLandingPage = ({ user, onLogout }) => {
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <p className="text-2xl font-bold text-indigo-600">₵{service.rate}</p>
-                    <p className="text-xs text-gray-500">per 1000</p>
+                    <p className="text-xs text-gray-500">per {service.rate_unit || 1000}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm text-gray-600">Min: {service.min_quantity.toLocaleString()}</p>

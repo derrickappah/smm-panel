@@ -31,7 +31,7 @@ export const generateServiceSchema = (service) => {
         '@type': 'UnitPriceSpecification',
         price: service.rate,
         priceCurrency: 'GHS',
-        unitText: 'per 1000'
+        unitText: `per ${service.rate_unit || 1000}`
       },
       availability: service.enabled ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
       itemCondition: 'https://schema.org/NewCondition'
