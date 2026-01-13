@@ -18,13 +18,32 @@ const PricingPage = ({ user, onLogout }) => {
 
   const fetchSampleServices = async () => {
     try {
-      const { data, error } = await supabase
+      // Try with rate_unit first, fallback to without it if column doesn't exist
+      let { data, error } = await supabase
         .from('services')
         .select('id, platform, service_type, name, rate, rate_unit, min_quantity, max_quantity')
         .eq('enabled', true)
         .order('platform', { ascending: true })
         .order('rate', { ascending: true })
         .limit(20);
+
+      // If rate_unit column doesn't exist, try without it
+      if (error && (error.message?.includes('rate_unit') || error.code === '42703')) {
+        console.warn('rate_unit column not found, fetching without it:', error.message);
+        const fallbackResult = await supabase
+          .from('services')
+          .select('id, platform, service_type, name, rate, min_quantity, max_quantity')
+          .eq('enabled', true)
+          .order('platform', { ascending: true })
+          .order('rate', { ascending: true })
+          .limit(20);
+        
+        if (fallbackResult.error) throw fallbackResult.error;
+        
+        // Add default rate_unit for backward compatibility
+        data = (fallbackResult.data || []).map(service => ({ ...service, rate_unit: 1000 }));
+        error = null;
+      }
 
       if (error) throw error;
       setServices(data || []);

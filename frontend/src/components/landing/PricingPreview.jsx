@@ -97,11 +97,27 @@ const PricingPreview = () => {
   const { data: services, isLoading } = useQuery({
     queryKey: ['landing-pricing-services'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Try with rate_unit first, fallback to without it if column doesn't exist
+      let { data, error } = await supabase
         .from('services')
         .select('id, name, rate, rate_unit, platform, service_type, min_quantity, max_quantity')
         .eq('enabled', true)
         .order('rate', { ascending: true }); // Order by price ascending
+
+      // If rate_unit column doesn't exist, try without it
+      if (error && (error.message?.includes('rate_unit') || error.code === '42703')) {
+        console.warn('rate_unit column not found, fetching without it:', error.message);
+        const fallbackResult = await supabase
+          .from('services')
+          .select('id, name, rate, platform, service_type, min_quantity, max_quantity')
+          .eq('enabled', true)
+          .order('rate', { ascending: true });
+        
+        if (fallbackResult.error) throw fallbackResult.error;
+        
+        // Add default rate_unit for backward compatibility
+        return (fallbackResult.data || []).map(service => ({ ...service, rate_unit: 1000 }));
+      }
 
       if (error) throw error;
       return data || [];

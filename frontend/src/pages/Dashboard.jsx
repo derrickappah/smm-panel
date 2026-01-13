@@ -3560,11 +3560,30 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       }
 
       // Get service details - fetch fresh from database to ensure we have latest data including smmcost_service_id
-      const { data: serviceData, error: serviceError } = await supabase
+      // Try with rate_unit first, fallback to without it if column doesn't exist
+      let { data: serviceData, error: serviceError } = await supabase
         .from('services')
         .select('id, name, description, rate, rate_unit, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only')
         .eq('id', orderForm.service_id)
         .single();
+      
+      // If rate_unit column doesn't exist, try without it
+      if (serviceError && (serviceError.message?.includes('rate_unit') || serviceError.code === '42703')) {
+        console.warn('rate_unit column not found, fetching without it:', serviceError.message);
+        const fallbackResult = await supabase
+          .from('services')
+          .select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only')
+          .eq('id', orderForm.service_id)
+          .single();
+        
+        if (fallbackResult.error) {
+          serviceError = fallbackResult.error;
+        } else {
+          // Add default rate_unit for backward compatibility
+          serviceData = { ...fallbackResult.data, rate_unit: 1000 };
+          serviceError = null;
+        }
+      }
       
       if (serviceError || !serviceData) {
         throw new Error('Service not found');
