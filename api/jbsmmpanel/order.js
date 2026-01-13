@@ -108,18 +108,19 @@ export default async function handler(req, res) {
     try {
       // Call JB SMM Panel API
       // Using POST with action parameter
+      // API requires x-www-form-urlencoded format, not JSON
       const response = await fetch(JBSMMPANEL_API_URL, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/x-www-form-urlencoded'
         },
-        body: JSON.stringify({
+        body: new URLSearchParams({
           key: JBSMMPANEL_API_KEY,
           action: 'add',
-          service: serviceId,
+          service: serviceId.toString(),
           link: link.trim(),
-          quantity: quantityNum
-        }),
+          quantity: quantityNum.toString()
+        }).toString(),
         signal: controller.signal
       });
 
