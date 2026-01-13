@@ -12,6 +12,7 @@ Setup and installation guides for different components.
 - **SUPABASE_SETUP.md** - Supabase configuration guide
 - **VERCEL_SETUP.md** - Vercel deployment and environment variables
 - **SMMGEN_SETUP.md** - SMMGen API integration setup
+- **JBSMMPANEL_SETUP.md** - JB SMM Panel API integration setup
 
 ### `troubleshooting/`
 Troubleshooting guides for common issues.

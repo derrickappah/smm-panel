@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { placeSMMGenOrder, extractSMMGenOrderId, isDuplicateOrderError, getDuplicateOrderErrorMessage } from '@/lib/smmgen';
 import { placeSMMCostOrder, extractSMMCostOrderId } from '@/lib/smmcost';
+import { placeJBSMMPanelOrder, extractJBSMMPanelOrderId } from '@/lib/jbsmmpanel';
 import { saveOrderStatusHistory } from '@/lib/orderStatusHistory';
 import { normalizePhoneNumber } from '@/utils/phoneUtils';
 import Navbar from '@/components/Navbar';
@@ -3561,7 +3562,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       // Get service details - fetch fresh from database to ensure we have latest data including smmcost_service_id
       const { data: serviceData, error: serviceError } = await supabase
         .from('services')
-        .select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only')
+        .select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only')
         .eq('id', orderForm.service_id)
         .single();
       
@@ -3571,14 +3572,16 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       
       const service = serviceData;
 
-      // Debug: Log the full service object to check for smmcost_service_id
+      // Debug: Log the full service object to check for panel service IDs
       console.log('Service object fetched from database for order placement:', {
         id: service.id,
         name: service.name,
         smmgen_service_id: service.smmgen_service_id,
         smmcost_service_id: service.smmcost_service_id,
+        jbsmmpanel_service_id: service.jbsmmpanel_service_id,
         has_smmcost: !!service.smmcost_service_id,
         has_smmgen: !!service.smmgen_service_id,
+        has_jbsmmpanel: !!service.jbsmmpanel_service_id,
         full_service: service
       });
 
@@ -3867,8 +3870,9 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         console.warn('Duplicate order detected but SMMGen order failed previously. Allowing retry.');
       }
 
-      // Place order via SMMCost API if service has SMMCost ID (prioritize SMMCost)
+      // Place order via panel APIs (priority: SMMCost > JB SMM Panel > SMMGen)
       let smmcostOrderId = null;
+      let jbsmmpanelOrderId = null;
       let smmgenOrderId = null; // Declare at top level so it's available in both code paths
       if (service.smmcost_service_id) {
         console.log('Attempting to place SMMCost order:', {
@@ -3946,13 +3950,87 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         } else {
           console.log('SMMCost order successful - order ID:', smmcostOrderId);
         }
-        // Note: smmgenOrderId remains null since we're using SMMCost, not SMMGen
-      } else {
-        console.log('Service does not have SMMCost service ID - skipping SMMCost order placement');
-        // Leave smmcostOrderId as null since we never attempted SMMCost order placement
-        // Only set "order not placed at smmcost" if we actually attempted but failed
+        // Note: smmgenOrderId and jbsmmpanelOrderId remain null since we're using SMMCost
+      } else if (service.jbsmmpanel_service_id) {
+        console.log('Attempting to place JB SMM Panel order:', {
+          serviceId: service.jbsmmpanel_service_id,
+          link: orderForm.link,
+          quantity: quantity
+        });
         
-        // Only check SMMGen if service doesn't have SMMCost ID
+        try {
+          const jbsmmpanelResponse = await placeJBSMMPanelOrder(
+            service.jbsmmpanel_service_id,
+            orderForm.link,
+            quantity
+          );
+          
+          console.log('JB SMM Panel API response received:', jbsmmpanelResponse);
+          console.log('JB SMM Panel response type:', typeof jbsmmpanelResponse, 'Keys:', Object.keys(jbsmmpanelResponse || {}));
+          
+          // If JB SMM Panel returns null, it means backend is not available (graceful skip)
+          if (jbsmmpanelResponse === null) {
+            console.warn('JB SMM Panel returned null - backend unavailable or not configured');
+            // Mark as failure since we attempted but couldn't place the order
+            // Leave as null, will be set to failure message in final check below
+          } else if (jbsmmpanelResponse) {
+            // Check if JB SMM Panel returned an error response
+            // Only check actual error fields, not keywords in message strings
+            if (jbsmmpanelResponse.error) {
+              const errorMsg = jbsmmpanelResponse.error || 'Unknown error';
+              console.warn('JB SMM Panel returned error - DETECTED:', errorMsg, 'Full response:', jbsmmpanelResponse);
+              console.warn('Setting jbsmmpanelOrderId to null due to error');
+              // Don't extract order ID from error responses
+              jbsmmpanelOrderId = null;
+            } else {
+              // Use standardized extraction utility that matches API endpoint logic
+              jbsmmpanelOrderId = extractJBSMMPanelOrderId(jbsmmpanelResponse);
+              console.log('JB SMM Panel order response:', jbsmmpanelResponse);
+              console.log('JB SMM Panel order ID extracted:', jbsmmpanelOrderId);
+            }
+          }
+        } catch (jbsmmpanelError) {
+          console.error('JB SMM Panel order error caught:', jbsmmpanelError);
+          
+          // Handle 404 errors specifically - provide helpful message
+          if (jbsmmpanelError.status === 404 || jbsmmpanelError.isConfigurationError) {
+            console.error('JB SMM Panel API endpoint not found. Make sure serverless functions are running:', {
+              error: jbsmmpanelError.message,
+              hint: 'Run "vercel dev" in the project root to start serverless functions locally'
+            });
+            toast.error('API endpoint not found. Please ensure serverless functions are running (use "vercel dev").');
+          }
+          
+          // Only log actual API errors, not connection failures (which are handled gracefully)
+          if (!jbsmmpanelError.message?.includes('Failed to fetch') && 
+              !jbsmmpanelError.message?.includes('ERR_CONNECTION_REFUSED') &&
+              !jbsmmpanelError.message?.includes('Backend proxy server not running') &&
+              !jbsmmpanelError.isConfigurationError) {
+            console.error('JB SMM Panel order failed:', jbsmmpanelError);
+            
+            // If JB SMM Panel API key is not configured, continue with local order only
+            if (jbsmmpanelError.message?.includes('API key not configured')) {
+              toast.warning('JB SMM Panel API not configured. Order created locally.');
+            }
+            // Continue with local order creation - leave jbsmmpanelOrderId as null, will be set in final check
+          }
+          // Continue with local order creation even if JB SMM Panel fails
+          // Leave jbsmmpanelOrderId as null, will be set to failure message in final check below
+        }
+        
+        // If JB SMM Panel service ID exists but order failed (jbsmmpanelOrderId is still null), set failure message
+        // This matches the pattern used for SMMCost and SMMGen
+        console.log('JB SMM Panel final check - jbsmmpanelOrderId value:', jbsmmpanelOrderId, 'type:', typeof jbsmmpanelOrderId);
+        if (jbsmmpanelOrderId === null || jbsmmpanelOrderId === undefined) {
+          jbsmmpanelOrderId = "order not placed at jbsmmpanel";
+          console.log('JB SMM Panel order failed - setting failure message:', jbsmmpanelOrderId);
+        } else {
+          console.log('JB SMM Panel order successful - order ID:', jbsmmpanelOrderId);
+        }
+        // Note: smmgenOrderId remains null since we're using JB SMM Panel, not SMMGen
+      } else {
+        console.log('Service does not have SMMCost or JB SMM Panel service ID - checking SMMGen');
+        // Only check SMMGen if service doesn't have SMMCost or JB SMM Panel ID
       // Place order via SMMGen API if service has SMMGen ID
       if (service.smmgen_service_id) {
         console.log('Attempting to place SMMGen order:', {
@@ -4046,9 +4124,10 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       }
 
       // Create order record in our database
-      console.log('Creating order with SMMGen ID:', smmgenOrderId, 'SMMCost ID:', smmcostOrderId);
+      console.log('Creating order with SMMGen ID:', smmgenOrderId, 'SMMCost ID:', smmcostOrderId, 'JB SMM Panel ID:', jbsmmpanelOrderId);
       console.log('SMMGen ID type:', typeof smmgenOrderId);
       console.log('SMMCost ID type:', typeof smmcostOrderId);
+      console.log('JB SMM Panel ID type:', typeof jbsmmpanelOrderId);
       
       // Get JWT token for API authentication
       const { data: { session } } = await supabase.auth.getSession();
@@ -4068,8 +4147,14 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         ? String(smmcostOrderId) 
         : null;
 
+      // Convert JB SMM Panel order ID to string (database expects INTEGER, but we'll send as string for consistency)
+      // This ensures failure messages like "order not placed at jbsmmpanel" are properly sent
+      const jbsmmpanelOrderIdString = jbsmmpanelOrderId !== null && jbsmmpanelOrderId !== undefined 
+        ? String(jbsmmpanelOrderId) 
+        : null;
+
       // Log what we're sending to the API
-      console.log('Sending to API - smmgen_order_id:', smmgenOrderIdString, 'smmcost_order_id:', smmcostOrderIdString);
+      console.log('Sending to API - smmgen_order_id:', smmgenOrderIdString, 'smmcost_order_id:', smmcostOrderIdString, 'jbsmmpanel_order_id:', jbsmmpanelOrderIdString);
 
       // Place order via secure API endpoint
       const orderResponse = await fetch('/api/place-order', {
@@ -4084,7 +4169,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           quantity: quantity,
           total_cost: totalCost,
           smmgen_order_id: smmgenOrderIdString,
-          smmcost_order_id: smmcostOrderIdString
+          smmcost_order_id: smmcostOrderIdString,
+          jbsmmpanel_order_id: jbsmmpanelOrderIdString
         })
       });
 

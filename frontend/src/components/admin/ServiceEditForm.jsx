@@ -16,6 +16,7 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
     description: service.description || '',
     smmgen_service_id: service.smmgen_service_id || '',
     smmcost_service_id: service.smmcost_service_id || '',
+    jbsmmpanel_service_id: service.jbsmmpanel_service_id || '',
     is_combo: service.is_combo || false,
     combo_service_ids: service.combo_service_ids || [],
     combo_smmgen_service_ids: service.combo_smmgen_service_ids || [],
@@ -53,6 +54,7 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
       description: formData.description || null,
       smmgen_service_id: formData.smmgen_service_id || null,
       smmcost_service_id: formData.smmcost_service_id ? parseInt(formData.smmcost_service_id, 10) : null,
+      jbsmmpanel_service_id: formData.jbsmmpanel_service_id ? parseInt(formData.jbsmmpanel_service_id, 10) : null,
       is_combo: Boolean(formData.is_combo),
       combo_service_ids: formData.is_combo && formData.combo_service_ids.length > 0 
         ? formData.combo_service_ids 
@@ -144,7 +146,7 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
           className="resize-y"
         />
       </div>
-      <div className="grid md:grid-cols-2 gap-4">
+      <div className="grid md:grid-cols-3 gap-4">
       <div>
         <Label>SMMGen Service ID</Label>
         <Input
@@ -163,6 +165,16 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
             onChange={(e) => setFormData({ ...formData, smmcost_service_id: e.target.value })}
           />
           <p className="text-xs text-gray-500 mt-1">Enter the SMMCost API service ID for integration</p>
+        </div>
+        <div>
+          <Label>JB SMM Panel Service ID</Label>
+          <Input
+            type="number"
+            placeholder="JB SMM Panel API service ID (optional)"
+            value={formData.jbsmmpanel_service_id}
+            onChange={(e) => setFormData({ ...formData, jbsmmpanel_service_id: e.target.value })}
+          />
+          <p className="text-xs text-gray-500 mt-1">Enter the JB SMM Panel API service ID for integration</p>
         </div>
       </div>
       <div className="flex items-center space-x-2 p-3 border border-gray-200 rounded-lg bg-yellow-50">

@@ -47,7 +47,7 @@ export default async function handler(req, res) {
     const { user, supabase: userSupabase } = await verifyAuth(req);
 
     // Get request body
-    const { service_id, package_id, link, quantity, total_cost, smmgen_order_id, smmcost_order_id } = req.body;
+    const { service_id, package_id, link, quantity, total_cost, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id } = req.body;
 
     // Validate required fields
     if (!link || typeof link !== 'string' || link.trim() === '') {
@@ -116,13 +116,38 @@ export default async function handler(req, res) {
     const smmcostOrderIdString = smmcost_order_id !== undefined && smmcost_order_id !== null
       ? String(smmcost_order_id)
       : null;
+
+    // Ensure jbsmmpanel_order_id is converted to integer (database expects INTEGER)
+    // For INTEGER columns, we store NULL for failures (can't store failure message strings like TEXT columns)
+    let jbsmmpanelOrderIdInt = null;
+    if (jbsmmpanel_order_id !== undefined && jbsmmpanel_order_id !== null) {
+      // Skip failure messages (strings containing "not placed")
+      if (typeof jbsmmpanel_order_id === 'string' && jbsmmpanel_order_id.toLowerCase().includes('not placed')) {
+        jbsmmpanelOrderIdInt = null; // Store NULL for failures (INTEGER column can't store strings)
+      } else if (typeof jbsmmpanel_order_id === 'number') {
+        jbsmmpanelOrderIdInt = jbsmmpanel_order_id;
+      } else if (typeof jbsmmpanel_order_id === 'string') {
+        const parsed = parseInt(jbsmmpanel_order_id, 10);
+        if (!isNaN(parsed) && parsed > 0) {
+          jbsmmpanelOrderIdInt = parsed;
+        }
+      }
+    }
     
     // Log what we received and converted
-    console.log('API received smmcost_order_id:', {
-      original: smmcost_order_id,
-      originalType: typeof smmcost_order_id,
-      converted: smmcostOrderIdString,
-      convertedType: typeof smmcostOrderIdString
+    console.log('API received order IDs:', {
+      smmcost_order_id: {
+        original: smmcost_order_id,
+        originalType: typeof smmcost_order_id,
+        converted: smmcostOrderIdString,
+        convertedType: typeof smmcostOrderIdString
+      },
+      jbsmmpanel_order_id: {
+        original: jbsmmpanel_order_id,
+        originalType: typeof jbsmmpanel_order_id,
+        converted: jbsmmpanelOrderIdInt,
+        convertedType: typeof jbsmmpanelOrderIdInt
+      }
     });
 
     // Idempotency check: Check if an order with the same parameters already exists
@@ -209,8 +234,10 @@ export default async function handler(req, res) {
       p_package_id: package_id || null,
       p_smmgen_order_id: smmgenOrderIdString,
       p_smmcost_order_id: smmcostOrderIdString,
+      p_jbsmmpanel_order_id: jbsmmpanelOrderIdInt,
       smmgen_order_id_type: typeof smmgenOrderIdString,
-      smmcost_order_id_type: typeof smmcostOrderIdString
+      smmcost_order_id_type: typeof smmcostOrderIdString,
+      jbsmmpanel_order_id_type: typeof jbsmmpanelOrderIdInt
     });
 
     // Call the atomic database function to place order and deduct balance
@@ -223,7 +250,8 @@ export default async function handler(req, res) {
       p_service_id: service_id || null,
       p_package_id: package_id || null,
       p_smmgen_order_id: smmgenOrderIdString,
-      p_smmcost_order_id: smmcostOrderIdString
+      p_smmcost_order_id: smmcostOrderIdString,
+      p_jbsmmpanel_order_id: jbsmmpanelOrderIdInt
     });
 
     if (rpcError) {
@@ -242,13 +270,14 @@ export default async function handler(req, res) {
           p_service_id: service_id || null,
           p_package_id: package_id || null,
           p_smmgen_order_id: smmgenOrderIdString,
-          p_smmcost_order_id: smmcostOrderIdString
+          p_smmcost_order_id: smmcostOrderIdString,
+          p_jbsmmpanel_order_id: jbsmmpanelOrderIdInt
         }
       });
       return res.status(500).json({
         error: 'Failed to place order',
         details: rpcError.message || rpcError.code || 'Unknown database error',
-        hint: rpcError.hint || 'Check if place_order_with_balance_deduction includes p_smmcost_order_id parameter (TEXT recommended)'
+        hint: rpcError.hint || 'Check if place_order_with_balance_deduction includes p_jbsmmpanel_order_id parameter (INTEGER)'
       });
     }
 

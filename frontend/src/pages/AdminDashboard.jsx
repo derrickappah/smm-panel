@@ -32,6 +32,7 @@ const AdminBalanceCheck = lazy(() => import('@/pages/admin/AdminBalanceCheck'));
 const AdminActivityLogs = lazy(() => import('@/pages/admin/AdminActivityLogs'));
 const AdminSMMCost = lazy(() => import('@/pages/admin/AdminSMMCost'));
 const AdminSMMGen = lazy(() => import('@/pages/admin/AdminSMMGen'));
+const AdminJBSMMPanel = lazy(() => import('@/pages/admin/AdminJBSMMPanel'));
 const AdminMoolre = lazy(() => import('@/pages/admin/AdminMoolre'));
 const AdminFAQ = lazy(() => import('@/pages/admin/AdminFAQ'));
 const AdminTerms = lazy(() => import('@/pages/admin/AdminTerms'));
@@ -78,6 +79,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
         'activity-logs': 'activity-logs',
         'smmcost': 'smmcost',
         'smmgen': 'smmgen',
+        'jbsmmpanel': 'jbsmmpanel',
         'moolre': 'moolre',
         'faq': 'faq',
         'terms': 'terms',
@@ -322,6 +324,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     'activity-logs': 'Activity Logs',
     smmcost: 'SMMCost Integration',
     smmgen: 'SMMGen Integration',
+    jbsmmpanel: 'JB SMM Panel Integration',
     moolre: 'Moolre Transactions'
   };
 
@@ -345,6 +348,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     { id: 'video-tutorials', label: 'Video Tutorials', icon: Video },
     { id: 'smmcost', label: 'SMMCost', icon: Server },
     { id: 'smmgen', label: 'SMMGen', icon: Server },
+    { id: 'jbsmmpanel', label: 'JB SMM Panel', icon: Server },
     { id: 'moolre', label: 'Moolre', icon: CreditCard },
   ];
 
@@ -759,6 +763,13 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                 <TabsContent value="smmgen" className="lg:mt-0">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminSMMGen />
+                  </Suspense>
+                </TabsContent>
+
+                {/* JB SMM Panel Section */}
+                <TabsContent value="jbsmmpanel" className="lg:mt-0">
+                  <Suspense fallback={<ComponentLoader />}>
+                    <AdminJBSMMPanel />
                   </Suspense>
                 </TabsContent>
 
