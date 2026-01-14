@@ -990,12 +990,12 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
         </div>
       ) : paginatedOrders.length === 0 ? (
         <p className="text-gray-600 text-center py-8">
-          {searchType === 'service_name' && debouncedSearch
-            ? `No orders found for service: ${debouncedSearch}`
-            : searchType === 'package_name' && debouncedSearch
-            ? `No orders found for package: ${debouncedSearch}`
-            : searchType === 'user_name' && debouncedSearch
-            ? `No orders found for user: ${debouncedSearch}`
+          {searchType === 'service_name' && searchTerm
+            ? `No orders found for service: ${searchTerm}`
+            : searchType === 'package_name' && searchTerm
+            ? `No orders found for package: ${searchTerm}`
+            : searchType === 'user_name' && searchTerm
+            ? `No orders found for user: ${searchTerm}`
             : 'No orders found'}
         </p>
       ) : (
