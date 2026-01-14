@@ -148,11 +148,12 @@ const fetchOrders = async ({
       const orderFieldsSearch = `id.ilike.${searchPattern},smmgen_order_id.ilike.${searchPattern},smmcost_order_id.ilike.${searchPattern},jbsmmpanel_order_id.ilike.${searchPattern}`;
       query = query.or(orderFieldsSearch);
     } else if (searchType === 'user_name') {
-      // Search only by user name (exact full match, case-insensitive)
+      // Search only by user name (partial match, case-insensitive)
       try {
-        const { data: allProfiles, error: profileError } = await supabase
+        const { data: matchingProfiles, error: profileError } = await supabase
           .from('profiles')
-          .select('id, name');
+          .select('id')
+          .ilike('name', searchPattern);
         
         if (profileError) {
           console.warn('User name search error:', profileError);
@@ -160,12 +161,7 @@ const fetchOrders = async ({
           return { data: [], nextPage: undefined, total: 0 };
         }
         
-        // Filter for exact match (case-insensitive)
-        const matchingProfiles = (allProfiles || []).filter(p => 
-          p.name && p.name.toLowerCase().trim() === trimmedSearch.toLowerCase().trim()
-        );
-        
-        const matchingUserIds = matchingProfiles.map(p => p.id);
+        const matchingUserIds = matchingProfiles?.map(p => p.id) || [];
         
         if (matchingUserIds.length > 0) {
           query = query.in('user_id', matchingUserIds);
@@ -234,14 +230,14 @@ const fetchOrders = async ({
       }
       
       // For profile fields, find matching user IDs
-      try {
-        const { data: matchingProfiles, error: profileError } = await supabase
-          .from('profiles')
-          .select('id')
-          .or(`name.ilike.${searchPattern},email.ilike.${searchPattern},phone_number.ilike.${searchPattern}`);
-        
-        if (profileError) {
-          console.warn('Profile search error, using order fields only:', profileError);
+    try {
+      const { data: matchingProfiles, error: profileError } = await supabase
+        .from('profiles')
+        .select('id')
+        .or(`name.ilike.${searchPattern},email.ilike.${searchPattern},phone_number.ilike.${searchPattern}`);
+      
+      if (profileError) {
+        console.warn('Profile search error, using order fields only:', profileError);
           // Build OR condition with order fields, service IDs, and package IDs
           const conditions = [orderFieldsSearch];
           
@@ -256,13 +252,13 @@ const fetchOrders = async ({
           if (conditions.length > 0) {
             query = query.or(conditions.join(','));
           }
-        } else {
-            const matchingUserIds = matchingProfiles?.map(p => p.id) || [];
-            
+      } else {
+        const matchingUserIds = matchingProfiles?.map(p => p.id) || [];
+        
             // Build OR condition: order fields OR user_id OR service_id OR promotion_package_id
             const conditions = [orderFieldsSearch];
             
-            if (matchingUserIds.length > 0) {
+        if (matchingUserIds.length > 0) {
               conditions.push(...matchingUserIds.map(id => `user_id.eq.${id}`));
             }
             
@@ -276,9 +272,9 @@ const fetchOrders = async ({
             
             if (conditions.length > 0) {
               query = query.or(conditions.join(','));
-            }
-          }
-      } catch (profileSearchError) {
+        }
+      }
+    } catch (profileSearchError) {
         // If profile search fails, fall back to order fields, services, and packages
         console.warn('Profile search failed, using order fields, services, and packages only:', profileSearchError);
         const conditions = [orderFieldsSearch];
