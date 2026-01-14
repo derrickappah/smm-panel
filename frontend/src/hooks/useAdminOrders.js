@@ -138,8 +138,25 @@ const fetchOrders = async ({
       }
     } else if (searchType === 'order_id') {
       // Search only by order ID and panel IDs
-      // Cast UUID and numeric fields to text for pattern matching
-      const orderFieldsSearch = `id::text.ilike.${searchPattern},smmgen_order_id.ilike.${searchPattern},smmcost_order_id::text.ilike.${searchPattern},jbsmmpanel_order_id::text.ilike.${searchPattern}`;
+      // Supabase doesn't support ::text casting in OR conditions, so we use separate conditions
+      // For UUID (id), Supabase handles conversion automatically
+      // For TEXT fields (smmgen_order_id, smmcost_order_id), use ilike directly
+      // For INTEGER (jbsmmpanel_order_id), try numeric match first, then text search
+      const trimmedSearch = searchTerm.trim();
+      
+      // Build conditions for text fields (UUID and TEXT columns)
+      const textFieldsSearch = `id.ilike.${searchPattern},smmgen_order_id.ilike.${searchPattern},smmcost_order_id.ilike.${searchPattern}`;
+      
+      // For numeric jbsmmpanel_order_id, check if search term is numeric
+      const numericSearch = /^\d+$/.test(trimmedSearch);
+      let numericCondition = '';
+      if (numericSearch) {
+        // If search term is numeric, also search jbsmmpanel_order_id as number
+        numericCondition = `,jbsmmpanel_order_id.eq.${trimmedSearch}`;
+      }
+      
+      // Combine text and numeric conditions
+      const orderFieldsSearch = textFieldsSearch + numericCondition;
       query = query.or(orderFieldsSearch);
     } else if (searchType === 'user_name') {
       // Search only by user name (partial match, case-insensitive)
@@ -199,8 +216,20 @@ const fetchOrders = async ({
       query = query.ilike('link', searchPattern);
     } else {
       // "all" - Search all fields including service/package names
-      // Cast UUID and numeric fields to text for pattern matching
-      const orderFieldsSearch = `id::text.ilike.${searchPattern},smmgen_order_id.ilike.${searchPattern},smmcost_order_id::text.ilike.${searchPattern},jbsmmpanel_order_id::text.ilike.${searchPattern},link.ilike.${searchPattern}`;
+      // Supabase doesn't support ::text casting in OR conditions, so we use compatible syntax
+      // For UUID (id), Supabase handles conversion automatically
+      // For TEXT fields (smmgen_order_id, smmcost_order_id), use ilike directly
+      // For INTEGER (jbsmmpanel_order_id), try numeric match if search term is numeric
+      const trimmedSearch = searchTerm.trim();
+      const numericSearch = /^\d+$/.test(trimmedSearch);
+      
+      // Build conditions for text fields (UUID and TEXT columns)
+      let orderFieldsSearch = `id.ilike.${searchPattern},smmgen_order_id.ilike.${searchPattern},smmcost_order_id.ilike.${searchPattern},link.ilike.${searchPattern}`;
+      
+      // For numeric jbsmmpanel_order_id, add numeric condition if search term is numeric
+      if (numericSearch) {
+        orderFieldsSearch += `,jbsmmpanel_order_id.eq.${trimmedSearch}`;
+      }
       
       // Search services and packages for matching names
       let matchingServiceIds = [];
