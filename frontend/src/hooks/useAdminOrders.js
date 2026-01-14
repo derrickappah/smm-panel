@@ -207,34 +207,38 @@ const fetchOrders = async ({
       let matchingPackageIds = [];
       let matchingUserIds = [];
       
-      // Search services
+      // Search services - limit to 15 to prevent query from becoming too long
       try {
         const { data: matchingServices } = await supabase
           .from('services')
           .select('id')
-          .ilike('name', searchPattern);
+          .ilike('name', searchPattern)
+          .limit(15);
         matchingServiceIds = matchingServices?.map(s => s.id) || [];
       } catch (e) {
         console.warn('Service search in "all" mode failed:', e);
       }
       
-      // Search packages
+      // Search packages - limit to 15 to prevent query from becoming too long
       try {
         const { data: matchingPackages } = await supabase
           .from('promotion_packages')
           .select('id')
-          .ilike('name', searchPattern);
+          .ilike('name', searchPattern)
+          .limit(15);
         matchingPackageIds = matchingPackages?.map(p => p.id) || [];
       } catch (e) {
         console.warn('Package search in "all" mode failed:', e);
       }
       
       // Search profiles (name, email, phone)
+      // Limit to first 15 to prevent query from becoming too long
       try {
         const { data: matchingProfiles, error: profileError } = await supabase
           .from('profiles')
           .select('id')
-          .or(`name.ilike.${searchPattern},email.ilike.${searchPattern},phone_number.ilike.${searchPattern}`);
+          .or(`name.ilike.${searchPattern},email.ilike.${searchPattern},phone_number.ilike.${searchPattern}`)
+          .limit(15);
         
         if (!profileError) {
           matchingUserIds = matchingProfiles?.map(p => p.id) || [];
@@ -245,19 +249,35 @@ const fetchOrders = async ({
         console.warn('Profile search failed in "all" mode:', profileSearchError);
       }
       
+      // Limit the number of IDs to prevent query from becoming too long
+      // Supabase has limits on query/URL length, so we cap at 15 per type (45 total + 5 order fields = 50 max)
+      const MAX_IDS_PER_TYPE = 15;
+      const limitedUserIds = matchingUserIds.slice(0, MAX_IDS_PER_TYPE);
+      const limitedServiceIds = matchingServiceIds.slice(0, MAX_IDS_PER_TYPE);
+      const limitedPackageIds = matchingPackageIds.slice(0, MAX_IDS_PER_TYPE);
+      
+      // Warn if we're truncating results
+      if (matchingUserIds.length > MAX_IDS_PER_TYPE || matchingServiceIds.length > MAX_IDS_PER_TYPE || matchingPackageIds.length > MAX_IDS_PER_TYPE) {
+        console.warn(`[useAdminOrders] Search term "${searchTerm}" matched too many results. Limiting to first ${MAX_IDS_PER_TYPE} per type.`, {
+          users: matchingUserIds.length,
+          services: matchingServiceIds.length,
+          packages: matchingPackageIds.length
+        });
+      }
+      
       // Build OR condition: order fields OR user_id OR service_id OR promotion_package_id
       const conditions = [orderFieldsSearch];
       
-      if (matchingUserIds.length > 0) {
-        conditions.push(...matchingUserIds.map(id => `user_id.eq.${id}`));
+      if (limitedUserIds.length > 0) {
+        conditions.push(...limitedUserIds.map(id => `user_id.eq.${id}`));
       }
       
-      if (matchingServiceIds.length > 0) {
-        conditions.push(...matchingServiceIds.map(id => `service_id.eq.${id}`));
+      if (limitedServiceIds.length > 0) {
+        conditions.push(...limitedServiceIds.map(id => `service_id.eq.${id}`));
       }
       
-      if (matchingPackageIds.length > 0) {
-        conditions.push(...matchingPackageIds.map(id => `promotion_package_id.eq.${id}`));
+      if (limitedPackageIds.length > 0) {
+        conditions.push(...limitedPackageIds.map(id => `promotion_package_id.eq.${id}`));
       }
       
       if (conditions.length > 0) {
