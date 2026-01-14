@@ -52,24 +52,55 @@ const mapSMMCostStatus = (smmcostStatus) => {
 };
 
 /**
- * Map JB SMM Panel status to our status format (same mapping as SMMGen/SMMCost)
- * @param {string} jbsmmpanelStatus - Status from JB SMM Panel API
+ * Map JB SMM Panel status to our status format
+ * Handles both numeric codes and string status values
+ * @param {string|number} jbsmmpanelStatus - Status from JB SMM Panel API
  * @returns {string|null} Mapped status or null if unknown
  */
 const mapJBSMMPanelStatus = (jbsmmpanelStatus) => {
-  if (!jbsmmpanelStatus) return null;
-  
+  if (jbsmmpanelStatus === null || jbsmmpanelStatus === undefined) return null;
+
+  // Handle numeric status codes first (common SMM panel format)
+  if (typeof jbsmmpanelStatus === 'number') {
+    const statusMap = {
+      0: 'pending',
+      1: 'processing',
+      2: 'completed',
+      3: 'partial',
+      4: 'canceled',
+      5: 'refunded'
+    };
+    if (statusMap.hasOwnProperty(jbsmmpanelStatus)) {
+      return statusMap[jbsmmpanelStatus];
+    }
+    // If not a known numeric code, convert to string and continue
+    jbsmmpanelStatus = String(jbsmmpanelStatus);
+  }
+
   const statusString = String(jbsmmpanelStatus).trim();
+  if (!statusString) return null;
+
   const statusLower = statusString.toLowerCase();
-  
-  if (statusLower === 'pending' || statusLower.includes('pending')) return 'pending';
-  if (statusLower === 'in progress' || statusLower.includes('in progress')) return 'in progress';
-  if (statusLower === 'completed' || statusLower.includes('completed')) return 'completed';
-  if (statusLower === 'partial' || statusLower.includes('partial')) return 'partial';
-  if (statusLower === 'processing' || statusLower.includes('processing')) return 'processing';
-  if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower.includes('cancel')) return 'canceled';
-  if (statusLower === 'refunds' || statusLower.includes('refund')) return 'refunds';
-  
+
+  // Exact matches first (most specific)
+  if (statusLower === 'pending') return 'pending';
+  if (statusLower === 'in progress' || statusLower === 'in-progress' || statusLower === 'inprogress') return 'in progress';
+  if (statusLower === 'completed' || statusLower === 'complete') return 'completed';
+  if (statusLower === 'partial') return 'partial';
+  if (statusLower === 'processing' || statusLower === 'process') return 'processing';
+  if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower === 'cancel') return 'canceled';
+  if (statusLower === 'refunds' || statusLower === 'refunded' || statusLower === 'refund') return 'refunds';
+
+  // Partial matches (less specific, check after exact matches)
+  // Order matters: check longer/more specific phrases first
+  if (statusLower.includes('in progress') || statusLower.includes('in-progress')) return 'in progress';
+  if (statusLower.includes('completed') || statusLower.includes('complete')) return 'completed';
+  if (statusLower.includes('partial')) return 'partial';
+  if (statusLower.includes('processing') || statusLower.includes('process')) return 'processing';
+  if (statusLower.includes('cancel')) return 'canceled';
+  if (statusLower.includes('refund')) return 'refunds';
+  if (statusLower.includes('pending')) return 'pending';
+
   return null;
 };
 
@@ -171,6 +202,37 @@ export const shouldCheckOrder = (order, minIntervalMinutes = 5) => {
 };
 
 /**
+ * Recursively search for status field in nested objects and arrays
+ * @param {*} obj - Object or array to search
+ * @param {number} depth - Current recursion depth
+ * @param {number} maxDepth - Maximum recursion depth (default: 3)
+ * @returns {*} Status value or null if not found
+ */
+const findStatusInObject = (obj, depth = 0, maxDepth = 3) => {
+  if (!obj || typeof obj !== 'object' || depth > maxDepth) return null;
+  
+  // Check common status field names
+  if (obj.status !== undefined && obj.status !== null) return obj.status;
+  if (obj.Status !== undefined && obj.Status !== null) return obj.Status;
+  if (obj.STATUS !== undefined && obj.STATUS !== null) return obj.STATUS;
+  
+  // If it's an array, check first element
+  if (Array.isArray(obj) && obj.length > 0) {
+    return findStatusInObject(obj[0], depth + 1, maxDepth);
+  }
+  
+  // Recursively search nested objects
+  for (const key in obj) {
+    if (obj.hasOwnProperty(key) && typeof obj[key] === 'object' && obj[key] !== null) {
+      const found = findStatusInObject(obj[key], depth + 1, maxDepth);
+      if (found !== null) return found;
+    }
+  }
+  
+  return null;
+};
+
+/**
  * Check and update a single order's status
  * @param {Object} order - Order object
  * @param {Function} onStatusUpdate - Optional callback when status is updated
@@ -226,11 +288,13 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
       console.log('[orderStatusCheck] JB SMM Panel status API response:', {
         orderId: order.id,
         jbsmmpanelOrderId: jbsmmpanelId,
-        statusData,
         hasStatusData: !!statusData,
         statusDataType: typeof statusData,
-        statusDataKeys: statusData && typeof statusData === 'object' ? Object.keys(statusData) : null,
-        statusDataIsArray: Array.isArray(statusData)
+        statusDataIsArray: Array.isArray(statusData),
+        statusDataKeys: statusData && typeof statusData === 'object' && !Array.isArray(statusData) ? Object.keys(statusData) : null,
+        statusDataArrayLength: Array.isArray(statusData) ? statusData.length : null,
+        statusDataPreview: statusData ? (typeof statusData === 'object' ? JSON.stringify(statusData, null, 2).substring(0, 300) : String(statusData).substring(0, 300)) : null,
+        fullStatusData: statusData // Keep full data for detailed inspection
       });
       
       // Check if statusData is null/undefined (network errors, etc.)
@@ -244,8 +308,9 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
       }
       
       // Extract status from various possible field names and nested structures
-      // Check all possible locations where status might be stored
-      const jbsmmpanelStatus = statusData?.status || 
+      // First, try direct field access (most common cases)
+      let jbsmmpanelStatus = 
+        statusData?.status || 
         statusData?.Status || 
         statusData?.STATUS ||
         statusData?.order?.status ||
@@ -254,41 +319,110 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
         statusData?.data?.Status ||
         statusData?.result?.status ||
         statusData?.result?.Status ||
-        // Check if status is a number (some APIs use numeric codes)
-        (typeof statusData?.status === 'number' ? String(statusData.status) : null) ||
-        (typeof statusData?.Status === 'number' ? String(statusData.Status) : null) ||
         null;
       
-      console.log('JB SMM Panel status extracted:', {
+      // Handle array responses (check first element if array)
+      if (!jbsmmpanelStatus && Array.isArray(statusData) && statusData.length > 0) {
+        jbsmmpanelStatus = statusData[0]?.status || 
+          statusData[0]?.Status || 
+          statusData[0]?.STATUS ||
+          null;
+      }
+      
+      // Handle nested arrays (e.g., data: [{status: 'pending'}])
+      if (!jbsmmpanelStatus && Array.isArray(statusData?.data) && statusData.data.length > 0) {
+        jbsmmpanelStatus = statusData.data[0]?.status || 
+          statusData.data[0]?.Status || 
+          statusData.data[0]?.STATUS ||
+          null;
+      }
+      
+      // If still not found, use recursive search
+      if (!jbsmmpanelStatus) {
+        jbsmmpanelStatus = findStatusInObject(statusData);
+      }
+      
+      // Preserve numeric status codes (don't convert to string yet - let mapping function handle it)
+      // But ensure we have a value to work with
+      if (jbsmmpanelStatus === null || jbsmmpanelStatus === undefined) {
+        // Last resort: search for status keywords in stringified response
+        const responseString = JSON.stringify(statusData);
+        const statusKeywords = ['pending', 'processing', 'completed', 'partial', 'canceled', 'refunded'];
+        for (const keyword of statusKeywords) {
+          if (responseString.toLowerCase().includes(keyword)) {
+            console.warn('[orderStatusCheck] Found status keyword in response string:', {
+              orderId: order.id,
+              keyword,
+              responsePreview: responseString.substring(0, 200)
+            });
+            // Don't use this as the status - it's too unreliable
+            // But log it for debugging
+            break;
+          }
+        }
+      }
+      
+      // Log detailed extraction information
+      console.log('[orderStatusCheck] JB SMM Panel status extraction:', {
         orderId: order.id,
         jbsmmpanelOrderId: jbsmmpanelId,
         rawStatus: jbsmmpanelStatus,
-        statusDataType: typeof jbsmmpanelStatus,
-        fullResponseKeys: statusData ? Object.keys(statusData) : [],
-        fullResponse: statusData
+        rawStatusType: typeof jbsmmpanelStatus,
+        rawStatusValue: jbsmmpanelStatus,
+        isNumeric: typeof jbsmmpanelStatus === 'number',
+        isString: typeof jbsmmpanelStatus === 'string',
+        statusDataKeys: statusData && typeof statusData === 'object' ? Object.keys(statusData) : null,
+        statusDataIsArray: Array.isArray(statusData),
+        statusDataArrayLength: Array.isArray(statusData) ? statusData.length : null,
+        hasNestedData: !!(statusData?.data),
+        nestedDataIsArray: Array.isArray(statusData?.data),
+        fullResponseStructure: statusData ? JSON.stringify(statusData, null, 2).substring(0, 500) : null
       });
       
       // If status is still null, log the full response structure for debugging
-      if (!jbsmmpanelStatus) {
-        console.error('JB SMM Panel status not found in response. Full response structure:', {
+      if (jbsmmpanelStatus === null || jbsmmpanelStatus === undefined) {
+        console.error('[orderStatusCheck] JB SMM Panel status not found in response. Full response structure:', {
           orderId: order.id,
           jbsmmpanelOrderId: jbsmmpanelId,
           response: statusData,
-          responseKeys: statusData ? Object.keys(statusData) : [],
-          responseStringified: JSON.stringify(statusData, null, 2)
+          responseKeys: statusData && typeof statusData === 'object' ? Object.keys(statusData) : [],
+          responseStringified: JSON.stringify(statusData, null, 2),
+          responseType: typeof statusData,
+          isArray: Array.isArray(statusData)
         });
       }
       
+      // Map the extracted status to our internal format
       mappedStatus = mapJBSMMPanelStatus(jbsmmpanelStatus);
       
-      console.log('JB SMM Panel status mapped:', {
+      // Detailed logging for mapping process
+      console.log('[orderStatusCheck] JB SMM Panel status mapping:', {
         orderId: order.id,
         jbsmmpanelOrderId: jbsmmpanelId,
         rawStatus: jbsmmpanelStatus,
+        rawStatusType: typeof jbsmmpanelStatus,
+        rawStatusStringified: jbsmmpanelStatus !== null && jbsmmpanelStatus !== undefined ? String(jbsmmpanelStatus) : null,
         mappedStatus,
+        mappingSuccess: mappedStatus !== null,
         currentStatus: order.status,
-        willUpdate: mappedStatus && mappedStatus !== order.status && order.status !== 'refunded'
+        statusChanged: mappedStatus !== null && mappedStatus !== order.status,
+        willUpdate: mappedStatus && mappedStatus !== order.status && order.status !== 'refunded',
+        updateBlocked: order.status === 'refunded' ? 'order is refunded' : 
+                      mappedStatus === null ? 'mapping returned null' :
+                      mappedStatus === order.status ? 'status unchanged' :
+                      'unknown reason'
       });
+      
+      // Log warning if mapping failed
+      if (jbsmmpanelStatus !== null && jbsmmpanelStatus !== undefined && mappedStatus === null) {
+        console.warn('[orderStatusCheck] JB SMM Panel status mapping failed - unknown status value:', {
+          orderId: order.id,
+          jbsmmpanelOrderId: jbsmmpanelId,
+          rawStatus: jbsmmpanelStatus,
+          rawStatusType: typeof jbsmmpanelStatus,
+          suggestion: 'Status value not recognized. May need to add mapping for this status value.'
+        });
+      }
       
       panelSource = 'jbsmmpanel';
     } else if (hasSmmgenId) {
