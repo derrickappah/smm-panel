@@ -147,6 +147,36 @@ const fetchOrders = async ({
       // Search only by order ID and panel IDs
       const orderFieldsSearch = `id.ilike.${searchPattern},smmgen_order_id.ilike.${searchPattern},smmcost_order_id.ilike.${searchPattern},jbsmmpanel_order_id.ilike.${searchPattern}`;
       query = query.or(orderFieldsSearch);
+    } else if (searchType === 'user_name') {
+      // Search only by user name (exact full match, case-insensitive)
+      try {
+        const { data: allProfiles, error: profileError } = await supabase
+          .from('profiles')
+          .select('id, name');
+        
+        if (profileError) {
+          console.warn('User name search error:', profileError);
+          // Return empty result if search fails
+          return { data: [], nextPage: undefined, total: 0 };
+        }
+        
+        // Filter for exact match (case-insensitive)
+        const matchingProfiles = (allProfiles || []).filter(p => 
+          p.name && p.name.toLowerCase().trim() === trimmedSearch.toLowerCase().trim()
+        );
+        
+        const matchingUserIds = matchingProfiles.map(p => p.id);
+        
+        if (matchingUserIds.length > 0) {
+          query = query.in('user_id', matchingUserIds);
+        } else {
+          // No matching users found, return empty result
+          return { data: [], nextPage: undefined, total: 0 };
+        }
+      } catch (userNameSearchError) {
+        console.warn('User name search failed:', userNameSearchError);
+        return { data: [], nextPage: undefined, total: 0 };
+      }
     } else if (searchType === 'user_info') {
       // Search only by user name, email, phone
       try {

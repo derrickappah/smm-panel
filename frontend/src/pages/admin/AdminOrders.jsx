@@ -929,6 +929,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                 <SelectItem value="service_name">Service Name</SelectItem>
                 <SelectItem value="package_name">Package Name</SelectItem>
                 <SelectItem value="order_id">Order ID</SelectItem>
+                <SelectItem value="user_name">User Name</SelectItem>
                 <SelectItem value="user_info">User Info</SelectItem>
                 <SelectItem value="link">Link</SelectItem>
               </SelectContent>
@@ -993,6 +994,8 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
             ? `No orders found for service: ${debouncedSearch}`
             : searchType === 'package_name' && debouncedSearch
             ? `No orders found for package: ${debouncedSearch}`
+            : searchType === 'user_name' && debouncedSearch
+            ? `No orders found for user: ${debouncedSearch}`
             : 'No orders found'}
         </p>
       ) : (
