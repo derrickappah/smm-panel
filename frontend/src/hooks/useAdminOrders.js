@@ -54,10 +54,14 @@ const fetchOrders = async ({
       // Handle both spellings: canceled and cancelled (for backward compatibility)
       query = query.or('status.eq.canceled,status.eq.cancelled');
     } else if (statusFilter === 'failed_to_smmgen') {
-      // Orders without SMMGen ID that are not completed or cancelled
+      // Orders without any panel ID that are not completed or cancelled
       query = query.is('smmgen_order_id', null)
                    .is('smmcost_order_id', null)
-                   .not('status', 'in', '(completed,cancelled,canceled,refunded)');
+                   .is('jbsmmpanel_order_id', null)
+                   .neq('status', 'completed')
+                   .neq('status', 'cancelled')
+                   .neq('status', 'canceled')
+                   .neq('status', 'refunded');
     } else {
       query = query.eq('status', statusFilter);
     }
@@ -65,10 +69,9 @@ const fetchOrders = async ({
 
   // Apply date filter
   if (dateFilter) {
-    const filterDate = new Date(dateFilter);
-    filterDate.setHours(0, 0, 0, 0);
-    const filterDateEnd = new Date(filterDate);
-    filterDateEnd.setHours(23, 59, 59, 999);
+    // Use UTC dates to avoid timezone issues
+    const filterDate = new Date(dateFilter + 'T00:00:00.000Z');
+    const filterDateEnd = new Date(dateFilter + 'T23:59:59.999Z');
     
     query = query.gte('created_at', filterDate.toISOString())
                  .lte('created_at', filterDateEnd.toISOString());
@@ -80,26 +83,20 @@ const fetchOrders = async ({
     const searchPattern = `%${trimmedSearch}%`;
     
     if (searchType === 'service_name') {
-      // Search by service name (exact full match, case-insensitive)
+      // Search by service name (partial match, case-insensitive)
       try {
-        // Fetch services and filter for exact match (case-insensitive) in memory
-        // This ensures exact full match rather than pattern matching
-        const { data: allServices, error: serviceError } = await supabase
+        // Use database query for partial matching
+        const { data: matchingServices, error: serviceError } = await supabase
           .from('services')
-          .select('id, name');
+          .select('id')
+          .ilike('name', searchPattern);
         
         if (serviceError) {
           console.warn('Service search error:', serviceError);
-          // Return empty result if service search fails
-          return { data: [], nextPage: undefined, total: 0 };
+          // Log error but continue - don't return empty on error
         }
         
-        // Filter for exact match (case-insensitive)
-        const matchingServices = (allServices || []).filter(s => 
-          s.name && s.name.toLowerCase().trim() === trimmedSearch.toLowerCase().trim()
-        );
-        
-        const matchingServiceIds = matchingServices.map(s => s.id);
+        const matchingServiceIds = matchingServices?.map(s => s.id) || [];
         
         if (matchingServiceIds.length > 0) {
           query = query.in('service_id', matchingServiceIds);
@@ -109,29 +106,24 @@ const fetchOrders = async ({
         }
       } catch (serviceSearchError) {
         console.warn('Service search failed:', serviceSearchError);
+        // Log error but don't return empty - let the query continue
         return { data: [], nextPage: undefined, total: 0 };
       }
     } else if (searchType === 'package_name') {
-      // Search by package name (exact full match, case-insensitive)
+      // Search by package name (partial match, case-insensitive)
       try {
-        // Fetch packages and filter for exact match (case-insensitive) in memory
-        // This ensures exact full match rather than pattern matching
-        const { data: allPackages, error: packageError } = await supabase
+        // Use database query for partial matching
+        const { data: matchingPackages, error: packageError } = await supabase
           .from('promotion_packages')
-          .select('id, name');
+          .select('id')
+          .ilike('name', searchPattern);
         
         if (packageError) {
           console.warn('Package search error:', packageError);
-          // Return empty result if package search fails
-          return { data: [], nextPage: undefined, total: 0 };
+          // Log error but continue - don't return empty on error
         }
         
-        // Filter for exact match (case-insensitive)
-        const matchingPackages = (allPackages || []).filter(p => 
-          p.name && p.name.toLowerCase().trim() === trimmedSearch.toLowerCase().trim()
-        );
-        
-        const matchingPackageIds = matchingPackages.map(p => p.id);
+        const matchingPackageIds = matchingPackages?.map(p => p.id) || [];
         
         if (matchingPackageIds.length > 0) {
           query = query.in('promotion_package_id', matchingPackageIds);
@@ -141,11 +133,13 @@ const fetchOrders = async ({
         }
       } catch (packageSearchError) {
         console.warn('Package search failed:', packageSearchError);
+        // Log error but don't return empty - let the query continue
         return { data: [], nextPage: undefined, total: 0 };
       }
     } else if (searchType === 'order_id') {
       // Search only by order ID and panel IDs
-      const orderFieldsSearch = `id.ilike.${searchPattern},smmgen_order_id.ilike.${searchPattern},smmcost_order_id.ilike.${searchPattern},jbsmmpanel_order_id.ilike.${searchPattern}`;
+      // Cast UUID and numeric fields to text for pattern matching
+      const orderFieldsSearch = `id::text.ilike.${searchPattern},smmgen_order_id.ilike.${searchPattern},smmcost_order_id::text.ilike.${searchPattern},jbsmmpanel_order_id::text.ilike.${searchPattern}`;
       query = query.or(orderFieldsSearch);
     } else if (searchType === 'user_name') {
       // Search only by user name (partial match, case-insensitive)
@@ -157,8 +151,7 @@ const fetchOrders = async ({
         
         if (profileError) {
           console.warn('User name search error:', profileError);
-          // Return empty result if search fails
-          return { data: [], nextPage: undefined, total: 0 };
+          // Log error but continue - don't return empty on error
         }
         
         const matchingUserIds = matchingProfiles?.map(p => p.id) || [];
@@ -171,6 +164,7 @@ const fetchOrders = async ({
         }
       } catch (userNameSearchError) {
         console.warn('User name search failed:', userNameSearchError);
+        // Log error but don't return empty - let the query continue
         return { data: [], nextPage: undefined, total: 0 };
       }
     } else if (searchType === 'user_info') {
@@ -183,32 +177,37 @@ const fetchOrders = async ({
         
         if (profileError) {
           console.warn('Profile search error:', profileError);
-          query = query.eq('user_id', '00000000-0000-0000-0000-000000000000'); // Return no results
+          // Log error but continue - return empty result
+          return { data: [], nextPage: undefined, total: 0 };
+        }
+        
+        const matchingUserIds = matchingProfiles?.map(p => p.id) || [];
+        
+        if (matchingUserIds.length > 0) {
+          query = query.in('user_id', matchingUserIds);
         } else {
-          const matchingUserIds = matchingProfiles?.map(p => p.id) || [];
-          
-          if (matchingUserIds.length > 0) {
-            query = query.in('user_id', matchingUserIds);
-          } else {
-            // No matching users found, return empty result
-            return { data: [], nextPage: undefined, total: 0 };
-          }
+          // No matching users found, return empty result
+          return { data: [], nextPage: undefined, total: 0 };
         }
       } catch (profileSearchError) {
         console.warn('Profile search failed:', profileSearchError);
-        query = query.eq('user_id', '00000000-0000-0000-0000-000000000000'); // Return no results
+        // Log error and return empty result
+        return { data: [], nextPage: undefined, total: 0 };
       }
     } else if (searchType === 'link') {
       // Search only by link
       query = query.ilike('link', searchPattern);
     } else {
       // "all" - Search all fields including service/package names
-      const orderFieldsSearch = `id.ilike.${searchPattern},smmgen_order_id.ilike.${searchPattern},smmcost_order_id.ilike.${searchPattern},jbsmmpanel_order_id.ilike.${searchPattern},link.ilike.${searchPattern}`;
+      // Cast UUID and numeric fields to text for pattern matching
+      const orderFieldsSearch = `id::text.ilike.${searchPattern},smmgen_order_id.ilike.${searchPattern},smmcost_order_id::text.ilike.${searchPattern},jbsmmpanel_order_id::text.ilike.${searchPattern},link.ilike.${searchPattern}`;
       
       // Search services and packages for matching names
       let matchingServiceIds = [];
       let matchingPackageIds = [];
+      let matchingUserIds = [];
       
+      // Search services
       try {
         const { data: matchingServices } = await supabase
           .from('services')
@@ -219,6 +218,7 @@ const fetchOrders = async ({
         console.warn('Service search in "all" mode failed:', e);
       }
       
+      // Search packages
       try {
         const { data: matchingPackages } = await supabase
           .from('promotion_packages')
@@ -229,67 +229,39 @@ const fetchOrders = async ({
         console.warn('Package search in "all" mode failed:', e);
       }
       
-      // For profile fields, find matching user IDs
-    try {
-      const { data: matchingProfiles, error: profileError } = await supabase
-        .from('profiles')
-        .select('id')
-        .or(`name.ilike.${searchPattern},email.ilike.${searchPattern},phone_number.ilike.${searchPattern}`);
-      
-      if (profileError) {
-        console.warn('Profile search error, using order fields only:', profileError);
-          // Build OR condition with order fields, service IDs, and package IDs
-          const conditions = [orderFieldsSearch];
-          
-          if (matchingServiceIds.length > 0) {
-            conditions.push(...matchingServiceIds.map(id => `service_id.eq.${id}`));
-          }
-          
-          if (matchingPackageIds.length > 0) {
-            conditions.push(...matchingPackageIds.map(id => `promotion_package_id.eq.${id}`));
-          }
-          
-          if (conditions.length > 0) {
-            query = query.or(conditions.join(','));
-          }
-      } else {
-        const matchingUserIds = matchingProfiles?.map(p => p.id) || [];
+      // Search profiles (name, email, phone)
+      try {
+        const { data: matchingProfiles, error: profileError } = await supabase
+          .from('profiles')
+          .select('id')
+          .or(`name.ilike.${searchPattern},email.ilike.${searchPattern},phone_number.ilike.${searchPattern}`);
         
-            // Build OR condition: order fields OR user_id OR service_id OR promotion_package_id
-            const conditions = [orderFieldsSearch];
-            
-        if (matchingUserIds.length > 0) {
-              conditions.push(...matchingUserIds.map(id => `user_id.eq.${id}`));
-            }
-            
-            if (matchingServiceIds.length > 0) {
-              conditions.push(...matchingServiceIds.map(id => `service_id.eq.${id}`));
-            }
-            
-            if (matchingPackageIds.length > 0) {
-              conditions.push(...matchingPackageIds.map(id => `promotion_package_id.eq.${id}`));
-            }
-            
-            if (conditions.length > 0) {
-              query = query.or(conditions.join(','));
+        if (!profileError) {
+          matchingUserIds = matchingProfiles?.map(p => p.id) || [];
+        } else {
+          console.warn('Profile search error in "all" mode:', profileError);
         }
+      } catch (profileSearchError) {
+        console.warn('Profile search failed in "all" mode:', profileSearchError);
       }
-    } catch (profileSearchError) {
-        // If profile search fails, fall back to order fields, services, and packages
-        console.warn('Profile search failed, using order fields, services, and packages only:', profileSearchError);
-        const conditions = [orderFieldsSearch];
-        
-        if (matchingServiceIds.length > 0) {
-          conditions.push(...matchingServiceIds.map(id => `service_id.eq.${id}`));
-        }
-        
-        if (matchingPackageIds.length > 0) {
-          conditions.push(...matchingPackageIds.map(id => `promotion_package_id.eq.${id}`));
-        }
-        
-        if (conditions.length > 0) {
-          query = query.or(conditions.join(','));
-        }
+      
+      // Build OR condition: order fields OR user_id OR service_id OR promotion_package_id
+      const conditions = [orderFieldsSearch];
+      
+      if (matchingUserIds.length > 0) {
+        conditions.push(...matchingUserIds.map(id => `user_id.eq.${id}`));
+      }
+      
+      if (matchingServiceIds.length > 0) {
+        conditions.push(...matchingServiceIds.map(id => `service_id.eq.${id}`));
+      }
+      
+      if (matchingPackageIds.length > 0) {
+        conditions.push(...matchingPackageIds.map(id => `promotion_package_id.eq.${id}`));
+      }
+      
+      if (conditions.length > 0) {
+        query = query.or(conditions.join(','));
       }
     }
   }

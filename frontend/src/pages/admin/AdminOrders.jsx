@@ -30,17 +30,27 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
 
   const queryClient = useQueryClient();
 
-  // Reset page to 1 when filters change
+  // Reset page to 1 when filters change (but not on initial render)
   useEffect(() => {
-    setPage(1);
+    // Only reset if we're not on page 1 already to avoid unnecessary re-renders
+    if (page !== 1) {
+      setPage(1);
+    }
   }, [debouncedSearch, searchType, statusFilter, dateFilter]);
 
   // Reset searchType to 'all' when search input is cleared
+  // Use a ref to track if this is the initial render
+  const isInitialMount = useRef(true);
   useEffect(() => {
-    if (!searchTerm.trim()) {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    
+    if (!searchTerm.trim() && searchType !== 'all') {
       setSearchType('all');
     }
-  }, [searchTerm]);
+  }, [searchTerm, searchType]);
 
   const { 
     data, 
