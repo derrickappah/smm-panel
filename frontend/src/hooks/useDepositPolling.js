@@ -44,11 +44,21 @@ export function useDepositPolling(
    */
   const checkTransactionStatus = useCallback(async (transactionId) => {
     try {
+      // Get the current session for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+
+      // Add authorization header if session exists
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
       const response = await fetch(`/api/check-transaction-status?transactionId=${transactionId}`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        }
+        headers
       });
 
       if (!response.ok) {
