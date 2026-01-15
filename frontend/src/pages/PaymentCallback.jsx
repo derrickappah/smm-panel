@@ -26,23 +26,32 @@ const PaymentCallback = ({ onUpdateUser }) => {
       try {
         // Get reference from URL params (Korapay may use different param names)
         // For Moolre, also check for externalref parameter
-        const reference = searchParams.get('reference') || 
-                         searchParams.get('ref') || 
+        const reference = searchParams.get('reference') ||
+                         searchParams.get('ref') ||
                          searchParams.get('trxref') ||
                          searchParams.get('reference_id') ||
                          searchParams.get('externalref') ||
                          searchParams.get('external_ref');
         const paymentMethod = searchParams.get('method') || 'korapay'; // Default to korapay
 
-        if (!reference) {
+        // Validate reference format and length
+        const isValidReference = (ref) => {
+          return ref &&
+                 typeof ref === 'string' &&
+                 ref.length >= 3 &&
+                 ref.length <= 100 &&
+                 /^[a-zA-Z0-9_-]+$/.test(ref); // Only alphanumeric, underscore, hyphen
+        };
+
+        if (!reference || !isValidReference(reference)) {
           // Try to get reference from URL hash or other locations
           const hashParams = new URLSearchParams(window.location.hash.substring(1));
-          const hashReference = hashParams.get('reference') || 
+          const hashReference = hashParams.get('reference') ||
                                hashParams.get('ref') ||
                                hashParams.get('externalref') ||
                                hashParams.get('external_ref');
-          
-          if (hashReference) {
+
+          if (hashReference && isValidReference(hashReference)) {
             // Use hash reference and continue
             const verifyWithHash = async () => {
               // Retry with hash reference
@@ -121,37 +130,13 @@ const PaymentCallback = ({ onUpdateUser }) => {
               throw new Error('No session token available. Please log in again.');
             }
 
-            // Use atomic API endpoint to approve transaction and update balance
-            // This prevents race conditions and ensures consistency
-            const approveResponse = await fetch('/api/approve-deposit-universal', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${session.access_token}`
-              },
-              body: JSON.stringify({
-                transaction_id: transaction.id,
-                payment_method: 'korapay',
-                payment_status: 'success',
-                payment_reference: reference
-              })
-            });
-
-            if (!approveResponse.ok) {
-              const errorData = await approveResponse.json().catch(() => ({ error: 'Unknown error' }));
-              console.error('Error approving transaction:', errorData);
-              throw new Error(`Payment verified but failed to approve transaction: ${errorData.error || 'Unknown error'}. Please contact support.`);
-            }
-
-            const approveResult = await approveResponse.json();
-
-            if (!approveResult.success) {
-              // Check if transaction was already approved (idempotent)
-              if (approveResult.message && approveResult.message.includes('already approved')) {
-                console.log('Transaction already approved, proceeding...');
-              } else {
-                throw new Error(`Transaction approval failed: ${approveResult.message || 'Unknown error'}. Please contact support.`);
-              }
+            // Check if transaction is already approved (webhook should have processed it)
+            if (transaction.status === 'approved') {
+              console.log('Transaction already approved by webhook');
+            } else {
+              // Transaction not yet approved - this is normal as webhooks can be delayed
+              // Show message to user that payment is being processed
+              console.log('Transaction still pending - webhook processing may be delayed');
             }
 
             // Refresh user data
@@ -251,37 +236,47 @@ const PaymentCallback = ({ onUpdateUser }) => {
             if (!idError && txById && txById.length > 0) {
               transactions = txById;
             } else {
-              // Last resort: find most recent pending moolre_web transaction for this user
-              const { data: txByUser, error: userError } = await supabase
+              // Try to find transaction by moolre_reference
+              if (reference) {
+                const { data: txByRef, error: refError } = await supabase
+                  .from('transactions')
+                  .select('id, user_id, type, amount, status, deposit_method, created_at')
+                  .eq('user_id', authUser.id)
+                  .eq('deposit_method', 'moolre_web')
+                  .eq('moolre_reference', reference)
+                  .in('status', ['pending', 'approved'])
+                  .order('created_at', { ascending: false })
+                  .limit(1);
+
+                if (!refError && txByRef && txByRef.length > 0) {
+                  transactions = txByRef;
+                } else {
+                  txError = refError || idError || new Error('Transaction not found');
+                }
+              } else {
+                txError = idError || new Error('Transaction not found - no reference available');
+              }
+            }
+          } else {
+            // Try to find transaction by moolre_reference if available
+            if (reference) {
+              const { data: txByRef, error: refError } = await supabase
                 .from('transactions')
                 .select('id, user_id, type, amount, status, deposit_method, created_at')
                 .eq('user_id', authUser.id)
                 .eq('deposit_method', 'moolre_web')
+                .eq('moolre_reference', reference)
                 .in('status', ['pending', 'approved'])
                 .order('created_at', { ascending: false })
                 .limit(1);
 
-              if (!userError && txByUser && txByUser.length > 0) {
-                transactions = txByUser;
+              if (!refError && txByRef && txByRef.length > 0) {
+                transactions = txByRef;
               } else {
-                txError = userError || idError || new Error('Transaction not found');
+                txError = refError || new Error('Transaction not found for reference');
               }
-            }
-          } else {
-            // If we can't extract transaction ID, try to find most recent pending transaction
-            const { data: txByUser, error: userError } = await supabase
-              .from('transactions')
-              .select('id, user_id, type, amount, status, deposit_method, created_at')
-              .eq('user_id', authUser.id)
-              .eq('deposit_method', 'moolre_web')
-              .in('status', ['pending', 'approved'])
-              .order('created_at', { ascending: false })
-              .limit(1);
-
-            if (!userError && txByUser && txByUser.length > 0) {
-              transactions = txByUser;
             } else {
-              txError = userError || new Error('Transaction not found');
+              txError = new Error('No reference available for transaction lookup');
             }
           }
 

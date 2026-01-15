@@ -96,8 +96,19 @@ export default async function handler(req, res) {
       });
     }
 
-    // Only allow users to approve their own pending deposits (admins can approve any)
-    if (!isAdmin && transaction.status !== 'pending') {
+    // Only admins can approve deposits - users cannot approve their own deposits
+    if (!isAdmin) {
+      return res.status(403).json({
+        error: 'Admin access required to approve deposits',
+        message: 'Users cannot approve their own deposits. Please contact support if you believe this is an error.',
+        transaction_id: transaction_id,
+        payment_method: payment_method || null,
+        payment_reference: payment_reference || null
+      });
+    }
+
+    // Additional check: Only allow approval of pending deposits
+    if (transaction.status !== 'pending') {
       return res.status(400).json({
         error: 'Can only approve pending deposits',
         current_status: transaction.status,

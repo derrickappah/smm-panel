@@ -23,6 +23,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { verifyAuth } from './utils/auth.js';
 
 export default async function handler(req, res) {
   // Enable CORS
@@ -41,11 +42,32 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Authenticate user
+    let user;
+    try {
+      const authResult = await verifyAuth(req);
+      user = authResult.user;
+    } catch (authError) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: authError.message
+      });
+    }
+
     const { transactionId } = req.query;
 
     if (!transactionId) {
-      return res.status(400).json({ 
-        error: 'Missing required parameter: transactionId' 
+      return res.status(400).json({
+        error: 'Missing required parameter: transactionId'
+      });
+    }
+
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(transactionId)) {
+      return res.status(400).json({
+        error: 'Invalid transactionId format. Must be a valid UUID.',
+        transactionId: transactionId
       });
     }
 
@@ -82,8 +104,16 @@ export default async function handler(req, res) {
     }
 
     if (!transaction) {
-      return res.status(404).json({ 
-        error: 'Transaction not found' 
+      return res.status(404).json({
+        error: 'Transaction not found'
+      });
+    }
+
+    // Verify transaction ownership - user can only check their own transactions
+    if (transaction.user_id !== user.id) {
+      return res.status(403).json({
+        error: 'Access denied. You can only check your own transactions.',
+        transaction_id: transactionId
       });
     }
 
@@ -146,11 +176,49 @@ export default async function handler(req, res) {
               const txstatus = moolreData.data?.txstatus; // 1=Success, 0=Pending, 2=Failed
 
               if (txstatus === 1) {
+                // SECURITY: Validate amount from Moolre API before approving
+                const moolreAmount = parseFloat(moolreData.data?.amount || moolreData.amount);
+                const storedAmount = parseFloat(transaction.amount || 0);
+
+                if (moolreAmount && moolreAmount > 0) {
+                  // Allow small tolerance for currency precision
+                  const tolerance = 0.01;
+                  const amountsMatch = Math.abs(moolreAmount - storedAmount) < tolerance;
+
+                  if (!amountsMatch) {
+                    console.error(`SECURITY ALERT: Moolre amount mismatch for transaction ${transaction.id}:`, {
+                      stored_amount: storedAmount,
+                      moolre_amount: moolreAmount,
+                      difference: Math.abs(moolreAmount - storedAmount),
+                      reference: transaction.moolre_reference,
+                      user_id: transaction.user_id
+                    });
+
+                    // Reject transaction due to amount mismatch
+                    await supabase
+                      .from('transactions')
+                      .update({
+                        status: 'rejected',
+                        moolre_status: 'amount_mismatch_detected'
+                      })
+                      .eq('id', transaction.id);
+
+                    return res.status(200).json({
+                      status: 'rejected',
+                      amount: transaction.amount,
+                      error: 'Payment amount verification failed',
+                      message: 'The payment amount does not match the transaction amount. Please contact support.'
+                    });
+                  }
+
+                  console.log(`Moolre amount verification successful: ${moolreAmount} for transaction ${transaction.id}`);
+                }
+
               // Payment successful - update transaction status and balance atomically
               // IMPORTANT: Only call approve_deposit_transaction_universal if transaction is still pending
               // If already approved, we need to manually ensure balance was updated
               // Using universal function which supports all payment methods (Moolre, Paystack, Korapay, etc.)
-              
+
               if (transaction.status === 'pending') {
                 // Transaction is still pending - use universal atomic function to update both status and balance
                 // This function supports all payment methods including Moolre
