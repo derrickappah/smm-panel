@@ -61,7 +61,15 @@ export default async function handler(req, res) {
       });
     }
 
-    console.log('[MOOLRE WEB CALLBACK] Received callback for reference:', reference);
+    console.log('[MOOLRE WEB CALLBACK] Received callback for reference:', reference, {
+      method: req.method,
+      query: req.query,
+      body: req.body,
+      headers: {
+        'content-type': req.headers['content-type'],
+        'user-agent': req.headers['user-agent']
+      }
+    });
 
     // Get Moolre credentials
     const moolreApiUser = process.env.MOOLRE_API_USER;
@@ -93,6 +101,16 @@ export default async function handler(req, res) {
 
     const moolreData = await moolreResponse.json();
 
+    console.log('[MOOLRE WEB CALLBACK] Moolre API response:', {
+      status: moolreResponse.status,
+      ok: moolreResponse.ok,
+      response: moolreData,
+      hasData: !!moolreData.data,
+      txstatus: moolreData.data?.txstatus,
+      amount: moolreData.data?.amount,
+      externalref: moolreData.data?.externalref
+    });
+
     if (!moolreResponse.ok || moolreData.status === 0) {
       console.error('[MOOLRE WEB CALLBACK] Moolre verification error:', moolreData);
       return res.status(moolreResponse.status || 500).json({
@@ -122,6 +140,7 @@ export default async function handler(req, res) {
     };
 
     // Find transaction by reference
+    console.log('[MOOLRE WEB CALLBACK] Looking for transaction with reference:', reference);
     const { data: transactions, error: txError } = await supabase
       .from('transactions')
       .select('id, user_id, type, amount, status, deposit_method, moolre_reference, moolre_id, moolre_status, created_at')
@@ -129,10 +148,25 @@ export default async function handler(req, res) {
       .order('created_at', { ascending: false })
       .limit(1);
 
+    console.log('[MOOLRE WEB CALLBACK] Transaction lookup result:', {
+      reference,
+      found: transactions && transactions.length > 0,
+      transactionCount: transactions ? transactions.length : 0,
+      error: txError,
+      transaction: transactions && transactions.length > 0 ? {
+        id: transactions[0].id,
+        amount: transactions[0].amount,
+        status: transactions[0].status,
+        deposit_method: transactions[0].deposit_method,
+        moolre_reference: transactions[0].moolre_reference
+      } : null
+    });
+
     if (txError || !transactions || transactions.length === 0) {
       console.error('[MOOLRE WEB CALLBACK] Transaction not found for reference:', reference);
       return res.status(404).json({
-        error: 'Transaction not found'
+        error: 'Transaction not found',
+        reference: reference
       });
     }
 
