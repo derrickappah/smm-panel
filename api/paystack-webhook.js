@@ -417,6 +417,44 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
       return;
     }
 
+    // CRITICAL SECURITY: Validate that the webhook amount matches the stored transaction amount
+    // This prevents client-side amount manipulation attacks
+    if (amount !== null && amount !== undefined) {
+      const gatewayAmount = amount / 100; // Convert from kobo to cedis
+      const storedAmount = parseFloat(transaction.amount || 0);
+
+      // Allow small tolerance for currency precision
+      const tolerance = 0.01;
+      const amountsMatch = Math.abs(gatewayAmount - storedAmount) < tolerance;
+
+      if (!amountsMatch) {
+        console.error(`SECURITY ALERT: Paystack amount mismatch for transaction ${transaction.id}:`, {
+          stored_amount: storedAmount,
+          gateway_amount: gatewayAmount,
+          difference: Math.abs(gatewayAmount - storedAmount),
+          reference: reference,
+          user_id: transaction.user_id,
+          webhook_amount_kobo: amount
+        });
+
+        // SECURITY: Reject the transaction if amounts don't match
+        // This prevents hackers from depositing 10 pesewas but getting credited 15 cedis
+        await supabase
+          .from('transactions')
+          .update({
+            status: 'rejected',
+            paystack_status: 'amount_mismatch_detected',
+            paystack_reference: reference
+          })
+          .eq('id', transaction.id);
+
+        console.warn(`SECURITY: Transaction ${transaction.id} rejected due to amount mismatch. Possible client-side manipulation attempt.`);
+        return;
+      }
+
+      console.log(`Paystack amount verification successful: ${gatewayAmount} Cedis for transaction ${transaction.id}`);
+    }
+
     // Always store reference if we have it (even if transaction is already approved)
     if (reference && !transaction.paystack_reference) {
       console.log('Storing missing reference for transaction:', transaction.id);

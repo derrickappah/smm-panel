@@ -317,44 +317,8 @@ const PaymentCallback = ({ onUpdateUser }) => {
           }
 
           if (isSuccessful && transaction.status !== 'approved') {
-            // Get JWT token for API authentication
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session?.access_token) {
-              throw new Error('No session token available. Please log in again.');
-            }
-
-            // Use atomic API endpoint to approve transaction and update balance
-            // This prevents race conditions and ensures consistency
-            const approveResponse = await fetch('/api/approve-deposit-universal', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${session.access_token}`
-              },
-              body: JSON.stringify({
-                transaction_id: transaction.id,
-                payment_method: 'moolre_web',
-                payment_status: 'success',
-                payment_reference: reference
-              })
-            });
-
-            if (!approveResponse.ok) {
-              const errorData = await approveResponse.json().catch(() => ({ error: 'Unknown error' }));
-              console.error('Error approving transaction:', errorData);
-              throw new Error(`Payment verified but failed to approve transaction: ${errorData.error || 'Unknown error'}. Please contact support.`);
-            }
-
-            const approveResult = await approveResponse.json();
-
-            if (!approveResult.success) {
-              // Check if transaction was already approved (idempotent)
-              if (approveResult.message && approveResult.message.includes('already approved')) {
-                console.log('Transaction already approved, proceeding...');
-              } else {
-                throw new Error(`Transaction approval failed: ${approveResult.message || 'Unknown error'}. Please contact support.`);
-              }
-            }
+            // Transaction should be approved by webhook, but if not, show processing message
+            console.log('Payment successful but transaction not yet approved - webhook may be processing');
 
             // Refresh user data
             if (onUpdateUser) {
@@ -444,44 +408,8 @@ const PaymentCallback = ({ onUpdateUser }) => {
           const isSuccessful = paymentStatus === 'success' || txstatus === 1;
 
           if (isSuccessful && transaction.status !== 'approved') {
-            // Get JWT token for API authentication
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session?.access_token) {
-              throw new Error('No session token available. Please log in again.');
-            }
-
-            // Use atomic API endpoint to approve transaction and update balance
-            // This prevents race conditions and ensures consistency
-            const approveResponse = await fetch('/api/approve-deposit-universal', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${session.access_token}`
-              },
-              body: JSON.stringify({
-                transaction_id: transaction.id,
-                payment_method: 'moolre',
-                payment_status: 'success',
-                payment_reference: reference
-              })
-            });
-
-            if (!approveResponse.ok) {
-              const errorData = await approveResponse.json().catch(() => ({ error: 'Unknown error' }));
-              console.error('Error approving transaction:', errorData);
-              throw new Error(`Payment verified but failed to approve transaction: ${errorData.error || 'Unknown error'}. Please contact support.`);
-            }
-
-            const approveResult = await approveResponse.json();
-
-            if (!approveResult.success) {
-              // Check if transaction was already approved (idempotent)
-              if (approveResult.message && approveResult.message.includes('already approved')) {
-                console.log('Transaction already approved, proceeding...');
-              } else {
-                throw new Error(`Transaction approval failed: ${approveResult.message || 'Unknown error'}. Please contact support.`);
-              }
-            }
+            // Transaction should be approved by webhook or status check, but if not, show processing message
+            console.log('Payment successful but transaction not yet approved - webhook/status check may be processing');
 
             // Refresh user data
             if (onUpdateUser) {

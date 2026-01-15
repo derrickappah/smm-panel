@@ -170,6 +170,49 @@ export default async function handler(req, res) {
     if (isSuccessful && transaction.status !== 'approved') {
       console.log('[MOOLRE WEB CALLBACK] Processing successful payment for transaction:', transaction.id);
 
+      // CRITICAL SECURITY: Validate that the Moolre amount matches the stored transaction amount
+      // This prevents client-side amount manipulation attacks
+      const moolreAmount = parseFloat(moolreData.data?.amount || 0);
+      const storedAmount = parseFloat(transaction.amount || 0);
+
+      if (moolreAmount > 0) {
+        // Allow small tolerance for currency precision
+        const tolerance = 0.01;
+        const amountsMatch = Math.abs(moolreAmount - storedAmount) < tolerance;
+
+        if (!amountsMatch) {
+          console.error(`SECURITY ALERT: Moolre Web amount mismatch for transaction ${transaction.id}:`, {
+            stored_amount: storedAmount,
+            moolre_amount: moolreAmount,
+            difference: Math.abs(moolreAmount - storedAmount),
+            reference: reference,
+            user_id: transaction.user_id
+          });
+
+          // SECURITY: Reject the transaction if amounts don't match
+          // This prevents hackers from depositing 10 pesewas but getting credited 15 cedis
+          await supabase
+            .from('transactions')
+            .update({
+              status: 'rejected',
+              moolre_status: 'amount_mismatch_detected'
+            })
+            .eq('id', transaction.id);
+
+          console.warn(`SECURITY: Transaction ${transaction.id} rejected due to amount mismatch. Possible client-side manipulation attempt.`);
+
+          return res.status(400).json({
+            error: 'Payment amount verification failed',
+            message: 'The payment amount does not match the transaction amount. Transaction rejected.',
+            transactionId: transaction.id,
+            stored_amount: storedAmount,
+            gateway_amount: moolreAmount
+          });
+        }
+
+        console.log(`Moolre Web amount verification successful: ${moolreAmount} for transaction ${transaction.id}`);
+      }
+
       // Use atomic database function to approve transaction and update balance
       // This prevents race conditions and ensures consistency
       const { data: result, error: rpcError } = await supabase.rpc('approve_deposit_transaction_universal', {
