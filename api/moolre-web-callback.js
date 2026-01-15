@@ -175,9 +175,18 @@ export default async function handler(req, res) {
       const moolreAmount = parseFloat(moolreData.data?.amount || 0);
       const storedAmount = parseFloat(transaction.amount || 0);
 
+      console.log(`MOOLRE AMOUNT VALIDATION DEBUG for transaction ${transaction.id}:`, {
+        moolre_response_amount: moolreData.data?.amount,
+        parsed_moolre_amount: moolreAmount,
+        stored_amount: storedAmount,
+        difference: Math.abs(moolreAmount - storedAmount),
+        reference: reference,
+        transaction_status: transaction.status
+      });
+
       if (moolreAmount > 0) {
-        // Allow small tolerance for currency precision
-        const tolerance = 0.01;
+        // Allow tolerance for currency precision and rounding differences
+        const tolerance = 0.05; // Increased tolerance for Moolre
         const amountsMatch = Math.abs(moolreAmount - storedAmount) < tolerance;
 
         if (!amountsMatch) {
@@ -185,6 +194,7 @@ export default async function handler(req, res) {
             stored_amount: storedAmount,
             moolre_amount: moolreAmount,
             difference: Math.abs(moolreAmount - storedAmount),
+            tolerance: tolerance,
             reference: reference,
             user_id: transaction.user_id
           });
@@ -206,7 +216,8 @@ export default async function handler(req, res) {
             message: 'The payment amount does not match the transaction amount. Transaction rejected.',
             transactionId: transaction.id,
             stored_amount: storedAmount,
-            gateway_amount: moolreAmount
+            gateway_amount: moolreAmount,
+            tolerance: tolerance
           });
         }
 

@@ -423,8 +423,17 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
       const gatewayAmount = amount / 100; // Convert from kobo to cedis
       const storedAmount = parseFloat(transaction.amount || 0);
 
-      // Allow small tolerance for currency precision
-      const tolerance = 0.01;
+      console.log(`AMOUNT VALIDATION DEBUG for transaction ${transaction.id}:`, {
+        webhook_amount_kobo: amount,
+        gateway_amount_cedis: gatewayAmount,
+        stored_amount_cedis: storedAmount,
+        difference: Math.abs(gatewayAmount - storedAmount),
+        reference: reference,
+        transaction_status: transaction.status
+      });
+
+      // Allow tolerance for currency precision and rounding differences
+      const tolerance = 0.05; // Increased from 0.01 to 0.05 to handle rounding
       const amountsMatch = Math.abs(gatewayAmount - storedAmount) < tolerance;
 
       if (!amountsMatch) {
@@ -434,7 +443,8 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
           difference: Math.abs(gatewayAmount - storedAmount),
           reference: reference,
           user_id: transaction.user_id,
-          webhook_amount_kobo: amount
+          webhook_amount_kobo: amount,
+          tolerance: tolerance
         });
 
         // SECURITY: Reject the transaction if amounts don't match
