@@ -185,29 +185,46 @@ export default async function handler(req, res) {
       });
 
       if (moolreAmount > 0) {
-        // Allow tolerance for currency precision and rounding differences
-        const tolerance = 0.05; // Increased tolerance for Moolre
-        const amountsMatch = Math.abs(moolreAmount - storedAmount) < tolerance;
+        // Ghanaian Cedi precision: Allow tolerance for currency precision
+        const tolerance = 0.01; // 1 pesewa tolerance (0.01 GHS)
+        const amountsMatch = Math.abs(moolreAmount - storedAmount) <= tolerance;
 
         if (!amountsMatch) {
-          console.error(`AMOUNT MISMATCH DETECTED for transaction ${transaction.id}:`, {
-            stored_amount: storedAmount,
-            moolre_amount: moolreAmount,
-            difference: Math.abs(moolreAmount - storedAmount),
-            tolerance: tolerance,
+          console.error(`SECURITY ALERT: Moolre Web amount mismatch detected for transaction ${transaction.id}:`, {
+            stored_amount_ghs: storedAmount,
+            moolre_amount_ghs: moolreAmount,
+            difference_ghs: Math.abs(moolreAmount - storedAmount),
+            tolerance_ghs: tolerance,
             reference: reference,
-            user_id: transaction.user_id
+            user_id: transaction.user_id,
+            currency: 'GHS (Ghanaian Cedi)',
+            security_threat: 'Possible client-side amount manipulation'
           });
 
-          // TEMPORARY: Log but continue processing for legitimate transactions
-          // TODO: Fix amount conversion/validation logic
-          console.warn(`TEMPORARY BYPASS: Allowing transaction ${transaction.id} despite amount mismatch. Amount validation needs fixing.`);
+          // SECURITY: Reject the transaction if amounts don't match
+          // This prevents hackers from depositing 10 pesewas but getting credited 15 cedis
+          await supabase
+            .from('transactions')
+            .update({
+              status: 'rejected',
+              moolre_status: 'amount_mismatch_security_violation'
+            })
+            .eq('id', transaction.id);
 
-          // For now, continue processing but log the discrepancy
-          // This allows legitimate payments to work while we debug the amount validation
+          console.warn(`SECURITY VIOLATION: Transaction ${transaction.id} rejected. Stored: ${storedAmount} GHS, Paid: ${moolreAmount} GHS. Possible client-side manipulation.`);
+
+          return res.status(400).json({
+            error: 'Payment amount verification failed',
+            message: 'The payment amount does not match the requested transaction amount. Transaction has been rejected for security reasons.',
+            transactionId: transaction.id,
+            stored_amount_ghs: storedAmount,
+            gateway_amount_ghs: moolreAmount,
+            tolerance_ghs: tolerance,
+            currency: 'GHS (Ghanaian Cedi)'
+          });
         }
 
-        console.log(`Moolre Web amount verification successful: ${moolreAmount} for transaction ${transaction.id}`);
+        console.log(`Moolre Web amount verification successful: ${moolreAmount} GHS matches stored amount for transaction ${transaction.id}`);
       }
 
       // Use atomic database function to approve transaction and update balance

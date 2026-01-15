@@ -419,43 +419,57 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
 
     // CRITICAL SECURITY: Validate that the webhook amount matches the stored transaction amount
     // This prevents client-side amount manipulation attacks
+    // Currency: Ghanaian Cedi (GHS) - Paystack sends amounts in kobo (100 kobo = 1 GHS)
     if (amount !== null && amount !== undefined) {
-      const gatewayAmount = amount / 100; // Convert from kobo to cedis
+      const gatewayAmount = amount / 100; // Convert from kobo to Ghanaian cedis
       const storedAmount = parseFloat(transaction.amount || 0);
 
-      console.log(`AMOUNT VALIDATION DEBUG for transaction ${transaction.id}:`, {
+      console.log(`PAYSTACK AMOUNT VALIDATION for transaction ${transaction.id}:`, {
         webhook_amount_kobo: amount,
-        gateway_amount_cedis: gatewayAmount,
-        stored_amount_cedis: storedAmount,
-        difference: Math.abs(gatewayAmount - storedAmount),
+        gateway_amount_ghs: gatewayAmount,
+        stored_amount_ghs: storedAmount,
+        difference_ghs: Math.abs(gatewayAmount - storedAmount),
         reference: reference,
-        transaction_status: transaction.status
+        transaction_status: transaction.status,
+        currency: 'GHS (Ghanaian Cedi)',
+        conversion: '100 kobo = 1 GHS'
       });
 
-      // Allow tolerance for currency precision and rounding differences
-      const tolerance = 0.05; // Increased from 0.01 to 0.05 to handle rounding
-      const amountsMatch = Math.abs(gatewayAmount - storedAmount) < tolerance;
+      // Ghanaian Cedi precision: Allow tolerance for currency conversion
+      // Paystack may have minor rounding differences in kobo conversion
+      const tolerance = 0.01; // 1 pesewa tolerance (0.01 GHS)
+      const amountsMatch = Math.abs(gatewayAmount - storedAmount) <= tolerance;
 
       if (!amountsMatch) {
-        console.error(`AMOUNT MISMATCH DETECTED for transaction ${transaction.id}:`, {
-          stored_amount: storedAmount,
-          gateway_amount: gatewayAmount,
-          difference: Math.abs(gatewayAmount - storedAmount),
+        console.error(`SECURITY ALERT: Paystack amount mismatch detected for transaction ${transaction.id}:`, {
+          stored_amount_ghs: storedAmount,
+          gateway_amount_ghs: gatewayAmount,
+          difference_ghs: Math.abs(gatewayAmount - storedAmount),
+          webhook_amount_kobo: amount,
+          tolerance_ghs: tolerance,
           reference: reference,
           user_id: transaction.user_id,
-          webhook_amount_kobo: amount,
-          tolerance: tolerance
+          currency: 'GHS (Ghanaian Cedi)',
+          subunit: 'kobo (100 kobo = 1 GHS)',
+          security_threat: 'Possible client-side amount manipulation'
         });
 
-        // TEMPORARY: Log but continue processing for legitimate transactions
-        // TODO: Fix amount conversion/validation logic
-        console.warn(`TEMPORARY BYPASS: Allowing transaction ${transaction.id} despite amount mismatch. Amount validation needs fixing.`);
+        // SECURITY: Reject the transaction if amounts don't match significantly
+        // This prevents hackers from depositing 10 pesewas but getting credited 15 cedis
+        await supabase
+          .from('transactions')
+          .update({
+            status: 'rejected',
+            paystack_status: 'amount_mismatch_security_violation',
+            paystack_reference: reference
+          })
+          .eq('id', transaction.id);
 
-        // For now, continue processing but log the discrepancy
-        // This allows legitimate payments to work while we debug the amount validation
+        console.warn(`SECURITY VIOLATION: Transaction ${transaction.id} rejected. Stored: ${storedAmount} GHS, Paid: ${gatewayAmount} GHS. Possible client-side manipulation.`);
+        return;
       }
 
-      console.log(`Paystack amount verification successful: ${gatewayAmount} Cedis for transaction ${transaction.id}`);
+      console.log(`Paystack amount verification successful: ${gatewayAmount} GHS matches stored amount for transaction ${transaction.id}`);
     }
 
     // Always store reference if we have it (even if transaction is already approved)
