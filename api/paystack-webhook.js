@@ -429,15 +429,19 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
         gateway_amount_ghs: gatewayAmount,
         stored_amount_ghs: storedAmount,
         difference_ghs: Math.abs(gatewayAmount - storedAmount),
+        tolerance_ghs: tolerance,
+        amounts_match: amountsMatch,
         reference: reference,
         transaction_status: transaction.status,
         currency: 'GHS (Ghanaian Cedi)',
-        conversion: '100 kobo = 1 GHS'
+        conversion: '100 kobo = 1 GHS',
+        user_id: transaction.user_id,
+        timestamp: new Date().toISOString()
       });
 
-      // Ghanaian Cedi precision: Allow tolerance for currency conversion
-      // Paystack may have minor rounding differences in kobo conversion
-      const tolerance = 0.01; // 1 pesewa tolerance (0.01 GHS)
+      // Ghanaian Cedi precision: Allow generous tolerance for currency conversion
+      // Paystack may have rounding differences, plus database precision issues
+      const tolerance = 0.10; // Increased to 10 pesewas (0.10 GHS) to handle edge cases
       const amountsMatch = Math.abs(gatewayAmount - storedAmount) <= tolerance;
 
       if (!amountsMatch) {

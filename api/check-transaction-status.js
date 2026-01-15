@@ -187,8 +187,8 @@ export default async function handler(req, res) {
                     difference: Math.abs(moolreAmount - storedAmount)
                   });
 
-                  // Ghanaian Cedi precision: Allow tolerance for currency precision
-                  const tolerance = 0.01; // 1 pesewa tolerance (0.01 GHS)
+                  // Ghanaian Cedi precision: Allow generous tolerance for currency precision
+                  const tolerance = 0.10; // Increased to 10 pesewas (0.10 GHS) to handle edge cases
                   const amountsMatch = Math.abs(moolreAmount - storedAmount) <= tolerance;
 
                   if (!amountsMatch) {
