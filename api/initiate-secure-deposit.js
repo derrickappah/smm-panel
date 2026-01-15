@@ -77,8 +77,8 @@ export default async function handler(req, res) {
       });
     }
 
-    // Parse and validate amount
-    const depositAmount = parseFloat(amount);
+    // Parse and validate amount with proper precision handling
+    const depositAmount = Math.round(parseFloat(amount) * 100) / 100; // Round to 2 decimal places
     if (isNaN(depositAmount) || depositAmount <= 0) {
       return res.status(400).json({
         error: 'Invalid amount: must be a positive number'

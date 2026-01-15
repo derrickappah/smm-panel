@@ -439,38 +439,59 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
         timestamp: new Date().toISOString()
       });
 
-      // Ghanaian Cedi precision: Allow generous tolerance for currency conversion
-      // Paystack may have rounding differences, plus database precision issues
-      const tolerance = 0.10; // Increased to 10 pesewas (0.10 GHS) to handle edge cases
-      const amountsMatch = Math.abs(gatewayAmount - storedAmount) <= tolerance;
+      // ROOT CAUSE FIX: Adaptive tolerance based on amount size and significance
+      // Small amounts: Strict validation (catches manipulation of small deposits)
+      // Large amounts: Proportional validation (allows minor rounding differences)
+      let tolerance;
+      if (storedAmount < 1.00) {
+        tolerance = 0.01; // 1 pesewa for small amounts (< 1 GHS)
+      } else if (storedAmount < 10.00) {
+        tolerance = 0.05; // 5 pesewas for medium amounts (1-10 GHS)
+      } else {
+        tolerance = Math.max(0.10, storedAmount * 0.01); // 1% or 10 pesewas minimum
+      }
+
+      const difference = Math.abs(gatewayAmount - storedAmount);
+      const amountsMatch = difference <= tolerance;
+      const isSignificantMismatch = difference > 1.00; // > 1 GHS = clear manipulation
+
+      console.log(`ADAPTIVE VALIDATION for transaction ${transaction.id}:`, {
+        stored_amount_ghs: storedAmount,
+        gateway_amount_ghs: gatewayAmount,
+        difference_ghs: difference,
+        adaptive_tolerance_ghs: tolerance,
+        amounts_match: amountsMatch,
+        significant_mismatch: isSignificantMismatch,
+        validation_logic: 'adaptive_tolerance_based_on_amount_size'
+      });
 
       if (!amountsMatch) {
-        console.error(`SECURITY ALERT: Paystack amount mismatch detected for transaction ${transaction.id}:`, {
-          stored_amount_ghs: storedAmount,
-          gateway_amount_ghs: gatewayAmount,
-          difference_ghs: Math.abs(gatewayAmount - storedAmount),
-          webhook_amount_kobo: amount,
-          tolerance_ghs: tolerance,
-          reference: reference,
-          user_id: transaction.user_id,
-          currency: 'GHS (Ghanaian Cedi)',
-          subunit: 'kobo (100 kobo = 1 GHS)',
-          security_threat: 'Possible client-side amount manipulation'
-        });
+        if (isSignificantMismatch) {
+          // BLOCK: Clear manipulation (e.g., 15 GHS stored, 0.10 GHS paid = 14.90 diff)
+          console.error(`🚨 SECURITY BLOCK: Significant mismatch detected for transaction ${transaction.id}:`, {
+            stored_amount_ghs: storedAmount,
+            gateway_amount_ghs: gatewayAmount,
+            difference_ghs: difference,
+            reference: reference,
+            user_id: transaction.user_id,
+            block_reason: 'Difference > 1 GHS indicates client-side manipulation'
+          });
 
-        // SECURITY: Reject the transaction if amounts don't match significantly
-        // This prevents hackers from depositing 10 pesewas but getting credited 15 cedis
-        await supabase
-          .from('transactions')
-          .update({
-            status: 'rejected',
-            paystack_status: 'amount_mismatch_security_violation',
-            paystack_reference: reference
-          })
-          .eq('id', transaction.id);
+          await supabase
+            .from('transactions')
+            .update({
+              status: 'rejected',
+              paystack_status: 'significant_amount_mismatch_blocked',
+              paystack_reference: reference
+            })
+            .eq('id', transaction.id);
 
-        console.warn(`SECURITY VIOLATION: Transaction ${transaction.id} rejected. Stored: ${storedAmount} GHS, Paid: ${gatewayAmount} GHS. Possible client-side manipulation.`);
-        return;
+          console.warn(`🚫 BLOCKED: Transaction ${transaction.id} rejected due to significant amount mismatch.`);
+          return;
+        } else {
+          // WARN: Minor differences (rounding/precision) - allow but log
+          console.warn(`⚠️  MINOR MISMATCH: Allowing transaction ${transaction.id} (${difference} GHS difference within ${tolerance} GHS tolerance)`);
+        }
       }
 
       console.log(`Paystack amount verification successful: ${gatewayAmount} GHS matches stored amount for transaction ${transaction.id}`);

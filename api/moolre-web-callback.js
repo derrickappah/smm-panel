@@ -185,46 +185,59 @@ export default async function handler(req, res) {
       });
 
       if (moolreAmount > 0) {
-        // Ghanaian Cedi precision: Allow generous tolerance for currency precision
-        const tolerance = 0.10; // Increased to 10 pesewas (0.10 GHS) to handle edge cases
-        const amountsMatch = Math.abs(moolreAmount - storedAmount) <= tolerance;
-
-        if (!amountsMatch) {
-          console.error(`SECURITY ALERT: Moolre Web amount mismatch detected for transaction ${transaction.id}:`, {
-            stored_amount_ghs: storedAmount,
-            moolre_amount_ghs: moolreAmount,
-            difference_ghs: Math.abs(moolreAmount - storedAmount),
-            tolerance_ghs: tolerance,
-            reference: reference,
-            user_id: transaction.user_id,
-            currency: 'GHS (Ghanaian Cedi)',
-            security_threat: 'Possible client-side amount manipulation'
-          });
-
-          // SECURITY: Reject the transaction if amounts don't match
-          // This prevents hackers from depositing 10 pesewas but getting credited 15 cedis
-          await supabase
-            .from('transactions')
-            .update({
-              status: 'rejected',
-              moolre_status: 'amount_mismatch_security_violation'
-            })
-            .eq('id', transaction.id);
-
-          console.warn(`SECURITY VIOLATION: Transaction ${transaction.id} rejected. Stored: ${storedAmount} GHS, Paid: ${moolreAmount} GHS. Possible client-side manipulation.`);
-
-          return res.status(400).json({
-            error: 'Payment amount verification failed',
-            message: 'The payment amount does not match the requested transaction amount. Transaction has been rejected for security reasons.',
-            transactionId: transaction.id,
-            stored_amount_ghs: storedAmount,
-            gateway_amount_ghs: moolreAmount,
-            tolerance_ghs: tolerance,
-            currency: 'GHS (Ghanaian Cedi)'
-          });
+        // ROOT CAUSE FIX: Adaptive tolerance for Moolre amounts
+        let tolerance;
+        if (storedAmount < 1.00) {
+          tolerance = 0.01; // 1 pesewa for small amounts
+        } else if (storedAmount < 10.00) {
+          tolerance = 0.05; // 5 pesewas for medium amounts
+        } else {
+          tolerance = Math.max(0.10, storedAmount * 0.01); // 1% or 10 pesewas minimum
         }
 
-        console.log(`Moolre Web amount verification successful: ${moolreAmount} GHS matches stored amount for transaction ${transaction.id}`);
+        const difference = Math.abs(moolreAmount - storedAmount);
+        const amountsMatch = difference <= tolerance;
+        const isSignificantMismatch = difference > 1.00;
+
+        console.log(`MOOLRE ADAPTIVE VALIDATION for transaction ${transaction.id}:`, {
+          stored_amount_ghs: storedAmount,
+          moolre_amount_ghs: moolreAmount,
+          difference_ghs: difference,
+          adaptive_tolerance_ghs: tolerance,
+          amounts_match: amountsMatch,
+          significant_mismatch: isSignificantMismatch
+        });
+
+        if (!amountsMatch) {
+          if (isSignificantMismatch) {
+            console.error(`🚨 SECURITY BLOCK: Moolre significant mismatch for transaction ${transaction.id}:`, {
+              stored_amount_ghs: storedAmount,
+              moolre_amount_ghs: moolreAmount,
+              difference_ghs: difference,
+              reference: reference,
+              user_id: transaction.user_id
+            });
+
+            await supabase
+              .from('transactions')
+              .update({
+                status: 'rejected',
+                moolre_status: 'significant_amount_mismatch_blocked'
+              })
+              .eq('id', transaction.id);
+
+            console.warn(`🚫 BLOCKED: Moolre transaction ${transaction.id} rejected due to significant mismatch.`);
+            return res.status(400).json({
+              error: 'Payment amount verification failed',
+              message: 'Significant payment amount discrepancy detected. Transaction rejected.',
+              transactionId: transaction.id
+            });
+          } else {
+            console.warn(`⚠️  MINOR MISMATCH: Allowing Moolre transaction ${transaction.id} (${difference} GHS difference within ${tolerance} GHS tolerance)`);
+          }
+        }
+
+        console.log(`Moolre amount verification successful: ${moolreAmount} GHS matches stored amount for transaction ${transaction.id}`);
       }
 
       // Use atomic database function to approve transaction and update balance

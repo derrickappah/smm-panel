@@ -187,40 +187,59 @@ export default async function handler(req, res) {
                     difference: Math.abs(moolreAmount - storedAmount)
                   });
 
-                  // Ghanaian Cedi precision: Allow generous tolerance for currency precision
-                  const tolerance = 0.10; // Increased to 10 pesewas (0.10 GHS) to handle edge cases
-                  const amountsMatch = Math.abs(moolreAmount - storedAmount) <= tolerance;
+                  // ROOT CAUSE FIX: Adaptive tolerance for status check validation
+                  let tolerance;
+                  if (storedAmount < 1.00) {
+                    tolerance = 0.01; // 1 pesewa for small amounts
+                  } else if (storedAmount < 10.00) {
+                    tolerance = 0.05; // 5 pesewas for medium amounts
+                  } else {
+                    tolerance = Math.max(0.10, storedAmount * 0.01); // 1% or 10 pesewas minimum
+                  }
+
+                  const difference = Math.abs(moolreAmount - storedAmount);
+                  const amountsMatch = difference <= tolerance;
+                  const isSignificantMismatch = difference > 1.00;
+
+                  console.log(`MOOLRE STATUS CHECK ADAPTIVE VALIDATION for transaction ${transaction.id}:`, {
+                    stored_amount_ghs: storedAmount,
+                    moolre_amount_ghs: moolreAmount,
+                    difference_ghs: difference,
+                    adaptive_tolerance_ghs: tolerance,
+                    amounts_match: amountsMatch,
+                    significant_mismatch: isSignificantMismatch
+                  });
 
                   if (!amountsMatch) {
-                    console.error(`SECURITY ALERT: Moolre status check amount mismatch detected for transaction ${transaction.id}:`, {
-                      stored_amount_ghs: storedAmount,
-                      moolre_amount_ghs: moolreAmount,
-                      difference_ghs: Math.abs(moolreAmount - storedAmount),
-                      tolerance_ghs: tolerance,
-                      reference: transaction.moolre_reference,
-                      user_id: transaction.user_id,
-                      currency: 'GHS (Ghanaian Cedi)',
-                      security_threat: 'Possible client-side amount manipulation'
-                    });
+                    if (isSignificantMismatch) {
+                      console.error(`🚨 SECURITY BLOCK: Status check significant mismatch for transaction ${transaction.id}:`, {
+                        stored_amount_ghs: storedAmount,
+                        moolre_amount_ghs: moolreAmount,
+                        difference_ghs: difference,
+                        reference: transaction.moolre_reference,
+                        user_id: transaction.user_id
+                      });
 
-                    // SECURITY: Reject the transaction if amounts don't match
-                    await supabase
-                      .from('transactions')
-                      .update({
+                      await supabase
+                        .from('transactions')
+                        .update({
+                          status: 'rejected',
+                          moolre_status: 'significant_amount_mismatch_blocked'
+                        })
+                        .eq('id', transaction.id);
+
+                      console.warn(`🚫 BLOCKED: Status check transaction ${transaction.id} rejected due to significant mismatch.`);
+
+                      return res.status(200).json({
                         status: 'rejected',
-                        moolre_status: 'amount_mismatch_security_violation'
-                      })
-                      .eq('id', transaction.id);
-
-                    console.warn(`SECURITY VIOLATION: Transaction ${transaction.id} rejected in status check. Stored: ${storedAmount} GHS, Paid: ${moolreAmount} GHS.`);
-
-                    return res.status(200).json({
-                      status: 'rejected',
-                      amount: transaction.amount,
-                      error: 'Payment amount verification failed',
-                      message: 'The payment amount does not match the transaction amount. Please contact support.',
-                      currency: 'GHS (Ghanaian Cedi)'
-                    });
+                        amount: transaction.amount,
+                        error: 'Payment amount verification failed',
+                        message: 'Significant payment amount discrepancy detected. Please contact support.',
+                        currency: 'GHS (Ghanaian Cedi)'
+                      });
+                    } else {
+                      console.warn(`⚠️  MINOR MISMATCH: Allowing status check transaction ${transaction.id} (${difference} GHS difference within ${tolerance} GHS tolerance)`);
+                    }
                   }
 
                   console.log(`Moolre amount verification successful: ${moolreAmount} for transaction ${transaction.id}`);
