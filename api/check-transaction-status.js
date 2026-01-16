@@ -227,6 +227,7 @@ export default async function handler(req, res) {
               // If already approved, we need to manually ensure balance was updated
               // Using universal function which supports all payment methods (Moolre, Paystack, Korapay, etc.)
 
+              let rpcResult = null;
               if (transaction.status === 'pending') {
                 // Transaction is still pending - use universal atomic function to update both status and balance
                 // This function supports all payment methods including Moolre
@@ -243,6 +244,7 @@ export default async function handler(req, res) {
                   // Even if there's an error, continue - the balance might have been updated
                 } else if (approvalResult && approvalResult.length > 0) {
                   const result = approvalResult[0];
+                  rpcResult = result;
                   console.log('Moolre transaction approved via atomic function:', {
                     transactionId: transaction.id,
                     success: result.success,
@@ -366,7 +368,7 @@ export default async function handler(req, res) {
               console.log('Moolre transaction approval complete:', {
                 transactionId: transaction.id,
                 finalStatus,
-                approvalSuccess: approvalResult?.[0]?.success
+                approvalSuccess: rpcResult?.success || (transaction.status === 'approved')
               });
 
               // Return updated status
