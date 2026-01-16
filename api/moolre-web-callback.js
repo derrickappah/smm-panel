@@ -119,20 +119,20 @@ export default async function handler(req, res) {
       });
     }
 
-    // Parse transaction status
+    // Extract transaction status
     // txstatus: 1=Success, 0=Pending, 2=Failed
-    const txstatus = moolreData.data?.txstatus;
+    const txstatus_val = moolreData.data?.txstatus;
     let paymentStatus = 'pending';
-    if (txstatus === 1) {
+    if (txstatus_val === 1) {
       paymentStatus = 'success';
-    } else if (txstatus === 2) {
+    } else if (txstatus_val === 2) {
       paymentStatus = 'failed';
     }
 
     const verifyData = {
       success: true,
       status: paymentStatus,
-      txstatus: txstatus,
+      txstatus: txstatus_val,
       data: moolreData.data,
       code: moolreData.code,
       message: moolreData.message,
@@ -174,15 +174,15 @@ export default async function handler(req, res) {
 
     // Check payment status (paymentStatus already declared above, reuse verifyData.status)
     const currentPaymentStatus = verifyData.status;
-    const txstatus = verifyData.txstatus; // 1=Success, 0=Pending, 2=Failed
-    const isSuccessful = currentPaymentStatus === 'success' || txstatus === 1;
-    const isFailed = currentPaymentStatus === 'failed' || txstatus === 2;
+    const txstatus_check = verifyData.txstatus; // 1=Success, 0=Pending, 2=Failed
+    const isSuccessful = currentPaymentStatus === 'success' || txstatus_check === 1;
+    const isFailed = currentPaymentStatus === 'failed' || txstatus_check === 2;
 
     console.log('[MOOLRE WEB CALLBACK] Payment status:', {
       reference,
       transactionId: transaction.id,
       paymentStatus: currentPaymentStatus,
-      txstatus,
+      txstatus: txstatus_check,
       isSuccessful,
       isFailed,
       currentStatus: transaction.status
@@ -283,7 +283,8 @@ export default async function handler(req, res) {
         p_transaction_id: transaction.id,
         p_payment_method: 'moolre_web',
         p_payment_status: 'success',
-        p_payment_reference: reference
+        p_payment_reference: reference,
+        p_actual_amount: moolreAmount // Credit the EXACT amount paid to Moolre
       });
 
       if (rpcError) {

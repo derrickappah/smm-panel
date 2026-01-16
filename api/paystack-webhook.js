@@ -554,12 +554,13 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
       metrics.balanceUpdateAttempts = attempt;
 
       try {
-        // Call the atomic database function
+        // Call the atomic database function with actual paid amount
         const { data: result, error: rpcError } = await supabase.rpc('approve_deposit_transaction_universal', {
           p_transaction_id: transaction.id,
           p_payment_method: 'paystack',
           p_payment_status: 'success',
-          p_payment_reference: reference || transaction.paystack_reference || null
+          p_payment_reference: reference || transaction.paystack_reference || null,
+          p_actual_amount: gatewayAmount // Credit the EXACT amount paid to Paystack
         });
 
         if (rpcError) {

@@ -234,7 +234,8 @@ export default async function handler(req, res) {
                   p_transaction_id: transaction.id,
                   p_payment_method: transaction.deposit_method || 'moolre',
                   p_payment_status: 'success',
-                  p_payment_reference: transaction.moolre_reference
+                  p_payment_reference: transaction.moolre_reference,
+                  p_actual_amount: moolreAmount // Credit the EXACT amount paid to Moolre
                 });
 
                 if (balanceError) {

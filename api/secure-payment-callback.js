@@ -387,9 +387,6 @@ export default async function handler(req, res) {
       });
     }
 
-    // Amounts match - log successful verification
-    console.log(`Amount verification successful for transaction ${transaction.id}: ${gatewayAmount} ${provider}`);
-
     // Amounts match - proceed with approval
     console.log(`Amount verification successful for transaction ${transaction.id}: ${gatewayAmount} ${provider}`);
 
@@ -398,7 +395,8 @@ export default async function handler(req, res) {
       p_transaction_id: transaction.id,
       p_payment_method: provider,
       p_payment_status: 'success',
-      p_payment_reference: transactionDetails.reference
+      p_payment_reference: transactionDetails.reference,
+      p_actual_amount: gatewayAmount // Credit the EXACT amount paid to the gateway
     });
 
     if (rpcError) {
@@ -432,7 +430,6 @@ export default async function handler(req, res) {
       reference: transactionDetails.reference,
       new_balance: approvalResult.new_balance
     });
-
   } catch (error) {
     console.error('Error in secure payment callback:', error);
     return res.status(500).json({

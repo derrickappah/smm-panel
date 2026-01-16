@@ -11,7 +11,8 @@ CREATE OR REPLACE FUNCTION approve_deposit_transaction_universal(
     p_transaction_id UUID,
     p_payment_method TEXT DEFAULT 'paystack',
     p_payment_status TEXT DEFAULT 'success',
-    p_payment_reference TEXT DEFAULT NULL
+    p_payment_reference TEXT DEFAULT NULL,
+    p_actual_amount NUMERIC DEFAULT NULL
 )
 RETURNS TABLE(
     success BOOLEAN,
@@ -19,7 +20,8 @@ RETURNS TABLE(
     old_status TEXT,
     new_status TEXT,
     old_balance NUMERIC,
-    new_balance NUMERIC
+    new_balance NUMERIC,
+    final_amount NUMERIC
 ) AS $$
 DECLARE
     v_transaction RECORD;
@@ -27,6 +29,7 @@ DECLARE
     v_old_status TEXT;
     v_old_balance NUMERIC;
     v_new_balance NUMERIC;
+    v_final_amount NUMERIC;
 BEGIN
     -- Get transaction details and lock the row
     SELECT * INTO v_transaction
@@ -36,13 +39,16 @@ BEGIN
 
     -- Check if transaction exists
     IF NOT FOUND THEN
-        RETURN QUERY SELECT FALSE, 'Transaction not found'::TEXT, NULL::TEXT, NULL::TEXT, NULL::NUMERIC, NULL::NUMERIC;
+        RETURN QUERY SELECT FALSE, 'Transaction not found'::TEXT, NULL::TEXT, NULL::TEXT, NULL::NUMERIC, NULL::NUMERIC, NULL::NUMERIC;
         RETURN;
     END IF;
 
+    -- Use actual amount if provided, otherwise fallback to stored transaction amount
+    v_final_amount := COALESCE(p_actual_amount, v_transaction.amount, 0);
+
     -- Check if transaction is a deposit
     IF v_transaction.type != 'deposit' THEN
-        RETURN QUERY SELECT FALSE, 'Transaction is not a deposit'::TEXT, v_transaction.status, v_transaction.status, NULL::NUMERIC, NULL::NUMERIC;
+        RETURN QUERY SELECT FALSE, 'Transaction is not a deposit'::TEXT, v_transaction.status, v_transaction.status, NULL::NUMERIC, NULL::NUMERIC, v_final_amount;
         RETURN;
     END IF;
 
@@ -62,7 +68,8 @@ BEGIN
             v_old_status,
             'approved'::TEXT,
             v_old_balance,
-            v_old_balance;
+            v_old_balance,
+            v_transaction.amount; -- Return original amount for already approved
         RETURN;
     END IF;
 
@@ -74,7 +81,8 @@ BEGIN
             v_old_status,
             v_old_status,
             NULL::NUMERIC,
-            NULL::NUMERIC;
+            NULL::NUMERIC,
+            v_final_amount;
         RETURN;
     END IF;
 
@@ -85,22 +93,22 @@ BEGIN
     FOR UPDATE; -- Lock the row to prevent concurrent balance updates
 
     IF NOT FOUND THEN
-        RETURN QUERY SELECT FALSE, 'User profile not found'::TEXT, v_old_status, v_old_status, NULL::NUMERIC, NULL::NUMERIC;
+        RETURN QUERY SELECT FALSE, 'User profile not found'::TEXT, v_old_status, v_old_status, NULL::NUMERIC, NULL::NUMERIC, v_final_amount;
         RETURN;
     END IF;
 
     -- Store old balance
     v_old_balance := COALESCE(v_profile.balance, 0);
     
-    -- Calculate new balance
-    v_new_balance := v_old_balance + COALESCE(v_transaction.amount, 0);
+    -- Calculate new balance using the validated amount from payment gateway
+    v_new_balance := v_old_balance + v_final_amount;
 
-    -- Update transaction status atomically based on payment method
-    -- Use dynamic SQL to update the appropriate reference and status columns
+    -- Update transaction status and amount atomically
     IF p_payment_method = 'paystack' THEN
         UPDATE transactions
         SET 
             status = 'approved',
+            amount = v_final_amount,
             paystack_status = COALESCE(p_payment_status, paystack_status, 'success'),
             paystack_reference = COALESCE(p_payment_reference, paystack_reference)
         WHERE id = p_transaction_id
@@ -109,24 +117,16 @@ BEGIN
         UPDATE transactions
         SET 
             status = 'approved',
+            amount = v_final_amount,
             korapay_status = COALESCE(p_payment_status, korapay_status, 'success'),
             korapay_reference = COALESCE(p_payment_reference, korapay_reference)
         WHERE id = p_transaction_id
         AND status = 'pending';
-    ELSIF p_payment_method = 'moolre' THEN
+    ELSIF p_payment_method = 'moolre' OR p_payment_method = 'moolre_web' THEN
         UPDATE transactions
         SET 
             status = 'approved',
-            moolre_status = COALESCE(p_payment_status, moolre_status, 'success'),
-            moolre_reference = COALESCE(p_payment_reference, moolre_reference)
-        WHERE id = p_transaction_id
-        AND status = 'pending';
-    ELSIF p_payment_method = 'moolre_web' THEN
-        -- Update transaction status
-        -- Use moolre_reference as primary field (moolre_web_reference may not exist in all schemas)
-        UPDATE transactions
-        SET 
-            status = 'approved',
+            amount = v_final_amount,
             moolre_status = COALESCE(p_payment_status, moolre_status, 'success'),
             moolre_reference = COALESCE(p_payment_reference, moolre_reference)
         WHERE id = p_transaction_id
@@ -135,17 +135,17 @@ BEGIN
         -- Generic update for other payment methods
         UPDATE transactions
         SET 
-            status = 'approved'
+            status = 'approved',
+            amount = v_final_amount
         WHERE id = p_transaction_id
         AND status = 'pending';
         
-        -- Try to update reference if provided (for future payment methods)
+        -- Try to update reference if provided
         IF p_payment_reference IS NOT NULL THEN
             BEGIN
                 EXECUTE format('UPDATE transactions SET %I = $1 WHERE id = $2', 
                     p_payment_method || '_reference', p_payment_reference, p_transaction_id);
             EXCEPTION WHEN OTHERS THEN
-                -- Ignore if column doesn't exist
                 NULL;
             END;
         END IF;
@@ -153,14 +153,14 @@ BEGIN
 
     -- Check if update succeeded
     IF NOT FOUND THEN
-        -- Status changed between lock and update (race condition detected)
         RETURN QUERY SELECT 
             FALSE, 
             'Transaction status changed during update (race condition)'::TEXT,
             v_old_status,
             (SELECT status FROM transactions WHERE id = p_transaction_id),
             v_old_balance,
-            v_old_balance;
+            v_old_balance,
+            v_final_amount;
         RETURN;
     END IF;
 
@@ -171,20 +171,18 @@ BEGIN
 
     -- Verify the update succeeded
     IF NOT FOUND THEN
-        -- Balance update failed
         RETURN QUERY SELECT 
             FALSE, 
             'Failed to update user balance'::TEXT,
             v_old_status,
-            'approved'::TEXT, -- Status was updated but balance wasn't
+            'approved'::TEXT,
             v_old_balance,
-            v_old_balance;
+            v_old_balance,
+            v_final_amount;
         RETURN;
     END IF;
 
     -- Link the transaction_id to the balance_audit_log entry
-    -- This prevents the create_transaction_from_audit_trigger from creating a duplicate transaction
-    -- The balance_audit_log entry is created by the balance_change_trigger when balance is updated
     UPDATE balance_audit_log
     SET transaction_id = p_transaction_id
     WHERE id = (
@@ -192,7 +190,7 @@ BEGIN
         FROM balance_audit_log
         WHERE user_id = v_transaction.user_id
           AND transaction_id IS NULL
-          AND change_amount = COALESCE(v_transaction.amount, 0)
+          AND change_amount = v_final_amount
           AND created_at >= NOW() - INTERVAL '2 seconds'
         ORDER BY created_at DESC
         LIMIT 1
@@ -205,13 +203,14 @@ BEGIN
         v_old_status,
         'approved'::TEXT,
         v_old_balance,
-        v_new_balance;
+        v_new_balance,
+        v_final_amount;
 END;
 $$ LANGUAGE plpgsql;
 
--- Grant execute permission to service_role and authenticated users
-GRANT EXECUTE ON FUNCTION approve_deposit_transaction_universal(UUID, TEXT, TEXT, TEXT) TO service_role, authenticated;
+-- Grant execute permission
+GRANT EXECUTE ON FUNCTION approve_deposit_transaction_universal(UUID, TEXT, TEXT, TEXT, NUMERIC) TO service_role, authenticated;
 
 -- Add comment
-COMMENT ON FUNCTION approve_deposit_transaction_universal IS 'Atomically approves a deposit transaction and updates user balance for any payment method. Prevents race conditions by using row-level locking. Supports: paystack, korapay, moolre, moolre_web';
+COMMENT ON FUNCTION approve_deposit_transaction_universal IS 'Atomically approves a deposit transaction and updates user balance using the EXACT amount paid to the gateway. Supports: paystack, korapay, moolre, moolre_web';
 
