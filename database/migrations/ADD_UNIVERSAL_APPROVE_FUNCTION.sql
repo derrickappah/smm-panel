@@ -4,7 +4,9 @@
 -- Prevents race conditions by using row-level locking
 
 -- Drop existing function if it exists
+-- We drop both possible signatures to ensure a clean slate
 DROP FUNCTION IF EXISTS approve_deposit_transaction_universal(UUID, TEXT, TEXT, TEXT);
+DROP FUNCTION IF EXISTS approve_deposit_transaction_universal(UUID, TEXT, TEXT, TEXT, NUMERIC);
 
 -- Create universal function to atomically approve deposit and update balance
 CREATE OR REPLACE FUNCTION approve_deposit_transaction_universal(
