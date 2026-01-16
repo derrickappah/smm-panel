@@ -243,12 +243,35 @@ export default async function handler(req, res) {
         });
 
         if (!amountsMatch) {
-          if (isSignificantMismatch) {
-            console.warn(`SIGNIFICANT MOOLRE MISMATCH LOGGED BUT ALLOWED: ${transaction.id} (${difference} GHS difference)`);
-            // Don't reject, continue processing for testing
-          } else {
-            console.warn(`⚠️  MINOR MISMATCH: Allowing Moolre transaction ${transaction.id} (${difference} GHS difference within ${tolerance} GHS tolerance)`);
+          console.error(`SECURITY ALERT: Amount mismatch detected for transaction ${transaction.id}:`, {
+            stored_amount_ghs: storedAmount,
+            moolre_amount_ghs: moolreAmount,
+            difference_ghs: difference,
+            adaptive_tolerance_ghs: tolerance,
+            reference: reference,
+            user_id: transaction.user_id,
+            timestamp: new Date().toISOString()
+          });
+
+          // SECURITY: Reject the transaction if amounts don't match
+          const { error: rejectError } = await supabase
+            .from('transactions')
+            .update({
+              status: 'rejected',
+              moolre_status: 'amount_mismatch_detected',
+              moolre_reference: reference
+            })
+            .eq('id', transaction.id);
+
+          if (rejectError) {
+            console.error('[MOOLRE WEB CALLBACK] Failed to reject transaction with amount mismatch:', rejectError);
           }
+
+          console.warn(`SECURITY: Transaction ${transaction.id} rejected due to amount mismatch. User ${transaction.user_id} may have attempted client-side manipulation.`);
+          return res.status(400).json({
+            error: 'Amount mismatch detected',
+            message: 'The payment amount does not match the transaction amount.'
+          });
         }
 
         console.log(`Moolre amount verification successful: ${moolreAmount} GHS matches stored amount for transaction ${transaction.id}`);

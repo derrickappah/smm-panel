@@ -1829,6 +1829,41 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) throw new Error('Not authenticated');
 
+      const amount = parseFloat(depositAmount);
+      if (isNaN(amount) || amount <= 0) {
+        throw new Error('Please enter a valid amount');
+      }
+
+      // Securely initiate deposit via backend
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Not authenticated - no session token');
+      }
+
+      const response = await fetch('/api/initiate-secure-deposit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          amount: amount,
+          method: 'manual'
+        })
+      });
+
+      const initData = await response.json();
+
+      if (!response.ok) {
+        throw new Error(initData.error || initData.message || 'Failed to initiate secure deposit');
+      }
+
+      if (!initData.success || !initData.transaction) {
+        throw new Error('Failed to create secure deposit transaction');
+      }
+
+      const transaction = initData.transaction;
+
       // Get user's full name for reference
       const reference = user?.name || authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'user';
 
@@ -1847,17 +1882,6 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
         if (uploadError) {
           console.error('Error uploading payment proof:', uploadError);
-          
-          // Check if it's an RLS policy error
-          if (uploadError.message?.includes('row-level security') || uploadError.message?.includes('policy')) {
-            throw new Error('Storage access denied. Please contact admin to set up storage policies. Error: ' + uploadError.message);
-          }
-          
-          // Check if bucket doesn't exist
-          if (uploadError.message?.includes('Bucket not found') || uploadError.statusCode === 404) {
-            throw new Error('Storage bucket not found. Please contact admin to create the storage bucket.');
-          }
-          
           throw new Error('Failed to upload payment proof: ' + (uploadError.message || 'Unknown error'));
         }
 
@@ -1869,29 +1893,24 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         paymentProofUrl = urlData.publicUrl;
       }
 
-      // Create manual deposit transaction
-      const { data: transaction, error } = await supabase
+      // Update the initiated transaction with proof and reference
+      const { error: updateError } = await supabase
         .from('transactions')
-        .insert({
-          user_id: authUser.id,
-          amount: 0,
-          type: 'deposit',
-          status: 'pending',
-          deposit_method: 'manual',
+        .update({
           momo_number: '',
           manual_reference: reference,
           payment_proof_url: paymentProofUrl
         })
-        .select()
-        .single();
+        .eq('id', transaction.id);
 
-      if (error) {
-        console.error('Error creating manual deposit:', error);
-        throw error;
+      if (updateError) {
+        console.error('Error updating manual deposit:', updateError);
+        throw updateError;
       }
 
       toast.success('Manual deposit submitted! Your funds will be added within 5 minutes after verification.');
       setManualDepositForm({ amount: '', momo_number: '', payment_proof_file: null });
+      setDepositAmount('');
     } catch (error) {
       console.error('Manual deposit error:', error);
       toast.error(error.message || 'Failed to submit manual deposit. Please try again.');
@@ -1919,23 +1938,35 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) throw new Error('Not authenticated');
 
-      // Create transaction record for Hubtel payment
-      const { data: transaction, error } = await supabase
-        .from('transactions')
-        .insert({
-          user_id: authUser.id,
-          amount: amount,
-          type: 'deposit',
-          status: 'pending',
-          deposit_method: 'hubtel'
-        })
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Error creating Hubtel deposit transaction:', error);
-        throw error;
+      // Securely initiate deposit via backend
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Not authenticated - no session token');
       }
+
+      const response = await fetch('/api/initiate-secure-deposit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          amount: amount,
+          method: 'hubtel'
+        })
+      });
+
+      const initData = await response.json();
+
+      if (!response.ok) {
+        throw new Error(initData.error || initData.message || 'Failed to initiate secure deposit');
+      }
+
+      if (!initData.success || !initData.transaction) {
+        throw new Error('Failed to create secure deposit transaction');
+      }
+
+      const transaction = initData.transaction;
 
       // ============================================
       // HUBTEL API INTEGRATION - ADD YOUR CODE HERE
@@ -2014,25 +2045,39 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) throw new Error('Not authenticated');
 
-      // Create transaction record for Korapay payment
-      const { data: transactionData, error } = await supabase
-        .from('transactions')
-        .insert({
-          user_id: authUser.id,
-          amount: amount,
-          type: 'deposit',
-          status: 'pending',
-          deposit_method: 'korapay'
-        })
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Error creating Korapay deposit transaction:', error);
-        throw error;
+      // Securely initiate deposit via backend
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Not authenticated - no session token');
       }
-      
-      transaction = transactionData; // Assign to outer variable
+
+      const response = await fetch('/api/initiate-secure-deposit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          amount: amount,
+          method: 'korapay'
+        })
+      });
+
+      const initData = await response.json();
+
+      if (!response.ok) {
+        throw new Error(initData.error || initData.message || 'Failed to initiate secure deposit');
+      }
+
+      if (!initData.success || !initData.transaction) {
+        throw new Error('Failed to create secure deposit transaction');
+      }
+
+      const transaction = initData.transaction;
+
+      // ============================================
+      // KORAPAY API INTEGRATION - ADD YOUR CODE HERE
+      // ============================================
 
       // Check if Korapay SDK is loaded
       if (!window.Korapay) {
@@ -2286,7 +2331,6 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     }
 
     setLoading(true);
-    let transaction = null;
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) throw new Error('Not authenticated');
@@ -2297,28 +2341,36 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         throw new Error('Email is required for Moolre Web payment');
       }
 
-      // Create transaction record for Moolre Web payment
-      const { data: transactionData, error } = await supabase
-        .from('transactions')
-        .insert({
-          user_id: authUser.id,
-          amount: amount,
-          type: 'deposit',
-          status: 'pending',
-          deposit_method: 'moolre_web'
-        })
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Error creating Moolre Web deposit transaction:', error);
-        throw error;
+      // Securely initiate deposit via backend
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('No session token available. Please log in again.');
       }
 
-      transaction = transactionData;
+      const response = await fetch('/api/initiate-secure-deposit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          amount: amount,
+          method: 'moolre_web'
+        })
+      });
 
-      // Generate unique reference for this transaction
-      const moolreWebReference = `MOOLRE_WEB_${transaction.id}_${Date.now()}`;
+      const initData = await response.json();
+
+      if (!response.ok) {
+        throw new Error(initData.error || initData.message || 'Failed to initiate secure deposit');
+      }
+
+      if (!initData.success || !initData.transaction) {
+        throw new Error('Failed to create secure deposit transaction');
+      }
+
+      const transaction = initData.transaction;
+      const moolreWebReference = initData.transaction.reference;
 
       // Ensure we have a proper origin (handle cases where window.location.origin might not be available)
       const origin = window.location.origin || 
@@ -2336,14 +2388,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         redirectUrl
       });
 
-      // Get JWT token for API authentication
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        throw new Error('No session token available. Please log in again.');
-      }
-
       // Initialize Moolre Web payment via serverless function
-      const initResponse = await fetch('/api/moolre-web-init', {
+      const moolreWebResponse = await fetch('/api/moolre-web-init', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -2359,42 +2405,42 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         })
       });
 
-      if (!initResponse.ok) {
+      if (!moolreWebResponse.ok) {
         let errorData;
         try {
-          errorData = await initResponse.json();
+          errorData = await moolreWebResponse.json();
         } catch (parseError) {
-          const text = await initResponse.text();
+          const text = await moolreWebResponse.text();
           console.error('Failed to parse error response:', text);
-          throw new Error(`Server error (${initResponse.status}): ${text || 'Unknown error'}`);
+          throw new Error(`Server error (${moolreWebResponse.status}): ${text || 'Unknown error'}`);
         }
         console.error('Moolre Web init error:', errorData);
         throw new Error(errorData.error || errorData.message || 'Failed to initialize Moolre Web payment');
       }
 
-      const initData = await initResponse.json();
-      console.log('Moolre Web init response:', initData);
+      const moolreWebData = await moolreWebResponse.json();
+      console.log('Moolre Web init response:', moolreWebData);
 
       // POS09 code indicates successful payment link generation even if success is false
-      const isSuccessCode = initData.code === 'POS09' || initData.success === true;
+      const isSuccessCode = moolreWebData.code === 'POS09' || moolreWebData.success === true;
       
       // Try to extract payment link from various possible locations
-      const paymentLink = initData.payment_link || 
-                         initData.details?.link ||
-                         initData.details?.url ||
-                         initData.details?.payment_link ||
-                         initData.details?.data?.link ||
-                         initData.details?.data?.url ||
-                         initData.data?.link ||
-                         initData.data?.url;
+      const paymentLink = moolreWebData.payment_link || 
+                         moolreWebData.details?.link ||
+                         moolreWebData.details?.url ||
+                         moolreWebData.details?.payment_link ||
+                         moolreWebData.details?.data?.link ||
+                         moolreWebData.details?.data?.url ||
+                         moolreWebData.data?.link ||
+                         moolreWebData.data?.url;
 
       if (!isSuccessCode || !paymentLink) {
-        console.error('Moolre Web init failed - missing payment link:', initData);
+        console.error('Moolre Web init failed - missing payment link:', moolreWebData);
         // If POS09 but no link, provide more helpful error
-        if (initData.code === 'POS09' && !paymentLink) {
+        if (moolreWebData.code === 'POS09' && !paymentLink) {
           throw new Error('Payment link was generated but could not be extracted from the response. Please contact support.');
         }
-        throw new Error(initData.error || initData.message || 'Failed to get payment link from Moolre');
+        throw new Error(moolreWebData.error || moolreWebData.message || 'Failed to get payment link from Moolre');
       }
 
       // Use the extracted payment link
@@ -2422,7 +2468,6 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
       // Redirect user to Moolre payment page
       window.location.href = finalPaymentLink;
-
     } catch (error) {
       console.error('Error in Moolre Web deposit:', error);
       toast.error(error.message || 'Failed to initialize payment. Please try again.');
@@ -2745,7 +2790,6 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     }
 
     setLoading(true);
-    let transaction = null;
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) throw new Error('Not authenticated');
@@ -2768,38 +2812,41 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         console.log('Phone number already verified, will skip OTP UI if Moolre requires it');
       }
 
-      // Create transaction record for Moolre payment
-      const { data: transactionData, error } = await supabase
-        .from('transactions')
-        .insert({
-          user_id: authUser.id,
-          amount: amount,
-          type: 'deposit',
-          status: 'pending',
-          deposit_method: 'moolre'
-        })
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Error creating Moolre deposit transaction:', error);
-        throw error;
-      }
-      
-      transaction = transactionData;
-
-      // Generate unique reference for this transaction
-      const moolreReference = `MOOLRE_${transaction.id}_${Date.now()}`;
-
+      // Securely initiate deposit via backend
       // Get JWT token for API authentication
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
         throw new Error('No session token available. Please log in again.');
       }
 
+      const response = await fetch('/api/initiate-secure-deposit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          amount: amount,
+          method: 'moolre'
+        })
+      });
+
+      const initData = await response.json();
+
+      if (!response.ok) {
+        throw new Error(initData.error || initData.message || 'Failed to initiate secure deposit');
+      }
+
+      if (!initData.success || !initData.transaction) {
+        throw new Error('Failed to create secure deposit transaction');
+      }
+
+      const transaction = initData.transaction;
+      const moolreReference = initData.transaction.reference;
+
       // Initialize Moolre payment via serverless function
       try {
-        const initResponse = await fetch('/api/moolre-init', {
+        const moolreResponse = await fetch('/api/moolre-init', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -2814,72 +2861,41 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           })
         });
 
-        if (!initResponse.ok) {
-          const errorData = await initResponse.json().catch(() => ({ error: 'Unknown error' }));
+        if (!moolreResponse.ok) {
+          const errorData = await moolreResponse.json().catch(() => ({ error: 'Unknown error' }));
           throw new Error(errorData.error || 'Failed to initialize Moolre payment');
         }
 
-        const initData = await initResponse.json();
+        const moolreData = await moolreResponse.json();
 
         console.log('Moolre API response:', {
-          code: initData.code,
-          requiresOtp: initData.requiresOtp,
-          success: initData.success,
+          code: moolreData.code,
+          requiresOtp: moolreData.requiresOtp,
+          success: moolreData.success,
           isPhoneVerified,
           normalizedPhone,
           channel: moolreChannel
         });
 
         // Handle OTP requirement
-        // IMPORTANT: Even if phone is verified in our DB, Moolre's API may still return TP14
-        // This is because Moolre has its own verification system that's independent of ours
-        // However, if phone is verified in our DB, we should still show OTP but log it as unexpected
-        if (initData.requiresOtp && initData.code === 'TP14') {
-          if (isPhoneVerified) {
-            // Phone is verified in our DB but Moolre still requires OTP
-            // This can happen if:
-            // 1. Moolre's verification expired or was reset
-            // 2. There's a mismatch in phone number format
-            // 3. Moolre requires OTP for every transaction regardless of previous verification
-            console.warn('⚠️ Phone verified in our DB but Moolre still requires OTP');
-            console.warn('This may indicate:', {
-              reason: 'Moolre has its own verification system that may require OTP each time',
-              ourVerification: { normalizedPhone, channel: moolreChannel },
-              suggestion: 'User will need to enter OTP again, but we will not store duplicate verification'
-            });
-            toast.info('OTP sent to your phone. Please enter the OTP code.');
-            setMoolreRequiresOtp(true);
-            setMoolreOtpTransaction({ 
-              ...transaction, 
-              moolreReference, 
-              amount, 
-              phoneNumber: normalizedPhone, // Store normalized phone for consistency
-              channel: moolreChannel 
-            });
-            setLoading(false);
-            return;
-          } else {
-            // OTP required and phone not verified - show OTP input UI
-            console.log('OTP required for unverified phone - this is expected');
-            toast.info('OTP sent to your phone. Please enter the OTP code.');
-            // Store transaction and OTP state for resubmission
-            // Store normalized phone to ensure consistency when storing verification
-            setMoolreRequiresOtp(true);
-            setMoolreOtpTransaction({ 
-              ...transaction, 
-              moolreReference, 
-              amount, 
-              phoneNumber: normalizedPhone, // Store normalized phone for consistency
-              channel: moolreChannel 
-            });
-            setLoading(false);
-            return;
-          }
+        if (moolreData.requiresOtp && moolreData.code === 'TP14') {
+          console.log('OTP required for Moolre payment');
+          toast.info('OTP sent to your phone. Please enter the OTP code.');
+          setMoolreRequiresOtp(true);
+          setMoolreOtpTransaction({ 
+            ...transaction, 
+            moolreReference, 
+            amount, 
+            phoneNumber: normalizedPhone, 
+            channel: moolreChannel 
+          });
+          setLoading(false);
+          return;
         }
 
 
         // Payment prompt sent successfully
-        if (initData.success && initData.code === '200_PAYMENT_REQ') {
+        if (moolreData.success && moolreData.code === '200_PAYMENT_REQ') {
           // Update transaction with Moolre reference
           const channelNames = { '13': 'MTN', '14': 'Vodafone', '15': 'AirtelTigo' };
           await supabase
@@ -2898,13 +2914,11 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           setMoolrePhoneNumber('');
           setMoolreChannel('13'); // Reset to default
           setLoading(false);
-          
-          // Start polling for payment status
           return;
         }
 
         // If we get here, something unexpected happened
-        throw new Error(initData.error || initData.message || 'Failed to initialize payment');
+        throw new Error(moolreData.error || moolreData.message || 'Failed to initialize payment');
 
       } catch (initError) {
         console.error('Error initializing Moolre payment:', initError);
@@ -3035,7 +3049,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         .order('created_at', { ascending: false })
         .limit(1);
 
-      // If there's a recent transaction (within last 5 minutes), reuse it
+    // If there's a recent transaction (within last 5 minutes), reuse it
       if (!checkPendingError && existingPending && existingPending.length > 0) {
         const existingTx = existingPending[0];
         const txAge = Date.now() - new Date(existingTx.created_at).getTime();
@@ -3058,69 +3072,38 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         }
       }
 
-      // Create new transaction record
-      const { data: transaction, error } = await supabase
-        .from('transactions')
-        .insert({
-        user_id: authUser.id,
-          amount: amount,
-        type: 'deposit',
-        status: 'pending',
-        deposit_method: 'paystack'
-        })
-        .select()
-        .single();
-
-      if (error) {
-        // Log the full error for debugging
-        console.error('Transaction insert error:', {
-          code: error.code,
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          fullError: error
-        });
-
-        // Handle specific error cases
-        const errorMessage = error.message || '';
-        const errorCode = error.code || '';
-        const errorDetails = error.details || '';
-        
-        // Check for 500 errors or database issues
-        if (errorCode === 'PGRST301' || 
-            errorMessage.includes('500') || 
-            errorMessage.includes('Internal Server Error') ||
-            errorDetails.includes('500')) {
-          console.error('Transaction table error - 500:', error);
-          toast.error('Database error: Transactions table may not exist. Please run SUPABASE_DATABASE_SETUP.sql in Supabase SQL Editor.');
-          return;
-        }
-        
-        // Foreign key constraint error
-        if (errorCode === '23503' || errorMessage.includes('foreign key')) {
-          toast.error('User profile not found. Please ensure your profile exists in the database.');
-          return;
-        }
-        
-        // Permission/RLS errors
-        if (errorCode === '42501' || errorMessage.includes('permission') || errorMessage.includes('policy')) {
-          toast.error('Permission denied: RLS policies may not be set up correctly. Please run SUPABASE_DATABASE_SETUP.sql');
-          return;
-        }
-        
-        // Network or connection errors
-        if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
-          toast.error('Network error: Please check your internet connection and try again.');
-          return;
-        }
-        
-        // Generic error
-        toast.error(errorMessage || 'Failed to create transaction. Please try again.');
-        return;
+      // Securely initiate deposit via backend
+      // Get JWT token for API authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Not authenticated - no session token');
       }
 
-      // Store transaction - useEffect will trigger payment
-      setPendingTransaction(transaction);
+      const response = await fetch('/api/initiate-secure-deposit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          amount: amount,
+          method: 'paystack'
+        })
+      });
+
+      const initData = await response.json();
+
+      if (!response.ok) {
+        throw new Error(initData.error || initData.message || 'Failed to initiate secure deposit');
+      }
+
+      if (initData.success && initData.transaction) {
+        console.log('Secure deposit initiated:', initData.transaction);
+        // Store transaction - useEffect will trigger payment
+        setPendingTransaction(initData.transaction);
+      } else {
+        throw new Error('Failed to create secure deposit transaction');
+      }
     } catch (error) {
       console.error('Deposit error (catch block):', error);
       const errorMessage = error.message || '';

@@ -466,14 +466,33 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
       });
 
       if (!amountsMatch) {
-        if (isSignificantMismatch) {
-          // TEMPORARY: Log significant mismatch but allow transaction for testing
-          console.warn(`SIGNIFICANT MISMATCH LOGGED BUT ALLOWED: ${transaction.id} (${difference} GHS difference)`);
-          // Don't reject, continue processing to test if validation is the blocker
-        } else {
-          // WARN: Minor differences (rounding/precision) - allow but log
-          console.warn(`⚠️  MINOR MISMATCH: Allowing transaction ${transaction.id} (${difference} GHS difference within ${tolerance} GHS tolerance)`);
+        console.error(`SECURITY ALERT: Amount mismatch detected for transaction ${transaction.id}:`, {
+          stored_amount_ghs: storedAmount,
+          gateway_amount_ghs: gatewayAmount,
+          difference_ghs: difference,
+          adaptive_tolerance_ghs: tolerance,
+          reference: reference,
+          user_id: transaction.user_id,
+          timestamp: new Date().toISOString()
+        });
+
+        // SECURITY: Reject the transaction if amounts don't match
+        // This prevents hackers from manipulating client-side amounts to get more than they paid
+        const { error: rejectError } = await supabase
+          .from('transactions')
+          .update({
+            status: 'rejected',
+            paystack_status: 'amount_mismatch_detected',
+            paystack_reference: reference
+          })
+          .eq('id', transaction.id);
+
+        if (rejectError) {
+          console.error('Failed to reject transaction with amount mismatch:', rejectError);
         }
+
+        console.warn(`SECURITY: Transaction ${transaction.id} rejected due to amount mismatch. User ${transaction.user_id} may have attempted client-side manipulation.`);
+        return; // Stop processing mismatching transactions
       }
 
       console.log(`Paystack amount verification successful: ${gatewayAmount} GHS matches stored amount for transaction ${transaction.id}`);
