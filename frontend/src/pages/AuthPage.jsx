@@ -10,6 +10,7 @@ import { supabase, isConfigured } from '@/lib/supabase';
 import { logLoginAttempt } from '@/lib/activityLogger';
 import SEO from '@/components/SEO';
 import TermsDialog from '@/components/TermsDialog';
+import WhatsAppButton from '@/components/WhatsAppButton';
 
 // Email validation function with TLD validation
 const isValidEmail = (email) => {
@@ -646,6 +647,9 @@ const AuthPage = () => {
         onOpenChange={setTermsDialogOpen}
         onAccept={() => setTermsAccepted(true)}
       />
+
+      {/* WhatsApp Floating Button */}
+      <WhatsAppButton message="i have problem loging in" />
     </div>
   );
 };

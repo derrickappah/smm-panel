@@ -11,6 +11,7 @@ import Testimonials from '@/components/landing/Testimonials';
 import HowItWorks from '@/components/landing/HowItWorks';
 import PricingPreview from '@/components/landing/PricingPreview';
 import FAQ from '@/components/landing/FAQ';
+import WhatsAppButton from '@/components/WhatsAppButton';
 import { generateOrganizationSchema, generateWebSiteSchema, generateFAQSchema } from '@/utils/schema';
 import { primaryKeywords, longTailKeywords, questionKeywords, locationKeywords } from '@/data/keywords';
 import { useFAQ } from '@/hooks/useFAQ';
@@ -688,6 +689,9 @@ const LandingPage = () => {
 
       {/* Back to Top Button */}
       <BackToTop />
+
+      {/* WhatsApp Floating Button */}
+      <WhatsAppButton message="i need help with ..." />
     </div>
   );
 };
