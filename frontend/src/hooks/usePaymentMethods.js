@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 
 export const usePaymentMethods = () => {
   const [depositMethod, setDepositMethod] = useState(null);
+  const hasLoadedSettings = useRef(false);
   const [paymentMethodSettings, setPaymentMethodSettings] = useState({
     paystack_enabled: false,
     manual_enabled: false,
@@ -27,13 +28,19 @@ export const usePaymentMethods = () => {
 
   const fetchPaymentSettings = useCallback(async () => {
     try {
+      console.log('Loading payment method settings...');
+
+      const startTime = performance.now();
+
+      // OPTIMIZATION: Use a single query instead of multiple settings queries
+      // This reduces database round trips and improves performance
       const { data, error } = await supabase
         .from('app_settings')
         .select('key, value')
         .in('key', [
-          'payment_method_paystack_enabled', 
-          'payment_method_manual_enabled', 
-          'payment_method_hubtel_enabled', 
+          'payment_method_paystack_enabled',
+          'payment_method_manual_enabled',
+          'payment_method_hubtel_enabled',
           'payment_method_korapay_enabled',
           'payment_method_moolre_enabled',
           'payment_method_moolre_web_enabled',
@@ -120,9 +127,22 @@ export const usePaymentMethods = () => {
   }, []);
 
   useEffect(() => {
-    fetchPaymentSettings().catch((error) => {
-      console.error('Error fetching payment settings:', error);
-    });
+    // Prevent multiple executions in React Strict Mode or hot reloads
+    if (hasLoadedSettings.current) {
+      console.log('Payment settings already loaded, skipping...');
+      return;
+    }
+
+    const loadPaymentSettings = async () => {
+      console.log('Loading payment methods...');
+      hasLoadedSettings.current = true;
+      await fetchPaymentSettings().catch((error) => {
+        console.error('Error fetching payment settings:', error);
+        hasLoadedSettings.current = false; // Reset on error to allow retry
+      });
+    };
+
+    loadPaymentSettings();
 
     // Ensure PaystackPop is loaded
     if (!window.PaystackPop && !document.querySelector('script[src*="paystack"]')) {

@@ -192,7 +192,7 @@ const fetchAllPendingOrders = async () => {
 };
 
 // Check all pending orders status in the background
-const checkAllPendingOrdersStatus = async (queryClient) => {
+const checkAllPendingOrdersStatus = useCallback(async (queryClient) => {
   console.log('checkAllPendingOrdersStatus called', { hasQueryClient: !!queryClient });
   try {
     let maxIterations = 10; // Prevent infinite loops
@@ -259,7 +259,7 @@ const checkAllPendingOrdersStatus = async (queryClient) => {
     // Silent error handling - only log to console
     console.error('Error checking pending orders status:', error);
   }
-};
+}, [queryClient]);
 
 export const useDashboardData = () => {
   const queryClient = useQueryClient();
