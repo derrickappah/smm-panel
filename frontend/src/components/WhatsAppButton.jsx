@@ -196,6 +196,23 @@ const WhatsAppButton = ({ message, className = "" }) => {
 
   return (
     <>
+      {/* CSS for pulsing glow animation */}
+      <style>
+        {`
+          @keyframes pulse-glow {
+            0% {
+              box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+            }
+            50% {
+              box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+            }
+            100% {
+              box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+            }
+          }
+        `}
+      </style>
+
       <div
         ref={buttonRef}
         className={!hasBeenTapped ? 'animate-pulse' : ''}
@@ -205,7 +222,9 @@ const WhatsAppButton = ({ message, className = "" }) => {
           top: `${position.y}px`,
           zIndex: 50,
           cursor: isDragging ? 'grabbing' : 'grab',
-          touchAction: 'none' // Prevent default touch behaviors
+          touchAction: 'none', // Prevent default touch behaviors
+          animation: !hasBeenTapped ? 'pulse-glow 2s ease-in-out infinite' : 'none',
+          borderRadius: '50%', // Ensure circular glow
         }}
         onMouseDown={handleMouseDown}
         onTouchStart={handleTouchStart}
