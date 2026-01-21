@@ -2,9 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 
 const WhatsAppButton = ({ message, className = "" }) => {
   const buttonRef = useRef(null);
-  const menuRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [showOptions, setShowOptions] = useState(false);
   const [position, setPosition] = useState(() => {
     // Always start in bottom-left corner (ignore saved position for now)
     return { x: 20, y: window.innerHeight - 80 };
@@ -16,24 +14,6 @@ const WhatsAppButton = ({ message, className = "" }) => {
     return localStorage.getItem('whatsapp-button-tapped') === 'true';
   });
 
-  // WhatsApp support options
-  const supportOptions = [
-    "I am having problems with ordering",
-    "I am having problems with depositing",
-    "I am having problems with _________"
-  ];
-
-  // Close options menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (showOptions && !buttonRef.current?.contains(event.target) && !menuRef.current?.contains(event.target)) {
-        setShowOptions(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showOptions]);
 
   // Save position to localStorage whenever it changes
   useEffect(() => {
@@ -63,7 +43,6 @@ const WhatsAppButton = ({ message, className = "" }) => {
     if (!e.target.closest('img')) {
       setIsDragging(true);
       setHasDragged(false);
-      setShowOptions(false); // Close options when starting to drag
       setHasBeenTapped(true); // Stop pulsing when dragged
       const rect = buttonRef.current.getBoundingClientRect();
       setDragOffset({
@@ -79,7 +58,6 @@ const WhatsAppButton = ({ message, className = "" }) => {
     if (!e.target.closest('img')) {
       setIsDragging(true);
       setHasDragged(false);
-      setShowOptions(false); // Close options when starting to drag
       setHasBeenTapped(true); // Stop pulsing when dragged
       const rect = buttonRef.current.getBoundingClientRect();
       const touch = e.touches[0];
@@ -136,22 +114,15 @@ const WhatsAppButton = ({ message, className = "" }) => {
   };
 
   const handleWhatsAppClick = (e) => {
-    // Only show options if we haven't dragged (i.e., it was just a click)
+    // Only open WhatsApp if we haven't dragged (i.e., it was just a click)
     if (!hasDragged) {
-      e.preventDefault();
-      setShowOptions(!showOptions);
+      const phoneNumber = "+233550069661"; // Ghana WhatsApp number
+      const whatsappUrl = `https://wa.me/${phoneNumber}`;
+
+      // Open WhatsApp in new tab/window
+      window.open(whatsappUrl, '_blank');
       setHasBeenTapped(true); // Stop pulsing when tapped
     }
-  };
-
-  const handleOptionSelect = (option) => {
-    const phoneNumber = "+233550069661"; // Ghana WhatsApp number
-    const encodedMessage = encodeURIComponent(option);
-    const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodedMessage}`;
-
-    // Open WhatsApp in new tab/window
-    window.open(whatsappUrl, '_blank');
-    setShowOptions(false);
   };
 
   // Add global mouse and touch event listeners when dragging
@@ -251,30 +222,6 @@ const WhatsAppButton = ({ message, className = "" }) => {
           </div>
         </button>
       </div>
-
-      {/* Options Menu */}
-      {showOptions && (
-        <div
-          ref={menuRef}
-          className="fixed z-40 bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden"
-          style={{
-            left: `${position.x}px`,
-            top: position.y < 100 ? `${position.y + 80}px` : `${position.y - 160}px`, // Position below if near top, above otherwise
-            minWidth: '160px',
-            maxWidth: '200px'
-          }}
-        >
-          {supportOptions.map((option, index) => (
-            <button
-              key={index}
-              onClick={() => handleOptionSelect(option)}
-              className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors duration-200 border-b border-gray-100 last:border-b-0 focus:outline-none focus:bg-green-50 focus:text-green-700"
-            >
-              {option}
-            </button>
-          ))}
-        </div>
-      )}
     </>
   );
 };
