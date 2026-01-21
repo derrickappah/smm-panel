@@ -691,7 +691,7 @@ const LandingPage = () => {
       <BackToTop />
 
       {/* WhatsApp Floating Button */}
-      <WhatsAppButton message="i need help with ..." />
+      <WhatsAppButton />
     </div>
   );
 };
