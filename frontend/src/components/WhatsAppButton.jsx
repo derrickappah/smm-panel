@@ -11,6 +11,10 @@ const WhatsAppButton = ({ message, className = "" }) => {
   });
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [hasDragged, setHasDragged] = useState(false);
+  const [hasBeenTapped, setHasBeenTapped] = useState(() => {
+    // Check localStorage to see if user has already tapped the button
+    return localStorage.getItem('whatsapp-button-tapped') === 'true';
+  });
 
   // WhatsApp support options
   const supportOptions = [
@@ -36,6 +40,11 @@ const WhatsAppButton = ({ message, className = "" }) => {
     localStorage.setItem('whatsapp-button-position', JSON.stringify(position));
   }, [position]);
 
+  // Save tapped state to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('whatsapp-button-tapped', hasBeenTapped.toString());
+  }, [hasBeenTapped]);
+
   // Update position when window resizes
   useEffect(() => {
     const handleResize = () => {
@@ -55,6 +64,7 @@ const WhatsAppButton = ({ message, className = "" }) => {
       setIsDragging(true);
       setHasDragged(false);
       setShowOptions(false); // Close options when starting to drag
+      setHasBeenTapped(true); // Stop pulsing when dragged
       const rect = buttonRef.current.getBoundingClientRect();
       setDragOffset({
         x: e.clientX - rect.left,
@@ -70,6 +80,7 @@ const WhatsAppButton = ({ message, className = "" }) => {
       setIsDragging(true);
       setHasDragged(false);
       setShowOptions(false); // Close options when starting to drag
+      setHasBeenTapped(true); // Stop pulsing when dragged
       const rect = buttonRef.current.getBoundingClientRect();
       const touch = e.touches[0];
       setDragOffset({
@@ -129,6 +140,7 @@ const WhatsAppButton = ({ message, className = "" }) => {
     if (!hasDragged) {
       e.preventDefault();
       setShowOptions(!showOptions);
+      setHasBeenTapped(true); // Stop pulsing when tapped
     }
   };
 
@@ -186,6 +198,7 @@ const WhatsAppButton = ({ message, className = "" }) => {
     <>
       <div
         ref={buttonRef}
+        className={!hasBeenTapped ? 'animate-pulse' : ''}
         style={{
           position: 'fixed',
           left: `${position.x}px`,
