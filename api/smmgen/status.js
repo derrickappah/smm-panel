@@ -108,8 +108,7 @@ export default async function handler(req, res) {
       // Alternative endpoints to try if primary fails
       const FALLBACK_ENDPOINTS = [
         'https://smmgen.com/api/v2',
-        'https://api.smmgen.com/v2',
-        'https://smmgen.com/api'
+        'https://api.smmgen.com/v2'
       ];
 
       // Test primary endpoint first
@@ -297,6 +296,16 @@ export default async function handler(req, res) {
           order: order.trim(),
           apiUrl: workingEndpoint
         });
+
+        if (response.status === 400 && errorData.error === 'Unable to verify your domain submission.') {
+          return res.status(502).json({
+            error: 'SMMGen API Configuration Error',
+            details: 'The request was incorrectly routed to the SMMGen documentation page instead of the API endpoint.',
+            suggestion: 'Check if SMMGEN_API_URL is correctly set. Avoiding fallback to /api (documentation).',
+            apiUrl: workingEndpoint,
+            receivedError: errorData.error
+          });
+        }
 
         return res.status(response.status).json({
           error: errorData.error || errorData.message || `Failed to get order status: ${response.status}`,

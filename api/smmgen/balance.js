@@ -20,8 +20,8 @@ export default async function handler(req, res) {
     const SMMGEN_API_KEY = process.env.SMMGEN_API_KEY;
 
     if (!SMMGEN_API_KEY) {
-      return res.status(400).json({ 
-        error: 'SMMGen API key not configured' 
+      return res.status(400).json({
+        error: 'SMMGen API key not configured'
       });
     }
 
@@ -38,8 +38,18 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-      return res.status(response.status).json({ 
-        error: errorData.error || errorData.message || 'Failed to get balance' 
+
+      if (response.status === 400 && errorData.error === 'Unable to verify your domain submission.') {
+        return res.status(502).json({
+          error: 'SMMGen API Configuration Error',
+          details: 'The request was incorrectly routed to the SMMGen documentation page instead of the API endpoint.',
+          suggestion: 'Verify SMMGEN_API_URL environment variable is set to https://smmgen.com/api/v2',
+          receivedError: errorData.error
+        });
+      }
+
+      return res.status(response.status).json({
+        error: errorData.error || errorData.message || 'Failed to get balance'
       });
     }
 
@@ -47,8 +57,8 @@ export default async function handler(req, res) {
     return res.status(200).json(data);
   } catch (error) {
     console.error('SMMGen balance error:', error);
-    return res.status(500).json({ 
-      error: error.message || 'Failed to get balance' 
+    return res.status(500).json({
+      error: error.message || 'Failed to get balance'
     });
   }
 }

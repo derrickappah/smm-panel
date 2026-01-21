@@ -138,6 +138,15 @@ export default async function handler(req, res) {
           quantity: quantityNum
         });
 
+        if (response.status === 400 && errorData.error === 'Unable to verify your domain submission.') {
+          return res.status(502).json({
+            error: 'SMMGen API Configuration Error',
+            details: 'The request was incorrectly routed to the SMMGen documentation page instead of the API endpoint.',
+            suggestion: 'Verify SMMGEN_API_URL environment variable is set to https://smmgen.com/api/v2',
+            receivedError: errorData.error
+          });
+        }
+
         return res.status(response.status).json({
           error: errorData.error || errorData.message || `Failed to place order: ${response.status}`,
           status: response.status,
