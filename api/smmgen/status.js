@@ -50,21 +50,48 @@ export default async function handler(req, res) {
   const startTime = Date.now();
 
   try {
-    const { order } = req.body;
+    // Parse JSON body if needed (Vercel sometimes doesn't auto-parse)
+    let body = req.body;
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch (parseError) {
+        console.error('Failed to parse JSON body:', parseError);
+        return res.status(400).json({
+          error: 'Invalid JSON in request body',
+          parseError: parseError.message
+        });
+      }
+    }
+
+    // Log the parsed request for debugging
+    console.log('SMMGen Status Request Debug:', {
+      method: req.method,
+      contentType: req.headers['content-type'],
+      body,
+      bodyType: typeof body,
+      hasOrder: body && 'order' in body
+    });
+
+    const { order } = body;
 
     // Input validation with detailed error messages
     if (!order) {
-      return res.status(400).json({ 
+      console.error('SMMGen Status: Missing order field', { body });
+      return res.status(400).json({
         error: 'Missing required field: order (SMMGen order ID is required)',
-        field: 'order'
+        field: 'order',
+        receivedBody: body
       });
     }
 
     if (typeof order !== 'string' || order.trim() === '') {
-      return res.status(400).json({ 
+      console.error('SMMGen Status: Invalid order field', { order, orderType: typeof order });
+      return res.status(400).json({
         error: 'Invalid order: must be a non-empty string',
         field: 'order',
-        received: typeof order
+        received: typeof order,
+        receivedValue: order
       });
     }
 
@@ -102,8 +129,17 @@ export default async function handler(req, res) {
 
     if (!SMMGEN_API_KEY) {
       console.error('SMMGen API key not configured');
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: 'SMMGen API key not configured. Set SMMGEN_API_KEY in Vercel environment variables.',
+        configIssue: true
+      });
+    }
+
+    // Validate API key format (should be a string)
+    if (typeof SMMGEN_API_KEY !== 'string' || SMMGEN_API_KEY.trim().length === 0) {
+      console.error('SMMGen API key is invalid:', typeof SMMGEN_API_KEY);
+      return res.status(500).json({
+        error: 'SMMGen API key is invalid. Check SMMGEN_API_KEY in Vercel environment variables.',
         configIssue: true
       });
     }
@@ -138,8 +174,48 @@ export default async function handler(req, res) {
       console.warn('SMMGen connectivity test failed:', connectError.message);
     }
 
+    // Prepare order ID - try as number first, then string
+    let orderId = order.trim();
+    const numericOrder = parseInt(orderId, 10);
+    if (!isNaN(numericOrder) && numericOrder.toString() === orderId) {
+      orderId = numericOrder;
+    }
+
+    // Log the request being prepared for SMMGen
+    console.log('Preparing request to SMMGen:', {
+      url: workingEndpoint,
+      order: orderId,
+      orderType: typeof orderId,
+      originalOrder: order.trim(),
+      hasApiKey: !!SMMGEN_API_KEY,
+      apiKeyLength: SMMGEN_API_KEY ? SMMGEN_API_KEY.length : 0
+    });
+
+    // Try form-encoded format first (many SMM APIs expect this)
+    const formData = new URLSearchParams({
+      key: SMMGEN_API_KEY,
+      action: 'status',
+      order: orderId.toString()
+    });
+    const formDataString = formData.toString();
+
+    console.log('Attempting form-encoded request to SMMGen');
+
+    let response;
     try {
-      const response = await fetch(workingEndpoint, {
+      response = await fetch(workingEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'BoostUp-GH-Serverless/1.0'
+        },
+        body: formDataString,
+        signal: controller.signal
+      });
+    } catch (formError) {
+      console.warn('Form-encoded request failed, trying JSON format:', formError.message);
+      // Fallback to JSON format
+      response = await fetch(workingEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -148,10 +224,11 @@ export default async function handler(req, res) {
         body: JSON.stringify({
           key: SMMGEN_API_KEY,
           action: 'status',
-          order: order.trim()
+          order: orderId
         }),
-        signal: controller.signal
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT - 1000) // Shorter timeout for fallback
       });
+    }
 
       clearTimeout(timeoutId);
 
@@ -178,22 +255,33 @@ export default async function handler(req, res) {
 
       if (!response.ok) {
         let errorData;
+        let rawResponseText = '';
         try {
-          errorData = await response.json();
-        } catch (parseError) {
+          rawResponseText = await response.text();
+          try {
+            errorData = JSON.parse(rawResponseText);
+          } catch (jsonParseError) {
+            errorData = { error: rawResponseText || `HTTP ${response.status}: ${response.statusText}` };
+          }
+        } catch (textParseError) {
           errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
         }
 
         console.error('SMMGen Status API Error:', {
           status: response.status,
+          statusText: response.statusText,
+          headers: Object.fromEntries(response.headers.entries()),
           errorData,
-          order: order.trim()
+          rawResponse: rawResponseText,
+          order: order.trim(),
+          apiUrl: workingEndpoint
         });
 
-        return res.status(response.status).json({ 
+        return res.status(response.status).json({
           error: errorData.error || errorData.message || `Failed to get order status: ${response.status}`,
           status: response.status,
-          details: errorData
+          details: errorData,
+          apiUrl: workingEndpoint
         });
       }
 

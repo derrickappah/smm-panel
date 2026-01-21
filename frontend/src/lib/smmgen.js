@@ -7,9 +7,9 @@ const BACKEND_PROXY_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost
 
 // Check if we're in production (Vercel)
 // In production, hostname will be something like 'smm-panel-ten.vercel.app'
-const isProduction = process.env.NODE_ENV === 'production' || 
-  (typeof window !== 'undefined' && 
-   window.location.hostname !== 'localhost' && 
+const isProduction = process.env.NODE_ENV === 'production' ||
+  (typeof window !== 'undefined' &&
+   window.location.hostname !== 'localhost' &&
    window.location.hostname !== '127.0.0.1' &&
    !window.location.hostname.includes('localhost'));
 
@@ -65,10 +65,10 @@ const getSMMGenConfig = async () => {
   let backendUrl;
   let useServerlessFunctions = true;
   let isConfigured = true;
-  
+
   // Check if serverless functions are available
   const serverlessAvailable = await checkServerlessFunctionAvailability();
-  
+
   if (serverlessAvailable) {
     // Use serverless functions at /api/smmgen
     backendUrl = '/api/smmgen';
@@ -76,7 +76,7 @@ const getSMMGenConfig = async () => {
   } else {
     // Fallback to backend server if configured
     const customBackendUrl = process.env.REACT_APP_BACKEND_URL;
-    
+
     if (customBackendUrl) {
       backendUrl = customBackendUrl;
       useServerlessFunctions = false;
