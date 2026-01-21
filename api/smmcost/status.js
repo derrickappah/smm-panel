@@ -24,7 +24,7 @@ export default async function handler(req, res) {
 
     // Input validation with detailed error messages
     if (!order) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Missing required field: order (SMMCost order ID is required)',
         field: 'order'
       });
@@ -32,7 +32,7 @@ export default async function handler(req, res) {
 
     const orderId = typeof order === 'string' ? parseInt(order, 10) : order;
     if (isNaN(orderId) || orderId <= 0) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Invalid order ID: must be a positive integer',
         field: 'order',
         received: order
@@ -44,7 +44,7 @@ export default async function handler(req, res) {
 
     if (!SMMCOST_API_KEY) {
       console.error('SMMCost API key not configured');
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: 'SMMCost API key not configured. Set SMMCOST_API_KEY in Vercel environment variables.',
         configIssue: true
       });
@@ -57,11 +57,13 @@ export default async function handler(req, res) {
       timestamp: new Date().toISOString()
     });
 
-    // Create abort controller for timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+    let timeoutId = null;
+    let controller = null;
 
     try {
+      // Create abort controller for timeout
+      controller = new AbortController();
+      timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
       // Call SMMCost API
       // Using POST with action parameter (same pattern as order endpoint)
       const response = await fetch(SMMCOST_API_URL, {
@@ -100,7 +102,7 @@ export default async function handler(req, res) {
           order: orderId
         });
 
-        return res.status(response.status).json({ 
+        return res.status(response.status).json({
           error: errorData.error || errorData.message || `Failed to get order status: ${response.status}`,
           status: response.status,
           details: errorData
@@ -112,7 +114,7 @@ export default async function handler(req, res) {
         data = await response.json();
       } catch (parseError) {
         console.error('SMMCost Status Response Parse Error:', parseError);
-        return res.status(500).json({ 
+        return res.status(500).json({
           error: 'Invalid JSON response from SMMCost API',
           parseError: parseError.message
         });
@@ -124,7 +126,7 @@ export default async function handler(req, res) {
       // Validate response structure
       if (typeof data !== 'object' || data === null) {
         console.error('SMMCost returned invalid response format:', typeof data);
-        return res.status(500).json({ 
+        return res.status(500).json({
           error: 'SMMCost API returned invalid response format',
           responseType: typeof data
         });
@@ -147,11 +149,11 @@ export default async function handler(req, res) {
 
       return res.status(200).json(data);
     } catch (fetchError) {
-      clearTimeout(timeoutId);
+      if (timeoutId) clearTimeout(timeoutId);
 
       if (fetchError.name === 'AbortError') {
         console.error('SMMCost status request timeout after', REQUEST_TIMEOUT, 'ms');
-        return res.status(504).json({ 
+        return res.status(504).json({
           error: `Request timeout after ${REQUEST_TIMEOUT}ms`,
           timeout: true
         });
@@ -164,7 +166,7 @@ export default async function handler(req, res) {
           code: fetchError.code,
           url: SMMCOST_API_URL
         });
-        return res.status(500).json({ 
+        return res.status(500).json({
           error: `Failed to connect to SMMCost API at ${SMMCOST_API_URL}. Please verify SMMCOST_API_URL is correct and the API is accessible.`,
           networkError: true,
           url: SMMCOST_API_URL,
@@ -175,6 +177,7 @@ export default async function handler(req, res) {
       throw fetchError;
     }
   } catch (error) {
+    if (timeoutId) clearTimeout(timeoutId);
     const duration = Date.now() - startTime;
     console.error('SMMCost status error:', {
       error: error.message,
@@ -186,14 +189,14 @@ export default async function handler(req, res) {
 
     // Check for network-related errors
     if (error.message?.includes('fetch failed') || error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: `Network error: Failed to connect to SMMCost API. Please verify SMMCOST_API_URL is correct.`,
         networkError: true,
         details: error.message
       });
     }
 
-    return res.status(500).json({ 
+    return res.status(500).json({
       error: error.message || 'Failed to get order status',
       errorName: error.name,
       details: error.code || error.message

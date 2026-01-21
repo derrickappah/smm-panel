@@ -46,19 +46,19 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
       isInitialMount.current = false;
       return;
     }
-    
+
     if (!searchTerm.trim() && searchType !== 'all') {
       setSearchType('all');
     }
   }, [searchTerm, searchType]);
 
-  const { 
-    data, 
-    isLoading, 
+  const {
+    data,
+    isLoading,
     isFetching,
     refetch
-  } = useAdminOrders({ 
-    enabled: true, 
+  } = useAdminOrders({
+    enabled: true,
     useInfinite: false, // Use regular query for server-side pagination
     checkSMMGenStatus: false, // Disable by default for better performance - can be enabled later if needed
     searchTerm: debouncedSearch,
@@ -90,7 +90,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
 
       const orders = data || [];
       const jbsmmpanelOrders = orders.filter(o => o.jbsmmpanel_order_id);
-      
+
       console.log('[AdminOrders] Fetched pending orders:', {
         total: orders.length,
         jbsmmpanelOrders: jbsmmpanelOrders.length,
@@ -111,11 +111,11 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
 
   // Handle checking pending orders status from panels
   const handleCheckPendingOrders = useCallback(async () => {
-    console.log('[AdminOrders] ===== handleCheckPendingOrders CALLED =====', { 
+    console.log('[AdminOrders] ===== handleCheckPendingOrders CALLED =====', {
       isCheckingStatus,
       timestamp: new Date().toISOString()
     });
-    
+
     if (isCheckingStatus) {
       console.log('[AdminOrders] Status check already in progress, skipping');
       return; // Prevent multiple simultaneous checks
@@ -159,10 +159,11 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
           status: o.status
         }))
       });
-      
+
       const result = await checkOrdersStatusBatch(pendingOrders, {
         concurrency: 12, // High concurrency (10-15 range)
         minIntervalMinutes: 0, // Bypass interval check for manual/admin checks
+        useServerSideBulkCheck: true, // Use more reliable server-side checks
         onStatusUpdate: (orderId, newStatus, oldStatus) => {
           console.log('[AdminOrders] Status updated:', { orderId, newStatus, oldStatus });
           // Real-time UI updates via debounced query invalidation
@@ -173,7 +174,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
           console.log(`[AdminOrders] Status check progress: ${checked}/${total}`);
         }
       });
-      
+
       console.log('[AdminOrders] Status check result:', result);
 
       // Clear any pending invalidation and do final refresh
@@ -218,20 +219,20 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
   // Auto-trigger status check on component mount (only once)
   useEffect(() => {
     console.log('[AdminOrders] Auto-check effect:', { hasAutoChecked, isLoading, timerExists: !!autoCheckTimerRef.current });
-    
+
     // Only set up timer if we haven't checked yet and data is loaded
     if (!hasAutoChecked && !isLoading && !autoCheckTimerRef.current) {
       console.log('[AdminOrders] Auto-triggering status check...');
-      
+
       // Run in background after a short delay to let page load
       autoCheckTimerRef.current = setTimeout(() => {
         console.log('[AdminOrders] ===== TIMER FIRED =====');
         console.log('[AdminOrders] handleCheckPendingOrders type:', typeof handleCheckPendingOrders);
-        
+
         // Mark as checked BEFORE calling to prevent re-triggering
         setHasAutoChecked(true);
         autoCheckTimerRef.current = null;
-        
+
         if (typeof handleCheckPendingOrders === 'function') {
           console.log('[AdminOrders] Calling handleCheckPendingOrders...');
           try {
@@ -250,10 +251,10 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
           console.error('[AdminOrders] handleCheckPendingOrders is not a function!');
         }
       }, 500); // Reduced from 1000ms to 500ms
-      
+
       console.log('[AdminOrders] Timer set with ID:', autoCheckTimerRef.current, 'will fire in 500ms');
     }
-    
+
     // Cleanup: only clear timer if component unmounts
     return () => {
       if (autoCheckTimerRef.current) {
@@ -280,9 +281,9 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
 
   const handleOrderStatusUpdate = useCallback(async (orderId, newStatus) => {
     try {
-      await updateOrderMutation.mutateAsync({ 
-        orderId, 
-        updates: { status: newStatus } 
+      await updateOrderMutation.mutateAsync({
+        orderId,
+        updates: { status: newStatus }
       });
       if (onRefresh) onRefresh();
     } catch (error) {
@@ -292,7 +293,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
 
   const handleRefundOrder = useCallback(async (order) => {
     if (!confirm('Are you sure you want to refund this order?')) return;
-    
+
     // Validate order has required fields
     if (!order.user_id) {
       console.error('Order missing user_id:', order);
@@ -317,11 +318,11 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
           ...oldData,
           pages: oldData.pages.map((page) => {
             if (!page || !page.data) return page;
-            
+
             const updatedData = page.data.map((o) => {
               if (o.id === order.id) {
-                return { 
-                  ...o, 
+                return {
+                  ...o,
                   status: 'refunded',
                   refund_status: 'succeeded'
                 };
@@ -341,8 +342,8 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
       if (Array.isArray(oldData)) {
         return oldData.map((o) => {
           if (o.id === order.id) {
-            return { 
-              ...o, 
+            return {
+              ...o,
               status: 'refunded',
               refund_status: 'succeeded'
             };
@@ -358,8 +359,8 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
             ...oldData,
             data: oldData.data.map((o) => {
               if (o.id === order.id) {
-                return { 
-                  ...o, 
+                return {
+                  ...o,
                   status: 'refunded',
                   refund_status: 'succeeded'
                 };
@@ -376,7 +377,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
     try {
       // Process the refund
       const result = await processManualRefund(order);
-      
+
       if (result.success) {
         toast.success('Refund processed successfully');
         // Invalidate queries to ensure data consistency (refetch in background)
@@ -408,7 +409,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
       return;
     }
 
-    const serviceName = order.promotion_package_id 
+    const serviceName = order.promotion_package_id
       ? order.promotion_packages?.name || 'Package'
       : order.services?.name || 'N/A';
     if (!confirm(`Are you sure you want to send this order to SMMGen?\n\nService: ${serviceName}\nLink: ${order.link}\nQuantity: ${order.quantity}`)) {
@@ -443,15 +444,14 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
     return (
       <div className="grid grid-cols-12 gap-4 p-4 items-start bg-white hover:bg-gray-50 transition-colors min-h-[100px]">
         <div className="col-span-1.5 flex flex-col gap-1">
-          <span className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 w-fit ${
-            order.status === 'completed' ? 'bg-green-100 text-green-700' :
-            order.status === 'processing' || order.status === 'in progress' ? 'bg-blue-100 text-blue-700' :
-            order.status === 'partial' ? 'bg-orange-100 text-orange-700' :
-            order.status === 'canceled' || order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-            order.status === 'refunds' ? 'bg-purple-100 text-purple-700' :
-            order.status === 'refunded' ? 'bg-gray-100 text-gray-700' :
-            'bg-yellow-100 text-yellow-700'
-          }`}>
+          <span className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 w-fit ${order.status === 'completed' ? 'bg-green-100 text-green-700' :
+              order.status === 'processing' || order.status === 'in progress' ? 'bg-blue-100 text-blue-700' :
+                order.status === 'partial' ? 'bg-orange-100 text-orange-700' :
+                  order.status === 'canceled' || order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                    order.status === 'refunds' ? 'bg-purple-100 text-purple-700' :
+                      order.status === 'refunded' ? 'bg-gray-100 text-gray-700' :
+                        'bg-yellow-100 text-yellow-700'
+            }`}>
             {order.status === 'refunded' ? 'already refunded' : (order.status || 'pending')}
           </span>
           {order.refund_status && (
@@ -464,12 +464,12 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
             const serviceHasSmmcost = order.services?.smmcost_service_id && order.services.smmcost_service_id > 0;
             const serviceHasSmmgen = order.services?.smmgen_service_id;
             const serviceHasJbsmmpanel = order.services?.jbsmmpanel_service_id && order.services.jbsmmpanel_service_id > 0;
-            
+
             // Prioritize: SMMCost > JB SMM Panel > SMMGen
             const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id > 0;
             const hasJbsmmpanel = order.jbsmmpanel_order_id && String(order.jbsmmpanel_order_id).toLowerCase() !== "order not placed at jbsmmpanel";
             const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
-            
+
             if (hasSmmcost) {
               // SMMCost order ID exists and is valid
               return <p className="font-medium text-gray-900 text-sm">{order.smmcost_order_id}</p>;
@@ -482,10 +482,10 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
             } else if (order.smmgen_order_id === "order not placed at smm gen") {
               // Order failed at SMMGen
               return (
-              <div className="flex items-center gap-1">
-                <AlertCircle className="w-4 h-4 text-red-500" />
-                <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMGen</p>
-              </div>
+                <div className="flex items-center gap-1">
+                  <AlertCircle className="w-4 h-4 text-red-500" />
+                  <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMGen</p>
+                </div>
               );
             } else if (String(order.jbsmmpanel_order_id || '').toLowerCase() === "order not placed at jbsmmpanel") {
               // Order failed at JB SMM Panel
@@ -514,10 +514,10 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
             } else {
               // Fallback - shouldn't reach here
               return (
-            <div className="flex items-center gap-1">
-              <AlertCircle className="w-4 h-4 text-orange-500" />
-              <p className="text-xs text-orange-600 italic font-medium">Not sent</p>
-            </div>
+                <div className="flex items-center gap-1">
+                  <AlertCircle className="w-4 h-4 text-orange-500" />
+                  <p className="text-xs text-orange-600 italic font-medium">Not sent</p>
+                </div>
               );
             }
           })()}
@@ -528,12 +528,12 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
             const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id > 0;
             const hasJbsmmpanel = order.jbsmmpanel_order_id && String(order.jbsmmpanel_order_id).toLowerCase() !== "order not placed at jbsmmpanel";
             const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
-            
+
             const panelIds = [];
             if (hasSmmcost) panelIds.push(`SMMCost: ${order.smmcost_order_id}`);
             if (hasJbsmmpanel) panelIds.push(`JBSMMPanel: ${order.jbsmmpanel_order_id}`);
             if (hasSmmgen) panelIds.push(`SMMGen: ${order.smmgen_order_id}`);
-            
+
             if (panelIds.length > 1) {
               return (
                 <div className="text-xs">
@@ -569,7 +569,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
         <div className="col-span-1.5">
           <div className="flex items-center gap-2">
             <p className="text-sm font-medium text-gray-900">
-              {order.promotion_package_id 
+              {order.promotion_package_id
                 ? order.promotion_packages?.name || 'Package'
                 : order.services?.name || 'N/A'}
             </p>
@@ -590,8 +590,8 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
         </div>
         <div className="col-span-1">
           <div className="flex flex-col gap-2 w-full">
-            <Select 
-              value={order.status || 'pending'} 
+            <Select
+              value={order.status || 'pending'}
               onValueChange={(value) => handleOrderStatusUpdate(order.id, value)}
             >
               <SelectTrigger className="w-full text-xs min-h-[44px]">
@@ -608,54 +608,53 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                 <SelectItem value="refunded">Already Refunded</SelectItem>
               </SelectContent>
             </Select>
-            {!order.smmgen_order_id && !order.smmcost_order_id && 
-             !order.smmcost_order_id &&
-             (order.services?.smmgen_service_id || order.services?.smmcost_service_id) && 
-             order.status !== 'completed' && 
-             order.status !== 'cancelled' && 
-             order.status !== 'refunded' && (
-              <Button
-                onClick={() => handleReorderToSMMGen(order)}
-                disabled={reorderMutation.isPending}
-                variant="outline"
-                size="sm"
-                className="w-full min-h-[44px] text-xs text-indigo-600 hover:text-indigo-700 border-indigo-300 hover:bg-indigo-50"
-                title="Send this order to SMMGen"
-              >
-                <RotateCcw className={`w-3 h-3 mr-1 ${reorderMutation.isPending ? 'animate-spin' : ''}`} />
-                {reorderMutation.isPending ? 'Sending...' : 'Reorder'}
-              </Button>
-            )}
-            {(order.status === 'canceled' || order.status === 'cancelled') && 
-             order.refund_status !== 'succeeded' && 
-             order.status !== 'refunded' && (
-              <Button
-                onClick={() => handleRefundOrder(order)}
-                variant="outline"
-                size="sm"
-                disabled={order.refund_status === 'pending'}
-                className={`w-full min-h-[44px] ${
-                  order.refund_status === 'failed' 
-                    ? "text-orange-600 hover:text-orange-700 border-orange-300 text-xs"
+            {!order.smmgen_order_id && !order.smmcost_order_id &&
+              !order.smmcost_order_id &&
+              (order.services?.smmgen_service_id || order.services?.smmcost_service_id) &&
+              order.status !== 'completed' &&
+              order.status !== 'cancelled' &&
+              order.status !== 'refunded' && (
+                <Button
+                  onClick={() => handleReorderToSMMGen(order)}
+                  disabled={reorderMutation.isPending}
+                  variant="outline"
+                  size="sm"
+                  className="w-full min-h-[44px] text-xs text-indigo-600 hover:text-indigo-700 border-indigo-300 hover:bg-indigo-50"
+                  title="Send this order to SMMGen"
+                >
+                  <RotateCcw className={`w-3 h-3 mr-1 ${reorderMutation.isPending ? 'animate-spin' : ''}`} />
+                  {reorderMutation.isPending ? 'Sending...' : 'Reorder'}
+                </Button>
+              )}
+            {(order.status === 'canceled' || order.status === 'cancelled') &&
+              order.refund_status !== 'succeeded' &&
+              order.status !== 'refunded' && (
+                <Button
+                  onClick={() => handleRefundOrder(order)}
+                  variant="outline"
+                  size="sm"
+                  disabled={order.refund_status === 'pending'}
+                  className={`w-full min-h-[44px] ${order.refund_status === 'failed'
+                      ? "text-orange-600 hover:text-orange-700 border-orange-300 text-xs"
+                      : order.refund_status === 'pending'
+                        ? "text-gray-400 border-gray-300 text-xs cursor-not-allowed"
+                        : "text-red-600 hover:text-red-700 text-xs"
+                    }`}
+                  title={order.refund_status === 'pending' ? 'Refund in progress...' : undefined}
+                >
+                  {order.refund_status === 'failed'
+                    ? 'Manual Refund'
                     : order.refund_status === 'pending'
-                    ? "text-gray-400 border-gray-300 text-xs cursor-not-allowed"
-                    : "text-red-600 hover:text-red-700 text-xs"
-                }`}
-                title={order.refund_status === 'pending' ? 'Refund in progress...' : undefined}
-              >
-                {order.refund_status === 'failed' 
-                  ? 'Manual Refund' 
-                  : order.refund_status === 'pending'
-                  ? 'Refund Pending...'
-                  : 'Refund'}
-              </Button>
-            )}
-            {(order.status === 'canceled' || order.status === 'cancelled') && 
-             (order.refund_status === 'succeeded' || order.status === 'refunded') && (
-              <div className="w-full min-h-[44px] flex items-center justify-center text-xs text-gray-500 italic">
-                Already Refunded
-              </div>
-            )}
+                      ? 'Refund Pending...'
+                      : 'Refund'}
+                </Button>
+              )}
+            {(order.status === 'canceled' || order.status === 'cancelled') &&
+              (order.refund_status === 'succeeded' || order.status === 'refunded') && (
+                <div className="w-full min-h-[44px] flex items-center justify-center text-xs text-gray-500 italic">
+                  Already Refunded
+                </div>
+              )}
           </div>
         </div>
       </div>
@@ -668,15 +667,14 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-2">
-              <span className={`px-3 py-1.5 rounded-full text-xs font-medium ${
-                order.status === 'completed' ? 'bg-green-100 text-green-700' :
-                order.status === 'processing' || order.status === 'in progress' ? 'bg-blue-100 text-blue-700' :
-                order.status === 'partial' ? 'bg-orange-100 text-orange-700' :
-                order.status === 'canceled' || order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-                order.status === 'refunds' ? 'bg-purple-100 text-purple-700' :
-                order.status === 'refunded' ? 'bg-gray-100 text-gray-700' :
-                'bg-yellow-100 text-yellow-700'
-              }`}>
+              <span className={`px-3 py-1.5 rounded-full text-xs font-medium ${order.status === 'completed' ? 'bg-green-100 text-green-700' :
+                  order.status === 'processing' || order.status === 'in progress' ? 'bg-blue-100 text-blue-700' :
+                    order.status === 'partial' ? 'bg-orange-100 text-orange-700' :
+                      order.status === 'canceled' || order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                        order.status === 'refunds' ? 'bg-purple-100 text-purple-700' :
+                          order.status === 'refunded' ? 'bg-gray-100 text-gray-700' :
+                            'bg-yellow-100 text-yellow-700'
+                }`}>
                 {order.status === 'refunded' ? 'already refunded' : (order.status || 'pending')}
               </span>
               {order.refund_status && (
@@ -688,12 +686,12 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               const serviceHasSmmcost = order.services?.smmcost_service_id && order.services.smmcost_service_id > 0;
               const serviceHasSmmgen = order.services?.smmgen_service_id;
               const serviceHasJbsmmpanel = order.services?.jbsmmpanel_service_id && order.services.jbsmmpanel_service_id > 0;
-              
+
               // Prioritize: SMMCost > JB SMM Panel > SMMGen
               const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id > 0;
               const hasJbsmmpanel = order.jbsmmpanel_order_id && String(order.jbsmmpanel_order_id).toLowerCase() !== "order not placed at jbsmmpanel";
               const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
-              
+
               if (hasSmmcost) {
                 return <p className="font-semibold text-gray-900 text-base">Order No: {order.smmcost_order_id}</p>;
               } else if (hasJbsmmpanel) {
@@ -702,10 +700,10 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                 return <p className="font-semibold text-gray-900 text-base">Order No: {order.smmgen_order_id}</p>;
               } else if (order.smmgen_order_id === "order not placed at smm gen") {
                 return (
-                <div className="flex items-center gap-1 mt-1">
-                  <AlertCircle className="w-4 h-4 text-red-500" />
-                  <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMGen</p>
-                </div>
+                  <div className="flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-4 h-4 text-red-500" />
+                    <p className="text-xs text-red-600 italic font-medium">Order not placed at SMMGen</p>
+                  </div>
                 );
               } else if (String(order.jbsmmpanel_order_id || '').toLowerCase() === "order not placed at jbsmmpanel") {
                 // Order failed at JB SMM Panel
@@ -732,8 +730,8 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                 );
               } else {
                 return (
-              <div className="flex items-center gap-1 mt-1">
-                <AlertCircle className="w-4 h-4 text-orange-500" />
+                  <div className="flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-4 h-4 text-orange-500" />
                     <p className="text-xs text-orange-600 italic font-medium">Not sent</p>
                   </div>
                 );
@@ -744,12 +742,12 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id > 0;
               const hasJbsmmpanel = order.jbsmmpanel_order_id && String(order.jbsmmpanel_order_id).toLowerCase() !== "order not placed at jbsmmpanel";
               const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
-              
+
               const panelIds = [];
               if (hasSmmcost) panelIds.push(`SMMCost: ${order.smmcost_order_id}`);
               if (hasJbsmmpanel) panelIds.push(`JBSMMPanel: ${order.jbsmmpanel_order_id}`);
               if (hasSmmgen) panelIds.push(`SMMGen: ${order.smmgen_order_id}`);
-              
+
               if (panelIds.length > 0) {
                 return (
                   <div className="text-xs text-gray-600 mt-1">
@@ -780,7 +778,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
             <p className="text-xs text-gray-500">Service</p>
             <div className="flex items-center gap-2">
               <p className="text-sm font-medium text-gray-900">
-                {order.promotion_package_id 
+                {order.promotion_package_id
                   ? order.promotion_packages?.name || 'Package'
                   : order.services?.name || 'N/A'}
               </p>
@@ -803,8 +801,8 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
           </div>
         </div>
         <div className="pt-3 border-t border-gray-200 space-y-2">
-          <Select 
-            value={order.status || 'pending'} 
+          <Select
+            value={order.status || 'pending'}
             onValueChange={(value) => handleOrderStatusUpdate(order.id, value)}
           >
             <SelectTrigger className="w-full min-h-[44px]">
@@ -821,53 +819,52 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               <SelectItem value="refunded">Already Refunded</SelectItem>
             </SelectContent>
           </Select>
-          {!order.smmgen_order_id && !order.smmcost_order_id && 
-           (order.services?.smmgen_service_id || order.services?.smmcost_service_id) && 
-           order.status !== 'completed' && 
-           order.status !== 'cancelled' && 
-           order.status !== 'refunded' && (
-            <Button
-              onClick={() => handleReorderToSMMGen(order)}
-              disabled={reorderMutation.isPending}
-              variant="outline"
-              size="sm"
-              className="w-full min-h-[44px] text-indigo-600 hover:text-indigo-700 border-indigo-300 hover:bg-indigo-50"
-              title="Send this order to SMMGen"
-            >
-              <RotateCcw className={`w-3 h-3 mr-1 ${reorderMutation.isPending ? 'animate-spin' : ''}`} />
-              {reorderMutation.isPending ? 'Sending...' : 'Reorder to SMMGen'}
-            </Button>
-          )}
-          {(order.status === 'canceled' || order.status === 'cancelled') && 
-           order.refund_status !== 'succeeded' && 
-           order.status !== 'refunded' && (
-            <Button
-              onClick={() => handleRefundOrder(order)}
-              variant="outline"
-              size="sm"
-              disabled={order.refund_status === 'pending'}
-              className={`w-full min-h-[44px] ${
-                order.refund_status === 'failed' 
-                  ? "text-orange-600 hover:text-orange-700 border-orange-300"
+          {!order.smmgen_order_id && !order.smmcost_order_id &&
+            (order.services?.smmgen_service_id || order.services?.smmcost_service_id) &&
+            order.status !== 'completed' &&
+            order.status !== 'cancelled' &&
+            order.status !== 'refunded' && (
+              <Button
+                onClick={() => handleReorderToSMMGen(order)}
+                disabled={reorderMutation.isPending}
+                variant="outline"
+                size="sm"
+                className="w-full min-h-[44px] text-indigo-600 hover:text-indigo-700 border-indigo-300 hover:bg-indigo-50"
+                title="Send this order to SMMGen"
+              >
+                <RotateCcw className={`w-3 h-3 mr-1 ${reorderMutation.isPending ? 'animate-spin' : ''}`} />
+                {reorderMutation.isPending ? 'Sending...' : 'Reorder to SMMGen'}
+              </Button>
+            )}
+          {(order.status === 'canceled' || order.status === 'cancelled') &&
+            order.refund_status !== 'succeeded' &&
+            order.status !== 'refunded' && (
+              <Button
+                onClick={() => handleRefundOrder(order)}
+                variant="outline"
+                size="sm"
+                disabled={order.refund_status === 'pending'}
+                className={`w-full min-h-[44px] ${order.refund_status === 'failed'
+                    ? "text-orange-600 hover:text-orange-700 border-orange-300"
+                    : order.refund_status === 'pending'
+                      ? "text-gray-400 border-gray-300 cursor-not-allowed"
+                      : "text-red-600 hover:text-red-700"
+                  }`}
+                title={order.refund_status === 'pending' ? 'Refund in progress...' : undefined}
+              >
+                {order.refund_status === 'failed'
+                  ? 'Manual Refund'
                   : order.refund_status === 'pending'
-                  ? "text-gray-400 border-gray-300 cursor-not-allowed"
-                  : "text-red-600 hover:text-red-700"
-              }`}
-              title={order.refund_status === 'pending' ? 'Refund in progress...' : undefined}
-            >
-              {order.refund_status === 'failed' 
-                ? 'Manual Refund' 
-                : order.refund_status === 'pending'
-                ? 'Refund Pending...'
-                : 'Refund'}
-            </Button>
-          )}
-          {(order.status === 'canceled' || order.status === 'cancelled') && 
-           (order.refund_status === 'succeeded' || order.status === 'refunded') && (
-            <div className="w-full min-h-[44px] flex items-center justify-center text-xs text-gray-500 italic">
-              Already Refunded
-            </div>
-          )}
+                    ? 'Refund Pending...'
+                    : 'Refund'}
+              </Button>
+            )}
+          {(order.status === 'canceled' || order.status === 'cancelled') &&
+            (order.refund_status === 'succeeded' || order.status === 'refunded') && (
+              <div className="w-full min-h-[44px] flex items-center justify-center text-xs text-gray-500 italic">
+                Already Refunded
+              </div>
+            )}
         </div>
       </div>
     );
@@ -924,8 +921,8 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
         </div>
         <div className="flex flex-col gap-3">
           <div className="flex flex-col sm:flex-row gap-3">
-            <Select 
-              value={searchType} 
+            <Select
+              value={searchType}
               onValueChange={(value) => {
                 setSearchType(value);
                 setPage(1);
@@ -1003,10 +1000,10 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
           {searchType === 'service_name' && searchTerm
             ? `No orders found for service: ${searchTerm}`
             : searchType === 'package_name' && searchTerm
-            ? `No orders found for package: ${searchTerm}`
-            : searchType === 'user_name' && searchTerm
-            ? `No orders found for user: ${searchTerm}`
-            : 'No orders found'}
+              ? `No orders found for package: ${searchTerm}`
+              : searchType === 'user_name' && searchTerm
+                ? `No orders found for user: ${searchTerm}`
+                : 'No orders found'}
         </p>
       ) : (
         <>

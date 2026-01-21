@@ -589,7 +589,8 @@ export const checkOrdersStatusBatch = async (orders, options = {}) => {
     concurrency = 5,
     minIntervalMinutes = 5,
     onStatusUpdate = null,
-    onProgress = null
+    onProgress = null,
+    useServerSideBulkCheck = false
   } = options;
 
   console.log('[orderStatusCheck] checkOrdersStatusBatch called:', {
@@ -681,6 +682,61 @@ export const checkOrdersStatusBatch = async (orders, options = {}) => {
       smmcost_order_id: o.smmcost_order_id
     }))
   });
+
+  // Use server-side bulk check if requested (more reliable for admins)
+  if (useServerSideBulkCheck && ordersToCheck.length > 0) {
+    try {
+      console.log(`[orderStatusCheck] Using server-side bulk check for ${ordersToCheck.length} orders`);
+
+      // Get current session for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session) {
+        throw new Error('No active session found. Authentication required.');
+      }
+
+      const response = await fetch('/api/admin/check-orders-status', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ orderIds: ordersToCheck.map(o => o.id) })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server error: ${response.status}`);
+      }
+
+      const serverResult = await response.json();
+      console.log('[orderStatusCheck] Server-side status check completed successfully:', serverResult);
+
+      // Trigger UI updates for each order that was actually updated
+      if (onStatusUpdate && serverResult.details) {
+        serverResult.details.forEach(detail => {
+          const originalOrder = ordersToCheck.find(o => o.id === detail.id);
+          if (detail.mapped && originalOrder && detail.mapped !== originalOrder.status) {
+            onStatusUpdate(detail.id, detail.mapped, originalOrder.status);
+          }
+        });
+      }
+
+      if (onProgress) {
+        onProgress(ordersToCheck.length, ordersToCheck.length);
+      }
+
+      return {
+        checked: serverResult.checked || ordersToCheck.length,
+        updated: serverResult.updated || 0,
+        errors: serverResult.errors || [],
+        results: serverResult.details || []
+      };
+    } catch (err) {
+      console.error('[orderStatusCheck] Server-side bulk check failed, falling back to client-side:', err);
+      // Continue to client-side orchestration as fallback
+    }
+  }
 
   const results = await processBatch(ordersToCheck, concurrency, onStatusUpdate);
 

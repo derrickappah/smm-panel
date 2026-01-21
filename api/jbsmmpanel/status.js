@@ -24,7 +24,7 @@ export default async function handler(req, res) {
 
     // Input validation with detailed error messages
     if (!order) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Missing required field: order (JB SMM Panel order ID is required)',
         field: 'order'
       });
@@ -32,7 +32,7 @@ export default async function handler(req, res) {
 
     const orderId = typeof order === 'string' ? parseInt(order, 10) : order;
     if (isNaN(orderId) || orderId <= 0) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Invalid order ID: must be a positive integer',
         field: 'order',
         received: order
@@ -44,7 +44,7 @@ export default async function handler(req, res) {
 
     if (!JBSMMPANEL_API_KEY) {
       console.error('JB SMM Panel API key not configured');
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: 'JB SMM Panel API key not configured. Set JBSMMPANEL_API_KEY in Vercel environment variables.',
         configIssue: true
       });
@@ -71,11 +71,13 @@ export default async function handler(req, res) {
       timestamp: new Date().toISOString()
     });
 
-    // Create abort controller for timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+    let timeoutId = null;
+    let controller = null;
 
     try {
+      // Create abort controller for timeout
+      controller = new AbortController();
+      timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
       // Call JB SMM Panel API
       // Using POST with action parameter
       // API requires x-www-form-urlencoded format, not JSON
@@ -111,7 +113,7 @@ export default async function handler(req, res) {
             order: orderId,
             contentType: response.headers.get('content-type')
           });
-          
+
           // Try to parse as JSON
           try {
             errorData = JSON.parse(responseText);
@@ -131,7 +133,7 @@ export default async function handler(req, res) {
           apiUrl: JBSMMPANEL_API_URL
         });
 
-        return res.status(response.status).json({ 
+        return res.status(response.status).json({
           error: errorData.error || errorData.message || `Failed to get order status: ${response.status}`,
           status: response.status,
           details: errorData
@@ -142,7 +144,7 @@ export default async function handler(req, res) {
       let data;
       const contentType = response.headers.get('content-type') || '';
       const isJson = contentType.includes('application/json');
-      
+
       try {
         if (isJson) {
           data = await response.json();
@@ -154,13 +156,13 @@ export default async function handler(req, res) {
             responseText: responseText.substring(0, 500), // First 500 chars
             length: responseText.length
           });
-          
+
           try {
             data = JSON.parse(responseText);
           } catch (parseError) {
             // If not JSON, wrap in an object
             console.warn('JB SMM Panel returned non-JSON response, treating as error');
-            return res.status(500).json({ 
+            return res.status(500).json({
               error: 'JB SMM Panel API returned non-JSON response',
               contentType,
               responsePreview: responseText.substring(0, 200),
@@ -174,7 +176,7 @@ export default async function handler(req, res) {
           contentType,
           order: orderId
         });
-        return res.status(500).json({ 
+        return res.status(500).json({
           error: 'Invalid response from JB SMM Panel API',
           parseError: parseError.message,
           contentType
@@ -187,7 +189,7 @@ export default async function handler(req, res) {
       // Check for errors in response body (API might return errors with 200 status)
       if (data && typeof data === 'object' && data.error) {
         console.error('JB SMM Panel Status API returned error in response:', data.error);
-        return res.status(400).json({ 
+        return res.status(400).json({
           error: data.error || 'Incorrect request',
           details: data,
           apiError: true
@@ -197,7 +199,7 @@ export default async function handler(req, res) {
       // Validate response structure
       if (typeof data !== 'object' || data === null) {
         console.error('JB SMM Panel returned invalid response format:', typeof data);
-        return res.status(500).json({ 
+        return res.status(500).json({
           error: 'JB SMM Panel API returned invalid response format',
           responseType: typeof data
         });
@@ -220,11 +222,11 @@ export default async function handler(req, res) {
 
       return res.status(200).json(data);
     } catch (fetchError) {
-      clearTimeout(timeoutId);
+      if (timeoutId) clearTimeout(timeoutId);
 
       if (fetchError.name === 'AbortError') {
         console.error('JB SMM Panel status request timeout after', REQUEST_TIMEOUT, 'ms');
-        return res.status(504).json({ 
+        return res.status(504).json({
           error: `Request timeout after ${REQUEST_TIMEOUT}ms`,
           timeout: true
         });
@@ -237,7 +239,7 @@ export default async function handler(req, res) {
           code: fetchError.code,
           url: JBSMMPANEL_API_URL
         });
-        return res.status(500).json({ 
+        return res.status(500).json({
           error: `Failed to connect to JB SMM Panel API at ${JBSMMPANEL_API_URL}. Please verify JBSMMPANEL_API_URL is correct and the API is accessible.`,
           networkError: true,
           url: JBSMMPANEL_API_URL,
@@ -248,6 +250,7 @@ export default async function handler(req, res) {
       throw fetchError;
     }
   } catch (error) {
+    if (timeoutId) clearTimeout(timeoutId);
     const duration = Date.now() - startTime;
     console.error('JB SMM Panel status error:', {
       error: error.message,
@@ -259,14 +262,14 @@ export default async function handler(req, res) {
 
     // Check for network-related errors
     if (error.message?.includes('fetch failed') || error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: `Network error: Failed to connect to JB SMM Panel API. Please verify JBSMMPANEL_API_URL is correct.`,
         networkError: true,
         details: error.message
       });
     }
 
-    return res.status(500).json({ 
+    return res.status(500).json({
       error: error.message || 'Failed to get order status',
       errorName: error.name,
       details: error.code || error.message
