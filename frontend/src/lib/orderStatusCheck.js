@@ -14,10 +14,10 @@ import { saveOrderStatusHistory } from './orderStatusHistory';
  */
 const mapSMMGenStatus = (smmgenStatus) => {
   if (!smmgenStatus) return null;
-  
+
   const statusString = String(smmgenStatus).trim();
   const statusLower = statusString.toLowerCase();
-  
+
   if (statusLower === 'pending' || statusLower.includes('pending')) return 'pending';
   if (statusLower === 'in progress' || statusLower.includes('in progress')) return 'in progress';
   if (statusLower === 'completed' || statusLower.includes('completed')) return 'completed';
@@ -25,7 +25,7 @@ const mapSMMGenStatus = (smmgenStatus) => {
   if (statusLower === 'processing' || statusLower.includes('processing')) return 'processing';
   if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower.includes('cancel')) return 'canceled';
   if (statusLower === 'refunds' || statusLower.includes('refund')) return 'refunds';
-  
+
   return null;
 };
 
@@ -36,10 +36,10 @@ const mapSMMGenStatus = (smmgenStatus) => {
  */
 const mapSMMCostStatus = (smmcostStatus) => {
   if (!smmcostStatus) return null;
-  
+
   const statusString = String(smmcostStatus).trim();
   const statusLower = statusString.toLowerCase();
-  
+
   if (statusLower === 'pending' || statusLower.includes('pending')) return 'pending';
   if (statusLower === 'in progress' || statusLower.includes('in progress')) return 'in progress';
   if (statusLower === 'completed' || statusLower.includes('completed')) return 'completed';
@@ -47,7 +47,7 @@ const mapSMMCostStatus = (smmcostStatus) => {
   if (statusLower === 'processing' || statusLower.includes('processing')) return 'processing';
   if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower.includes('cancel')) return 'canceled';
   if (statusLower === 'refunds' || statusLower.includes('refund')) return 'refunds';
-  
+
   return null;
 };
 
@@ -114,16 +114,16 @@ export const shouldCheckOrder = (order, minIntervalMinutes = 5) => {
   // Check if order has SMMGen, SMMCost, or JB SMM Panel order ID
   // Ignore smmgen_order_id if it's the internal UUID (set by trigger)
   const isInternalUuid = order.smmgen_order_id === order.id;
-  const hasSmmgenId = order.smmgen_order_id && 
-                     order.smmgen_order_id !== "order not placed at smm gen" && 
-                     !isInternalUuid; // Ignore if it's just the internal UUID
+  const hasSmmgenId = order.smmgen_order_id &&
+    order.smmgen_order_id !== "order not placed at smm gen" &&
+    !isInternalUuid; // Ignore if it's just the internal UUID
   const hasSmmcostId = order.smmcost_order_id && String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost";
   // JB SMM Panel validation: handle both string and number types, check for error strings
   const jbsmmpanelId = order.jbsmmpanel_order_id;
-  const hasJbsmmpanelId = jbsmmpanelId && 
+  const hasJbsmmpanelId = jbsmmpanelId &&
     String(jbsmmpanelId).toLowerCase() !== "order not placed at jbsmmpanel" &&
     Number(jbsmmpanelId) > 0;
-  
+
   // Debug logging for JB SMM Panel orders
   if (jbsmmpanelId) {
     console.log('[orderStatusCheck] shouldCheckOrder - JB SMM Panel order:', {
@@ -143,7 +143,7 @@ export const shouldCheckOrder = (order, minIntervalMinutes = 5) => {
       minIntervalMinutes
     });
   }
-  
+
   // Skip if no valid order ID from any panel
   if (!hasSmmgenId && !hasSmmcostId && !hasJbsmmpanelId) {
     if (jbsmmpanelId) {
@@ -175,7 +175,7 @@ export const shouldCheckOrder = (order, minIntervalMinutes = 5) => {
     const lastCheck = new Date(order.last_status_check);
     const now = new Date();
     const minutesSinceCheck = (now - lastCheck) / (1000 * 60);
-    
+
     if (minutesSinceCheck < minIntervalMinutes) {
       if (jbsmmpanelId) {
         console.log('[orderStatusCheck] shouldCheckOrder - Skipping JB SMM Panel order (checked recently):', {
@@ -210,17 +210,17 @@ export const shouldCheckOrder = (order, minIntervalMinutes = 5) => {
  */
 const findStatusInObject = (obj, depth = 0, maxDepth = 3) => {
   if (!obj || typeof obj !== 'object' || depth > maxDepth) return null;
-  
+
   // Check common status field names
   if (obj.status !== undefined && obj.status !== null) return obj.status;
   if (obj.Status !== undefined && obj.Status !== null) return obj.Status;
   if (obj.STATUS !== undefined && obj.STATUS !== null) return obj.STATUS;
-  
+
   // If it's an array, check first element
   if (Array.isArray(obj) && obj.length > 0) {
     return findStatusInObject(obj[0], depth + 1, maxDepth);
   }
-  
+
   // Recursively search nested objects
   for (const key in obj) {
     if (obj.hasOwnProperty(key) && typeof obj[key] === 'object' && obj[key] !== null) {
@@ -228,7 +228,7 @@ const findStatusInObject = (obj, depth = 0, maxDepth = 3) => {
       if (found !== null) return found;
     }
   }
-  
+
   return null;
 };
 
@@ -247,21 +247,22 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
     newStatus: null
   };
 
+  let statusData = null;
+  let mappedStatus = null;
+  let panelSource = null;
+
   try {
-    let statusData = null;
-    let mappedStatus = null;
-    let panelSource = null;
 
     // Check if order has SMMGen, SMMCost, or JB SMM Panel order ID
     // Ignore smmgen_order_id if it's the internal UUID (set by trigger)
     const isInternalUuid = order.smmgen_order_id === order.id;
-    const hasSmmgenId = order.smmgen_order_id && 
-                       order.smmgen_order_id !== "order not placed at smm gen" && 
-                       !isInternalUuid; // Ignore if it's just the internal UUID
+    const hasSmmgenId = order.smmgen_order_id &&
+      order.smmgen_order_id !== "order not placed at smm gen" &&
+      !isInternalUuid; // Ignore if it's just the internal UUID
     const hasSmmcostId = order.smmcost_order_id && String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost";
     // JB SMM Panel validation: handle both string and number types, check for error strings
     const jbsmmpanelId = order.jbsmmpanel_order_id;
-    const hasJbsmmpanelId = jbsmmpanelId && 
+    const hasJbsmmpanelId = jbsmmpanelId &&
       String(jbsmmpanelId).toLowerCase() !== "order not placed at jbsmmpanel" &&
       Number(jbsmmpanelId) > 0;
 
@@ -281,9 +282,9 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
         currentStatus: order.status,
         lastStatusCheck: order.last_status_check
       });
-      
+
       statusData = await getJBSMMPanelOrderStatus(jbsmmpanelId);
-      
+
       // Log the API response for debugging
       console.log('[orderStatusCheck] JB SMM Panel status API response:', {
         orderId: order.id,
@@ -296,7 +297,7 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
         statusDataPreview: statusData ? (typeof statusData === 'object' ? JSON.stringify(statusData, null, 2).substring(0, 300) : String(statusData).substring(0, 300)) : null,
         fullStatusData: statusData // Keep full data for detailed inspection
       });
-      
+
       // Check if statusData is null/undefined (network errors, etc.)
       if (!statusData) {
         console.warn('JB SMM Panel status check returned null/undefined:', {
@@ -306,12 +307,12 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
         });
         throw new Error('JB SMM Panel status check failed: API returned null');
       }
-      
+
       // Extract status from various possible field names and nested structures
       // First, try direct field access (most common cases)
-      let jbsmmpanelStatus = 
-        statusData?.status || 
-        statusData?.Status || 
+      let jbsmmpanelStatus =
+        statusData?.status ||
+        statusData?.Status ||
         statusData?.STATUS ||
         statusData?.order?.status ||
         statusData?.order?.Status ||
@@ -320,28 +321,28 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
         statusData?.result?.status ||
         statusData?.result?.Status ||
         null;
-      
+
       // Handle array responses (check first element if array)
       if (!jbsmmpanelStatus && Array.isArray(statusData) && statusData.length > 0) {
-        jbsmmpanelStatus = statusData[0]?.status || 
-          statusData[0]?.Status || 
+        jbsmmpanelStatus = statusData[0]?.status ||
+          statusData[0]?.Status ||
           statusData[0]?.STATUS ||
           null;
       }
-      
+
       // Handle nested arrays (e.g., data: [{status: 'pending'}])
       if (!jbsmmpanelStatus && Array.isArray(statusData?.data) && statusData.data.length > 0) {
-        jbsmmpanelStatus = statusData.data[0]?.status || 
-          statusData.data[0]?.Status || 
+        jbsmmpanelStatus = statusData.data[0]?.status ||
+          statusData.data[0]?.Status ||
           statusData.data[0]?.STATUS ||
           null;
       }
-      
+
       // If still not found, use recursive search
       if (!jbsmmpanelStatus) {
         jbsmmpanelStatus = findStatusInObject(statusData);
       }
-      
+
       // Preserve numeric status codes (don't convert to string yet - let mapping function handle it)
       // But ensure we have a value to work with
       if (jbsmmpanelStatus === null || jbsmmpanelStatus === undefined) {
@@ -361,7 +362,7 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
           }
         }
       }
-      
+
       // Log detailed extraction information
       console.log('[orderStatusCheck] JB SMM Panel status extraction:', {
         orderId: order.id,
@@ -378,7 +379,7 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
         nestedDataIsArray: Array.isArray(statusData?.data),
         fullResponseStructure: statusData ? JSON.stringify(statusData, null, 2).substring(0, 500) : null
       });
-      
+
       // If status is still null, log the full response structure for debugging
       if (jbsmmpanelStatus === null || jbsmmpanelStatus === undefined) {
         console.error('[orderStatusCheck] JB SMM Panel status not found in response. Full response structure:', {
@@ -391,10 +392,10 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
           isArray: Array.isArray(statusData)
         });
       }
-      
+
       // Map the extracted status to our internal format
       mappedStatus = mapJBSMMPanelStatus(jbsmmpanelStatus);
-      
+
       // Detailed logging for mapping process
       console.log('[orderStatusCheck] JB SMM Panel status mapping:', {
         orderId: order.id,
@@ -407,12 +408,12 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
         currentStatus: order.status,
         statusChanged: mappedStatus !== null && mappedStatus !== order.status,
         willUpdate: mappedStatus && mappedStatus !== order.status && order.status !== 'refunded',
-        updateBlocked: order.status === 'refunded' ? 'order is refunded' : 
-                      mappedStatus === null ? 'mapping returned null' :
-                      mappedStatus === order.status ? 'status unchanged' :
-                      'unknown reason'
+        updateBlocked: order.status === 'refunded' ? 'order is refunded' :
+          mappedStatus === null ? 'mapping returned null' :
+            mappedStatus === order.status ? 'status unchanged' :
+              'unknown reason'
       });
-      
+
       // Log warning if mapping failed
       if (jbsmmpanelStatus !== null && jbsmmpanelStatus !== undefined && mappedStatus === null) {
         console.warn('[orderStatusCheck] JB SMM Panel status mapping failed - unknown status value:', {
@@ -423,7 +424,7 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
           suggestion: 'Status value not recognized. May need to add mapping for this status value.'
         });
       }
-      
+
       panelSource = 'jbsmmpanel';
     } else if (hasSmmgenId) {
       // Get status from SMMGen
@@ -444,7 +445,7 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
         newStatus: mappedStatus,
         jbsmmpanelOrderId: panelSource === 'jbsmmpanel' ? jbsmmpanelId : undefined
       });
-      
+
       // Save status to history
       await saveOrderStatusHistory(
         order.id,
@@ -486,21 +487,21 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
 
       result.updated = true;
       result.newStatus = mappedStatus;
-      
+
       // Call callback if provided
       if (onStatusUpdate) {
         onStatusUpdate(order.id, mappedStatus, order.status);
       }
     } else {
       // Status unchanged, but still update last_status_check
-      const reason = !mappedStatus 
-        ? 'mappedStatus is null' 
-        : mappedStatus === order.status 
-        ? 'status unchanged' 
-        : order.status === 'refunded'
-        ? 'order is refunded'
-        : 'unknown reason';
-      
+      const reason = !mappedStatus
+        ? 'mappedStatus is null'
+        : mappedStatus === order.status
+          ? 'status unchanged'
+          : order.status === 'refunded'
+            ? 'order is refunded'
+            : 'unknown reason';
+
       console.log('Order status not updated:', {
         orderId: order.id,
         panelSource,
@@ -508,7 +509,7 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
         mappedStatus,
         reason
       });
-      
+
       const { error: updateError } = await supabase
         .from('orders')
         .update({ last_status_check: new Date().toISOString() })
@@ -548,7 +549,7 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
  */
 const processBatch = async (orders, concurrency = 5, onStatusUpdate = null) => {
   const results = [];
-  
+
   for (let i = 0; i < orders.length; i += concurrency) {
     const batch = orders.slice(i, i + concurrency);
     const batchResults = await Promise.all(
@@ -556,7 +557,7 @@ const processBatch = async (orders, concurrency = 5, onStatusUpdate = null) => {
     );
     results.push(...batchResults);
   }
-  
+
   return results;
 };
 
@@ -583,7 +584,7 @@ export const checkOrdersStatusBatch = async (orders, options = {}) => {
       last_status_check: o.last_status_check
     }))
   });
-  
+
   const {
     concurrency = 5,
     minIntervalMinutes = 5,
@@ -622,7 +623,7 @@ export const checkOrdersStatusBatch = async (orders, options = {}) => {
     }
     return shouldCheck;
   });
-  
+
   console.log('[orderStatusCheck] Orders filtered:', {
     total: orders.length,
     toCheck: ordersToCheck.length,
@@ -636,19 +637,19 @@ export const checkOrdersStatusBatch = async (orders, options = {}) => {
       filteredOut: orders.length,
       reasons: orders.map(order => {
         const isInternalUuid = order.smmgen_order_id === order.id;
-        const hasSmmgenId = order.smmgen_order_id && 
-                           order.smmgen_order_id !== "order not placed at smm gen" && 
-                           !isInternalUuid;
+        const hasSmmgenId = order.smmgen_order_id &&
+          order.smmgen_order_id !== "order not placed at smm gen" &&
+          !isInternalUuid;
         const hasSmmcostId = order.smmcost_order_id && String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost";
         const jbsmmpanelId = order.jbsmmpanel_order_id;
-        const hasJbsmmpanelId = jbsmmpanelId && 
+        const hasJbsmmpanelId = jbsmmpanelId &&
           String(jbsmmpanelId).toLowerCase() !== "order not placed at jbsmmpanel" &&
           Number(jbsmmpanelId) > 0;
         const hasValidId = hasSmmgenId || hasSmmcostId || hasJbsmmpanelId;
         const isCompleted = order.status === 'completed' || order.status === 'refunded';
-        const recentlyChecked = minIntervalMinutes > 0 && order.last_status_check && 
+        const recentlyChecked = minIntervalMinutes > 0 && order.last_status_check &&
           (new Date() - new Date(order.last_status_check)) / (1000 * 60) < minIntervalMinutes;
-        
+
         return {
           orderId: order.id,
           hasValidId,
@@ -682,7 +683,7 @@ export const checkOrdersStatusBatch = async (orders, options = {}) => {
   });
 
   const results = await processBatch(ordersToCheck, concurrency, onStatusUpdate);
-  
+
   // Report progress if callback provided
   if (onProgress) {
     onProgress(ordersToCheck.length, ordersToCheck.length);
@@ -694,12 +695,12 @@ export const checkOrdersStatusBatch = async (orders, options = {}) => {
     const hasSmmcostId = order.smmcost_order_id && order.smmcost_order_id !== "order not placed at smmcost";
     // JB SMM Panel validation: handle both string and number types, check for error strings
     const jbsmmpanelId = order.jbsmmpanel_order_id;
-    const hasJbsmmpanelId = jbsmmpanelId && 
+    const hasJbsmmpanelId = jbsmmpanelId &&
       String(jbsmmpanelId).toLowerCase() !== "order not placed at jbsmmpanel" &&
       Number(jbsmmpanelId) > 0;
-    return !shouldCheckOrder(order, minIntervalMinutes) && 
+    return !shouldCheckOrder(order, minIntervalMinutes) &&
       (hasSmmgenId || hasSmmcostId || hasJbsmmpanelId) &&
-    order.status !== 'completed' &&
+      order.status !== 'completed' &&
       order.status !== 'refunded';
   });
 
