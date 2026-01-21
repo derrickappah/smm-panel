@@ -1,5 +1,21 @@
 # SMMGen API Integration Setup
 
+## ⚠️ Important: API Endpoint Issue
+
+**Current Status (January 2026):** The configured SMMGen API endpoint `https://smmgen.com/api/v2` is returning 404 Not Found errors. This indicates the API may have changed or been moved.
+
+### Troubleshooting Steps:
+1. Check Vercel function logs for detailed error information
+2. Verify your SMMGen API key is valid and active
+3. Contact SMMGen support for the correct API endpoint
+4. Consider alternative SMM service providers if SMMGen API is discontinued
+
+### Alternative Providers:
+If SMMGen is no longer available, consider:
+- **SMMCost**: Alternative API provider
+- **JBSMM Panel**: Another SMM service API
+- **Local SMM providers**: Check with local service providers
+
 You have **three options** for integrating with SMMGen API:
 
 ## Option 1: Vercel Serverless Functions (Recommended) ✅
@@ -35,6 +51,15 @@ You have **three options** for integrating with SMMGen API:
 - In production, the frontend automatically uses `/api/smmgen/*` endpoints
 - These are Vercel serverless functions that proxy requests to SMMGen
 - Your API key is never exposed to the frontend
+
+### Error Diagnostics:
+
+The serverless functions now include enhanced error handling:
+- **Network connectivity tests** before API calls
+- **Detailed error logging** with specific error types
+- **Endpoint validation** (404 detection)
+- **Timeout handling** (20-second limit)
+- **Clear error messages** for troubleshooting
 
 ## Option 2: Separate Backend Server
 
