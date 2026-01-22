@@ -1,39 +1,32 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 
-export const usePaymentMethods = () => {
-  const [depositMethod, setDepositMethod] = useState(null);
-  const hasLoadedSettings = useRef(false);
-  const [paymentMethodSettings, setPaymentMethodSettings] = useState({
-    paystack_enabled: false,
-    manual_enabled: false,
-    hubtel_enabled: false,
-    korapay_enabled: false,
-    moolre_enabled: false,
-    moolre_web_enabled: false
-  });
-  const [minDepositSettings, setMinDepositSettings] = useState({
-    paystack_min: 10,
-    manual_min: 10,
-    hubtel_min: 1,
-    korapay_min: 1,
-    moolre_min: 1,
-    moolre_web_min: 1
-  });
-  const [manualDepositDetails, setManualDepositDetails] = useState({
-    phone_number: '0559272762',
-    account_name: 'MTN - APPIAH MANASSEH ATTAH',
-    instructions: 'Make PAYMENT to 0559272762\nMTN - APPIAH MANASSEH ATTAH\nuse your USERNAME as reference\nsend SCREENSHOT of PAYMENT when done'
-  });
+// Global cache for payment settings to prevent redundant fetches and slow UI
+let cachedPaymentSettings = null;
+let cachedMinDepositSettings = null;
+let cachedManualDepositDetails = null;
+let cachedDepositMethod = null;
+let prefetchPromise = null;
 
-  const fetchPaymentSettings = useCallback(async () => {
+// Standalone function to prefetch payment settings
+export const prefetchPaymentSettings = async () => {
+  if (cachedPaymentSettings && cachedMinDepositSettings && cachedManualDepositDetails) {
+    return {
+      paymentMethodSettings: cachedPaymentSettings,
+      minDepositSettings: cachedMinDepositSettings,
+      manualDepositDetails: cachedManualDepositDetails,
+      depositMethod: cachedDepositMethod
+    };
+  }
+
+  if (prefetchPromise) {
+    return prefetchPromise;
+  }
+
+  prefetchPromise = (async () => {
     try {
-      console.log('Loading payment method settings...');
+      console.log('Prefetching payment method settings...');
 
-      const startTime = performance.now();
-
-      // OPTIMIZATION: Use a single query instead of multiple settings queries
-      // This reduces database round trips and improves performance
       const { data, error } = await supabase
         .from('app_settings')
         .select('key, value')
@@ -54,12 +47,11 @@ export const usePaymentMethods = () => {
           'manual_deposit_account_name',
           'manual_deposit_instructions'
         ]);
-      
+
       if (error) {
         console.warn('Error fetching payment method settings:', error);
-        // On error, keep methods disabled and don't set a default method
-        setDepositMethod(null);
-        return;
+        prefetchPromise = null;
+        return null;
       }
 
       if (data && data.length > 0) {
@@ -67,7 +59,8 @@ export const usePaymentMethods = () => {
         data.forEach(setting => {
           settings[setting.key] = setting.value;
         });
-        const newSettings = {
+
+        cachedPaymentSettings = {
           paystack_enabled: settings.payment_method_paystack_enabled === 'true',
           manual_enabled: settings.payment_method_manual_enabled === 'true',
           hubtel_enabled: settings.payment_method_hubtel_enabled === 'true',
@@ -75,86 +68,123 @@ export const usePaymentMethods = () => {
           moolre_enabled: settings.payment_method_moolre_enabled === 'true',
           moolre_web_enabled: settings.payment_method_moolre_web_enabled === 'true'
         };
-        setPaymentMethodSettings(newSettings);
-        
-        // Set minimum deposit settings with fallback to defaults
-        setMinDepositSettings({
+
+        cachedMinDepositSettings = {
           paystack_min: parseFloat(settings.payment_method_paystack_min_deposit) || 10,
           manual_min: parseFloat(settings.payment_method_manual_min_deposit) || 10,
           hubtel_min: parseFloat(settings.payment_method_hubtel_min_deposit) || 1,
           korapay_min: parseFloat(settings.payment_method_korapay_min_deposit) || 1,
           moolre_min: parseFloat(settings.payment_method_moolre_min_deposit) || 1,
           moolre_web_min: parseFloat(settings.payment_method_moolre_web_min_deposit) || 1
-        });
-        
-        // Set manual deposit details with fallback to defaults
-        setManualDepositDetails({
+        };
+
+        cachedManualDepositDetails = {
           phone_number: settings.manual_deposit_phone_number || '0559272762',
           account_name: settings.manual_deposit_account_name || 'MTN - APPIAH MANASSEH ATTAH',
           instructions: settings.manual_deposit_instructions || 'Make PAYMENT to 0559272762\nMTN - APPIAH MANASSEH ATTAH\nuse your USERNAME as reference\nsend SCREENSHOT of PAYMENT when done'
-        });
-        
+        };
+
         // Auto-select method based on what's enabled
-        if (!newSettings.paystack_enabled && newSettings.manual_enabled && !newSettings.hubtel_enabled && !newSettings.korapay_enabled && !newSettings.moolre_enabled && !newSettings.moolre_web_enabled) {
-          setDepositMethod('manual');
-        } else if (newSettings.paystack_enabled && !newSettings.manual_enabled && !newSettings.hubtel_enabled && !newSettings.korapay_enabled && !newSettings.moolre_enabled && !newSettings.moolre_web_enabled) {
-          setDepositMethod('paystack');
-        } else if (!newSettings.paystack_enabled && !newSettings.manual_enabled && newSettings.hubtel_enabled && !newSettings.korapay_enabled && !newSettings.moolre_enabled && !newSettings.moolre_web_enabled) {
-          setDepositMethod('hubtel');
-        } else if (newSettings.paystack_enabled || newSettings.manual_enabled || newSettings.hubtel_enabled || newSettings.korapay_enabled || newSettings.moolre_enabled || newSettings.moolre_web_enabled) {
-          // At least one enabled, default to paystack if available, else first available
-          setDepositMethod(
-            newSettings.paystack_enabled ? 'paystack' : 
-            (newSettings.manual_enabled ? 'manual' : 
-            (newSettings.hubtel_enabled ? 'hubtel' :
-            (newSettings.korapay_enabled ? 'korapay' : 
-            (newSettings.moolre_web_enabled ? 'moolre_web' : 'moolre'))))
-          );
+        if (!cachedPaymentSettings.paystack_enabled && cachedPaymentSettings.manual_enabled && !cachedPaymentSettings.hubtel_enabled && !cachedPaymentSettings.korapay_enabled && !cachedPaymentSettings.moolre_enabled && !cachedPaymentSettings.moolre_web_enabled) {
+          cachedDepositMethod = 'manual';
+        } else if (cachedPaymentSettings.paystack_enabled && !cachedPaymentSettings.manual_enabled && !cachedPaymentSettings.hubtel_enabled && !cachedPaymentSettings.korapay_enabled && !cachedPaymentSettings.moolre_enabled && !cachedPaymentSettings.moolre_web_enabled) {
+          cachedDepositMethod = 'paystack';
+        } else if (!cachedPaymentSettings.paystack_enabled && !cachedPaymentSettings.manual_enabled && cachedPaymentSettings.hubtel_enabled && !cachedPaymentSettings.korapay_enabled && !cachedPaymentSettings.moolre_enabled && !cachedPaymentSettings.moolre_web_enabled) {
+          cachedDepositMethod = 'hubtel';
+        } else if (cachedPaymentSettings.paystack_enabled || cachedPaymentSettings.manual_enabled || cachedPaymentSettings.hubtel_enabled || cachedPaymentSettings.korapay_enabled || cachedPaymentSettings.moolre_enabled || cachedPaymentSettings.moolre_web_enabled) {
+          cachedDepositMethod = cachedPaymentSettings.moolre_web_enabled ? 'moolre_web' :
+            (cachedPaymentSettings.moolre_enabled ? 'moolre' :
+              (cachedPaymentSettings.paystack_enabled ? 'paystack' :
+                (cachedPaymentSettings.manual_enabled ? 'manual' :
+                  (cachedPaymentSettings.hubtel_enabled ? 'hubtel' : 'korapay'))));
         } else {
-          // All disabled
-          setDepositMethod(null);
+          cachedDepositMethod = null;
         }
-      } else {
-        // No data returned, keep methods disabled
-        console.warn('No payment method settings found, keeping methods disabled');
-        setDepositMethod(null);
+
+        prefetchPromise = null;
+        return {
+          paymentMethodSettings: cachedPaymentSettings,
+          minDepositSettings: cachedMinDepositSettings,
+          manualDepositDetails: cachedManualDepositDetails,
+          depositMethod: cachedDepositMethod
+        };
       }
+
+      prefetchPromise = null;
+      return null;
     } catch (error) {
-      console.error('Error fetching payment method settings:', error);
-      // Keep methods disabled if settings can't be fetched
-      setDepositMethod(null);
+      console.error('Error prefetching payment method settings:', error);
+      prefetchPromise = null;
+      return null;
+    }
+  })();
+
+  return prefetchPromise;
+};
+
+export const usePaymentMethods = () => {
+  const [depositMethod, setDepositMethod] = useState(cachedDepositMethod);
+  const hasLoadedSettings = useRef(false);
+  const [paymentMethodSettings, setPaymentMethodSettings] = useState(cachedPaymentSettings || {
+    paystack_enabled: false,
+    manual_enabled: false,
+    hubtel_enabled: false,
+    korapay_enabled: false,
+    moolre_enabled: false,
+    moolre_web_enabled: false
+  });
+  const [minDepositSettings, setMinDepositSettings] = useState(cachedMinDepositSettings || {
+    paystack_min: 10,
+    manual_min: 10,
+    hubtel_min: 1,
+    korapay_min: 1,
+    moolre_min: 1,
+    min_deposit_moolre_web: 1
+  });
+  const [manualDepositDetails, setManualDepositDetails] = useState(cachedManualDepositDetails || {
+    phone_number: '0559272762',
+    account_name: 'MTN - APPIAH MANASSEH ATTAH',
+    instructions: 'Make PAYMENT to 0559272762\nMTN - APPIAH MANASSEH ATTAH\nuse your USERNAME as reference\nsend SCREENSHOT of PAYMENT when done'
+  });
+
+  const fetchPaymentSettings = useCallback(async (force = false) => {
+    if (!force && cachedPaymentSettings && !hasLoadedSettings.current) {
+      setPaymentMethodSettings(cachedPaymentSettings);
+      setMinDepositSettings(cachedMinDepositSettings);
+      setManualDepositDetails(cachedManualDepositDetails);
+      setDepositMethod(cachedDepositMethod);
+      hasLoadedSettings.current = true;
+      return;
+    }
+
+    const data = await prefetchPaymentSettings();
+    if (data) {
+      setPaymentMethodSettings(data.paymentMethodSettings);
+      setMinDepositSettings(data.minDepositSettings);
+      setManualDepositDetails(data.manualDepositDetails);
+      setDepositMethod(data.depositMethod);
+      hasLoadedSettings.current = true;
     }
   }, []);
 
   useEffect(() => {
-    // Prevent multiple executions in React Strict Mode or hot reloads
-    if (hasLoadedSettings.current) {
-      console.log('Payment settings already loaded, skipping...');
-      return;
-    }
-
-    const loadPaymentSettings = async () => {
-      console.log('Loading payment methods...');
+    // If we already have cached data, don't show loading state
+    if (cachedPaymentSettings && !hasLoadedSettings.current) {
+      setPaymentMethodSettings(cachedPaymentSettings);
+      setMinDepositSettings(cachedMinDepositSettings);
+      setManualDepositDetails(cachedManualDepositDetails);
+      setDepositMethod(cachedDepositMethod);
       hasLoadedSettings.current = true;
-      await fetchPaymentSettings().catch((error) => {
-        console.error('Error fetching payment settings:', error);
-        hasLoadedSettings.current = false; // Reset on error to allow retry
-      });
-    };
-
-    loadPaymentSettings();
+    } else if (!hasLoadedSettings.current) {
+      fetchPaymentSettings();
+    }
 
     // Ensure PaystackPop is loaded
     if (!window.PaystackPop && !document.querySelector('script[src*="paystack"]')) {
       const script = document.createElement('script');
       script.src = 'https://js.paystack.co/v1/inline.js';
       script.async = true;
-      script.onerror = (error) => {
-        console.warn('Failed to load Paystack script:', error);
-      };
-      script.onload = () => {
-        console.log('Paystack script loaded successfully');
-      };
+      script.onload = () => console.log('Paystack script loaded successfully');
       document.head.appendChild(script);
     }
   }, [fetchPaymentSettings]);
@@ -168,4 +198,5 @@ export const usePaymentMethods = () => {
     fetchPaymentSettings,
   };
 };
+
 

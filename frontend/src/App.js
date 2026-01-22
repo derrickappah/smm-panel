@@ -10,6 +10,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { supabase, isConfigured } from "@/lib/supabase";
 import { queryClient } from "@/lib/queryClient";
+import { prefetchPaymentSettings } from "@/hooks/usePaymentMethods";
 import * as serviceWorkerRegistration from "./serviceWorkerRegistration";
 
 // Lazy load all page components for code splitting
@@ -62,6 +63,9 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Pre-fetch payment settings as early as possible
+    prefetchPaymentSettings();
+
     // Skip if Supabase is not configured
     if (!isConfigured) {
       setLoading(false);
@@ -82,7 +86,7 @@ function App() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth state changed:', event, session?.user?.id);
-      
+
       // Handle password recovery event
       if (event === 'PASSWORD_RECOVERY') {
         // Supabase has already extracted tokens from URL hash
@@ -93,14 +97,14 @@ function App() {
         setLoading(false);
         return;
       }
-      
+
       // Only clear user on explicit sign out events
       if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
         setUser(null);
         setLoading(false);
         return;
       }
-      
+
       // For SIGNED_IN, TOKEN_REFRESHED, USER_UPDATED, and other events
       // Only update if we have a valid session
       if (session?.user) {
@@ -138,7 +142,7 @@ function App() {
     try {
       // First, get auth user
       const { data: { user: authUser }, error: getUserError } = await supabase.auth.getUser();
-      
+
       if (!authUser) {
         // Check if it's a token expiration error (which might be temporary during refresh)
         if (getUserError?.message?.includes('expired') || getUserError?.message?.includes('refresh')) {
@@ -184,11 +188,11 @@ function App() {
               const { data: newProfile, error: insertError } = await supabase
                 .from('profiles')
                 .insert({
-              id: authUser.id,
-              email: authUser.email,
-              name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
-              balance: 0.0,
-              role: 'user',
+                  id: authUser.id,
+                  email: authUser.email,
+                  name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
+                  balance: 0.0,
+                  role: 'user',
                 })
                 .select()
                 .single();
@@ -283,7 +287,7 @@ function App() {
         console.warn('Failed to log logout:', error);
       }
     }
-    
+
     await supabase.auth.signOut();
     setUser(null);
   };
@@ -364,382 +368,382 @@ function App() {
             <BrowserRouter>
               <Suspense fallback={<PageLoader />}>
                 <Routes>
-              <Route path="/" element={user ? <Navigate to={user?.role === 'admin' ? '/admin/dashboard' : '/dashboard'} /> : <LandingPage />} />
-              <Route path="/auth" element={user ? <Navigate to={user?.role === 'admin' ? '/admin/dashboard' : '/dashboard'} /> : <AuthPage />} />
-              <Route path="/reset-password" element={<ResetPasswordPage />} />
-              <Route
-                path="/dashboard"
-                element={
-                  user ? (
-                    <Dashboard user={user} onLogout={logout} onUpdateUser={() => loadUserProfile(user.id)} />
-                  ) : (
-                    <Navigate to="/auth" />
-                  )
-                }
-              />
-              <Route
-                path="/services"
-                element={user ? <ServicesPage user={user} onLogout={logout} /> : <Navigate to="/auth" />}
-              />
-              <Route
-                path="/services/:platform/:serviceType"
-                element={<ServiceLandingPage user={user} onLogout={logout} />}
-              />
-              <Route
-                path="/instagram-services"
-                element={<PlatformLandingPage user={user} onLogout={logout} />}
-              />
-              <Route
-                path="/tiktok-services"
-                element={<PlatformLandingPage user={user} onLogout={logout} />}
-              />
-              <Route
-                path="/youtube-services"
-                element={<PlatformLandingPage user={user} onLogout={logout} />}
-              />
-              <Route
-                path="/facebook-services"
-                element={<PlatformLandingPage user={user} onLogout={logout} />}
-              />
-              <Route
-                path="/twitter-services"
-                element={<PlatformLandingPage user={user} onLogout={logout} />}
-              />
-              <Route
-                path="/whatsapp-services"
-                element={<PlatformLandingPage user={user} onLogout={logout} />}
-              />
-              <Route
-                path="/telegram-services"
-                element={<PlatformLandingPage user={user} onLogout={logout} />}
-              />
-              <Route
-                path="/orders"
-                element={user ? <OrderHistory user={user} onLogout={logout} /> : <Navigate to="/auth" />}
-              />
-              <Route
-                path="/admin"
-                element={
-                  user?.role === 'admin' ? (
-                    <Navigate to="/admin/dashboard" replace />
-                  ) : user ? (
-                    <Navigate to="/dashboard" />
-                  ) : (
-                    <Navigate to="/auth" />
-                  )
-                }
-              />
-              <Route
-                path="/admin/dashboard"
-                element={
-                  user?.role === 'admin' ? (
-                    <AdminDashboard user={user} onLogout={logout} />
-                  ) : user ? (
-                    <Navigate to="/dashboard" />
-                  ) : (
-                    <Navigate to="/auth" />
-                  )
-                }
-              />
-              <Route
-                path="/admin/deposits"
-                element={
-                  user?.role === 'admin' ? (
-                    <AdminDashboard user={user} onLogout={logout} />
-                  ) : user ? (
-                    <Navigate to="/dashboard" />
-                  ) : (
-                    <Navigate to="/auth" />
-                  )
-                }
-              />
-              <Route
-                path="/admin/orders"
-                element={
-                  user?.role === 'admin' ? (
-                    <AdminDashboard user={user} onLogout={logout} />
-                  ) : user ? (
-                    <Navigate to="/dashboard" />
-                  ) : (
-                    <Navigate to="/auth" />
-                  )
-                }
-              />
-              <Route
-                path="/admin/services"
-                element={
-                  user?.role === 'admin' ? (
-                    <AdminDashboard user={user} onLogout={logout} />
-                  ) : user ? (
-                    <Navigate to="/dashboard" />
-                  ) : (
-                    <Navigate to="/auth" />
-                  )
-                }
-              />
-              <Route
-                path="/admin/promotion-packages"
-                element={
-                  user?.role === 'admin' ? (
-                    <AdminDashboard user={user} onLogout={logout} />
-                  ) : user ? (
-                    <Navigate to="/dashboard" />
-                  ) : (
-                    <Navigate to="/auth" />
-                  )
-                }
-              />
-              <Route
-                path="/admin/payment-methods"
-                element={
-                  user?.role === 'admin' ? (
-                    <AdminDashboard user={user} onLogout={logout} />
-                  ) : user ? (
-                    <Navigate to="/dashboard" />
-                  ) : (
-                    <Navigate to="/auth" />
-                  )
-                }
-              />
-              <Route
-                path="/admin/users"
-                element={
-                  user?.role === 'admin' ? (
-                    <AdminDashboard user={user} onLogout={logout} />
-                  ) : user ? (
-                    <Navigate to="/dashboard" />
-                  ) : (
-                    <Navigate to="/auth" />
-                  )
-                }
-              />
-              <Route
-                path="/admin/transactions"
-                element={
-                  user?.role === 'admin' ? (
-                    <AdminDashboard user={user} onLogout={logout} />
-                  ) : user ? (
-                    <Navigate to="/dashboard" />
-                  ) : (
-                    <Navigate to="/auth" />
-                  )
-                }
-              />
-              <Route
-                path="/admin/support"
-                element={
-                  user?.role === 'admin' ? (
-                    <AdminDashboard user={user} onLogout={logout} />
-                  ) : user ? (
-                    <Navigate to="/dashboard" />
-                  ) : (
-                    <Navigate to="/auth" />
-                  )
-                }
-              />
-              <Route
-                path="/admin/support/analytics"
-                element={
-                  user?.role === 'admin' ? (
-                    <AdminSupportAnalytics />
-                  ) : user ? (
-                    <Navigate to="/dashboard" />
-                  ) : (
-                    <Navigate to="/auth" />
-                  )
-                }
-              />
-              <Route
-                path="/admin/balance"
-                element={
-                  user?.role === 'admin' ? (
-                    <AdminDashboard user={user} onLogout={logout} />
-                  ) : user ? (
-                    <Navigate to="/dashboard" />
-                  ) : (
-                    <Navigate to="/auth" />
-                  )
-                }
-              />
-              <Route
-                path="/admin/referrals"
-                element={
-                  user?.role === 'admin' ? (
-                    <AdminDashboard user={user} onLogout={logout} />
-                  ) : user ? (
-                    <Navigate to="/dashboard" />
-                  ) : (
-                    <Navigate to="/auth" />
-                  )
-                }
-              />
-              <Route
-                path="/admin/activity-logs"
-                element={
-                  user?.role === 'admin' ? (
-                    <AdminDashboard user={user} onLogout={logout} />
-                  ) : user ? (
-                    <Navigate to="/dashboard" />
-                  ) : (
-                    <Navigate to="/auth" />
-                  )
-                }
-              />
-              <Route
-                path="/admin/smmcost"
-                element={
-                  user?.role === 'admin' ? (
-                    <AdminDashboard user={user} onLogout={logout} />
-                  ) : user ? (
-                    <Navigate to="/dashboard" />
-                  ) : (
-                    <Navigate to="/auth" />
-                  )
-                }
-              />
-              <Route
-                path="/admin/smmgen"
-                element={
-                  user?.role === 'admin' ? (
-                    <AdminDashboard user={user} onLogout={logout} />
-                  ) : user ? (
-                    <Navigate to="/dashboard" />
-                  ) : (
-                    <Navigate to="/auth" />
-                  )
-                }
-              />
-              <Route
-                path="/admin/jbsmmpanel"
-                element={
-                  user?.role === 'admin' ? (
-                    <AdminDashboard user={user} onLogout={logout} />
-                  ) : user ? (
-                    <Navigate to="/dashboard" />
-                  ) : (
-                    <Navigate to="/auth" />
-                  )
-                }
-              />
-              <Route
-                path="/admin/moolre"
-                element={
-                  user?.role === 'admin' ? (
-                    <AdminDashboard user={user} onLogout={logout} />
-                  ) : user ? (
-                    <Navigate to="/dashboard" />
-                  ) : (
-                    <Navigate to="/auth" />
-                  )
-                }
-              />
-              <Route
-                path="/admin/faq"
-                element={
-                  user?.role === 'admin' ? (
-                    <AdminDashboard user={user} onLogout={logout} />
-                  ) : user ? (
-                    <Navigate to="/dashboard" />
-                  ) : (
-                    <Navigate to="/auth" />
-                  )
-                }
-              />
-              <Route
-                path="/admin/terms"
-                element={
-                  user?.role === 'admin' ? (
-                    <AdminDashboard user={user} onLogout={logout} />
-                  ) : user ? (
-                    <Navigate to="/dashboard" />
-                  ) : (
-                    <Navigate to="/auth" />
-                  )
-                }
-              />
-              <Route
-                path="/admin/updates"
-                element={
-                  user?.role === 'admin' ? (
-                    <AdminDashboard user={user} onLogout={logout} />
-                  ) : user ? (
-                    <Navigate to="/dashboard" />
-                  ) : (
-                    <Navigate to="/auth" />
-                  )
-                }
-              />
-              <Route
-                path="/admin/video-tutorials"
-                element={
-                  user?.role === 'admin' ? (
-                    <AdminDashboard user={user} onLogout={logout} />
-                  ) : user ? (
-                    <Navigate to="/dashboard" />
-                  ) : (
-                    <Navigate to="/auth" />
-                  )
-                }
-              />
-              <Route
-                path="/support"
-                element={<SupportPage user={user} onLogout={logout} />}
-              />
-              <Route
-                path="/transactions"
-                element={
-                  user ? (
-                    <TransactionsPage user={user} onLogout={logout} />
-                  ) : (
-                    <Navigate to="/auth" />
-                  )
-                }
-              />
-              <Route
-                path="/payment/callback"
-                element={
-                  <PaymentCallback onUpdateUser={() => user && loadUserProfile(user.id)} />
-                }
-              />
-              <Route
-                path="/payment-callback"
-                element={
-                  <PaymentCallback onUpdateUser={() => user && loadUserProfile(user.id)} />
-                }
-              />
-              <Route
-                path="/blog"
-                element={<BlogListPage user={user} onLogout={logout} />}
-              />
-              <Route
-                path="/blog/:slug"
-                element={<BlogPostPage user={user} onLogout={logout} />}
-              />
-              <Route
-                path="/guides/:slug"
-                element={<GuidePage user={user} onLogout={logout} />}
-              />
-              <Route
-                path="/about"
-                element={<AboutPage user={user} onLogout={logout} />}
-              />
-              <Route
-                path="/pricing"
-                element={<PricingPage user={user} onLogout={logout} />}
-              />
-              <Route
-                path="/term"
-                element={<Navigate to="/terms" replace />}
-              />
-              <Route
-                path="/terms"
-                element={<TermsPage user={user} onLogout={logout} />}
-              />
-              <Route
-                path="/faq"
-                element={<FAQPage user={user} onLogout={logout} />}
-              />
-              </Routes>
+                  <Route path="/" element={user ? <Navigate to={user?.role === 'admin' ? '/admin/dashboard' : '/dashboard'} /> : <LandingPage />} />
+                  <Route path="/auth" element={user ? <Navigate to={user?.role === 'admin' ? '/admin/dashboard' : '/dashboard'} /> : <AuthPage />} />
+                  <Route path="/reset-password" element={<ResetPasswordPage />} />
+                  <Route
+                    path="/dashboard"
+                    element={
+                      user ? (
+                        <Dashboard user={user} onLogout={logout} onUpdateUser={() => loadUserProfile(user.id)} />
+                      ) : (
+                        <Navigate to="/auth" />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/services"
+                    element={user ? <ServicesPage user={user} onLogout={logout} /> : <Navigate to="/auth" />}
+                  />
+                  <Route
+                    path="/services/:platform/:serviceType"
+                    element={<ServiceLandingPage user={user} onLogout={logout} />}
+                  />
+                  <Route
+                    path="/instagram-services"
+                    element={<PlatformLandingPage user={user} onLogout={logout} />}
+                  />
+                  <Route
+                    path="/tiktok-services"
+                    element={<PlatformLandingPage user={user} onLogout={logout} />}
+                  />
+                  <Route
+                    path="/youtube-services"
+                    element={<PlatformLandingPage user={user} onLogout={logout} />}
+                  />
+                  <Route
+                    path="/facebook-services"
+                    element={<PlatformLandingPage user={user} onLogout={logout} />}
+                  />
+                  <Route
+                    path="/twitter-services"
+                    element={<PlatformLandingPage user={user} onLogout={logout} />}
+                  />
+                  <Route
+                    path="/whatsapp-services"
+                    element={<PlatformLandingPage user={user} onLogout={logout} />}
+                  />
+                  <Route
+                    path="/telegram-services"
+                    element={<PlatformLandingPage user={user} onLogout={logout} />}
+                  />
+                  <Route
+                    path="/orders"
+                    element={user ? <OrderHistory user={user} onLogout={logout} /> : <Navigate to="/auth" />}
+                  />
+                  <Route
+                    path="/admin"
+                    element={
+                      user?.role === 'admin' ? (
+                        <Navigate to="/admin/dashboard" replace />
+                      ) : user ? (
+                        <Navigate to="/dashboard" />
+                      ) : (
+                        <Navigate to="/auth" />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/admin/dashboard"
+                    element={
+                      user?.role === 'admin' ? (
+                        <AdminDashboard user={user} onLogout={logout} />
+                      ) : user ? (
+                        <Navigate to="/dashboard" />
+                      ) : (
+                        <Navigate to="/auth" />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/admin/deposits"
+                    element={
+                      user?.role === 'admin' ? (
+                        <AdminDashboard user={user} onLogout={logout} />
+                      ) : user ? (
+                        <Navigate to="/dashboard" />
+                      ) : (
+                        <Navigate to="/auth" />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/admin/orders"
+                    element={
+                      user?.role === 'admin' ? (
+                        <AdminDashboard user={user} onLogout={logout} />
+                      ) : user ? (
+                        <Navigate to="/dashboard" />
+                      ) : (
+                        <Navigate to="/auth" />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/admin/services"
+                    element={
+                      user?.role === 'admin' ? (
+                        <AdminDashboard user={user} onLogout={logout} />
+                      ) : user ? (
+                        <Navigate to="/dashboard" />
+                      ) : (
+                        <Navigate to="/auth" />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/admin/promotion-packages"
+                    element={
+                      user?.role === 'admin' ? (
+                        <AdminDashboard user={user} onLogout={logout} />
+                      ) : user ? (
+                        <Navigate to="/dashboard" />
+                      ) : (
+                        <Navigate to="/auth" />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/admin/payment-methods"
+                    element={
+                      user?.role === 'admin' ? (
+                        <AdminDashboard user={user} onLogout={logout} />
+                      ) : user ? (
+                        <Navigate to="/dashboard" />
+                      ) : (
+                        <Navigate to="/auth" />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/admin/users"
+                    element={
+                      user?.role === 'admin' ? (
+                        <AdminDashboard user={user} onLogout={logout} />
+                      ) : user ? (
+                        <Navigate to="/dashboard" />
+                      ) : (
+                        <Navigate to="/auth" />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/admin/transactions"
+                    element={
+                      user?.role === 'admin' ? (
+                        <AdminDashboard user={user} onLogout={logout} />
+                      ) : user ? (
+                        <Navigate to="/dashboard" />
+                      ) : (
+                        <Navigate to="/auth" />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/admin/support"
+                    element={
+                      user?.role === 'admin' ? (
+                        <AdminDashboard user={user} onLogout={logout} />
+                      ) : user ? (
+                        <Navigate to="/dashboard" />
+                      ) : (
+                        <Navigate to="/auth" />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/admin/support/analytics"
+                    element={
+                      user?.role === 'admin' ? (
+                        <AdminSupportAnalytics />
+                      ) : user ? (
+                        <Navigate to="/dashboard" />
+                      ) : (
+                        <Navigate to="/auth" />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/admin/balance"
+                    element={
+                      user?.role === 'admin' ? (
+                        <AdminDashboard user={user} onLogout={logout} />
+                      ) : user ? (
+                        <Navigate to="/dashboard" />
+                      ) : (
+                        <Navigate to="/auth" />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/admin/referrals"
+                    element={
+                      user?.role === 'admin' ? (
+                        <AdminDashboard user={user} onLogout={logout} />
+                      ) : user ? (
+                        <Navigate to="/dashboard" />
+                      ) : (
+                        <Navigate to="/auth" />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/admin/activity-logs"
+                    element={
+                      user?.role === 'admin' ? (
+                        <AdminDashboard user={user} onLogout={logout} />
+                      ) : user ? (
+                        <Navigate to="/dashboard" />
+                      ) : (
+                        <Navigate to="/auth" />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/admin/smmcost"
+                    element={
+                      user?.role === 'admin' ? (
+                        <AdminDashboard user={user} onLogout={logout} />
+                      ) : user ? (
+                        <Navigate to="/dashboard" />
+                      ) : (
+                        <Navigate to="/auth" />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/admin/smmgen"
+                    element={
+                      user?.role === 'admin' ? (
+                        <AdminDashboard user={user} onLogout={logout} />
+                      ) : user ? (
+                        <Navigate to="/dashboard" />
+                      ) : (
+                        <Navigate to="/auth" />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/admin/jbsmmpanel"
+                    element={
+                      user?.role === 'admin' ? (
+                        <AdminDashboard user={user} onLogout={logout} />
+                      ) : user ? (
+                        <Navigate to="/dashboard" />
+                      ) : (
+                        <Navigate to="/auth" />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/admin/moolre"
+                    element={
+                      user?.role === 'admin' ? (
+                        <AdminDashboard user={user} onLogout={logout} />
+                      ) : user ? (
+                        <Navigate to="/dashboard" />
+                      ) : (
+                        <Navigate to="/auth" />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/admin/faq"
+                    element={
+                      user?.role === 'admin' ? (
+                        <AdminDashboard user={user} onLogout={logout} />
+                      ) : user ? (
+                        <Navigate to="/dashboard" />
+                      ) : (
+                        <Navigate to="/auth" />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/admin/terms"
+                    element={
+                      user?.role === 'admin' ? (
+                        <AdminDashboard user={user} onLogout={logout} />
+                      ) : user ? (
+                        <Navigate to="/dashboard" />
+                      ) : (
+                        <Navigate to="/auth" />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/admin/updates"
+                    element={
+                      user?.role === 'admin' ? (
+                        <AdminDashboard user={user} onLogout={logout} />
+                      ) : user ? (
+                        <Navigate to="/dashboard" />
+                      ) : (
+                        <Navigate to="/auth" />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/admin/video-tutorials"
+                    element={
+                      user?.role === 'admin' ? (
+                        <AdminDashboard user={user} onLogout={logout} />
+                      ) : user ? (
+                        <Navigate to="/dashboard" />
+                      ) : (
+                        <Navigate to="/auth" />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/support"
+                    element={<SupportPage user={user} onLogout={logout} />}
+                  />
+                  <Route
+                    path="/transactions"
+                    element={
+                      user ? (
+                        <TransactionsPage user={user} onLogout={logout} />
+                      ) : (
+                        <Navigate to="/auth" />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/payment/callback"
+                    element={
+                      <PaymentCallback onUpdateUser={() => user && loadUserProfile(user.id)} />
+                    }
+                  />
+                  <Route
+                    path="/payment-callback"
+                    element={
+                      <PaymentCallback onUpdateUser={() => user && loadUserProfile(user.id)} />
+                    }
+                  />
+                  <Route
+                    path="/blog"
+                    element={<BlogListPage user={user} onLogout={logout} />}
+                  />
+                  <Route
+                    path="/blog/:slug"
+                    element={<BlogPostPage user={user} onLogout={logout} />}
+                  />
+                  <Route
+                    path="/guides/:slug"
+                    element={<GuidePage user={user} onLogout={logout} />}
+                  />
+                  <Route
+                    path="/about"
+                    element={<AboutPage user={user} onLogout={logout} />}
+                  />
+                  <Route
+                    path="/pricing"
+                    element={<PricingPage user={user} onLogout={logout} />}
+                  />
+                  <Route
+                    path="/term"
+                    element={<Navigate to="/terms" replace />}
+                  />
+                  <Route
+                    path="/terms"
+                    element={<TermsPage user={user} onLogout={logout} />}
+                  />
+                  <Route
+                    path="/faq"
+                    element={<FAQPage user={user} onLogout={logout} />}
+                  />
+                </Routes>
               </Suspense>
             </BrowserRouter>
             <SpeedInsights />
