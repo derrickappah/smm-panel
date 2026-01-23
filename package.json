@@ -7,7 +7,7 @@
     "pages:build": "cd frontend && npm install --legacy-peer-deps && npm run build"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.84.0"
+    "@supabase/supabase-js": "^2.84.0",
+    "jsonwebtoken": "^9.0.3"
   }
 }
-

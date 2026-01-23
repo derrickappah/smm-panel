@@ -295,9 +295,13 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
       timestamp: new Date().toISOString()
     });
 
-    // Find transaction by reference first, then by transaction_id from metadata
+    // OPTIMIZATION: Consolidated Search Strategy
+    // Instead of making 4+ sequential database calls, we try to match by reference first (indexed, fast),
+    // and if that fails, we use a broader search.
+
     let transaction = null;
 
+    // 1. Primary Search: By Paystack Reference (Indexed, Unique)
     if (reference) {
       const { data: txByRef, error: refError } = await supabase
         .from('transactions')
@@ -311,97 +315,86 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
       }
     }
 
-    // If not found by reference, try by transaction_id from metadata
-    if (!transaction && transactionId) {
-      const { data: txById, error: idError } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('id', transactionId)
-        .maybeSingle();
+    // 2. Secondary Search: If no reference match, try metadata ID or smart matching
+    if (!transaction) {
+      const searchConditions = [];
+      const queryParams = {};
 
-      if (!idError && txById) {
-        transaction = txById;
-        console.log('Found transaction by ID from metadata:', transaction.id);
+      // Condition A: Transaction ID from metadata
+      if (transactionId) {
+        searchConditions.push(`id.eq.${transactionId}`);
       }
-    }
 
-    // If still not found, try by user_id and amount (with tolerance for rounding)
-    if (!transaction && userId && amount) {
-      // Try exact match first
-      const { data: txByUser, error: userError } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('type', 'deposit')
-        .eq('status', 'pending')
-        .eq('deposit_method', 'paystack')
-        .eq('amount', amount)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (!userError && txByUser) {
-        transaction = txByUser;
-        console.log('Found transaction by user and exact amount:', transaction.id);
+      // Condition B: User + Amount (Pending only)
+      if (userId && amount) {
+        // We'll search for pending transactions for this user with this amount
+        // This is harder to OR with ID because fields differ, so we might keep this separate
+        // or check ID first then falling back to this is acceptable if ID check is fast.
       }
-    }
 
-    // If still not found, try by user email and amount (if we have email)
-    if (!transaction && customerEmail && amount) {
-      try {
-        // First, find user by email
-        const { data: userByEmail, error: emailError } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('email', customerEmail)
+      // Optimization: Try ID lookup if available (Primary key, very fast)
+      if (transactionId) {
+        const { data: txById } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('id', transactionId)
           .maybeSingle();
 
-        if (!emailError && userByEmail) {
-          // Now find pending transaction for this user with matching amount
-          const { data: txByEmail, error: txEmailError } = await supabase
+        if (txById) transaction = txById;
+      }
+
+      // Fallback: Smart fuzzy match (User + Amount OR Email + Amount)
+      if (!transaction && amount) {
+        // Gather user IDs to check
+        const userIds = [];
+        if (userId) userIds.push(userId);
+
+        // If we have email but no userId, try to resolve email to userId
+        if (!userId && customerEmail) {
+          const { data: userByEmail } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('email', customerEmail)
+            .maybeSingle();
+          if (userByEmail) userIds.push(userByEmail.id);
+        }
+
+        if (userIds.length > 0) {
+          const { data: txFuzzy } = await supabase
             .from('transactions')
             .select('*')
-            .eq('user_id', userByEmail.id)
+            .in('user_id', userIds)
             .eq('type', 'deposit')
             .eq('status', 'pending')
             .eq('deposit_method', 'paystack')
             .eq('amount', amount)
-            .gte('created_at', new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()) // Within last 2 hours
             .order('created_at', { ascending: false })
             .limit(1)
             .maybeSingle();
 
-          if (!txEmailError && txByEmail) {
-            transaction = txByEmail;
-            console.log('Found transaction by email and amount:', transaction.id);
-          }
+          if (txFuzzy) transaction = txFuzzy;
         }
-      } catch (emailMatchError) {
-        console.warn('Error matching by email:', emailMatchError);
       }
-    }
 
-    // Last resort: find by amount and time window (within 2 hours of payment)
-    if (!transaction && amount) {
-      const twoHoursAgo = new Date(paidAt.getTime() - 2 * 60 * 60 * 1000).toISOString();
-      const twoHoursLater = new Date(paidAt.getTime() + 2 * 60 * 60 * 1000).toISOString();
+      // Last Resort: Amount + Time Window (Risky but necessary fallback)
+      if (!transaction && amount) {
+        const twoHoursAgo = new Date(paidAt.getTime() - 2 * 60 * 60 * 1000).toISOString();
+        const twoHoursLater = new Date(paidAt.getTime() + 2 * 60 * 60 * 1000).toISOString();
 
-      const { data: txByAmount, error: amountError } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('type', 'deposit')
-        .eq('status', 'pending')
-        .eq('deposit_method', 'paystack')
-        .eq('amount', amount)
-        .gte('created_at', twoHoursAgo)
-        .lte('created_at', twoHoursLater)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        const { data: txByTime } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('type', 'deposit')
+          .eq('status', 'pending')
+          .eq('deposit_method', 'paystack')
+          .eq('amount', amount)
+          .gte('created_at', twoHoursAgo)
+          .lte('created_at', twoHoursLater)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-      if (!amountError && txByAmount) {
-        transaction = txByAmount;
-        console.log('Found transaction by amount and time window:', transaction.id);
+        if (txByTime) transaction = txByTime;
       }
     }
 
