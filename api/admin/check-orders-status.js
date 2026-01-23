@@ -85,20 +85,26 @@ export default async function handler(req, res) {
             for (const order of groups.smmgen) {
                 results.checked++;
                 try {
+                    console.log(`[SMMGen] Checking status for order ${order.id} (Provider ID: ${order.smmgen_order_id})`);
                     const response = await fetch(API_URL, {
                         method: 'POST',
                         body: new URLSearchParams({ key: API_KEY, action: 'status', order: order.smmgen_order_id })
                     });
                     const data = await response.json();
+                    console.log(`[SMMGen] Response for ${order.id}:`, data);
+
                     const rawStatus = data.status || data.Status;
                     const mappedStatus = mapSMMGenStatus(rawStatus);
 
                     if (mappedStatus && mappedStatus !== order.status) {
                         const success = await updateOrder(order.id, mappedStatus, rawStatus);
-                        if (success) results.updated++;
+                        if (success) {
+                            results.updated++;
+                            results.details.push({ id: order.id, old: order.status, new: mappedStatus, provider: 'smmgen' });
+                        }
                     }
-                    results.details.push({ id: order.id, provider: 'smmgen', status: rawStatus, mapped: mappedStatus });
                 } catch (err) {
+                    console.error(`[SMMGen] Error checking order ${order.id}:`, err.message);
                     results.errors.push({ id: order.id, provider: 'smmgen', error: err.message });
                 }
             }
@@ -112,21 +118,27 @@ export default async function handler(req, res) {
             for (const order of groups.smmcost) {
                 results.checked++;
                 try {
+                    console.log(`[SMMCost] Checking status for order ${order.id} (Provider ID: ${order.smmcost_order_id})`);
                     const response = await fetch(API_URL, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ key: API_KEY, action: 'status', order: parseInt(order.smmcost_order_id, 10) })
                     });
                     const data = await response.json();
+                    console.log(`[SMMCost] Response for ${order.id}:`, data);
+
                     const rawStatus = data.status || data.Status;
                     const mappedStatus = mapSMMCostStatus(rawStatus);
 
                     if (mappedStatus && mappedStatus !== order.status) {
                         const success = await updateOrder(order.id, mappedStatus, rawStatus);
-                        if (success) results.updated++;
+                        if (success) {
+                            results.updated++;
+                            results.details.push({ id: order.id, old: order.status, new: mappedStatus, provider: 'smmcost' });
+                        }
                     }
-                    results.details.push({ id: order.id, provider: 'smmcost', status: rawStatus, mapped: mappedStatus });
                 } catch (err) {
+                    console.error(`[SMMCost] Error checking order ${order.id}:`, err.message);
                     results.errors.push({ id: order.id, provider: 'smmcost', error: err.message });
                 }
             }
@@ -140,20 +152,32 @@ export default async function handler(req, res) {
             for (const order of groups.jbsmmpanel) {
                 results.checked++;
                 try {
+                    console.log(`[JBSMMPanel] Checking status for order ${order.id} (Provider ID: ${order.jbsmmpanel_order_id})`);
                     const response = await fetch(API_URL, {
                         method: 'POST',
                         body: new URLSearchParams({ key: API_KEY, action: 'status', order: order.jbsmmpanel_order_id.toString() })
                     });
                     const data = await response.json();
-                    const rawStatus = data.status || data.Status;
+                    console.log(`[JBSMMPanel] Response for ${order.id}:`, data);
+
+                    // Robust parsing for JBSMMPanel (handle arrays and nested objects)
+                    let rawStatus = data.status || data.Status || data.order?.status;
+                    if (rawStatus === undefined && Array.isArray(data) && data.length > 0) {
+                        rawStatus = data[0]?.status || data[0]?.Status;
+                    }
+
                     const mappedStatus = mapJBSMMPanelStatus(rawStatus);
+                    console.log(`[JBSMMPanel] ${order.id}: raw=${rawStatus}, mapped=${mappedStatus}`);
 
                     if (mappedStatus && mappedStatus !== order.status) {
                         const success = await updateOrder(order.id, mappedStatus, rawStatus);
-                        if (success) results.updated++;
+                        if (success) {
+                            results.updated++;
+                            results.details.push({ id: order.id, old: order.status, new: mappedStatus, provider: 'jbsmmpanel' });
+                        }
                     }
-                    results.details.push({ id: order.id, provider: 'jbsmmpanel', status: rawStatus, mapped: mappedStatus });
                 } catch (err) {
+                    console.error(`[JBSMMPanel] Error checking order ${order.id}:`, err.message);
                     results.errors.push({ id: order.id, provider: 'jbsmmpanel', error: err.message });
                 }
             }
