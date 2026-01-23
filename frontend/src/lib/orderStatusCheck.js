@@ -683,10 +683,13 @@ export const checkOrdersStatusBatch = async (orders, options = {}) => {
     }))
   });
 
-  // Use server-side bulk check if requested (more reliable for admins)
-  if (useServerSideBulkCheck && ordersToCheck.length > 0) {
+  // Use server-side bulk check by default or if requested
+  // We prioritize server-side check now for both users and admins
+  const shouldUseServerSide = useServerSideBulkCheck || true; // Force true by default for now
+
+  if (shouldUseServerSide && ordersToCheck.length > 0) {
     try {
-      console.log(`[orderStatusCheck] Using server-side bulk check for ${ordersToCheck.length} orders`);
+      console.log(`[orderStatusCheck] Using server-side bulk check to /api/check-orders-status for ${ordersToCheck.length} orders`);
 
       // Get current session for authentication
       const { data: { session } } = await supabase.auth.getSession();
@@ -695,7 +698,8 @@ export const checkOrdersStatusBatch = async (orders, options = {}) => {
         throw new Error('No active session found. Authentication required.');
       }
 
-      const response = await fetch('/api/admin/check-orders-status', {
+      // Use the generic endpoint that handles both users and admins
+      const response = await fetch('/api/check-orders-status', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -715,9 +719,12 @@ export const checkOrdersStatusBatch = async (orders, options = {}) => {
       // Trigger UI updates for each order that was actually updated
       if (onStatusUpdate && serverResult.details) {
         serverResult.details.forEach(detail => {
-          const originalOrder = ordersToCheck.find(o => o.id === detail.id);
-          if (detail.mapped && originalOrder && detail.mapped !== originalOrder.status) {
-            onStatusUpdate(detail.id, detail.mapped, originalOrder.status);
+          // Map backend 'new' status to frontend expected format if needed
+          // But backend should return correct strings
+          const resultStatus = detail.new || detail.status;
+
+          if (resultStatus) {
+            onStatusUpdate(detail.id, resultStatus, detail.old);
           }
         });
       }
@@ -734,7 +741,7 @@ export const checkOrdersStatusBatch = async (orders, options = {}) => {
       };
     } catch (err) {
       console.error('[orderStatusCheck] Server-side bulk check failed, falling back to client-side:', err);
-      // Continue to client-side orchestration as fallback
+      // Continue to client-side orchestration as fallback if server fails
     }
   }
 
