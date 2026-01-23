@@ -9,9 +9,9 @@ const BACKEND_PROXY_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost
 // In production, hostname will be something like 'smm-panel-ten.vercel.app'
 const isProduction = process.env.NODE_ENV === 'production' ||
   (typeof window !== 'undefined' &&
-   window.location.hostname !== 'localhost' &&
-   window.location.hostname !== '127.0.0.1' &&
-   !window.location.hostname.includes('localhost'));
+    window.location.hostname !== 'localhost' &&
+    window.location.hostname !== '127.0.0.1' &&
+    !window.location.hostname.includes('localhost'));
 
 // Cache for serverless function availability check
 let serverlessFunctionAvailable = null;
@@ -24,7 +24,7 @@ const AVAILABILITY_CHECK_TTL = 60000; // Check every 60 seconds
  */
 const checkServerlessFunctionAvailability = async () => {
   const now = Date.now();
-  
+
   // Return cached result if still valid
   if (serverlessFunctionAvailable !== null && (now - availabilityCheckTime) < AVAILABILITY_CHECK_TTL) {
     return serverlessFunctionAvailable;
@@ -41,12 +41,12 @@ const checkServerlessFunctionAvailability = async () => {
     // Try a simple OPTIONS request to check if serverless function exists
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second timeout
-    
+
     const response = await fetch('/api/smmgen/order', {
       method: 'OPTIONS',
       signal: controller.signal
     });
-    
+
     clearTimeout(timeoutId);
     serverlessFunctionAvailable = true;
     availabilityCheckTime = now;
@@ -63,53 +63,57 @@ const checkServerlessFunctionAvailability = async () => {
 // Get SMMGen config from environment variables
 const getSMMGenConfig = async () => {
   let backendUrl;
-  let useServerlessFunctions = true;
+  let useServerlessFunctions = false; // Forced to false to use backend server
   let isConfigured = true;
 
-  // Check if serverless functions are available
-  const serverlessAvailable = await checkServerlessFunctionAvailability();
+  // Always prefer the backend server
+  const customBackendUrl = process.env.REACT_APP_BACKEND_URL;
 
-  if (serverlessAvailable) {
-    // Use serverless functions at /api/smmgen
-    backendUrl = '/api/smmgen';
-    useServerlessFunctions = true;
+  if (customBackendUrl) {
+    backendUrl = customBackendUrl;
+    useServerlessFunctions = false;
+    // console.log('Using backend server:', customBackendUrl);
   } else {
-    // Fallback to backend server if configured
-    const customBackendUrl = process.env.REACT_APP_BACKEND_URL;
+    // Fallback to searching for serverless functions if no backend configured (legacy behavior)
+    // But for this requirement we want to prefer backend. 
+    // If no backend URL, we might fail or default to serverless if available.
+    // However, the prompt implies "make normal users use the server". 
+    // So we should warn if REACT_APP_BACKEND_URL is missing.
 
-    if (customBackendUrl) {
-      backendUrl = customBackendUrl;
-      useServerlessFunctions = false;
-      console.log('Using backend server fallback:', customBackendUrl);
+    // Check if serverless functions are available as a fallback
+    const serverlessAvailable = await checkServerlessFunctionAvailability();
+
+    if (serverlessAvailable) {
+      backendUrl = '/api/smmgen';
+      useServerlessFunctions = true;
     } else {
-      // No backend configured
       isConfigured = false;
-      console.warn('Neither serverless functions nor backend server are available');
+      console.warn('Neither backend server (REACT_APP_BACKEND_URL) nor serverless functions are available');
     }
   }
-  
+
   return { backendUrl, isConfigured, useServerlessFunctions };
 };
 
 // Helper function to build the correct API endpoint URL
 const buildApiUrl = async (endpoint) => {
   const { backendUrl, useServerlessFunctions } = await getSMMGenConfig();
-  
+
   // Remove any trailing slashes from backendUrl and leading slashes from endpoint
   let cleanBackendUrl = (backendUrl || '').replace(/\/+$/, '');
   const cleanEndpoint = (endpoint || '').replace(/^\/+/, '');
-  
+
   if (useServerlessFunctions) {
     // Serverless functions: /api/smmgen/order, /api/smmgen/services, etc.
     // backendUrl should be '/api/smmgen', endpoint should be 'order'
     // Result: '/api/smmgen/order'
-    
+
     // Safety check: if endpoint already contains /api/smmgen, don't duplicate it
     if (cleanEndpoint.includes('/api/smmgen')) {
       // Endpoint already has full path, use it as-is
       return cleanEndpoint.startsWith('/') ? cleanEndpoint : `/${cleanEndpoint}`;
     }
-    
+
     const url = `${cleanBackendUrl}/${cleanEndpoint}`.replace(/\/+/g, '/');
     // Ensure it starts with / for relative URLs
     return url.startsWith('/') ? url : `/${url}`;
@@ -128,16 +132,16 @@ const buildApiUrl = async (endpoint) => {
         return url;
       }
     }
-    
+
     // Construct the full URL
     const url = `${cleanBackendUrl}/api/smmgen/${cleanEndpoint}`.replace(/\/+/g, '/');
-    
+
     // Final validation: ensure it's a valid absolute URL
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
       console.error('Invalid URL constructed:', url, 'from backendUrl:', backendUrl);
       throw new Error(`Invalid backend URL configuration: ${backendUrl}`);
     }
-    
+
     return url;
   }
 };
@@ -168,7 +172,7 @@ export const fetchSMMGenServices = async () => {
     }
 
     const data = await response.json();
-    
+
     // Transform SMMGen service format to our format
     // SMMGen typically returns: { service: id, name, type, category, rate, min, max, ... }
     if (Array.isArray(data)) {
@@ -187,7 +191,7 @@ export const fetchSMMGenServices = async () => {
         smmgen_data: service
       }));
     }
-    
+
     // If SMMGen returns object with services array
     if (data.services && Array.isArray(data.services)) {
       return data.services.map(service => ({
@@ -221,13 +225,13 @@ export const isDuplicateOrderError = (errorMessage) => {
   if (!errorMessage || typeof errorMessage !== 'string') {
     return false;
   }
-  
+
   const errorMessageLower = errorMessage.toLowerCase();
-  return errorMessageLower.includes('duplicate') || 
-         errorMessageLower.includes('already exists') ||
-         errorMessageLower.includes('already placed') ||
-         errorMessageLower.includes('active order') ||
-         errorMessageLower.includes('wait until');
+  return errorMessageLower.includes('duplicate') ||
+    errorMessageLower.includes('already exists') ||
+    errorMessageLower.includes('already placed') ||
+    errorMessageLower.includes('active order') ||
+    errorMessageLower.includes('wait until');
 };
 
 /**
@@ -239,17 +243,17 @@ export const getDuplicateOrderErrorMessage = (errorMessage) => {
   if (!errorMessage || typeof errorMessage !== 'string') {
     return 'An order with this link already exists. Please check your order history.';
   }
-  
+
   const errorMessageLower = errorMessage.toLowerCase();
-  
+
   if (errorMessageLower.includes('active order') || errorMessageLower.includes('wait until')) {
     return 'You already have an active order with this link. Please wait until it completes.';
   }
-  
+
   if (errorMessageLower.includes('duplicate') || errorMessageLower.includes('already exists')) {
     return 'An order with this link already exists. Please check your order history.';
   }
-  
+
   // Return original message if we can't map it
   return errorMessage;
 };
@@ -266,15 +270,15 @@ export const extractSMMGenOrderId = (response) => {
   }
 
   // Check for order ID in various formats (matches API endpoint logic)
-  const orderId = response.order || 
-                 response.order_id || 
-                 response.orderId || 
-                 response.id ||
-                 response.Order ||
-                 response.OrderID ||
-                 response.OrderId ||
-                 (response.data && (response.data.order || response.data.order_id || response.data.id)) ||
-                 null;
+  const orderId = response.order ||
+    response.order_id ||
+    response.orderId ||
+    response.id ||
+    response.Order ||
+    response.OrderID ||
+    response.OrderId ||
+    (response.data && (response.data.order || response.data.order_id || response.data.id)) ||
+    null;
 
   // Validate order ID - must be truthy and not empty string
   if (orderId !== null && orderId !== undefined && orderId !== '') {
@@ -350,7 +354,7 @@ export const placeSMMGenOrder = async (serviceId, link, quantity, retryCount = 0
     }
 
     const apiUrl = await buildApiUrl('order');
-    
+
     // Comprehensive logging
     console.log('SMMGen Order Request:', {
       attempt: retryCount + 1,
@@ -363,7 +367,7 @@ export const placeSMMGenOrder = async (serviceId, link, quantity, retryCount = 0
       isConfigured,
       timestamp: new Date().toISOString()
     });
-    
+
     // Create abort controller for timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
@@ -413,12 +417,12 @@ export const placeSMMGenOrder = async (serviceId, link, quantity, retryCount = 0
         } catch (parseError) {
           errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
         }
-        
+
         const errorMessage = errorData.error || errorData.message || `Order failed: ${response.status}`;
         const fullError = new Error(errorMessage);
         fullError.status = response.status;
         fullError.responseData = errorData;
-        
+
         console.error('SMMGen API Error Response:', {
           status: response.status,
           errorMessage,
@@ -427,21 +431,21 @@ export const placeSMMGenOrder = async (serviceId, link, quantity, retryCount = 0
           link,
           quantity
         });
-        
+
         // Check for duplicate order errors - don't retry these
         const errorMessageLower = errorMessage.toLowerCase();
-        if (errorMessageLower.includes('duplicate') || 
-            errorMessageLower.includes('already exists') ||
-            errorMessageLower.includes('already placed')) {
+        if (errorMessageLower.includes('duplicate') ||
+          errorMessageLower.includes('already exists') ||
+          errorMessageLower.includes('already placed')) {
           console.warn('SMMGen returned duplicate order error - not retrying:', errorMessage);
           throw fullError;
         }
-        
+
         // For 4xx errors (client errors), don't retry - these are permanent failures
         if (response.status >= 400 && response.status < 500) {
           throw fullError;
         }
-        
+
         // For 5xx errors (server errors), retry if we haven't exceeded max retries
         if (response.status >= 500 && retryCount < MAX_RETRIES) {
           const delay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
@@ -456,7 +460,7 @@ export const placeSMMGenOrder = async (serviceId, link, quantity, retryCount = 0
           await new Promise(resolve => setTimeout(resolve, delay));
           return placeSMMGenOrder(serviceId, link, quantity, retryCount + 1);
         }
-        
+
         throw fullError;
       }
 
@@ -485,21 +489,21 @@ export const placeSMMGenOrder = async (serviceId, link, quantity, retryCount = 0
           link,
           quantity
         });
-        
+
         // If we have an order ID despite the error, log it but still return the error
         if (orderId) {
           console.warn('SMMGen returned error but also provided order ID. This may indicate a partial success:', orderId);
         }
-        
+
         // Don't retry on client errors (4xx-like errors in response body)
         // Check for duplicate/active order errors
         const errorMessageLower = errorMessage.toLowerCase();
-        if (errorMessageLower.includes('duplicate') || 
-            errorMessageLower.includes('already exists') ||
-            errorMessageLower.includes('already placed') ||
-            errorMessageLower.includes('active order') ||
-            errorMessageLower.includes('wait until') ||
-            errorMessageLower.includes('invalid')) {
+        if (errorMessageLower.includes('duplicate') ||
+          errorMessageLower.includes('already exists') ||
+          errorMessageLower.includes('already placed') ||
+          errorMessageLower.includes('active order') ||
+          errorMessageLower.includes('wait until') ||
+          errorMessageLower.includes('invalid')) {
           throw new Error(errorMessage);
         }
       }
@@ -523,12 +527,12 @@ export const placeSMMGenOrder = async (serviceId, link, quantity, retryCount = 0
       return data;
     } catch (fetchError) {
       clearTimeout(timeoutId);
-      
+
       // Handle timeout
       if (fetchError.name === 'AbortError') {
         const timeoutError = new Error(`Request timeout after ${REQUEST_TIMEOUT}ms`);
         timeoutError.isTimeout = true;
-        
+
         // Retry timeout errors if we haven't exceeded max retries
         if (retryCount < MAX_RETRIES) {
           const delay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
@@ -536,23 +540,23 @@ export const placeSMMGenOrder = async (serviceId, link, quantity, retryCount = 0
           await new Promise(resolve => setTimeout(resolve, delay));
           return placeSMMGenOrder(serviceId, link, quantity, retryCount + 1);
         }
-        
+
         throw timeoutError;
       }
-      
+
       throw fetchError;
     }
   } catch (error) {
     // Check if this is a network/connection error that should be retried
-    const isNetworkError = error.name === 'TypeError' && 
-      (error.message.includes('Failed to fetch') || 
-       error.message.includes('NetworkError') ||
-       error.message.includes('ERR_CONNECTION_REFUSED') ||
-       error.message.includes('ERR_NETWORK') ||
-       error.message.includes('ERR_INTERNET_DISCONNECTED'));
+    const isNetworkError = error.name === 'TypeError' &&
+      (error.message.includes('Failed to fetch') ||
+        error.message.includes('NetworkError') ||
+        error.message.includes('ERR_CONNECTION_REFUSED') ||
+        error.message.includes('ERR_NETWORK') ||
+        error.message.includes('ERR_INTERNET_DISCONNECTED'));
 
     const isCorsError = error.message.includes('CORS');
-    
+
     // Retry network errors if we haven't exceeded max retries
     if ((isNetworkError || isCorsError) && retryCount < MAX_RETRIES) {
       const delay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
@@ -560,7 +564,7 @@ export const placeSMMGenOrder = async (serviceId, link, quantity, retryCount = 0
       await new Promise(resolve => setTimeout(resolve, delay));
       return placeSMMGenOrder(serviceId, link, quantity, retryCount + 1);
     }
-    
+
     // Log error details
     console.error('SMMGen Order Error:', {
       error: error.message,
@@ -575,7 +579,7 @@ export const placeSMMGenOrder = async (serviceId, link, quantity, retryCount = 0
       quantity,
       stack: error.stack
     });
-    
+
     // For network errors after all retries, return null to allow graceful degradation
     if (isNetworkError || isCorsError) {
       if (!isProduction) {
@@ -583,7 +587,7 @@ export const placeSMMGenOrder = async (serviceId, link, quantity, retryCount = 0
       }
       return null; // Return null to allow graceful degradation
     }
-    
+
     // For all other errors (API errors, validation errors, etc.), throw them
     // These should be handled by the caller to show appropriate error messages
     throw error;
@@ -623,7 +627,7 @@ export const getSMMGenOrderStatus = async (orderId, retryCount = 0) => {
     }
 
     const apiUrl = await buildApiUrl('status');
-    
+
     // Comprehensive logging
     console.log('SMMGen Status Request:', {
       attempt: retryCount + 1,
@@ -633,7 +637,7 @@ export const getSMMGenOrderStatus = async (orderId, retryCount = 0) => {
       apiUrl,
       timestamp: new Date().toISOString()
     });
-    
+
     // Create abort controller for timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
@@ -667,24 +671,24 @@ export const getSMMGenOrderStatus = async (orderId, retryCount = 0) => {
         } catch (parseError) {
           errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
         }
-        
+
         const errorMessage = errorData.error || errorData.message || `Status check failed: ${response.status}`;
         const fullError = new Error(errorMessage);
         fullError.status = response.status;
         fullError.responseData = errorData;
-        
+
         console.error('SMMGen Status API Error Response:', {
           status: response.status,
           errorMessage,
           errorData,
           orderId
         });
-        
+
         // For 4xx errors (client errors), don't retry - these are permanent failures
         if (response.status >= 400 && response.status < 500) {
           throw fullError;
         }
-        
+
         // For 5xx errors (server errors), retry if we haven't exceeded max retries
         if (response.status >= 500 && retryCount < MAX_RETRIES) {
           const delay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
@@ -692,7 +696,7 @@ export const getSMMGenOrderStatus = async (orderId, retryCount = 0) => {
           await new Promise(resolve => setTimeout(resolve, delay));
           return getSMMGenOrderStatus(orderId, retryCount + 1);
         }
-        
+
         throw fullError;
       }
 
@@ -727,12 +731,12 @@ export const getSMMGenOrderStatus = async (orderId, retryCount = 0) => {
       return data;
     } catch (fetchError) {
       clearTimeout(timeoutId);
-      
+
       // Handle timeout
       if (fetchError.name === 'AbortError') {
         const timeoutError = new Error(`Status check timeout after ${REQUEST_TIMEOUT}ms`);
         timeoutError.isTimeout = true;
-        
+
         // Retry timeout errors if we haven't exceeded max retries
         if (retryCount < MAX_RETRIES) {
           const delay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
@@ -740,23 +744,23 @@ export const getSMMGenOrderStatus = async (orderId, retryCount = 0) => {
           await new Promise(resolve => setTimeout(resolve, delay));
           return getSMMGenOrderStatus(orderId, retryCount + 1);
         }
-        
+
         throw timeoutError;
       }
-      
+
       throw fetchError;
     }
   } catch (error) {
     // Check if this is a network/connection error that should be retried
-    const isNetworkError = error.name === 'TypeError' && 
-      (error.message.includes('Failed to fetch') || 
-       error.message.includes('NetworkError') ||
-       error.message.includes('ERR_CONNECTION_REFUSED') ||
-       error.message.includes('ERR_NETWORK') ||
-       error.message.includes('ERR_INTERNET_DISCONNECTED'));
+    const isNetworkError = error.name === 'TypeError' &&
+      (error.message.includes('Failed to fetch') ||
+        error.message.includes('NetworkError') ||
+        error.message.includes('ERR_CONNECTION_REFUSED') ||
+        error.message.includes('ERR_NETWORK') ||
+        error.message.includes('ERR_INTERNET_DISCONNECTED'));
 
     const isCorsError = error.message.includes('CORS');
-    
+
     // Retry network errors if we haven't exceeded max retries
     if ((isNetworkError || isCorsError) && retryCount < MAX_RETRIES) {
       const delay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
@@ -764,7 +768,7 @@ export const getSMMGenOrderStatus = async (orderId, retryCount = 0) => {
       await new Promise(resolve => setTimeout(resolve, delay));
       return getSMMGenOrderStatus(orderId, retryCount + 1);
     }
-    
+
     // Log error details
     console.error('SMMGen Status Error:', {
       error: error.message,
@@ -777,7 +781,7 @@ export const getSMMGenOrderStatus = async (orderId, retryCount = 0) => {
       orderId,
       stack: error.stack
     });
-    
+
     // Re-throw the error so caller can handle it
     throw error;
   }
@@ -818,7 +822,7 @@ export const getSMMGenBalance = async () => {
  */
 const mapCategoryToPlatform = (category) => {
   const categoryLower = (category || '').toLowerCase();
-  
+
   if (categoryLower.includes('instagram') || categoryLower.includes('ig')) {
     return 'instagram';
   }
@@ -834,7 +838,7 @@ const mapCategoryToPlatform = (category) => {
   if (categoryLower.includes('twitter') || categoryLower.includes('x.com')) {
     return 'twitter';
   }
-  
+
   return categoryLower || 'other';
 };
 
