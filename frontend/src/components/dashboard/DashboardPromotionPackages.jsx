@@ -40,46 +40,76 @@ const DashboardPromotionPackages = ({ packages, onPackageSelect, user }) => {
 
     const handleScroll = () => {
       if (isScrollingRef.current) return;
-      
-      const scrollLeft = container.scrollLeft;
-      const containerWidth = container.clientWidth;
-      const cardWidth = 180 + 16; // min-w-[180px] + gap-4
-      const singleSetWidth = displayPackages.length * cardWidth;
-      const centerOffset = (containerWidth - 180) / 2 - 24; // 24px is px-6 padding
 
-      // If scrolled past the end of second set (entering third set), reset to middle (second set)
-      if (scrollLeft >= singleSetWidth * 2 - centerOffset) {
-        isScrollingRef.current = true;
-        const offset = scrollLeft - singleSetWidth * 2;
-        container.scrollLeft = singleSetWidth + centerOffset + offset;
-        setTimeout(() => {
-          isScrollingRef.current = false;
-        }, 50);
-      }
-      // If scrolled before the start of second set (in first set), reset to middle (second set)
-      else if (scrollLeft <= singleSetWidth - centerOffset) {
-        isScrollingRef.current = true;
-        const offset = scrollLeft - (singleSetWidth - centerOffset);
-        container.scrollLeft = singleSetWidth + centerOffset + offset;
-        setTimeout(() => {
-          isScrollingRef.current = false;
-        }, 50);
-      }
+      const scrollLeft = container.scrollLeft;
+      const firstCard = container.querySelector('div[class*="min-w-"]');
+      if (!firstCard) return;
+
+      // Get accurate gap from container
+      const containerStyle = window.getComputedStyle(container);
+      const gap = parseFloat(containerStyle.columnGap || containerStyle.gap || '0');
+
+      const cardStyle = window.getComputedStyle(firstCard);
+      const cardWidth = firstCard.offsetWidth + parseFloat(cardStyle.marginRight || 0) + gap;
+
+      const singleSetWidth = displayPackages.length * cardWidth;
+      const containerWidth = container.clientWidth;
+      const centerOffset = (containerWidth - (cardWidth - gap)) / 2;
+
+      const checkAndResetScroll = () => {
+        // If scrolled past the end of second set (entering third set)
+        if (scrollLeft >= singleSetWidth * 2 - centerOffset) {
+          isScrollingRef.current = true;
+          container.style.scrollBehavior = 'auto';
+          const offset = scrollLeft - singleSetWidth * 2;
+          container.scrollLeft = singleSetWidth + centerOffset + offset;
+          requestAnimationFrame(() => {
+            container.style.scrollBehavior = 'smooth';
+            isScrollingRef.current = false;
+          });
+        }
+        // If scrolled before the start of second set (in first set)
+        else if (scrollLeft <= singleSetWidth - centerOffset) {
+          isScrollingRef.current = true;
+          container.style.scrollBehavior = 'auto';
+          const offset = scrollLeft - (singleSetWidth - centerOffset);
+          container.scrollLeft = singleSetWidth + centerOffset + offset;
+          requestAnimationFrame(() => {
+            container.style.scrollBehavior = 'smooth';
+            isScrollingRef.current = false;
+          });
+        }
+      };
+
+      checkAndResetScroll();
     };
 
     // Initialize scroll position to center first card of middle set
     const initializeScroll = () => {
-      const cardWidth = 180 + 16;
+      const firstCard = container.querySelector('div[class*="min-w-"]');
+      if (!firstCard) return;
+
+      const containerStyle = window.getComputedStyle(container);
+      const gap = parseFloat(containerStyle.columnGap || containerStyle.gap || '0');
+
+      const cardStyle = window.getComputedStyle(firstCard);
+      const cardWidth = firstCard.offsetWidth + parseFloat(cardStyle.marginRight || 0) + gap;
+
       const singleSetWidth = displayPackages.length * cardWidth;
       const containerWidth = container.clientWidth;
+
       if (containerWidth > 0) {
         // Center the first card of the middle set
-        const centerOffset = (containerWidth - 180) / 2 - 24; // 24px is px-6 padding
+        const centerOffset = (containerWidth - (cardWidth - gap)) / 2;
+        container.style.scrollBehavior = 'auto';
         container.scrollLeft = singleSetWidth + centerOffset;
+        requestAnimationFrame(() => {
+          container.style.scrollBehavior = 'smooth';
+        });
       }
     };
 
-    // Wait for container to be ready
+    // Wait for container to be ready and layout to stabilize
     requestAnimationFrame(() => {
       initializeScroll();
     });
@@ -89,60 +119,65 @@ const DashboardPromotionPackages = ({ packages, onPackageSelect, user }) => {
   }, [displayPackages.length]);
 
   return (
-    <div className="bg-white border-2 border-white rounded-lg p-6 shadow-sm animate-slideUp">
-      <div className="text-center mb-6">
-        <div className="flex items-center justify-center gap-2 mb-2">
-          <Sparkles className="w-5 h-5 text-purple-600" />
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Special Promotions</h2>
+    <div className="bg-white border-2 border-white rounded-lg p-3 shadow-sm animate-slideUp">
+      <div className="text-center mb-4">
+        <div className="flex items-center justify-center gap-2 mb-1">
+          <Sparkles className="w-4 h-4 text-purple-600" />
+          <h2 className="text-lg font-bold text-gray-900">Special Promotions</h2>
         </div>
-        <p className="text-sm text-gray-600">Limited-time fixed-price packages</p>
+        <p className="text-xs text-gray-600">Limited-time fixed-price packages</p>
       </div>
-      
-      <div 
+
+      <div
         ref={scrollContainerRef}
-        className="flex overflow-x-auto snap-x snap-mandatory gap-4 pb-2 -mx-6 px-6 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:snap-none scrollbar-hide"
-        style={{ scrollSnapType: 'x mandatory' }}
+        className="flex overflow-x-auto snap-x snap-mandatory gap-3 pb-2 -mx-3 px-3 scrollbar-hide"
+        style={{
+          scrollSnapType: 'x mandatory',
+          width: '100%',
+          maxWidth: '600px',
+          margin: '0 auto'
+        }}
       >
         {infinitePackages.map((pkg, index) => (
           <div
             key={`${pkg.id}-${index}`}
-            className="bg-white border-2 border-purple-300 rounded-lg p-3 shadow-sm hover:shadow-md transition-all hover:border-purple-400 w-[280px] min-w-[280px] snap-center flex-shrink-0 sm:w-auto sm:min-w-0 sm:snap-none"
+            className="bg-white border-2 border-purple-300 rounded-lg p-3 shadow-sm hover:shadow-md transition-all hover:border-purple-400 w-[160px] min-w-[160px] snap-center flex-shrink-0"
           >
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex items-center gap-2 flex-wrap">
-                <Tag className="w-4 h-4 text-purple-600" />
-                <span className="text-xs font-medium px-2 py-1 bg-purple-100 text-purple-700 rounded">
+            <div className="flex items-start justify-between mb-2">
+              <div className="flex items-center gap-1 flex-wrap">
+                <Tag className="w-3 h-3 text-purple-600" />
+                <span className="text-[10px] font-medium px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded">
                   {pkg.platform}
                 </span>
                 {pkg.is_combo && (
-                  <span className="text-xs font-medium px-2 py-1 bg-indigo-100 text-indigo-700 rounded">
+                  <span className="text-[10px] font-medium px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded">
                     Combo
                   </span>
                 )}
               </div>
               <div className="text-right">
-                <p className="text-lg font-bold text-purple-600">{pkg.price} GHS</p>
-                <p className="text-xs text-gray-500">Fixed Price</p>
+                <p className="text-base font-bold text-purple-600">{pkg.price} GHS</p>
+                <p className="text-[10px] text-gray-500">Fixed</p>
               </div>
             </div>
-            
-            <h3 className="text-sm font-semibold text-gray-900 mb-2 line-clamp-1">
+
+            <h3 className="text-sm font-semibold text-gray-900 mb-1 line-clamp-1" title={pkg.name}>
               {pkg.name}
             </h3>
-            
-            <div className="space-y-1 mb-4">
+
+            <div className="space-y-0.5 mb-3">
               {pkg.is_combo && pkg.combo_package_ids && (
-                <p className="text-xs text-indigo-600 font-medium">
-                  Includes {pkg.combo_package_ids.length} package{pkg.combo_package_ids.length !== 1 ? 's' : ''}
+                <p className="text-[10px] text-indigo-600 font-medium">
+                  Includes {pkg.combo_package_ids.length} items
                 </p>
               )}
-              <p className="text-sm text-gray-600">
-                <span className="font-medium">Quantity:</span> {formatQuantity(pkg.quantity)}
+              <p className="text-[10px] text-gray-600">
+                <span className="font-medium">Qty:</span> {formatQuantity(pkg.quantity)}
               </p>
               {pkg.description && (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <p className="text-xs text-gray-500 line-clamp-2 break-words cursor-help">{pkg.description}</p>
+                    <p className="text-[10px] text-gray-500 line-clamp-2 break-words cursor-help">{pkg.description}</p>
                   </TooltipTrigger>
                   <TooltipContent>
                     <p className="max-w-xs text-xs">{pkg.description}</p>
@@ -150,11 +185,11 @@ const DashboardPromotionPackages = ({ packages, onPackageSelect, user }) => {
                 </Tooltip>
               )}
             </div>
-            
+
             {user ? (
               <Button
                 onClick={() => handlePackageClick(pkg)}
-                className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                className="w-full bg-purple-600 hover:bg-purple-700 text-white h-7 text-xs"
                 size="sm"
               >
                 Buy Now
@@ -162,16 +197,16 @@ const DashboardPromotionPackages = ({ packages, onPackageSelect, user }) => {
             ) : (
               <Button
                 onClick={() => navigate('/auth')}
-                className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                className="w-full bg-purple-600 hover:bg-purple-700 text-white h-7 text-xs"
                 size="sm"
               >
-                Sign In to Order
+                Sign In
               </Button>
             )}
           </div>
         ))}
       </div>
-      
+
       {packages.length > 6 && (
         <div className="mt-4 text-center">
           <Button

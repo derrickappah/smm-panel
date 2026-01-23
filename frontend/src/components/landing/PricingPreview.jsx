@@ -21,7 +21,7 @@ const PricingPreview = () => {
   const { data: promotionPackages = [] } = usePromotionPackages();
   const scrollContainerRef = useRef(null);
   const isScrollingRef = useRef(false);
-  
+
   const displayPackages = promotionPackages.slice(0, 3);
   // Duplicate items for infinite scroll
   const infinitePackages = useMemo(() => {
@@ -45,46 +45,79 @@ const PricingPreview = () => {
 
     const handleScroll = () => {
       if (isScrollingRef.current) return;
-      
-      const scrollLeft = container.scrollLeft;
-      const containerWidth = container.clientWidth;
-      const cardWidth = 280 + 16; // min-w-[280px] + gap-4
-      const singleSetWidth = displayPackages.length * cardWidth;
-      const centerOffset = (containerWidth - 280) / 2 - 16; // 16px is px-4 padding
 
-      // If scrolled past the end of second set (entering third set), reset to middle (second set)
-      if (scrollLeft >= singleSetWidth * 2 - centerOffset) {
-        isScrollingRef.current = true;
-        const offset = scrollLeft - singleSetWidth * 2;
-        container.scrollLeft = singleSetWidth + centerOffset + offset;
-        setTimeout(() => {
-          isScrollingRef.current = false;
-        }, 50);
-      }
-      // If scrolled before the start of second set (in first set), reset to middle (second set)
-      else if (scrollLeft <= singleSetWidth - centerOffset) {
-        isScrollingRef.current = true;
-        const offset = scrollLeft - (singleSetWidth - centerOffset);
-        container.scrollLeft = singleSetWidth + centerOffset + offset;
-        setTimeout(() => {
-          isScrollingRef.current = false;
-        }, 50);
-      }
+      const scrollLeft = container.scrollLeft;
+      const firstCard = container.querySelector('div[class*="min-w-"]');
+      if (!firstCard) return;
+
+      // Get accurate gap from container
+      const containerStyle = window.getComputedStyle(container);
+      const gap = parseFloat(containerStyle.columnGap || containerStyle.gap || '0');
+
+      const cardStyle = window.getComputedStyle(firstCard);
+      const cardWidth = firstCard.offsetWidth + parseFloat(cardStyle.marginRight || 0) + gap;
+
+      const singleSetWidth = displayPackages.length * cardWidth;
+      const containerWidth = container.clientWidth;
+      const centerOffset = (containerWidth - (cardWidth - gap)) / 2;
+
+      const checkAndResetScroll = () => {
+        // If scrolled past the end of second set (entering third set)
+        if (scrollLeft >= singleSetWidth * 2 - centerOffset) {
+          isScrollingRef.current = true;
+          // Disable smooth scroll for instant jump
+          container.style.scrollBehavior = 'auto';
+          const offset = scrollLeft - singleSetWidth * 2;
+          container.scrollLeft = singleSetWidth + centerOffset + offset;
+          // Re-enable smooth scroll after jump
+          requestAnimationFrame(() => {
+            container.style.scrollBehavior = 'smooth';
+            isScrollingRef.current = false;
+          });
+        }
+        // If scrolled before the start of second set (in first set)
+        else if (scrollLeft <= singleSetWidth - centerOffset) {
+          isScrollingRef.current = true;
+          container.style.scrollBehavior = 'auto';
+          const offset = scrollLeft - (singleSetWidth - centerOffset);
+          container.scrollLeft = singleSetWidth + centerOffset + offset;
+          requestAnimationFrame(() => {
+            container.style.scrollBehavior = 'smooth';
+            isScrollingRef.current = false;
+          });
+        }
+      };
+
+      checkAndResetScroll();
     };
 
     // Initialize scroll position to center first card of middle set
     const initializeScroll = () => {
-      const cardWidth = 280 + 16;
+      const firstCard = container.querySelector('div[class*="min-w-"]');
+      if (!firstCard) return;
+
+      const containerStyle = window.getComputedStyle(container);
+      const gap = parseFloat(containerStyle.columnGap || containerStyle.gap || '0');
+
+      const cardStyle = window.getComputedStyle(firstCard);
+      const cardWidth = firstCard.offsetWidth + parseFloat(cardStyle.marginRight || 0) + gap;
+
       const singleSetWidth = displayPackages.length * cardWidth;
       const containerWidth = container.clientWidth;
+
       if (containerWidth > 0) {
         // Center the first card of the middle set
-        const centerOffset = (containerWidth - 280) / 2 - 16; // 16px is px-4 padding
+        const centerOffset = (containerWidth - (cardWidth - gap)) / 2;
+
+        container.style.scrollBehavior = 'auto';
         container.scrollLeft = singleSetWidth + centerOffset;
+        requestAnimationFrame(() => {
+          container.style.scrollBehavior = 'smooth';
+        });
       }
     };
 
-    // Wait for container to be ready
+    // Wait for container to be ready and layout to stabilize
     requestAnimationFrame(() => {
       initializeScroll();
     });
@@ -112,9 +145,9 @@ const PricingPreview = () => {
           .select('id, name, rate, platform, service_type, min_quantity, max_quantity')
           .eq('enabled', true)
           .order('rate', { ascending: true });
-        
+
         if (fallbackResult.error) throw fallbackResult.error;
-        
+
         // Add default rate_unit for backward compatibility
         return (fallbackResult.data || []).map(service => ({ ...service, rate_unit: 1000 }));
       }
@@ -138,11 +171,11 @@ const PricingPreview = () => {
       const platformPriority = ['instagram', 'tiktok', 'youtube', 'facebook', 'twitter'];
       const selectedServices = [];
       const usedPlatforms = new Set();
-      
+
       // First, get one service from each priority platform
       platformPriority.forEach(platform => {
-        const platformService = services.find(s => 
-          (s.platform || '').toLowerCase() === platform && 
+        const platformService = services.find(s =>
+          (s.platform || '').toLowerCase() === platform &&
           !selectedServices.some(sel => sel.id === s.id)
         );
         if (platformService) {
@@ -154,19 +187,19 @@ const PricingPreview = () => {
       // Fill up to at least 6 services with diverse service types
       const serviceTypes = ['followers', 'likes', 'views', 'subscribers', 'comments'];
       let typeIndex = 0;
-      
+
       while (selectedServices.length < 6 && selectedServices.length < services.length) {
         const targetType = serviceTypes[typeIndex % serviceTypes.length];
-        const service = services.find(s => 
+        const service = services.find(s =>
           !selectedServices.some(sel => sel.id === s.id) &&
           (s.service_type || '').toLowerCase().includes(targetType)
         );
-        
+
         if (service) {
           selectedServices.push(service);
         } else {
           // If no service of this type, just get next available
-          const nextService = services.find(s => 
+          const nextService = services.find(s =>
             !selectedServices.some(sel => sel.id === s.id)
           );
           if (nextService) {
@@ -235,21 +268,26 @@ const PricingPreview = () => {
             Transparent pricing with no hidden fees
           </p>
         </div>
-        
+
         {/* Promotion Packages Section */}
         {promotionPackages.length > 0 && (
-          <div className="mb-8 sm:mb-12">
-            <div className="text-center mb-6">
-              <div className="flex items-center justify-center gap-2 mb-2">
-                <Sparkles className="w-5 h-5 text-purple-600" />
-                <h3 className="text-xl sm:text-2xl font-bold text-gray-900">Special Promotions</h3>
+          <div className="mb-8 me:mb-12">
+            <div className="text-center mb-4">
+              <div className="flex items-center justify-center gap-2 mb-1">
+                <Sparkles className="w-4 h-4 text-purple-600" />
+                <h3 className="text-lg font-bold text-gray-900">Special Promotions</h3>
               </div>
-              <p className="text-sm text-gray-600">Limited-time fixed-price packages</p>
+              <p className="text-xs text-gray-600">Limited-time fixed-price packages</p>
             </div>
-            <div 
+            <div
               ref={scrollContainerRef}
-              className="flex overflow-x-auto snap-x snap-mandatory gap-4 sm:gap-6 pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:snap-none mb-6 scrollbar-hide"
-              style={{ scrollSnapType: 'x mandatory' }}
+              className="flex overflow-x-auto snap-x snap-mandatory gap-3 pb-2 -mx-4 px-4 scrollbar-hide"
+              style={{
+                scrollSnapType: 'x mandatory',
+                width: '100%',
+                maxWidth: '600px',
+                margin: '0 auto'
+              }}
             >
               {infinitePackages.map((pkg, index) => {
                 const platform = (pkg.platform || '').toLowerCase();
@@ -257,40 +295,41 @@ const PricingPreview = () => {
                 return (
                   <div
                     key={`${pkg.id}-${index}`}
-                    className="bg-white border-2 border-purple-300 rounded-lg p-5 sm:p-6 text-center hover:shadow-lg transition-all duration-200 min-w-[280px] snap-center flex-shrink-0 sm:min-w-0 sm:snap-none"
+                    className="bg-white border-2 border-purple-300 rounded-lg p-3 text-center hover:shadow-lg transition-all duration-200 min-w-[160px] max-w-[160px] snap-center flex-shrink-0"
                   >
-                    <div className="flex items-center justify-center gap-2 mb-3">
-                      <Tag className="w-4 h-4 text-purple-600" />
-                      <span className="text-xs font-medium px-2 py-1 bg-purple-100 text-purple-700 rounded">
+                    <div className="flex items-center justify-center gap-1 mb-2">
+                      <Tag className="w-3 h-3 text-purple-600" />
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded">
                         Special Offer
                       </span>
                     </div>
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-3 sm:mb-4">
-                      <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600" />
+                    <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                      <Icon className="w-4 h-4 text-purple-600" />
                     </div>
-                    <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-1">
+                    <h3 className="text-sm font-bold text-gray-900 mb-0.5 truncate px-1" title={pkg.name}>
                       {pkg.name}
                     </h3>
-                    <p className="text-xs sm:text-sm text-gray-600 mb-3">{pkg.platform}</p>
-                    <div className="text-xl sm:text-2xl font-bold text-purple-600 mb-1">
+                    <p className="text-[10px] text-gray-600 mb-2 truncate" title={pkg.platform}>{pkg.platform}</p>
+                    <div className="text-base font-bold text-purple-600 mb-0.5">
                       {pkg.price} GHS
                     </div>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-[10px] text-gray-500">
                       {formatQuantity(pkg.quantity)} {pkg.service_type}
                     </p>
-                    <p className="text-xs text-purple-600 font-medium mt-2">Fixed Price Package</p>
+                    <p className="text-[10px] text-purple-600 font-medium mt-1">Fixed Price</p>
                   </div>
                 );
               })}
             </div>
             {promotionPackages.length > 3 && (
-              <div className="text-center">
+              <div className="text-center mt-4">
                 <Button
                   onClick={() => navigate('/services')}
                   variant="outline"
-                  className="border-purple-300 text-purple-700 hover:bg-purple-50"
+                  size="sm"
+                  className="border-purple-300 text-purple-700 hover:bg-purple-50 text-xs h-8 px-3"
                 >
-                  View All Packages
+                  View All
                 </Button>
               </div>
             )}
@@ -303,7 +342,7 @@ const PricingPreview = () => {
               const platform = (service.platform || '').toLowerCase();
               const Icon = platformIcons[platform] || TrendingUp;
               const serviceType = (service.service_type || '').toLowerCase();
-              
+
               // Format service name - use actual name from database, fallback to formatted type
               const getServiceDisplayName = () => {
                 if (service.name) {
@@ -325,9 +364,9 @@ const PricingPreview = () => {
                 if (serviceType.includes('comment')) return 'Comments';
                 return 'Service';
               };
-              
+
               const displayName = getServiceDisplayName();
-              const platformName = service.platform 
+              const platformName = service.platform
                 ? service.platform.charAt(0).toUpperCase() + service.platform.slice(1).toLowerCase()
                 : 'Social Media';
 
