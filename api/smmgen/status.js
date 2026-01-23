@@ -105,34 +105,6 @@ export default async function handler(req, res) {
       const SMMGEN_API_URL = process.env.SMMGEN_API_URL || 'https://smmgen.com/api/v2';
       const SMMGEN_API_KEY = process.env.SMMGEN_API_KEY;
 
-      // Alternative endpoints to try if primary fails
-      const FALLBACK_ENDPOINTS = [
-        'https://smmgen.com/api/v2',
-        'https://api.smmgen.com/v2'
-      ];
-
-      // Test primary endpoint first
-      const primaryEndpointTest = await testEndpoint(SMMGEN_API_URL);
-      workingEndpoint = SMMGEN_API_URL;
-
-      if (!primaryEndpointTest.reachable) {
-        console.warn('Primary SMMGen endpoint not reachable, trying fallbacks...');
-        const fallbackEndpoint = await findWorkingEndpoint(FALLBACK_ENDPOINTS.filter(ep => ep !== SMMGEN_API_URL));
-
-        if (fallbackEndpoint) {
-          console.log('Found working fallback endpoint:', fallbackEndpoint);
-          workingEndpoint = fallbackEndpoint;
-        } else {
-          console.error('No working SMMGen endpoints found');
-          return res.status(503).json({
-            error: 'SMMGen API is not reachable',
-            details: 'All configured endpoints are returning 404 or unreachable',
-            suggestion: 'Contact SMMGen support or check if the service is still available',
-            endpointTests: await Promise.all(FALLBACK_ENDPOINTS.map(ep => testEndpoint(ep)))
-          });
-        }
-      }
-
       if (!SMMGEN_API_KEY) {
         console.error('SMMGen API key not configured');
         return res.status(500).json({
@@ -141,51 +113,16 @@ export default async function handler(req, res) {
         });
       }
 
-      // Validate API key format (should be a string)
-      if (typeof SMMGEN_API_KEY !== 'string' || SMMGEN_API_KEY.trim().length === 0) {
-        console.error('SMMGen API key is invalid:', typeof SMMGEN_API_KEY);
-        return res.status(500).json({
-          error: 'SMMGen API key is invalid. Check SMMGEN_API_KEY in Vercel environment variables.',
-          configIssue: true
-        });
-      }
-
       // Log request details
       console.log('SMMGen Status Request:', {
         order: order.trim(),
-        apiUrl: workingEndpoint,
-        primaryEndpoint: SMMGEN_API_URL,
-        endpointChanged: workingEndpoint !== SMMGEN_API_URL,
+        apiUrl: SMMGEN_API_URL,
         timestamp: new Date().toISOString()
       });
 
       // Create abort controller for timeout
       controller = new AbortController();
       timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
-
-      // Test basic connectivity first
-      console.log('Testing SMMGen API connectivity...');
-      try {
-        const baseUrl = workingEndpoint.replace(/\/api.*$/, '');
-        const testController = new AbortController();
-        const testTimeoutId = setTimeout(() => testController.abort(), 5000);
-
-        try {
-          const testResponse = await fetch(baseUrl, {
-            method: 'HEAD',
-            signal: testController.signal
-          });
-          console.log('SMMGen domain connectivity test:', {
-            url: baseUrl,
-            status: testResponse.status,
-            ok: testResponse.ok
-          });
-        } finally {
-          clearTimeout(testTimeoutId);
-        }
-      } catch (connectError) {
-        console.warn('SMMGen connectivity test failed:', connectError.message);
-      }
 
       // Prepare order ID - try as number first, then string
       let orderId = order.trim();
@@ -196,7 +133,7 @@ export default async function handler(req, res) {
 
       // Log the request being prepared for SMMGen
       console.log('Preparing request to SMMGen:', {
-        url: workingEndpoint,
+        url: SMMGEN_API_URL,
         order: orderId,
         orderType: typeof orderId,
         originalOrder: order.trim(),
@@ -212,11 +149,9 @@ export default async function handler(req, res) {
       });
       const formDataString = formData.toString();
 
-      console.log('Attempting form-encoded request to SMMGen');
-
       let response;
       try {
-        response = await fetch(workingEndpoint, {
+        response = await fetch(SMMGEN_API_URL, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
@@ -226,13 +161,15 @@ export default async function handler(req, res) {
           signal: controller.signal
         });
       } catch (formError) {
+        if (formError.name === 'AbortError') throw formError;
+
         console.warn('Form-encoded request failed, trying JSON format:', formError.message);
         // Fallback to JSON format with manual timeout
         const fallbackController = new AbortController();
         const fallbackTimeoutId = setTimeout(() => fallbackController.abort(), REQUEST_TIMEOUT - 1000);
 
         try {
-          response = await fetch(workingEndpoint, {
+          response = await fetch(SMMGEN_API_URL, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
