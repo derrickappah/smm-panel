@@ -13,6 +13,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import SEO from '@/components/SEO';
 import { toast } from 'sonner';
 
+const formatLatency = (mins) => {
+    if (!mins) return '0M';
+    if (mins < 60) return `${mins}M`;
+    if (mins < 1440) return `${(mins / 60).toFixed(1)}H`;
+    return `${(mins / 1440).toFixed(1)}D`;
+};
+
 const DevDashboard = ({ user }) => {
     const [reconciling, setReconciling] = useState(false);
     const [reconData, setReconData] = useState(null);
@@ -175,8 +182,8 @@ const DevDashboard = ({ user }) => {
                     title="ORDERS_TODAY"
                     icon={ShoppingCart}
                     value={m.order_pipeline?.total_today || 0}
-                    description={`FAILURES: ${m.order_pipeline?.failed || 0}`}
-                    status={m.order_pipeline?.failed > 5 ? 'warning' : 'healthy'}
+                    description={`FAILURES: ${m.order_pipeline?.failed || 0} / ERRORS: ${m.system_events?.provider_errors_1h || 0}`}
+                    status={(m.order_pipeline?.failed > 0 || m.system_events?.provider_errors_1h > 5) ? 'warning' : 'healthy'}
                 />
                 <StatCard
                     title="STUCK_ORDERS"
@@ -275,7 +282,7 @@ const DevDashboard = ({ user }) => {
                                             <TableCell>
                                                 <Badge variant="outline" className="text-[8px] text-indigo-300 border-indigo-500/40 font-bold">{item.provider_status}</Badge>
                                             </TableCell>
-                                            <TableCell className="text-gray-100 font-bold">{item.age_mins}M</TableCell>
+                                            <TableCell className="text-gray-100 font-bold">{formatLatency(item.age_mins)}</TableCell>
                                             <TableCell className="text-right">
                                                 <Badge className={
                                                     item.classification === 'STATUS_MISMATCH' ? 'bg-red-500/30 text-red-400 border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.2)] font-bold' :

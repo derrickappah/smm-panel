@@ -49,7 +49,8 @@ SELECT
             WHEN t.status = 'approved' THEN
                 CASE 
                     WHEN t.type IN ('deposit', 'refund', 'referral_bonus') THEN t.amount
-                    WHEN t.type IN ('order', 'manual_adjustment') THEN 
+                    WHEN t.type = 'manual_adjustment' THEN t.amount
+                    WHEN t.type = 'order' THEN 
                         CASE WHEN t.amount < 0 THEN t.amount ELSE -t.amount END
                     ELSE 0
                 END
@@ -61,7 +62,8 @@ SELECT
             WHEN t.status = 'approved' THEN
                 CASE 
                     WHEN t.type IN ('deposit', 'refund', 'referral_bonus') THEN t.amount
-                    WHEN t.type IN ('order', 'manual_adjustment') THEN 
+                    WHEN t.type = 'manual_adjustment' THEN t.amount
+                    WHEN t.type = 'order' THEN 
                         CASE WHEN t.amount < 0 THEN t.amount ELSE -t.amount END
                     ELSE 0
                 END
@@ -70,7 +72,8 @@ SELECT
     ), 0) as discrepancy
 FROM profiles p
 LEFT JOIN transactions t ON p.id = t.user_id
-GROUP BY p.id, p.email, p.balance;
+GROUP BY p.id, p.email, p.balance
+HAVING p.balance != 0 OR EXISTS (SELECT 1 FROM transactions WHERE user_id = p.id);
 
 COMMENT ON VIEW ledger_balance_verification IS 'Detects silent balance corruption by comparing cached balance with transaction ledger.';
 
@@ -219,19 +222,20 @@ GRANT EXECUTE ON FUNCTION approve_deposit_transaction_universal_v2(UUID, TEXT, T
 -- 8. Comprehensive Monitoring Summary for /dev Dashboard
 CREATE OR REPLACE VIEW dev_monitoring_summary AS
 WITH order_stats AS (
-    SELECT 
+    SELECT
         COUNT(*) as total_today,
         COUNT(*) FILTER (WHERE status = 'pending') as pending,
         COUNT(*) FILTER (WHERE status = 'processing') as processing,
         COUNT(*) FILTER (WHERE status = 'completed') as completed,
         COUNT(*) FILTER (WHERE status = 'failed') as failed,
-        COUNT(*) FILTER (WHERE status = 'pending' AND created_at < NOW() - INTERVAL '5 minutes') as stuck_pending,
-        COUNT(*) FILTER (WHERE status = 'processing' AND submitted_at < NOW() - INTERVAL '4 hours') as stuck_processing
+        -- Corrected: Stuck orders should be tracked across ALL time if still active
+        (SELECT COUNT(*) FROM orders WHERE status = 'pending' AND created_at < NOW() - INTERVAL '5 minutes') as stuck_pending,
+        (SELECT COUNT(*) FROM orders WHERE status = 'processing' AND submitted_at < NOW() - INTERVAL '4 hours') as stuck_processing
     FROM orders
     WHERE created_at >= CURRENT_DATE
 ),
 payment_stats AS (
-    SELECT 
+    SELECT
         COUNT(*) as deposits_today,
         COUNT(*) FILTER (WHERE status = 'approved') as approved_today
     FROM transactions
