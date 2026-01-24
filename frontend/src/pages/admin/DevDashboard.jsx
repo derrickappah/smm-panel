@@ -4,15 +4,19 @@ import { supabase } from '@/lib/supabase';
 import {
     Server, ShieldAlert, Activity, CreditCard,
     ShoppingCart, AlertTriangle, CheckCircle, Clock,
-    RefreshCw, TrendingDown, TrendingUp
+    RefreshCw, TrendingDown, TrendingUp, Search, Crosshair
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import SEO from '@/components/SEO';
+import { toast } from 'sonner';
 
 const DevDashboard = ({ user }) => {
-    const [refreshInterval, setRefreshInterval] = useState(30000); // 30s auto-refresh
+    const [refreshInterval, setRefreshInterval] = useState(30 * 60000); // 30m auto-refresh for full scan
+    const [reconciling, setReconciling] = useState(false);
+    const [reconData, setReconData] = useState(null);
 
     const { data: monitorData, isLoading, error, refetch } = useQuery({
         queryKey: ['admin', 'monitor-system'],
@@ -28,6 +32,25 @@ const DevDashboard = ({ user }) => {
         },
         refetchInterval: refreshInterval
     });
+
+    const runReconciliation = async () => {
+        setReconciling(true);
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const response = await fetch('/api/admin/reconcile-orders', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${session?.access_token}` }
+            });
+            if (!response.ok) throw new Error('Reconciliation failed');
+            const data = await response.json();
+            setReconData(data);
+            toast.success('System Reconciliation Complete');
+        } catch (err) {
+            toast.error(err.message);
+        } finally {
+            setReconciling(false);
+        }
+    };
 
     if (isLoading) return (
         <div className="flex items-center justify-center min-h-screen bg-gray-950 text-emerald-500">
@@ -88,6 +111,17 @@ const DevDashboard = ({ user }) => {
         <div className="min-h-screen bg-black text-gray-300 font-mono p-4 md:p-8">
             <SEO title="INTERNAL SYSTEM MONITOR" />
 
+            {/* FAIL SAFE WARNING */}
+            {(m.security_signals?.balance_discrepancies > 0 || reconData?.summary?.mismatch_count > 5) && (
+                <div className="mb-6 p-4 border border-red-500/50 bg-red-500/10 text-red-500 rounded flex items-center gap-3 animate-pulse">
+                    <ShieldAlert className="w-6 h-6" />
+                    <div>
+                        <p className="font-bold uppercase tracking-widest text-sm">System Integrity Compromised</p>
+                        <p className="text-xs opacity-70">Significant discrepancies detected in orders or financial ledger. Intervention required.</p>
+                    </div>
+                </div>
+            )}
+
             <header className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-8 border-b border-gray-800 pb-6">
                 <div>
                     <h1 className="text-2xl font-bold text-white flex items-center gap-3">
@@ -98,6 +132,16 @@ const DevDashboard = ({ user }) => {
                     <p className="text-sm text-emerald-500/60 mt-1">REAL-TIME TELEMETRY FEED: {monitorData?.timestamp}</p>
                 </div>
                 <div className="flex items-center gap-3">
+                    <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={runReconciliation}
+                        disabled={reconciling}
+                        className="bg-indigo-900/20 border-indigo-500/30 hover:bg-indigo-900/40 text-indigo-400 text-xs"
+                    >
+                        <Crosshair className={`w-3 h-3 mr-2 ${reconciling ? 'animate-spin' : ''}`} />
+                        {reconciling ? 'SCANNING...' : 'SCAN_RECONCILIATION'}
+                    </Button>
                     <Button
                         variant="outline"
                         size="sm"
@@ -140,6 +184,79 @@ const DevDashboard = ({ user }) => {
                     status={(m.system_events?.payment_mismatches_today > 0) ? 'critical' : 'healthy'}
                 />
             </div>
+
+            {/* ORDER RECONCILIATION PANEL */}
+            {reconData && (
+                <Card className="bg-gray-950 border-gray-800 mb-8 overflow-hidden">
+                    <CardHeader className="border-b border-gray-900 pb-4 flex flex-row items-center justify-between">
+                        <div>
+                            <CardTitle className="text-sm font-bold flex items-center gap-2">
+                                <Crosshair className="w-4 h-4 text-indigo-500" />
+                                ORDER_RECONCILIATION_PANEL
+                            </CardTitle>
+                            <CardDescription className="text-[10px] uppercase font-mono">
+                                Discrepancy scan result: {reconData.timestamp}
+                            </CardDescription>
+                        </div>
+                        <div className="flex gap-4">
+                            <div className="text-center">
+                                <div className="text-xl font-bold text-white leading-none">{reconData.summary.ok_count}</div>
+                                <div className="text-[8px] text-emerald-500 uppercase">OK_VERIFIED</div>
+                            </div>
+                            <div className="text-center">
+                                <div className="text-xl font-bold text-red-500 leading-none">{reconData.summary.mismatch_count}</div>
+                                <div className="text-[8px] text-red-500 uppercase">STATUS_MISM</div>
+                            </div>
+                            <div className="text-center">
+                                <div className="text-xl font-bold text-yellow-500 leading-none">{reconData.summary.missing_count}</div>
+                                <div className="text-[8px] text-yellow-500 uppercase">MISSING_ORD</div>
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                        {reconData.mismatches?.length > 0 ? (
+                            <Table className="text-xs">
+                                <TableHeader className="bg-gray-900/50">
+                                    <TableRow className="border-gray-900">
+                                        <TableHead className="font-mono text-[10px] text-gray-500 uppercase">Order ID</TableHead>
+                                        <TableHead className="font-mono text-[10px] text-gray-500 uppercase">Local</TableHead>
+                                        <TableHead className="font-mono text-[10px] text-gray-500 uppercase">Provider</TableHead>
+                                        <TableHead className="font-mono text-[10px] text-gray-500 uppercase">Latency</TableHead>
+                                        <TableHead className="font-mono text-[10px] text-gray-500 uppercase text-right">Class</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {reconData.mismatches.map((item) => (
+                                        <TableRow key={item.order_id} className="border-gray-900 hover:bg-gray-900/20">
+                                            <TableCell className="font-mono text-[9px] text-gray-400 truncate max-w-[100px]">{item.order_id}</TableCell>
+                                            <TableCell>
+                                                <Badge variant="outline" className="text-[8px] border-gray-700">{item.local_status}</Badge>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge variant="outline" className="text-[8px] text-indigo-400 border-indigo-500/20">{item.provider_status}</Badge>
+                                            </TableCell>
+                                            <TableCell className="text-gray-500">{item.age_mins}M</TableCell>
+                                            <TableCell className="text-right">
+                                                <Badge className={
+                                                    item.classification === 'STATUS_MISMATCH' ? 'bg-red-500/10 text-red-500' :
+                                                        item.classification === 'MISSING_PROVIDER_ORDER' ? 'bg-orange-500/10 text-orange-500' :
+                                                            'bg-yellow-500/10 text-yellow-500'
+                                                }>
+                                                    {item.classification}
+                                                </Badge>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        ) : (
+                            <div className="py-8 text-center text-[10px] text-gray-600 uppercase tracking-widest">
+                                Zero discrepancies detected in latest batch
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* SYSTEM EVENTS LOG */}

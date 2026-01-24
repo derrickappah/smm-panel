@@ -27,6 +27,91 @@ export async function placeProviderOrder(provider, params) {
     }
 }
 
+/**
+ * Fetches order status from a specific provider
+ * @param {string} provider - 'smmgen', 'jbsmmpanel', or 'smmcost'
+ * @param {string|number} providerOrderId - ID assigned by the provider
+ * @returns {Promise<Object>} Status response
+ */
+export async function fetchProviderOrderStatus(provider, providerOrderId) {
+    if (!providerOrderId) throw new Error('Provider Order ID is required');
+
+    switch (provider.toLowerCase()) {
+        case 'smmgen':
+            return await fetchSMMGenStatus(providerOrderId);
+        case 'jbsmmpanel':
+            return await fetchJBSMMPanelStatus(providerOrderId);
+        case 'smmcost':
+            return await fetchSMMCostStatus(providerOrderId);
+        default:
+            throw new Error(`Unsupported status check provider: ${provider}`);
+    }
+}
+
+async function fetchSMMGenStatus(providerOrderId) {
+    const SMMGEN_API_URL = process.env.SMMGEN_API_URL || 'https://smmgen.com/api/v2';
+    const SMMGEN_API_KEY = process.env.SMMGEN_API_KEY;
+
+    if (!SMMGEN_API_KEY) throw new Error('SMMGen API key not configured');
+
+    const response = await fetch(SMMGEN_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            key: SMMGEN_API_KEY,
+            action: 'status',
+            order: providerOrderId
+        })
+    });
+
+    if (!response.ok) throw new Error(`SMMGen API error: ${response.status}`);
+    return await response.json();
+}
+
+async function fetchJBSMMPanelStatus(providerOrderId) {
+    const JBSMMPANEL_API_URL = process.env.JBSMMPANEL_API_URL || 'https://jbsmmpanel.com/api/v2';
+    const JBSMMPANEL_API_KEY = process.env.JBSMMPANEL_API_KEY;
+
+    if (!JBSMMPANEL_API_KEY) throw new Error('JBSMMPanel API key not configured');
+
+    const requestBody = new URLSearchParams({
+        key: JBSMMPANEL_API_KEY,
+        action: 'status',
+        order: String(providerOrderId)
+    }).toString();
+
+    const response = await fetch(JBSMMPANEL_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: requestBody
+    });
+
+    if (!response.ok) throw new Error(`JBSMMPanel API error: ${response.status}`);
+    return await response.json();
+}
+
+async function fetchSMMCostStatus(providerOrderId) {
+    const SMMCOST_API_URL = process.env.SMMCOST_API_URL || 'https://smmcost.com/api/v2';
+    const SMMCOST_API_KEY = process.env.SMMCOST_API_KEY;
+
+    if (!SMMCOST_API_KEY) throw new Error('SMMCost API key not configured');
+
+    const requestBody = new URLSearchParams({
+        key: SMMCOST_API_KEY,
+        action: 'status',
+        order: String(providerOrderId)
+    }).toString();
+
+    const response = await fetch(SMMCOST_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: requestBody
+    });
+
+    if (!response.ok) throw new Error(`SMMCost API error: ${response.status}`);
+    return await response.json();
+}
+
 async function placeSMMGenOrder(service, link, quantity) {
     const SMMGEN_API_URL = process.env.SMMGEN_API_URL || 'https://smmgen.com/api/v2';
     const SMMGEN_API_KEY = process.env.SMMGEN_API_KEY;
