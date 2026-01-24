@@ -223,16 +223,44 @@ export default async function handler(req, res) {
 
     // Parse webhook event from raw body (if not already parsed)
     const event = typeof rawBody === 'string' ? JSON.parse(rawBody) : req.body;
-    console.log('Paystack webhook event received:', event.event);
+    const eventId = event.id; // Paystack unique event ID
+    console.log('Paystack webhook event received:', event.event, 'ID:', eventId);
+
+    // Get Supabase client for common checks
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false }
+    });
+
+    // CRITICAL: Idempotency Check (Prevent duplicate processing of the same event)
+    if (eventId) {
+      const { data: duplicateEvent } = await supabase
+        .from('transactions')
+        .select('id, paystack_reference')
+        .eq('provider_event_id', String(eventId))
+        .maybeSingle();
+
+      if (duplicateEvent) {
+        console.warn(`Duplicate webhook event rejected: ${eventId} for transaction ${duplicateEvent.id}`);
+        // Log duplicate attempt to system_events
+        await supabase.rpc('log_system_event', {
+          p_type: 'duplicate_webhook_attempt',
+          p_severity: 'warning',
+          p_source: 'paystack-webhook',
+          p_description: `Received duplicate webhook event ID: ${eventId}`,
+          p_metadata: { event_id: eventId, transaction_id: duplicateEvent.id, reference: duplicateEvent.paystack_reference }
+        });
+        return res.status(200).json({ received: true, note: 'Duplicate event already processed' });
+      }
+    }
 
     // Handle different event types
     if (event.event === 'charge.success') {
-      await handleSuccessfulPayment(event.data, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+      await handleSuccessfulPayment(event.data, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, eventId);
     } else if (event.event === 'charge.failed') {
-      await handleFailedPayment(event.data, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+      await handleFailedPayment(event.data, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, eventId);
     } else if (event.event === 'charge.abandoned') {
       // Handle abandoned payments (user closed payment window)
-      await handleFailedPayment(event.data, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+      await handleFailedPayment(event.data, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, eventId);
     } else {
       console.log('[WEBHOOK] Unhandled webhook event:', event.event);
       // Even for unhandled events, try to store reference if available
@@ -245,7 +273,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ received: true });
   } catch (error) {
     console.error('Error processing Paystack webhook:', error);
-    // Still return 200 to prevent Paystack from retrying
+    // Still return 200 to prevent Paystack from retrying unless it's a transient failure
     return res.status(200).json({
       received: true,
       error: error.message
@@ -256,7 +284,7 @@ export default async function handler(req, res) {
 /**
  * Handle successful payment
  */
-async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseServiceKey) {
+async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseServiceKey, eventId = null) {
   const startTime = Date.now();
   const metrics = {
     transactionId: null,
@@ -476,13 +504,32 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
           .update({
             status: 'rejected',
             paystack_status: 'amount_mismatch_detected',
-            paystack_reference: reference
+            paystack_reference: reference,
+            provider_event_id: eventId ? String(eventId) : null
           })
           .eq('id', transaction.id);
 
         if (rejectError) {
           console.error('Failed to reject transaction with amount mismatch:', rejectError);
         }
+
+        // LOG CRITICAL EVENT
+        await supabase.rpc('log_system_event', {
+          p_type: 'payment_amount_mismatch',
+          p_severity: 'critical',
+          p_source: 'paystack-webhook',
+          p_description: `Amount mismatch for transaction ${transaction.id}. Paid: ${gatewayAmount}, Stored: ${storedAmount}`,
+          p_metadata: {
+            transaction_id: transaction.id,
+            user_id: transaction.user_id,
+            paid_amount: gatewayAmount,
+            stored_amount: storedAmount,
+            reference: reference,
+            event_id: eventId
+          },
+          p_entity_type: 'transaction',
+          p_entity_id: transaction.id
+        });
 
         console.warn(`SECURITY: Transaction ${transaction.id} rejected due to amount mismatch. User ${transaction.user_id} may have attempted client-side manipulation.`);
         return; // Stop processing mismatching transactions
@@ -548,12 +595,13 @@ async function handleSuccessfulPayment(paymentData, supabaseUrl, supabaseService
 
       try {
         // Call the atomic database function with actual paid amount
-        const { data: result, error: rpcError } = await supabase.rpc('approve_deposit_transaction_universal', {
+        const { data: result, error: rpcError } = await supabase.rpc('approve_deposit_transaction_universal_v2', {
           p_transaction_id: transaction.id,
           p_payment_method: 'paystack',
           p_payment_status: 'success',
           p_payment_reference: reference || transaction.paystack_reference || null,
-          p_actual_amount: gatewayAmount // Credit the EXACT amount paid to Paystack
+          p_actual_amount: gatewayAmount, // Credit the EXACT amount paid to Paystack
+          p_provider_event_id: eventId ? String(eventId) : null
         });
 
         if (rpcError) {
@@ -773,7 +821,7 @@ async function storeReferenceForEvent(paymentData, supabaseUrl, supabaseServiceK
 /**
  * Handle failed payment
  */
-async function handleFailedPayment(paymentData, supabaseUrl, supabaseServiceKey) {
+async function handleFailedPayment(paymentData, supabaseUrl, supabaseServiceKey, eventId = null) {
   try {
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       auth: {

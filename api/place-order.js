@@ -56,6 +56,14 @@ export default async function handler(req, res) {
       });
     }
 
+    // URL Validation (Defensive)
+    const urlPattern = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([\/\w .-]*)*\/?$/;
+    if (!urlPattern.test(link)) {
+      return res.status(400).json({
+        error: 'Invalid URL format'
+      });
+    }
+
     if (quantity === undefined || quantity === null) {
       return res.status(400).json({
         error: 'Missing required field: quantity'
@@ -107,8 +115,8 @@ export default async function handler(req, res) {
     const supabase = getServiceRoleClient();
 
     // Ensure smmgen_order_id is a string (database expects TEXT)
-    const smmgenOrderIdString = smmgen_order_id 
-      ? String(smmgen_order_id) 
+    const smmgenOrderIdString = smmgen_order_id
+      ? String(smmgen_order_id)
       : null;
 
     // Ensure smmcost_order_id is a string (recommended: TEXT column, like smmgen_order_id)
@@ -133,7 +141,7 @@ export default async function handler(req, res) {
         }
       }
     }
-    
+
     // Log what we received and converted
     console.log('API received order IDs:', {
       smmcost_order_id: {
@@ -149,6 +157,24 @@ export default async function handler(req, res) {
         convertedType: typeof jbsmmpanelOrderIdInt
       }
     });
+
+    // 1b. Rate Limit Check (Defensive)
+    const { count: recentOrderCount } = await supabase
+      .from('orders')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .gte('created_at', new Date(Date.now() - 60000).toISOString());
+
+    if (recentOrderCount > 10) {
+      await supabase.rpc('log_system_event', {
+        p_type: 'rate_limit_exceeded',
+        p_severity: 'warning',
+        p_source: 'place-order',
+        p_description: `User ${user.id} exceeded order rate limit (${recentOrderCount} in last min)`,
+        p_metadata: { user_id: user.id, count: recentOrderCount }
+      });
+      return res.status(429).json({ error: 'Too many orders. Please wait a minute.' });
+    }
 
     // Idempotency check: Check if an order with the same parameters already exists
     // This prevents duplicate orders even if frontend checks are bypassed
@@ -176,7 +202,7 @@ export default async function handler(req, res) {
     } else if (existingOrders && existingOrders.length > 0) {
       const existingOrder = existingOrders[0];
       const existingSmmgenId = existingOrder.smmgen_order_id;
-      
+
       // If order exists and has a valid SMMGen ID, return it
       if (existingSmmgenId && existingSmmgenId !== "order not placed at smm gen") {
         console.log('Duplicate order detected at API level - returning existing order:', {
@@ -186,7 +212,7 @@ export default async function handler(req, res) {
           link: link.trim(),
           quantity: quantityNum
         });
-        
+
         // Log duplicate attempt
         await logUserAction({
           user_id: user.id,
@@ -205,7 +231,7 @@ export default async function handler(req, res) {
           },
           req
         });
-        
+
         return res.status(409).json({
           error: 'Duplicate order detected',
           message: 'An order with the same parameters was recently placed. Please check your order history.',
@@ -214,7 +240,7 @@ export default async function handler(req, res) {
           existing_smmgen_order_id: existingSmmgenId
         });
       }
-      
+
       // If order exists but SMMGen order failed, log it but allow retry
       console.warn('Duplicate order detected but SMMGen order failed previously. Allowing retry:', {
         order_id: existingOrder.id,
@@ -313,7 +339,7 @@ export default async function handler(req, res) {
         },
         req
       });
-      
+
       return res.status(400).json({
         error: orderResult.message || 'Order placement failed',
         success: false,
@@ -367,8 +393,8 @@ export default async function handler(req, res) {
   } catch (error) {
     // Handle authentication errors
     if (error.message === 'Missing or invalid authorization header' ||
-        error.message === 'Missing authentication token' ||
-        error.message === 'Invalid or expired token') {
+      error.message === 'Missing authentication token' ||
+      error.message === 'Invalid or expired token') {
       return res.status(401).json({
         error: 'Authentication required',
         message: error.message

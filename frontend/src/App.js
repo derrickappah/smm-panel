@@ -35,6 +35,7 @@ const AboutPage = lazy(() => import("@/pages/AboutPage"));
 const PricingPage = lazy(() => import("@/pages/PricingPage"));
 const TermsPage = lazy(() => import("@/pages/TermsPage"));
 const FAQPage = lazy(() => import("@/pages/FAQPage"));
+const DevDashboard = lazy(() => import("@/pages/admin/DevDashboard"));
 
 // Loading fallback component - Skeleton loader
 const PageLoader = () => (
@@ -742,6 +743,16 @@ function App() {
                   <Route
                     path="/faq"
                     element={<FAQPage user={user} onLogout={logout} />}
+                  />
+                  <Route
+                    path="/dev"
+                    element={
+                      user?.role === 'admin' ? (
+                        <DevDashboard user={user} />
+                      ) : (
+                        <Navigate to="/auth" />
+                      )
+                    }
                   />
                 </Routes>
               </Suspense>

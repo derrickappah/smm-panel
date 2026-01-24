@@ -39,8 +39,8 @@ export default async function handler(req, res) {
 
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       console.error('Supabase credentials not configured');
-      return res.status(500).json({ 
-        error: 'Server configuration error' 
+      return res.status(500).json({
+        error: 'Server configuration error'
       });
     }
 
@@ -75,7 +75,7 @@ export default async function handler(req, res) {
     const moolreApiUser = process.env.MOOLRE_API_USER;
     const moolreApiPubkey = process.env.MOOLRE_API_PUBKEY;
     const moolreAccountNumber = process.env.MOOLRE_ACCOUNT_NUMBER;
-    
+
     if (!moolreApiUser || !moolreApiPubkey || !moolreAccountNumber) {
       console.error('[MOOLRE WEB CALLBACK] Moolre credentials not configured');
       return res.status(500).json({
@@ -190,7 +190,7 @@ export default async function handler(req, res) {
 
     // Extract moolre_id (transactionid) from Moolre API response
     const moolreId = moolreData.data?.id || moolreData.data?.transactionid || moolreData.data?.transaction_id;
-    
+
     // Update moolre_id if available and not already set
     if (moolreId && !transaction.moolre_id) {
       await supabase
@@ -253,19 +253,23 @@ export default async function handler(req, res) {
             timestamp: new Date().toISOString()
           });
 
-          // SECURITY: Reject the transaction if amounts don't match
-          const { error: rejectError } = await supabase
-            .from('transactions')
-            .update({
-              status: 'rejected',
-              moolre_status: 'amount_mismatch_detected',
-              moolre_reference: reference
-            })
-            .eq('id', transaction.id);
-
-          if (rejectError) {
-            console.error('[MOOLRE WEB CALLBACK] Failed to reject transaction with amount mismatch:', rejectError);
-          }
+          // LOG CRITICAL EVENT
+          await supabase.rpc('log_system_event', {
+            p_type: 'payment_amount_mismatch',
+            p_severity: 'critical',
+            p_source: 'moolre-web-callback',
+            p_description: `Amount mismatch for transaction ${transaction.id}. Paid: ${moolreAmount}, Stored: ${storedAmount}`,
+            p_metadata: {
+              transaction_id: transaction.id,
+              user_id: transaction.user_id,
+              paid_amount: moolreAmount,
+              stored_amount: storedAmount,
+              reference: reference,
+              moolre_id: moolreId
+            },
+            p_entity_type: 'transaction',
+            p_entity_id: transaction.id
+          });
 
           console.warn(`SECURITY: Transaction ${transaction.id} rejected due to amount mismatch. User ${transaction.user_id} may have attempted client-side manipulation.`);
           return res.status(400).json({
@@ -279,12 +283,13 @@ export default async function handler(req, res) {
 
       // Use atomic database function to approve transaction and update balance
       // This prevents race conditions and ensures consistency
-      const { data: result, error: rpcError } = await supabase.rpc('approve_deposit_transaction_universal', {
+      const { data: result, error: rpcError } = await supabase.rpc('approve_deposit_transaction_universal_v2', {
         p_transaction_id: transaction.id,
         p_payment_method: 'moolre_web',
         p_payment_status: 'success',
         p_payment_reference: reference,
-        p_actual_amount: moolreAmount // Credit the EXACT amount paid to Moolre
+        p_actual_amount: moolreAmount, // Credit the EXACT amount paid to Moolre
+        p_provider_event_id: moolreId ? String(moolreId) : null
       });
 
       if (rpcError) {
@@ -370,7 +375,7 @@ export default async function handler(req, res) {
           .select('status')
           .eq('id', transaction.id)
           .single();
-        
+
         if (currentTx?.status === 'pending') {
           const moolreId = moolreData.data?.id || moolreData.data?.transactionid || moolreData.data?.transaction_id;
           const retryUpdateData = {
@@ -381,12 +386,12 @@ export default async function handler(req, res) {
           if (moolreId && !transaction.moolre_id) {
             retryUpdateData.moolre_id = String(moolreId);
           }
-          
+
           const { error: retryError } = await supabase
             .from('transactions')
             .update(retryUpdateData)
             .eq('id', transaction.id);
-          
+
           if (retryError) {
             updateError = retryError;
           } else {
@@ -418,9 +423,9 @@ export default async function handler(req, res) {
   } catch (error) {
     console.error('[MOOLRE WEB CALLBACK] Error processing callback:', error);
     // Return 200 to prevent Moolre from retrying if it's a transient error
-    return res.status(200).json({ 
-      received: true, 
-      error: error.message 
+    return res.status(200).json({
+      received: true,
+      error: error.message
     });
   }
 }

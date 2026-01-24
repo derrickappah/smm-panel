@@ -47,7 +47,9 @@ async function placeSMMGenOrder(service, link, quantity) {
 
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `SMMGen API error: ${response.status}`);
+        const errorMessage = errorData.error || `SMMGen API error: ${response.status}`;
+        console.error(`[PROVIDER FAILURE] smmgen: ${errorMessage}`, { status: response.status });
+        throw new Error(errorMessage);
     }
 
     return await response.json();
@@ -75,7 +77,9 @@ async function placeJBSMMPanelOrder(service, link, quantity) {
 
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `JBSMMPanel API error: ${response.status}`);
+        const errorMessage = errorData.error || `JBSMMPanel API error: ${response.status}`;
+        console.error(`[PROVIDER FAILURE] jbsmmpanel: ${errorMessage}`, { status: response.status });
+        throw new Error(errorMessage);
     }
 
     return await response.json();
@@ -103,7 +107,9 @@ async function placeSMMCostOrder(service, link, quantity) {
 
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `SMMCost API error: ${response.status}`);
+        const errorMessage = errorData.error || `SMMCost API error: ${response.status}`;
+        console.error(`[PROVIDER FAILURE] smmcost: ${errorMessage}`, { status: response.status });
+        throw new Error(errorMessage);
     }
 
     return await response.json();

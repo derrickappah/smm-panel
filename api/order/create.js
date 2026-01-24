@@ -20,7 +20,31 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: 'Missing required fields' });
         }
 
+        // URL Validation (Defensive)
+        const urlPattern = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([\/\w .-]*)*\/?$/;
+        if (!urlPattern.test(link)) {
+            return res.status(400).json({ error: 'Invalid URL format' });
+        }
+
         const supabase = getServiceRoleClient();
+
+        // 1b. Rate Limit Check (Defensive)
+        const { count: recentOrderCount } = await supabase
+            .from('orders')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', user.id)
+            .gte('created_at', new Date(Date.now() - 60000).toISOString());
+
+        if (recentOrderCount > 10) {
+            await supabase.rpc('log_system_event', {
+                p_type: 'rate_limit_exceeded',
+                p_severity: 'warning',
+                p_source: 'order-create',
+                p_description: `User ${user.id} exceeded order rate limit (${recentOrderCount} in last min)`,
+                p_metadata: { user_id: user.id, count: recentOrderCount }
+            });
+            return res.status(429).json({ error: 'Too many orders. Please wait a minute.' });
+        }
 
         // 2. Fetch Service/Package Details for Validation
         let provider = null;
@@ -124,7 +148,11 @@ export default async function handler(req, res) {
                     if (provider === 'smmcost') updateData.smmcost_order_id = String(providerOrderId);
                     if (provider === 'jbsmmpanel') updateData.jbsmmpanel_order_id = parseInt(providerOrderId);
 
-                    await supabase.from('orders').update(updateData).eq('id', order_id);
+                    await supabase.from('orders').update({
+                        ...updateData,
+                        submitted_at: new Date().toISOString(),
+                        status: 'processing'
+                    }).eq('id', order_id);
 
                     return res.status(200).json({
                         success: true,
@@ -137,6 +165,30 @@ export default async function handler(req, res) {
                 }
             } catch (pError) {
                 console.error('Provider Error:', pError);
+
+                // Track failure
+                await supabase.from('orders').update({
+                    provider_error_count: 1,
+                    last_provider_error: pError.message
+                }).eq('id', order_id);
+
+                // Log to system_events
+                await supabase.rpc('log_system_event', {
+                    p_type: 'provider_submission_failure',
+                    p_severity: 'error',
+                    p_source: 'order-create',
+                    p_description: `Failed to submit order ${order_id} to ${provider}: ${pError.message}`,
+                    p_metadata: {
+                        order_id,
+                        provider,
+                        error: pError.message,
+                        service: provider_service_id,
+                        user_id: user.id
+                    },
+                    p_entity_type: 'order',
+                    p_entity_id: order_id
+                });
+
                 // Refund balance if provider fails
                 await supabase.rpc('refund_failed_order', {
                     p_order_id: order_id,
