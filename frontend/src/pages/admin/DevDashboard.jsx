@@ -99,7 +99,7 @@ const DevDashboard = ({ user }) => {
                     <div className="text-2xl font-bold font-mono text-white">
                         {value}
                     </div>
-                    <p className="text-xs text-gray-400 mt-1 uppercase tracking-wider">
+                    <p className="text-xs text-gray-200 mt-1 uppercase tracking-wider font-bold">
                         {description}
                     </p>
                 </CardContent>
@@ -249,7 +249,7 @@ const DevDashboard = ({ user }) => {
                                             className="border-gray-800 hover:bg-gray-900/40 cursor-pointer"
                                             onClick={() => window.open(`/admin/orders?search=${item.order_id}`, '_blank')}
                                         >
-                                            <TableCell className="font-mono text-[9px] text-gray-100 truncate max-w-[100px] flex items-center gap-1">
+                                            <TableCell className="font-mono text-[9px] text-white truncate max-w-[100px] flex items-center gap-1 font-bold">
                                                 <ExternalLink className="w-2 h-2 text-indigo-400" />
                                                 {item.order_id}
                                             </TableCell>
@@ -262,9 +262,9 @@ const DevDashboard = ({ user }) => {
                                             <TableCell className="text-gray-100 font-bold">{item.age_mins}M</TableCell>
                                             <TableCell className="text-right">
                                                 <Badge className={
-                                                    item.classification === 'STATUS_MISMATCH' ? 'bg-red-500/20 text-red-400 border-red-500/50' :
-                                                        item.classification === 'MISSING_PROVIDER_ORDER' ? 'bg-orange-500/20 text-orange-400 border-orange-500/50' :
-                                                            'bg-yellow-500/20 text-yellow-400 border-yellow-500/50'
+                                                    item.classification === 'STATUS_MISMATCH' ? 'bg-red-500/30 text-red-400 border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.2)] font-bold' :
+                                                        item.classification === 'MISSING_PROVIDER_ORDER' ? 'bg-orange-500/30 text-orange-400 border-orange-500/50 shadow-[0_0_10px_rgba(249,115,22,0.2)] font-bold' :
+                                                            'bg-yellow-500/30 text-yellow-400 border-yellow-500/50 shadow-[0_0_10px_rgba(234,179,8,0.2)] font-bold'
                                                 }>
                                                     {item.classification}
                                                 </Badge>
@@ -303,9 +303,9 @@ const DevDashboard = ({ user }) => {
                                         }>
                                             {event.event_type}
                                         </Badge>
-                                        <span className="text-gray-400 font-bold">{new Date(event.created_at).toLocaleTimeString()}</span>
+                                        <span className="text-gray-100 font-bold bg-gray-800 px-1.5 py-0.5 rounded">{new Date(event.created_at).toLocaleTimeString()}</span>
                                     </div>
-                                    <p className="text-gray-200 font-medium">{event.description}</p>
+                                    <p className="text-white font-bold mt-1">{event.description}</p>
                                 </div>
                             </div>
                         )) : (
@@ -323,15 +323,15 @@ const DevDashboard = ({ user }) => {
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        <div className="flex items-center justify-between p-3 border border-gray-800 rounded bg-gray-900/30">
-                            <span className="text-xs uppercase text-gray-200 font-bold">Balance Anomalies</span>
-                            <Badge variant="outline" className={m.security_signals?.balance_discrepancies > 0 ? 'text-red-500 border-red-500 bg-red-500/10' : 'text-emerald-400 border-emerald-500/50 bg-emerald-500/5'}>
+                        <div className="flex items-center justify-between p-3 border border-gray-700 rounded bg-gray-900/50">
+                            <span className="text-xs uppercase text-white font-bold tracking-tight">Balance Anomalies</span>
+                            <Badge variant="outline" className={m.security_signals?.balance_discrepancies > 0 ? 'text-red-400 border-red-500 bg-red-500/20 font-bold' : 'text-emerald-400 border-emerald-500/50 bg-emerald-500/10 font-bold'}>
                                 {m.security_signals?.balance_discrepancies || 0} DETECTED
                             </Badge>
                         </div>
-                        <div className="flex items-center justify-between p-3 border border-gray-800 rounded bg-gray-900/30">
-                            <span className="text-xs uppercase text-gray-200 font-bold">Rate Limit Hits (1h)</span>
-                            <Badge variant="outline" className={m.system_events?.rate_limits_today > 20 ? 'text-yellow-500 border-yellow-500' : 'text-gray-300 border-gray-700'}>
+                        <div className="flex items-center justify-between p-3 border border-gray-700 rounded bg-gray-900/50">
+                            <span className="text-xs uppercase text-white font-bold tracking-tight">Rate Limit Hits (1h)</span>
+                            <Badge variant="outline" className={m.system_events?.rate_limits_today > 20 ? 'text-yellow-400 border-yellow-500 bg-yellow-500/10 font-bold' : 'text-gray-100 border-gray-600 bg-gray-800 font-bold'}>
                                 {m.system_events?.rate_limits_today || 0} EVENTS
                             </Badge>
                         </div>
