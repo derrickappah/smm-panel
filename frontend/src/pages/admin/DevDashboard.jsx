@@ -14,7 +14,6 @@ import SEO from '@/components/SEO';
 import { toast } from 'sonner';
 
 const DevDashboard = ({ user }) => {
-    const [refreshInterval, setRefreshInterval] = useState(30 * 60000); // 30m auto-refresh for full scan
     const [reconciling, setReconciling] = useState(false);
     const [reconData, setReconData] = useState(null);
 
@@ -30,8 +29,25 @@ const DevDashboard = ({ user }) => {
             if (!response.ok) throw new Error('Unauthorized or fetch failed');
             return response.json();
         },
-        refetchInterval: refreshInterval
+        refetchInterval: 10000 // 10s auto-refresh for metrics
     });
+
+    useEffect(() => {
+        // SUBSCRIBE TO LIVE UPDATES
+        const systemEventsSubscription = supabase
+            .channel('system-monitor-live')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'system_events' }, () => {
+                refetch();
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+                refetch();
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(systemEventsSubscription);
+        };
+    }, [refetch]);
 
     const runReconciliation = async () => {
         setReconciling(true);
@@ -125,11 +141,11 @@ const DevDashboard = ({ user }) => {
             <header className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-8 border-b border-gray-800 pb-6">
                 <div>
                     <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-                        <Activity className="text-emerald-500" />
+                        <Activity className="text-emerald-400" />
                         SYSTEM_RELIABILITY_V1
-                        <Badge variant="secondary" className="bg-gray-800 text-gray-300 border-gray-700">HIDDEN_ADMIN_ONLY</Badge>
+                        <Badge variant="secondary" className="bg-gray-800 text-white border-gray-600 font-bold">HIDDEN_ADMIN_ONLY</Badge>
                     </h1>
-                    <p className="text-sm text-emerald-400/80 mt-1">REAL-TIME TELEMETRY FEED: {monitorData?.timestamp}</p>
+                    <p className="text-sm text-emerald-300 mt-1 font-bold">REAL-TIME TELEMETRY FEED: {monitorData?.timestamp}</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <Button
@@ -187,13 +203,13 @@ const DevDashboard = ({ user }) => {
 
             {/* ORDER RECONCILIATION PANEL */}
             <Card className="bg-gray-950 border-gray-700 mb-8 overflow-hidden">
-                <CardHeader className="border-b border-gray-900 pb-4 flex flex-row items-center justify-between">
+                <CardHeader className="border-b border-gray-800 bg-gray-900/40 pb-4 flex flex-row items-center justify-between">
                     <div>
-                        <CardTitle className="text-sm font-bold text-gray-100 flex items-center gap-2">
+                        <CardTitle className="text-sm font-bold text-white flex items-center gap-2">
                             <Crosshair className="w-4 h-4 text-indigo-400" />
                             ORDER_RECONCILIATION_PANEL
                         </CardTitle>
-                        <CardDescription className="text-[10px] uppercase font-mono text-gray-400">
+                        <CardDescription className="text-[10px] uppercase font-mono text-gray-200 font-bold">
                             {reconData ? `Discrepancy scan result: ${reconData.timestamp}` : 'Ready for system integrity audit'}
                         </CardDescription>
                     </div>
@@ -285,8 +301,8 @@ const DevDashboard = ({ user }) => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* SYSTEM EVENTS LOG */}
                 <Card className="bg-gray-950 border-gray-700">
-                    <CardHeader>
-                        <CardTitle className="text-sm font-bold text-gray-100 flex items-center gap-2">
+                    <CardHeader className="bg-gray-900/40 border-b border-gray-800 mb-2">
+                        <CardTitle className="text-sm font-bold text-white flex items-center gap-2">
                             <Activity className="w-4 h-4 text-emerald-400" />
                             CRITICAL_EVENT_STREAM
                         </CardTitle>
@@ -316,8 +332,8 @@ const DevDashboard = ({ user }) => {
 
                 {/* SECURITY & ANOMALIES */}
                 <Card className="bg-gray-950 border-gray-700">
-                    <CardHeader>
-                        <CardTitle className="text-sm font-bold text-gray-100 flex items-center gap-2">
+                    <CardHeader className="bg-gray-900/40 border-b border-gray-800 mb-2">
+                        <CardTitle className="text-sm font-bold text-white flex items-center gap-2">
                             <ShieldAlert className="w-4 h-4 text-emerald-400" />
                             SECURITY_SIGNALS
                         </CardTitle>
