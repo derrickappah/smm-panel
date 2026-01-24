@@ -186,35 +186,52 @@ const DevDashboard = ({ user }) => {
             </div>
 
             {/* ORDER RECONCILIATION PANEL */}
-            {reconData && (
-                <Card className="bg-gray-950 border-gray-800 mb-8 overflow-hidden">
-                    <CardHeader className="border-b border-gray-900 pb-4 flex flex-row items-center justify-between">
-                        <div>
-                            <CardTitle className="text-sm font-bold flex items-center gap-2">
-                                <Crosshair className="w-4 h-4 text-indigo-500" />
-                                ORDER_RECONCILIATION_PANEL
-                            </CardTitle>
-                            <CardDescription className="text-[10px] uppercase font-mono">
-                                Discrepancy scan result: {reconData.timestamp}
-                            </CardDescription>
-                        </div>
+            <Card className="bg-gray-950 border-gray-700 mb-8 overflow-hidden">
+                <CardHeader className="border-b border-gray-900 pb-4 flex flex-row items-center justify-between">
+                    <div>
+                        <CardTitle className="text-sm font-bold text-gray-100 flex items-center gap-2">
+                            <Crosshair className="w-4 h-4 text-indigo-400" />
+                            ORDER_RECONCILIATION_PANEL
+                        </CardTitle>
+                        <CardDescription className="text-[10px] uppercase font-mono text-gray-400">
+                            {reconData ? `Discrepancy scan result: ${reconData.timestamp}` : 'Ready for system integrity audit'}
+                        </CardDescription>
+                    </div>
+                    {reconData && (
                         <div className="flex gap-4">
                             <div className="text-center">
                                 <div className="text-xl font-bold text-white leading-none">{reconData.summary.ok_count}</div>
-                                <div className="text-[8px] text-emerald-500 uppercase">OK_VERIFIED</div>
+                                <div className="text-[8px] text-emerald-400 uppercase font-bold">OK_VERIFIED</div>
                             </div>
                             <div className="text-center">
                                 <div className="text-xl font-bold text-red-500 leading-none">{reconData.summary.mismatch_count}</div>
-                                <div className="text-[8px] text-red-500 uppercase">STATUS_MISM</div>
+                                <div className="text-[8px] text-red-500 uppercase font-bold">STATUS_MISM</div>
                             </div>
                             <div className="text-center">
                                 <div className="text-xl font-bold text-yellow-500 leading-none">{reconData.summary.missing_count}</div>
-                                <div className="text-[8px] text-yellow-500 uppercase">MISSING_ORD</div>
+                                <div className="text-[8px] text-yellow-500 uppercase font-bold">MISSING_ORD</div>
                             </div>
                         </div>
-                    </CardHeader>
-                    <CardContent className="p-0">
-                        {reconData.mismatches?.length > 0 ? (
+                    )}
+                </CardHeader>
+                <CardContent className="p-0">
+                    {!reconData ? (
+                        <div className="py-20 text-center flex flex-col items-center gap-4 bg-gray-950/50">
+                            <Search className="w-12 h-12 text-gray-800 animate-pulse" />
+                            <div className="space-y-1">
+                                <p className="text-xs text-gray-300 uppercase tracking-widest font-bold">System scan required</p>
+                                <p className="text-[10px] text-gray-500 uppercase">Detect discrepancies between Local DB and Provider APIs</p>
+                            </div>
+                            <Button
+                                onClick={runReconciliation}
+                                disabled={reconciling}
+                                className="mt-2 bg-indigo-600 hover:bg-indigo-700 text-white border-none h-9 text-xs font-bold"
+                            >
+                                <Crosshair className="w-3 h-3 mr-2" /> RUN_RECONCILIATION_SCAN
+                            </Button>
+                        </div>
+                    ) : (
+                        reconData.mismatches?.length > 0 ? (
                             <Table className="text-xs">
                                 <TableHeader className="bg-gray-900/80">
                                     <TableRow className="border-gray-800">
@@ -232,17 +249,17 @@ const DevDashboard = ({ user }) => {
                                             className="border-gray-800 hover:bg-gray-900/40 cursor-pointer"
                                             onClick={() => window.open(`/admin/orders?search=${item.order_id}`, '_blank')}
                                         >
-                                            <TableCell className="font-mono text-[9px] text-gray-300 truncate max-w-[100px] flex items-center gap-1">
+                                            <TableCell className="font-mono text-[9px] text-gray-100 truncate max-w-[100px] flex items-center gap-1">
                                                 <ExternalLink className="w-2 h-2 text-indigo-400" />
                                                 {item.order_id}
                                             </TableCell>
                                             <TableCell>
-                                                <Badge variant="outline" className="text-[8px] border-gray-600 text-gray-200">{item.local_status}</Badge>
+                                                <Badge variant="outline" className="text-[8px] border-gray-600 text-gray-100 font-bold">{item.local_status}</Badge>
                                             </TableCell>
                                             <TableCell>
-                                                <Badge variant="outline" className="text-[8px] text-indigo-300 border-indigo-500/40">{item.provider_status}</Badge>
+                                                <Badge variant="outline" className="text-[8px] text-indigo-300 border-indigo-500/40 font-bold">{item.provider_status}</Badge>
                                             </TableCell>
-                                            <TableCell className="text-gray-300 font-bold">{item.age_mins}M</TableCell>
+                                            <TableCell className="text-gray-100 font-bold">{item.age_mins}M</TableCell>
                                             <TableCell className="text-right">
                                                 <Badge className={
                                                     item.classification === 'STATUS_MISMATCH' ? 'bg-red-500/20 text-red-400 border-red-500/50' :
@@ -257,20 +274,20 @@ const DevDashboard = ({ user }) => {
                                 </TableBody>
                             </Table>
                         ) : (
-                            <div className="py-8 text-center text-[10px] text-gray-400 uppercase tracking-widest">
+                            <div className="py-8 text-center text-[10px] text-gray-300 uppercase tracking-widest font-bold">
                                 Zero discrepancies detected in latest batch
                             </div>
-                        )}
-                    </CardContent>
-                </Card>
-            )}
+                        )
+                    )}
+                </CardContent>
+            </Card>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* SYSTEM EVENTS LOG */}
-                <Card className="bg-gray-950 border-gray-800">
+                <Card className="bg-gray-950 border-gray-700">
                     <CardHeader>
-                        <CardTitle className="text-sm font-bold flex items-center gap-2">
-                            <Activity className="w-4 h-4 text-emerald-500" />
+                        <CardTitle className="text-sm font-bold text-gray-100 flex items-center gap-2">
+                            <Activity className="w-4 h-4 text-emerald-400" />
                             CRITICAL_EVENT_STREAM
                         </CardTitle>
                     </CardHeader>
@@ -298,10 +315,10 @@ const DevDashboard = ({ user }) => {
                 </Card>
 
                 {/* SECURITY & ANOMALIES */}
-                <Card className="bg-gray-950 border-gray-800">
+                <Card className="bg-gray-950 border-gray-700">
                     <CardHeader>
-                        <CardTitle className="text-sm font-bold flex items-center gap-2">
-                            <ShieldAlert className="w-4 h-4 text-emerald-500" />
+                        <CardTitle className="text-sm font-bold text-gray-100 flex items-center gap-2">
+                            <ShieldAlert className="w-4 h-4 text-emerald-400" />
                             SECURITY_SIGNALS
                         </CardTitle>
                     </CardHeader>
