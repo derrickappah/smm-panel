@@ -93,7 +93,7 @@ export default async function handler(req, res) {
                     mismatches.push(result);
                     // Log to system_events (Async)
                     supabase.rpc('log_system_event', {
-                        p_type: 'order_reconciliation_mismatch',
+                        p_type: 'order_mismatch',
                         p_severity: classification === 'MISSING_PROVIDER_ORDER' ? 'critical' : 'warning',
                         p_source: 'order-reconciler',
                         p_description: `Reconciliation ${classification}: Local ${localStatus} vs Provider ${providerStatus}`,

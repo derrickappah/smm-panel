@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import {
     Server, ShieldAlert, Activity, CreditCard,
     ShoppingCart, AlertTriangle, CheckCircle, Clock,
-    RefreshCw, TrendingDown, TrendingUp, Search, Crosshair
+    RefreshCw, TrendingDown, TrendingUp, Search, Crosshair, ExternalLink
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -227,8 +227,15 @@ const DevDashboard = ({ user }) => {
                                 </TableHeader>
                                 <TableBody>
                                     {reconData.mismatches.map((item) => (
-                                        <TableRow key={item.order_id} className="border-gray-900 hover:bg-gray-900/20">
-                                            <TableCell className="font-mono text-[9px] text-gray-400 truncate max-w-[100px]">{item.order_id}</TableCell>
+                                        <TableRow
+                                            key={item.order_id}
+                                            className="border-gray-900 hover:bg-gray-900/20 cursor-pointer"
+                                            onClick={() => window.open(`/admin/orders?search=${item.order_id}`, '_blank')}
+                                        >
+                                            <TableCell className="font-mono text-[9px] text-gray-400 truncate max-w-[100px] flex items-center gap-1">
+                                                <ExternalLink className="w-2 h-2 text-indigo-500" />
+                                                {item.order_id}
+                                            </TableCell>
                                             <TableCell>
                                                 <Badge variant="outline" className="text-[8px] border-gray-700">{item.local_status}</Badge>
                                             </TableCell>
