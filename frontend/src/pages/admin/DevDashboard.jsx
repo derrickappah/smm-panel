@@ -371,6 +371,51 @@ const DevDashboard = ({ user }) => {
                 </Card>
             </div>
 
+            {/* BALANCE DISCREPANCY REPORT */}
+            {d.balance_anomalies?.length > 0 && (
+                <Card className="bg-gray-950 border-gray-700 mt-8 overflow-hidden">
+                    <CardHeader className="bg-gray-900/40 border-b border-gray-800">
+                        <CardTitle className="text-sm font-bold text-white flex items-center gap-2">
+                            <ShieldAlert className="w-4 h-4 text-red-500" />
+                            DETAILED_BALANCE_ANOMALIES
+                        </CardTitle>
+                        <CardDescription className="text-xs text-red-400 font-mono uppercase">
+                            Accounts where database balance differs from transaction ledger (Top 10)
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                        <Table className="text-xs">
+                            <TableHeader className="bg-gray-900/80">
+                                <TableRow className="border-gray-800">
+                                    <TableHead className="font-mono text-[10px] text-gray-200 uppercase font-bold">User Email</TableHead>
+                                    <TableHead className="font-mono text-[10px] text-gray-200 uppercase font-bold text-right">Cached Bal</TableHead>
+                                    <TableHead className="font-mono text-[10px] text-gray-200 uppercase font-bold text-right">Ledger sum</TableHead>
+                                    <TableHead className="font-mono text-[10px] text-gray-200 uppercase font-bold text-right">Discrepancy</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {d.balance_anomalies.map((item) => (
+                                    <TableRow
+                                        key={item.user_id}
+                                        className="border-gray-800 hover:bg-gray-900/40 cursor-pointer"
+                                        onClick={() => window.open(`/admin/users?search=${item.email}`, '_blank')}
+                                    >
+                                        <TableCell className="text-gray-100 font-bold">{item.email}</TableCell>
+                                        <TableCell className="text-right text-gray-300 font-mono">GH₵{item.cached_balance}</TableCell>
+                                        <TableCell className="text-right text-gray-300 font-mono">GH₵{item.ledger_balance}</TableCell>
+                                        <TableCell className="text-right">
+                                            <Badge className={`font-bold ${item.discrepancy > 0 ? 'bg-red-500/30 text-red-500' : 'bg-emerald-500/30 text-emerald-500'}`}>
+                                                {item.discrepancy > 0 ? '+' : ''}{item.discrepancy}
+                                            </Badge>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+            )}
+
             <footer className="mt-8 pt-6 border-t border-gray-800 text-[10px] text-gray-400 flex justify-between uppercase tracking-widest">
                 <span>BoostUp GH Internal Infrastructure</span>
                 <span>SECURED BY SUPABASE_PG_POLICIES</span>

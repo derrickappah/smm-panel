@@ -57,6 +57,14 @@ export default async function handler(req, res) {
             .eq('event_type', 'provider_submission_failure')
             .gte('created_at', new Date(Date.now() - 30 * 60000).toISOString());
 
+        // 5. Get Balance Discrepancy Details
+        const { data: balanceAnomalies } = await supabase
+            .from('ledger_balance_verification')
+            .select('*')
+            .neq('discrepancy', 0)
+            .order('discrepancy', { ascending: false })
+            .limit(10);
+
         return res.status(200).json({
             success: true,
             timestamp: new Date().toISOString(),
@@ -70,7 +78,8 @@ export default async function handler(req, res) {
             },
             details: {
                 stuck_orders: stuckDetails || [],
-                recent_critical_events: criticalEvents || []
+                recent_critical_events: criticalEvents || [],
+                balance_anomalies: balanceAnomalies || []
             }
         });
 
