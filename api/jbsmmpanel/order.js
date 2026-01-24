@@ -7,7 +7,7 @@ export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
@@ -20,20 +20,26 @@ export default async function handler(req, res) {
   }
 
   const startTime = Date.now();
-  
+
   try {
+    // SECURITY: Only admins can call this direct proxy endpoint
+    // Standard users must use /api/order/create
+    const { isAdmin } = await verifyAdmin(req).catch(() => ({ isAdmin: false }));
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Unauthorized: Direct provider access restricted to admins' });
+    }
     const { service, link, quantity } = req.body;
 
     // Input validation with detailed error messages
     if (!service) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Missing required field: service (JB SMM Panel service ID is required)',
         field: 'service'
       });
     }
 
     if (typeof service !== 'number' && typeof service !== 'string') {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Invalid service: must be a number or numeric string',
         field: 'service',
         received: typeof service
@@ -42,7 +48,7 @@ export default async function handler(req, res) {
 
     const serviceId = typeof service === 'string' ? parseInt(service, 10) : service;
     if (isNaN(serviceId) || serviceId <= 0) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Invalid service ID: must be a positive integer',
         field: 'service',
         received: service
@@ -50,14 +56,14 @@ export default async function handler(req, res) {
     }
 
     if (!link) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Missing required field: link (target URL is required)',
         field: 'link'
       });
     }
 
     if (typeof link !== 'string' || link.trim() === '') {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Invalid link: must be a non-empty string',
         field: 'link',
         received: typeof link
@@ -65,7 +71,7 @@ export default async function handler(req, res) {
     }
 
     if (quantity === undefined || quantity === null) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Missing required field: quantity',
         field: 'quantity'
       });
@@ -73,7 +79,7 @@ export default async function handler(req, res) {
 
     const quantityNum = Number(quantity);
     if (isNaN(quantityNum) || quantityNum <= 0 || !Number.isInteger(quantityNum)) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: `Invalid quantity: must be a positive integer, got ${quantity}`,
         field: 'quantity',
         received: quantity,
@@ -86,7 +92,7 @@ export default async function handler(req, res) {
 
     if (!JBSMMPANEL_API_KEY) {
       console.error('JB SMM Panel API key not configured');
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: 'JB SMM Panel API key not configured. Set JBSMMPANEL_API_KEY in Vercel environment variables.',
         configIssue: true
       });
@@ -171,7 +177,7 @@ export default async function handler(req, res) {
           errorData = JSON.parse(responseText);
         } catch (parseError) {
           // If not JSON, use the raw text as error
-          errorData = { 
+          errorData = {
             error: `HTTP ${response.status}: ${response.statusText}`,
             rawResponse: responseText.substring(0, 200) // First 200 chars of raw response
           };
@@ -188,7 +194,7 @@ export default async function handler(req, res) {
           requestBody: requestBody.replace(/key=[^&]+/, 'key=***REDACTED***')
         });
 
-        return res.status(response.status).json({ 
+        return res.status(response.status).json({
           error: errorData.error || errorData.message || `Failed to place order: ${response.status}`,
           status: response.status,
           details: errorData,
@@ -206,7 +212,7 @@ export default async function handler(req, res) {
           contentType: response.headers.get('content-type'),
           status: response.status
         });
-        return res.status(500).json({ 
+        return res.status(500).json({
           error: 'Invalid JSON response from JB SMM Panel API',
           parseError: parseError.message,
           rawResponse: responseText.substring(0, 500)
@@ -224,7 +230,7 @@ export default async function handler(req, res) {
       // Check for errors in response body (API might return errors with 200 status)
       if (data && typeof data === 'object' && data.error) {
         console.error('JB SMM Panel Order API returned error in response:', data.error);
-        return res.status(400).json({ 
+        return res.status(400).json({
           error: data.error || 'Incorrect request',
           details: data,
           apiError: true
@@ -234,22 +240,22 @@ export default async function handler(req, res) {
       // Validate response structure
       if (typeof data !== 'object' || data === null) {
         console.error('JB SMM Panel returned invalid response format:', typeof data);
-        return res.status(500).json({ 
+        return res.status(500).json({
           error: 'JB SMM Panel API returned invalid response format',
           responseType: typeof data
         });
       }
 
       // Check for order ID in various formats (expecting numeric ID)
-      const orderId = data.order || 
-                     data.order_id || 
-                     data.orderId || 
-                     data.id ||
-                     data.Order ||
-                     data.OrderID ||
-                     data.OrderId ||
-                     (data.data && (data.data.order || data.data.order_id || data.data.id)) ||
-                     null;
+      const orderId = data.order ||
+        data.order_id ||
+        data.orderId ||
+        data.id ||
+        data.Order ||
+        data.OrderID ||
+        data.OrderId ||
+        (data.data && (data.data.order || data.data.order_id || data.data.id)) ||
+        null;
 
       if (!orderId) {
         console.warn('JB SMM Panel response does not contain order ID in expected format:', {
@@ -270,7 +276,7 @@ export default async function handler(req, res) {
 
       if (fetchError.name === 'AbortError') {
         console.error('JB SMM Panel request timeout after', REQUEST_TIMEOUT, 'ms');
-        return res.status(504).json({ 
+        return res.status(504).json({
           error: `Request timeout after ${REQUEST_TIMEOUT}ms`,
           timeout: true
         });
@@ -283,7 +289,7 @@ export default async function handler(req, res) {
           code: fetchError.code,
           url: JBSMMPANEL_API_URL
         });
-        return res.status(500).json({ 
+        return res.status(500).json({
           error: `Failed to connect to JB SMM Panel API at ${JBSMMPANEL_API_URL}. Please verify JBSMMPANEL_API_URL is correct and the API is accessible.`,
           networkError: true,
           url: JBSMMPANEL_API_URL,
@@ -305,14 +311,14 @@ export default async function handler(req, res) {
 
     // Check for network-related errors
     if (error.message?.includes('fetch failed') || error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: `Network error: Failed to connect to JB SMM Panel API. Please verify JBSMMPANEL_API_URL is correct.`,
         networkError: true,
         details: error.message
       });
     }
 
-    return res.status(500).json({ 
+    return res.status(500).json({
       error: error.message || 'Failed to place order',
       errorName: error.name,
       details: error.code || error.message

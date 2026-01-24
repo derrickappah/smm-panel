@@ -7,7 +7,7 @@ export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
@@ -20,20 +20,26 @@ export default async function handler(req, res) {
   }
 
   const startTime = Date.now();
-  
+
   try {
+    // SECURITY: Only admins can call this direct proxy endpoint
+    // Standard users must use /api/order/create
+    const { isAdmin } = await verifyAdmin(req).catch(() => ({ isAdmin: false }));
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Unauthorized: Direct provider access restricted to admins' });
+    }
     const { service, link, quantity } = req.body;
 
     // Input validation with detailed error messages
     if (!service) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Missing required field: service (SMMCost service ID is required)',
         field: 'service'
       });
     }
 
     if (typeof service !== 'number' && typeof service !== 'string') {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Invalid service: must be a number or numeric string',
         field: 'service',
         received: typeof service
@@ -42,7 +48,7 @@ export default async function handler(req, res) {
 
     const serviceId = typeof service === 'string' ? parseInt(service, 10) : service;
     if (isNaN(serviceId) || serviceId <= 0) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Invalid service ID: must be a positive integer',
         field: 'service',
         received: service
@@ -50,14 +56,14 @@ export default async function handler(req, res) {
     }
 
     if (!link) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Missing required field: link (target URL is required)',
         field: 'link'
       });
     }
 
     if (typeof link !== 'string' || link.trim() === '') {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Invalid link: must be a non-empty string',
         field: 'link',
         received: typeof link
@@ -65,7 +71,7 @@ export default async function handler(req, res) {
     }
 
     if (quantity === undefined || quantity === null) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Missing required field: quantity',
         field: 'quantity'
       });
@@ -73,7 +79,7 @@ export default async function handler(req, res) {
 
     const quantityNum = Number(quantity);
     if (isNaN(quantityNum) || quantityNum <= 0 || !Number.isInteger(quantityNum)) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: `Invalid quantity: must be a positive integer, got ${quantity}`,
         field: 'quantity',
         received: quantity,
@@ -86,7 +92,7 @@ export default async function handler(req, res) {
 
     if (!SMMCOST_API_KEY) {
       console.error('SMMCost API key not configured');
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: 'SMMCost API key not configured. Set SMMCOST_API_KEY in Vercel environment variables.',
         configIssue: true
       });
@@ -150,7 +156,7 @@ export default async function handler(req, res) {
           quantity: quantityNum
         });
 
-        return res.status(response.status).json({ 
+        return res.status(response.status).json({
           error: errorData.error || errorData.message || `Failed to place order: ${response.status}`,
           status: response.status,
           details: errorData
@@ -162,7 +168,7 @@ export default async function handler(req, res) {
         data = await response.json();
       } catch (parseError) {
         console.error('SMMCost Response Parse Error:', parseError);
-        return res.status(500).json({ 
+        return res.status(500).json({
           error: 'Invalid JSON response from SMMCost API',
           parseError: parseError.message
         });
@@ -174,22 +180,22 @@ export default async function handler(req, res) {
       // Validate response structure
       if (typeof data !== 'object' || data === null) {
         console.error('SMMCost returned invalid response format:', typeof data);
-        return res.status(500).json({ 
+        return res.status(500).json({
           error: 'SMMCost API returned invalid response format',
           responseType: typeof data
         });
       }
 
       // Check for order ID in various formats (expecting numeric ID)
-      const orderId = data.order || 
-                     data.order_id || 
-                     data.orderId || 
-                     data.id ||
-                     data.Order ||
-                     data.OrderID ||
-                     data.OrderId ||
-                     (data.data && (data.data.order || data.data.order_id || data.data.id)) ||
-                     null;
+      const orderId = data.order ||
+        data.order_id ||
+        data.orderId ||
+        data.id ||
+        data.Order ||
+        data.OrderID ||
+        data.OrderId ||
+        (data.data && (data.data.order || data.data.order_id || data.data.id)) ||
+        null;
 
       if (!orderId) {
         console.warn('SMMCost response does not contain order ID in expected format:', {
@@ -210,7 +216,7 @@ export default async function handler(req, res) {
 
       if (fetchError.name === 'AbortError') {
         console.error('SMMCost request timeout after', REQUEST_TIMEOUT, 'ms');
-        return res.status(504).json({ 
+        return res.status(504).json({
           error: `Request timeout after ${REQUEST_TIMEOUT}ms`,
           timeout: true
         });
@@ -223,7 +229,7 @@ export default async function handler(req, res) {
           code: fetchError.code,
           url: `${SMMCOST_API_URL}/api/order`
         });
-        return res.status(500).json({ 
+        return res.status(500).json({
           error: `Failed to connect to SMMCost API at ${SMMCOST_API_URL}. Please verify SMMCOST_API_URL is correct and the API is accessible.`,
           networkError: true,
           url: SMMCOST_API_URL,
@@ -245,14 +251,14 @@ export default async function handler(req, res) {
 
     // Check for network-related errors
     if (error.message?.includes('fetch failed') || error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: `Network error: Failed to connect to SMMCost API. Please verify SMMCOST_API_URL is correct.`,
         networkError: true,
         details: error.message
       });
     }
 
-    return res.status(500).json({ 
+    return res.status(500).json({
       error: error.message || 'Failed to place order',
       errorName: error.name,
       details: error.code || error.message

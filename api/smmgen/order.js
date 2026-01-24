@@ -7,7 +7,7 @@ export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
@@ -22,6 +22,12 @@ export default async function handler(req, res) {
   const startTime = Date.now();
 
   try {
+    // SECURITY: Only admins can call this direct proxy endpoint
+    // Standard users must use /api/order/create
+    const { isAdmin } = await verifyAdmin(req).catch(() => ({ isAdmin: false }));
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Unauthorized: Direct provider access restricted to admins' });
+    }
     const { service, link, quantity } = req.body;
 
     // Input validation with detailed error messages
