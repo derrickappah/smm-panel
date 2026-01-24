@@ -257,7 +257,7 @@ const DevDashboard = ({ user }) => {
                                 </TableBody>
                             </Table>
                         ) : (
-                            <div className="py-8 text-center text-[10px] text-gray-600 uppercase tracking-widest">
+                            <div className="py-8 text-center text-[10px] text-gray-400 uppercase tracking-widest">
                                 Zero discrepancies detected in latest batch
                             </div>
                         )}
