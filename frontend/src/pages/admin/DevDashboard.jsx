@@ -85,7 +85,7 @@ const DevDashboard = ({ user }) => {
         return (
             <Card className={`bg-gray-950 border-gray-800 overflow-hidden`}>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium text-gray-400 flex items-center gap-2">
+                    <CardTitle className="text-sm font-medium text-gray-200 flex items-center gap-2">
                         <Icon className="w-4 h-4" />
                         {title}
                     </CardTitle>
@@ -99,7 +99,7 @@ const DevDashboard = ({ user }) => {
                     <div className="text-2xl font-bold font-mono text-white">
                         {value}
                     </div>
-                    <p className="text-xs text-gray-500 mt-1 uppercase tracking-wider">
+                    <p className="text-xs text-gray-400 mt-1 uppercase tracking-wider">
                         {description}
                     </p>
                 </CardContent>
@@ -127,9 +127,9 @@ const DevDashboard = ({ user }) => {
                     <h1 className="text-2xl font-bold text-white flex items-center gap-3">
                         <Activity className="text-emerald-500" />
                         SYSTEM_RELIABILITY_V1
-                        <Badge variant="secondary" className="bg-gray-900 text-gray-500 border-gray-800">HIDDEN_ADMIN_ONLY</Badge>
+                        <Badge variant="secondary" className="bg-gray-800 text-gray-300 border-gray-700">HIDDEN_ADMIN_ONLY</Badge>
                     </h1>
-                    <p className="text-sm text-emerald-500/60 mt-1">REAL-TIME TELEMETRY FEED: {monitorData?.timestamp}</p>
+                    <p className="text-sm text-emerald-400/80 mt-1">REAL-TIME TELEMETRY FEED: {monitorData?.timestamp}</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <Button
@@ -216,38 +216,38 @@ const DevDashboard = ({ user }) => {
                     <CardContent className="p-0">
                         {reconData.mismatches?.length > 0 ? (
                             <Table className="text-xs">
-                                <TableHeader className="bg-gray-900/50">
-                                    <TableRow className="border-gray-900">
-                                        <TableHead className="font-mono text-[10px] text-gray-500 uppercase">Order ID</TableHead>
-                                        <TableHead className="font-mono text-[10px] text-gray-500 uppercase">Local</TableHead>
-                                        <TableHead className="font-mono text-[10px] text-gray-500 uppercase">Provider</TableHead>
-                                        <TableHead className="font-mono text-[10px] text-gray-500 uppercase">Latency</TableHead>
-                                        <TableHead className="font-mono text-[10px] text-gray-500 uppercase text-right">Class</TableHead>
+                                <TableHeader className="bg-gray-900/80">
+                                    <TableRow className="border-gray-800">
+                                        <TableHead className="font-mono text-[10px] text-gray-200 uppercase font-bold">Order ID</TableHead>
+                                        <TableHead className="font-mono text-[10px] text-gray-200 uppercase font-bold">Local</TableHead>
+                                        <TableHead className="font-mono text-[10px] text-gray-200 uppercase font-bold">Provider</TableHead>
+                                        <TableHead className="font-mono text-[10px] text-gray-200 uppercase font-bold">Latency</TableHead>
+                                        <TableHead className="font-mono text-[10px] text-gray-200 uppercase font-bold text-right">Class</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {reconData.mismatches.map((item) => (
                                         <TableRow
                                             key={item.order_id}
-                                            className="border-gray-900 hover:bg-gray-900/20 cursor-pointer"
+                                            className="border-gray-800 hover:bg-gray-900/40 cursor-pointer"
                                             onClick={() => window.open(`/admin/orders?search=${item.order_id}`, '_blank')}
                                         >
-                                            <TableCell className="font-mono text-[9px] text-gray-400 truncate max-w-[100px] flex items-center gap-1">
-                                                <ExternalLink className="w-2 h-2 text-indigo-500" />
+                                            <TableCell className="font-mono text-[9px] text-gray-300 truncate max-w-[100px] flex items-center gap-1">
+                                                <ExternalLink className="w-2 h-2 text-indigo-400" />
                                                 {item.order_id}
                                             </TableCell>
                                             <TableCell>
-                                                <Badge variant="outline" className="text-[8px] border-gray-700">{item.local_status}</Badge>
+                                                <Badge variant="outline" className="text-[8px] border-gray-600 text-gray-200">{item.local_status}</Badge>
                                             </TableCell>
                                             <TableCell>
-                                                <Badge variant="outline" className="text-[8px] text-indigo-400 border-indigo-500/20">{item.provider_status}</Badge>
+                                                <Badge variant="outline" className="text-[8px] text-indigo-300 border-indigo-500/40">{item.provider_status}</Badge>
                                             </TableCell>
-                                            <TableCell className="text-gray-500">{item.age_mins}M</TableCell>
+                                            <TableCell className="text-gray-300 font-bold">{item.age_mins}M</TableCell>
                                             <TableCell className="text-right">
                                                 <Badge className={
-                                                    item.classification === 'STATUS_MISMATCH' ? 'bg-red-500/10 text-red-500' :
-                                                        item.classification === 'MISSING_PROVIDER_ORDER' ? 'bg-orange-500/10 text-orange-500' :
-                                                            'bg-yellow-500/10 text-yellow-500'
+                                                    item.classification === 'STATUS_MISMATCH' ? 'bg-red-500/20 text-red-400 border-red-500/50' :
+                                                        item.classification === 'MISSING_PROVIDER_ORDER' ? 'bg-orange-500/20 text-orange-400 border-orange-500/50' :
+                                                            'bg-yellow-500/20 text-yellow-400 border-yellow-500/50'
                                                 }>
                                                     {item.classification}
                                                 </Badge>
@@ -286,13 +286,13 @@ const DevDashboard = ({ user }) => {
                                         }>
                                             {event.event_type}
                                         </Badge>
-                                        <span className="text-gray-500">{new Date(event.created_at).toLocaleTimeString()}</span>
+                                        <span className="text-gray-400 font-bold">{new Date(event.created_at).toLocaleTimeString()}</span>
                                     </div>
-                                    <p className="text-gray-300 font-medium">{event.description}</p>
+                                    <p className="text-gray-200 font-medium">{event.description}</p>
                                 </div>
                             </div>
                         )) : (
-                            <p className="text-xs text-gray-600 text-center py-8">NO_CRITICAL_EVENTS_DETECTED</p>
+                            <p className="text-xs text-gray-400 text-center py-8">NO_CRITICAL_EVENTS_DETECTED</p>
                         )}
                     </CardContent>
                 </Card>
@@ -306,15 +306,15 @@ const DevDashboard = ({ user }) => {
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        <div className="flex items-center justify-between p-3 border border-gray-900 rounded bg-gray-900/30">
-                            <span className="text-xs uppercase">Balance Anomalies</span>
-                            <Badge variant="outline" className={m.security_signals?.balance_discrepancies > 0 ? 'text-red-500 border-red-500' : 'text-emerald-500 border-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.3)]'}>
+                        <div className="flex items-center justify-between p-3 border border-gray-800 rounded bg-gray-900/30">
+                            <span className="text-xs uppercase text-gray-200 font-bold">Balance Anomalies</span>
+                            <Badge variant="outline" className={m.security_signals?.balance_discrepancies > 0 ? 'text-red-500 border-red-500 bg-red-500/10' : 'text-emerald-400 border-emerald-500/50 bg-emerald-500/5'}>
                                 {m.security_signals?.balance_discrepancies || 0} DETECTED
                             </Badge>
                         </div>
-                        <div className="flex items-center justify-between p-3 border border-gray-900 rounded bg-gray-900/30">
-                            <span className="text-xs uppercase">Rate Limit Hits (1h)</span>
-                            <Badge variant="outline" className={m.system_events?.rate_limits_today > 20 ? 'text-yellow-500 border-yellow-500' : 'text-gray-500 border-gray-800'}>
+                        <div className="flex items-center justify-between p-3 border border-gray-800 rounded bg-gray-900/30">
+                            <span className="text-xs uppercase text-gray-200 font-bold">Rate Limit Hits (1h)</span>
+                            <Badge variant="outline" className={m.system_events?.rate_limits_today > 20 ? 'text-yellow-500 border-yellow-500' : 'text-gray-300 border-gray-700'}>
                                 {m.system_events?.rate_limits_today || 0} EVENTS
                             </Badge>
                         </div>
@@ -331,7 +331,7 @@ const DevDashboard = ({ user }) => {
                 </Card>
             </div>
 
-            <footer className="mt-8 pt-6 border-t border-gray-800 text-[10px] text-gray-600 flex justify-between uppercase tracking-widest">
+            <footer className="mt-8 pt-6 border-t border-gray-800 text-[10px] text-gray-400 flex justify-between uppercase tracking-widest">
                 <span>BoostUp GH Internal Infrastructure</span>
                 <span>SECURED BY SUPABASE_PG_POLICIES</span>
             </footer>
