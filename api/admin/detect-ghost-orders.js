@@ -16,6 +16,7 @@ export async function runGhostOrderDetection() {
         try {
             console.log(`[RECON] Fetching orders from ${provider}...`);
             const externalOrders = await fetchProviderOrders(provider, CHECK_LIMIT);
+            console.log(`[RECON] ${provider} returned ${externalOrders?.length || 0} orders.`);
 
             if (!externalOrders || externalOrders.length === 0) {
                 console.log(`[RECON] No orders found for ${provider} or API not supported.`);
@@ -35,8 +36,11 @@ export async function runGhostOrderDetection() {
             for (const extOrder of externalOrders) {
                 // 1. Primary Check: Order ID
                 if (localMap.has(extOrder.id)) {
+                    // console.log(`[RECON] Matched ID ${extOrder.id}`); 
                     continue; // Match found, valid order
                 }
+
+                console.warn(`[RECON] No ID match for ${extOrder.id}. Checking fingerprint...`);
 
                 // 2. Secondary Check: Fingerprint (Link + Qty + Service +/- Time)
                 // If ID is missing, did we have a local order that matches the characteristics?

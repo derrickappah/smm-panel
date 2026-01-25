@@ -161,7 +161,9 @@ export default async function handler(req, res) {
                         new_balance: rpcResult.new_balance
                     });
                 } else {
-                    throw new Error('Provider failed to return order ID');
+                    const error = new Error('Provider failed to return order ID');
+                    error.providerDetails = providerResponse; // Capture the unexpected success response
+                    throw error;
                 }
             } catch (pError) {
                 console.error('Provider Error:', pError);
