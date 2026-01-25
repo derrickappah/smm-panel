@@ -11,6 +11,7 @@ export async function runGhostOrderDetection() {
     const PROVIDERS = ['smmgen', 'jbsmmpanel', 'smmcost'];
     const CHECK_LIMIT = 200; // Check last 200 orders from each provider
     let totalGhostOrders = 0;
+    const allCheckedOrders = [];
 
     for (const provider of PROVIDERS) {
         try {
@@ -22,6 +23,13 @@ export async function runGhostOrderDetection() {
                 console.log(`[RECON] No orders found for ${provider} or API not supported.`);
                 continue;
             }
+
+            // Store for debugging return
+            externalOrders.forEach(o => allCheckedOrders.push({
+                ...o,
+                provider,
+                is_ghost: false // default
+            }));
 
             // Get local orders that might match these IDs
             const externalIds = externalOrders.map(o => o.id);
@@ -75,7 +83,12 @@ export async function runGhostOrderDetection() {
                     is_resolved: false
                 });
 
-                if (!error) totalGhostOrders++;
+                if (!error) {
+                    totalGhostOrders++;
+                    // Mark in debug list
+                    const debugItem = allCheckedOrders.find(o => o.id === extOrder.id && o.provider === provider);
+                    if (debugItem) debugItem.is_ghost = true;
+                }
             }
 
         } catch (err) {
@@ -94,5 +107,9 @@ export async function runGhostOrderDetection() {
     }
 
     console.log(`[RECON] Complete. Found ${totalGhostOrders} ghost orders.`);
-    return { ghost_orders: totalGhostOrders };
+    console.log(`[RECON] Complete. Found ${totalGhostOrders} ghost orders.`);
+    return {
+        ghost_orders: totalGhostOrders,
+        checked_orders: allCheckedOrders
+    };
 }

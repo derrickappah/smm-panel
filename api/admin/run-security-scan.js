@@ -32,7 +32,8 @@ export default async function handler(req, res) {
             timestamp: new Date().toISOString(),
             ghost_orders: ghostResult.ghost_orders,
             spam_clusters: abuseResult.spam,
-            volume_spikes: abuseResult.spikes
+            volume_spikes: abuseResult.spikes,
+            debug_checked_orders: ghostResult.checked_orders // Returning for debugging
         });
 
     } catch (error) {
