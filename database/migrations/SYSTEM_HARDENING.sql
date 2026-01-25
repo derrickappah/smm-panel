@@ -48,10 +48,12 @@ SELECT
         CASE 
             WHEN t.status = 'approved' THEN
                 CASE 
-                    WHEN t.type IN ('deposit', 'refund', 'referral_bonus') THEN t.amount
+                    -- These add to balance (positive)
+                    WHEN t.type IN ('deposit', 'refund', 'referral_bonus') THEN ABS(t.amount)
+                    -- Manual adjustments can be positive or negative
                     WHEN t.type = 'manual_adjustment' THEN t.amount
-                    WHEN t.type = 'order' THEN 
-                        CASE WHEN t.amount < 0 THEN t.amount ELSE -t.amount END
+                    -- Orders subtract from balance (negative)
+                    WHEN t.type = 'order' THEN -ABS(t.amount)
                     ELSE 0
                 END
             ELSE 0
@@ -61,10 +63,12 @@ SELECT
         CASE 
             WHEN t.status = 'approved' THEN
                 CASE 
-                    WHEN t.type IN ('deposit', 'refund', 'referral_bonus') THEN t.amount
+                    -- These add to balance (positive)
+                    WHEN t.type IN ('deposit', 'refund', 'referral_bonus') THEN ABS(t.amount)
+                    -- Manual adjustments can be positive or negative
                     WHEN t.type = 'manual_adjustment' THEN t.amount
-                    WHEN t.type = 'order' THEN 
-                        CASE WHEN t.amount < 0 THEN t.amount ELSE -t.amount END
+                    -- Orders subtract from balance (negative)
+                    WHEN t.type = 'order' THEN -ABS(t.amount)
                     ELSE 0
                 END
             ELSE 0
