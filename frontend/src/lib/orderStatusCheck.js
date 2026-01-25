@@ -698,47 +698,77 @@ export const checkOrdersStatusBatch = async (orders, options = {}) => {
         throw new Error('No active session found. Authentication required.');
       }
 
-      // Use the generic endpoint that handles both users and admins
-      const response = await fetch('/api/check-orders-status', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({ orderIds: ordersToCheck.map(o => o.id) })
-      });
+      // Batch size for server-side check (matching safety limit on backend)
+      const BATCH_SIZE = 50;
+      const orderIds = ordersToCheck.map(o => o.id);
+      const totalBatches = Math.ceil(orderIds.length / BATCH_SIZE);
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Server error: ${response.status}`);
-      }
-
-      const serverResult = await response.json();
-      console.log('[orderStatusCheck] Server-side status check completed successfully:', serverResult);
-
-      // Trigger UI updates for each order that was actually updated
-      if (onStatusUpdate && serverResult.details) {
-        serverResult.details.forEach(detail => {
-          // Map backend 'new' status to frontend expected format if needed
-          // But backend should return correct strings
-          const resultStatus = detail.new || detail.status;
-
-          if (resultStatus) {
-            onStatusUpdate(detail.id, resultStatus, detail.old);
-          }
-        });
-      }
-
-      if (onProgress) {
-        onProgress(ordersToCheck.length, ordersToCheck.length);
-      }
-
-      return {
-        checked: serverResult.checked || ordersToCheck.length,
-        updated: serverResult.updated || 0,
-        errors: serverResult.errors || [],
-        results: serverResult.details || []
+      const aggregateResult = {
+        checked: 0,
+        updated: 0,
+        errors: [],
+        results: []
       };
+
+      console.log(`[orderStatusCheck] Splitting ${orderIds.length} orders into ${totalBatches} batches of ${BATCH_SIZE}`);
+
+      // Process batches sequentially to avoid overwhelming the server and handle timeouts gracefully
+      for (let i = 0; i < orderIds.length; i += BATCH_SIZE) {
+        const currentBatchIds = orderIds.slice(i, i + BATCH_SIZE);
+        const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+
+        console.log(`[orderStatusCheck] Processing batch ${batchNum}/${totalBatches} (${currentBatchIds.length} orders)`);
+
+        try {
+          const response = await fetch('/api/check-orders-status', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`
+            },
+            body: JSON.stringify({ orderIds: currentBatchIds })
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `Server error during batch ${batchNum}: ${response.status}`);
+          }
+
+          const serverResult = await response.json();
+          console.log(`[orderStatusCheck] Batch ${batchNum} completed:`, serverResult);
+
+          // Aggregate results
+          aggregateResult.checked += serverResult.checked || currentBatchIds.length;
+          aggregateResult.updated += serverResult.updated || 0;
+          if (serverResult.errors) aggregateResult.errors.push(...serverResult.errors);
+          if (serverResult.details) aggregateResult.results.push(...serverResult.details);
+
+          // Trigger UI updates for this batch
+          if (onStatusUpdate && serverResult.details) {
+            serverResult.details.forEach(detail => {
+              const resultStatus = detail.new || detail.status;
+              if (resultStatus) {
+                onStatusUpdate(detail.id, resultStatus, detail.old);
+              }
+            });
+          }
+
+          if (onProgress) {
+            onProgress(aggregateResult.checked, ordersToCheck.length);
+          }
+        } catch (batchErr) {
+          console.error(`[orderStatusCheck] Error in batch ${batchNum}:`, batchErr);
+          aggregateResult.errors.push({
+            batch: batchNum,
+            error: batchErr.message,
+            orderIds: currentBatchIds
+          });
+        }
+      }
+
+      console.log('[orderStatusCheck] All batches completed. Aggregate Result:', aggregateResult);
+
+      return aggregateResult;
     } catch (err) {
       console.error('[orderStatusCheck] Server-side bulk check failed, falling back to client-side:', err);
       // Continue to client-side orchestration as fallback if server fails

@@ -82,7 +82,7 @@ export default async function handler(req, res) {
             const API_URL = process.env.SMMGEN_API_URL || 'https://smmgen.com/api/v2';
             const API_KEY = process.env.SMMGEN_API_KEY;
 
-            for (const order of groups.smmgen) {
+            const smmgenTasks = groups.smmgen.map(async (order) => {
                 results.checked++;
                 try {
                     console.log(`[SMMGen] Checking status for order ${order.id} (Provider ID: ${order.smmgen_order_id})`);
@@ -91,7 +91,6 @@ export default async function handler(req, res) {
                         body: new URLSearchParams({ key: API_KEY, action: 'status', order: order.smmgen_order_id })
                     });
                     const data = await response.json();
-                    console.log(`[SMMGen] Response for ${order.id}:`, data);
 
                     const rawStatus = data.status || data.Status;
                     const mappedStatus = mapSMMGenStatus(rawStatus);
@@ -107,7 +106,8 @@ export default async function handler(req, res) {
                     console.error(`[SMMGen] Error checking order ${order.id}:`, err.message);
                     results.errors.push({ id: order.id, provider: 'smmgen', error: err.message });
                 }
-            }
+            });
+            await Promise.all(smmgenTasks);
         }
 
         // 5. Process SMMCost orders
@@ -115,7 +115,7 @@ export default async function handler(req, res) {
             const API_URL = process.env.SMMCOST_API_URL || 'https://api.smmcost.com';
             const API_KEY = process.env.SMMCOST_API_KEY;
 
-            for (const order of groups.smmcost) {
+            const smmcostTasks = groups.smmcost.map(async (order) => {
                 results.checked++;
                 try {
                     console.log(`[SMMCost] Checking status for order ${order.id} (Provider ID: ${order.smmcost_order_id})`);
@@ -125,7 +125,6 @@ export default async function handler(req, res) {
                         body: JSON.stringify({ key: API_KEY, action: 'status', order: parseInt(order.smmcost_order_id, 10) })
                     });
                     const data = await response.json();
-                    console.log(`[SMMCost] Response for ${order.id}:`, data);
 
                     const rawStatus = data.status || data.Status;
                     const mappedStatus = mapSMMCostStatus(rawStatus);
@@ -141,7 +140,8 @@ export default async function handler(req, res) {
                     console.error(`[SMMCost] Error checking order ${order.id}:`, err.message);
                     results.errors.push({ id: order.id, provider: 'smmcost', error: err.message });
                 }
-            }
+            });
+            await Promise.all(smmcostTasks);
         }
 
         // 6. Process JB SMM Panel orders
@@ -149,7 +149,7 @@ export default async function handler(req, res) {
             const API_URL = process.env.JBSMMPANEL_API_URL || 'https://jbsmmpanel.com/api/v2';
             const API_KEY = process.env.JBSMMPANEL_API_KEY;
 
-            for (const order of groups.jbsmmpanel) {
+            const jbTasks = groups.jbsmmpanel.map(async (order) => {
                 results.checked++;
                 try {
                     console.log(`[JBSMMPanel] Checking status for order ${order.id} (Provider ID: ${order.jbsmmpanel_order_id})`);
@@ -158,7 +158,6 @@ export default async function handler(req, res) {
                         body: new URLSearchParams({ key: API_KEY, action: 'status', order: order.jbsmmpanel_order_id.toString() })
                     });
                     const data = await response.json();
-                    console.log(`[JBSMMPanel] Response for ${order.id}:`, data);
 
                     // Robust parsing for JBSMMPanel (handle arrays and nested objects)
                     let rawStatus = data.status || data.Status || data.order?.status;
@@ -167,7 +166,6 @@ export default async function handler(req, res) {
                     }
 
                     const mappedStatus = mapJBSMMPanelStatus(rawStatus);
-                    console.log(`[JBSMMPanel] ${order.id}: raw=${rawStatus}, mapped=${mappedStatus}`);
 
                     if (mappedStatus && mappedStatus !== order.status) {
                         const success = await updateOrder(order.id, mappedStatus, rawStatus);
@@ -180,7 +178,8 @@ export default async function handler(req, res) {
                     console.error(`[JBSMMPanel] Error checking order ${order.id}:`, err.message);
                     results.errors.push({ id: order.id, provider: 'jbsmmpanel', error: err.message });
                 }
-            }
+            });
+            await Promise.all(jbTasks);
         }
 
         const duration = Date.now() - startTime;
