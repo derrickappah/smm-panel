@@ -80,3 +80,34 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 GRANT EXECUTE ON FUNCTION lock_order_for_retry(TEXT, TEXT) TO service_role, authenticated;
+
+-- 5. Auto-Mark Submission Failed Trigger
+-- This ensures that any orders with 'Order not placed' text in the panel ID
+-- are instantly correctly classified in the database status.
+CREATE OR REPLACE FUNCTION auto_mark_submission_failed()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF (NEW.smmgen_order_id ILIKE '%Order not placed%' OR 
+        NEW.smmcost_order_id::text ILIKE '%Order not placed%' OR 
+        NEW.jbsmmpanel_order_id::text ILIKE '%Order not placed%') 
+       AND NEW.status != 'submission_failed' THEN
+        NEW.status := 'submission_failed';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_auto_mark_submission_failed ON orders;
+CREATE TRIGGER trigger_auto_mark_submission_failed
+BEFORE INSERT OR UPDATE ON orders
+FOR EACH ROW
+EXECUTE FUNCTION auto_mark_submission_failed();
+
+-- 6. Cleanup Existing Legacy Failed Records
+-- One-time sync to move legacy text-failures to the new formal status
+UPDATE orders
+SET status = 'submission_failed'
+WHERE (smmgen_order_id ILIKE '%Order not placed%' OR 
+       smmcost_order_id::text ILIKE '%Order not placed%' OR 
+       jbsmmpanel_order_id::text ILIKE '%Order not placed%')
+AND status NOT IN ('submission_failed', 'completed', 'cancelled', 'canceled', 'refunded');
