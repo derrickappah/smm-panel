@@ -1,4 +1,4 @@
-import { getServiceRoleClient } from '../../utils/auth.js';
+import { getServiceRoleClient } from '../utils/auth.js';
 
 /**
  * Traffic Analysis & Abuse Detection
