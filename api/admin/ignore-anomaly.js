@@ -14,29 +14,32 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: 'User ID and reason are required' });
         }
 
-        // Insert into exceptions table
+        // Support for Bulk Ignore
+        const userIds = Array.isArray(userId) ? userId : [userId];
+
+        // Prepare batch upsert
+        const upsertData = userIds.map(uid => ({
+            user_id: uid,
+            reason: reason,
+            created_by: adminUser.id
+        }));
+
         const { error: insertError } = await supabase
             .from('ledger_balance_exceptions')
-            .upsert({
-                user_id: userId,
-                reason: reason,
-                created_by: adminUser.id
-            });
+            .upsert(upsertData);
 
         if (insertError) throw insertError;
 
-        // Log the action
+        // Log the action (Summary log for bulk)
         await supabase.rpc('log_system_event', {
-            p_type: 'anomaly_ignored',
+            p_type: 'anomaly_ignored_bulk',
             p_severity: 'info',
             p_source: 'admin-dashboard',
-            p_description: `Admin ignored balance anomaly for user ${userId}`,
-            p_metadata: { reason, admin_id: adminUser.id },
-            p_entity_type: 'user',
-            p_entity_id: userId
+            p_description: `Admin ignored balance anomalies for ${userIds.length} users`,
+            p_metadata: { reason, count: userIds.length, user_ids: userIds, admin_id: adminUser.id }
         });
 
-        return res.status(200).json({ success: true, message: 'Anomaly ignored successfully' });
+        return res.status(200).json({ success: true, message: `Ignored ${userIds.length} anomalies` });
 
     } catch (error) {
         console.error('Ignore Anomaly API Error:', error);

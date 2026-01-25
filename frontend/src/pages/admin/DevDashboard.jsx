@@ -403,14 +403,28 @@ const DevDashboard = ({ user }) => {
             {/* BALANCE DISCREPANCY REPORT */}
             {d.balance_anomalies?.length > 0 && (
                 <Card className="bg-gray-950 border-gray-700 mt-8 overflow-hidden">
-                    <CardHeader className="bg-gray-900/40 border-b border-gray-800">
-                        <CardTitle className="text-sm font-bold text-white flex items-center gap-2">
-                            <ShieldAlert className="w-4 h-4 text-red-500" />
-                            DETAILED_BALANCE_ANOMALIES
-                        </CardTitle>
-                        <CardDescription className="text-xs text-red-400 font-mono uppercase">
-                            Accounts where database balance differs from transaction ledger (Top 10)
-                        </CardDescription>
+                    <CardHeader className="bg-gray-900/40 border-b border-gray-800 flex flex-row items-center justify-between">
+                        <div>
+                            <CardTitle className="text-sm font-bold text-white flex items-center gap-2">
+                                <ShieldAlert className="w-4 h-4 text-red-500" />
+                                DETAILED_BALANCE_ANOMALIES
+                            </CardTitle>
+                            <CardDescription className="text-xs text-red-400 font-mono uppercase">
+                                Accounts where database balance differs from transaction ledger (Top 10)
+                            </CardDescription>
+                        </div>
+                        <Button
+                            variant="destructive"
+                            size="sm"
+                            className="h-7 text-[10px] bg-red-900/20 border border-red-900/50 hover:bg-red-900/40 text-red-500"
+                            onClick={() => {
+                                const allIds = d.balance_anomalies.map(a => a.user_id);
+                                handleIgnoreAnomaly(allIds, `${allIds.length} users`);
+                            }}
+                        >
+                            <EyeOff className="w-3 h-3 mr-2" />
+                            IGNORE_ALL_({d.balance_anomalies.length})
+                        </Button>
                     </CardHeader>
                     <CardContent className="p-0">
                         <Table className="text-xs">
