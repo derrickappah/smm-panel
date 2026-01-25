@@ -31,6 +31,10 @@ COMMENT ON COLUMN orders.manual_retry_count IS 'Number of times an admin has man
 COMMENT ON COLUMN orders.status IS 'Order status: pending, in progress, processing, partial, completed, canceled/cancelled, refunded/refunds, submission_failed';
 
 -- 4. Atomic Lockout Function for Retries
+-- IMPORTANT: Drop both potential overloaded signatures to avoid ambiguity
+DROP FUNCTION IF EXISTS lock_order_for_retry(UUID, UUID);
+DROP FUNCTION IF EXISTS lock_order_for_retry(TEXT, TEXT);
+
 CREATE OR REPLACE FUNCTION lock_order_for_retry(
     p_order_id TEXT,
     p_user_id TEXT DEFAULT NULL
