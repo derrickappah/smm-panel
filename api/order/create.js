@@ -3,7 +3,7 @@ import { placeProviderOrder, extractOrderId } from '../utils/providers.js';
 import crypto from 'crypto';
 
 export default async function handler(req, res) {
-    // CORS Headers
+    // CORS Headers - updated for deployment trigger v2
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
