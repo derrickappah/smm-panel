@@ -45,18 +45,17 @@ const SortableServiceItem = memo(({ service, editingService, onEdit, onToggle, o
   };
 
   return (
-    <div 
+    <div
       ref={setNodeRef}
       style={style}
-      className={`p-4 rounded-xl transition-all ${
-        service.enabled === false 
-          ? 'bg-gray-100/50 border-2 border-gray-300 opacity-75' 
+      className={`p-4 rounded-xl transition-all ${service.enabled === false
+          ? 'bg-gray-100/50 border-2 border-gray-300 opacity-75'
           : 'bg-white/50 border-2 border-green-200'
-      } ${isDragging ? 'cursor-grabbing' : ''}`}
+        } ${isDragging ? 'cursor-grabbing' : ''}`}
     >
       {editingService?.id === service.id ? (
-        <ServiceEditForm 
-          service={service} 
+        <ServiceEditForm
+          service={service}
           services={services}
           onSave={onSave}
           onCancel={onCancel}
@@ -120,7 +119,7 @@ const SortableServiceItem = memo(({ service, editingService, onEdit, onToggle, o
               )}
               {(service.smmgen_service_id || service.smmcost_service_id || service.jbsmmpanel_service_id) && (
                 <div className="flex flex-wrap gap-2 text-xs text-gray-500 mt-1">
-              {service.smmgen_service_id && (
+                  {service.smmgen_service_id && (
                     <span>SMMGen ID: {service.smmgen_service_id}</span>
                   )}
                   {service.smmcost_service_id && (
@@ -246,7 +245,7 @@ const AdminServices = memo(() => {
       const newIndex = servicesOrder.indexOf(over.id);
       const newOrder = arrayMove(servicesOrder, oldIndex, newIndex);
       setServicesOrder(newOrder);
-      
+
       // Update the order in the database
       reorderServices.mutate(newOrder);
     }
@@ -268,8 +267,8 @@ const AdminServices = memo(() => {
         smmcost_service_id: serviceForm.smmcost_service_id ? parseInt(serviceForm.smmcost_service_id, 10) : null,
         jbsmmpanel_service_id: serviceForm.jbsmmpanel_service_id ? parseInt(serviceForm.jbsmmpanel_service_id, 10) : null,
         is_combo: serviceForm.is_combo || false,
-        combo_service_ids: serviceForm.is_combo && serviceForm.combo_service_ids.length > 0 
-          ? serviceForm.combo_service_ids 
+        combo_service_ids: serviceForm.is_combo && serviceForm.combo_service_ids.length > 0
+          ? serviceForm.combo_service_ids
           : null,
         combo_smmgen_service_ids: serviceForm.is_combo && serviceForm.combo_smmgen_service_ids.length > 0
           ? serviceForm.combo_smmgen_service_ids
@@ -312,9 +311,9 @@ const AdminServices = memo(() => {
 
   const handleToggleService = useCallback(async (serviceId, currentEnabled) => {
     try {
-      await updateService.mutateAsync({ 
-        serviceId, 
-        updates: { enabled: !currentEnabled } 
+      await updateService.mutateAsync({
+        serviceId,
+        updates: { enabled: !currentEnabled }
       });
     } catch (error) {
       // Error handled by mutation
@@ -518,14 +517,14 @@ const AdminServices = memo(() => {
             />
           </div>
           <div className="grid md:grid-cols-3 gap-4">
-          <div>
-            <Label>SMMGen Service ID</Label>
-            <Input
-              placeholder="SMMGen API service ID (optional)"
-              value={serviceForm.smmgen_service_id}
-              onChange={(e) => setServiceForm({ ...serviceForm, smmgen_service_id: e.target.value })}
-            />
-            <p className="text-xs text-gray-500 mt-1">Enter the SMMGen API service ID for integration</p>
+            <div>
+              <Label>SMMGen Service ID</Label>
+              <Input
+                placeholder="SMMGen API service ID (optional)"
+                value={serviceForm.smmgen_service_id}
+                onChange={(e) => setServiceForm({ ...serviceForm, smmgen_service_id: e.target.value })}
+              />
+              <p className="text-xs text-gray-500 mt-1">Enter the SMMGen API service ID for integration</p>
             </div>
             <div>
               <Label>SMMCost Service ID</Label>
@@ -548,7 +547,7 @@ const AdminServices = memo(() => {
               <p className="text-xs text-gray-500 mt-1">Enter the JB SMM Panel API service ID for integration</p>
             </div>
           </div>
-          
+
           {/* Combo Service Options */}
           <div className="space-y-4 p-4 border border-gray-200 rounded-lg bg-gray-50">
             <div className="flex items-center space-x-2">
@@ -563,7 +562,7 @@ const AdminServices = memo(() => {
                 This is a combo service (combines multiple services)
               </Label>
             </div>
-            
+
             {serviceForm.is_combo && (
               <div className="space-y-3 mt-3">
                 <div>
@@ -598,7 +597,7 @@ const AdminServices = memo(() => {
                     ))}
                   </div>
                 </div>
-                
+
                 <div>
                   <Label className="text-sm font-medium">SMMGen Service IDs (comma-separated)</Label>
                   <Input
@@ -617,7 +616,7 @@ const AdminServices = memo(() => {
               </div>
             )}
           </div>
-          
+
           {/* Seller-Only Service Option */}
           <div className="flex items-center space-x-2 p-4 border border-gray-200 rounded-lg bg-yellow-50">
             <input
@@ -631,7 +630,7 @@ const AdminServices = memo(() => {
               Seller-only service (only visible to users with seller or admin role)
             </Label>
           </div>
-          
+
           {/* Enabled Service Option */}
           <div className="flex items-center space-x-2 p-4 border border-gray-200 rounded-lg bg-green-50">
             <input
@@ -648,7 +647,7 @@ const AdminServices = memo(() => {
               Enabled (service is visible to users)
             </Label>
           </div>
-          
+
           <Button
             type="submit"
             disabled={createService.isPending}
@@ -691,17 +690,16 @@ const AdminServices = memo(() => {
           // When searching, show services without drag and drop
           <div className="space-y-4">
             {filteredServices.map((service) => (
-              <div 
-                key={service.id} 
-                className={`p-4 rounded-xl transition-all ${
-                  service.enabled === false 
-                    ? 'bg-gray-100/50 border-2 border-gray-300 opacity-75' 
+              <div
+                key={service.id}
+                className={`p-4 rounded-xl transition-all ${service.enabled === false
+                    ? 'bg-gray-100/50 border-2 border-gray-300 opacity-75'
                     : 'bg-white/50 border-2 border-green-200'
-                }`}
+                  }`}
               >
                 {editingService?.id === service.id ? (
-                  <ServiceEditForm 
-                    service={service} 
+                  <ServiceEditForm
+                    service={service}
                     services={services}
                     onSave={(updates) => handleUpdateService(service.id, updates)}
                     onCancel={() => setEditingService(null)}
@@ -756,7 +754,7 @@ const AdminServices = memo(() => {
                       )}
                       {(service.smmgen_service_id || service.smmcost_service_id) && (
                         <div className="flex flex-wrap gap-2 text-xs text-gray-500 mt-1">
-                      {service.smmgen_service_id && (
+                          {service.smmgen_service_id && (
                             <span>SMMGen ID: {service.smmgen_service_id}</span>
                           )}
                           {service.smmcost_service_id && (

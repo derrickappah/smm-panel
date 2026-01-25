@@ -4,10 +4,11 @@ import { useAdminOrders, useUpdateOrder, useReorderToSMMGen } from '@/hooks/useA
 import { useDebounce } from '@/hooks/useDebounce';
 import VirtualizedList from '@/components/VirtualizedList';
 import ResponsiveTable from '@/components/admin/ResponsiveTable';
+import OrderErrorModal from '@/components/admin/OrderErrorModal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, RefreshCw, Filter, AlertCircle, RotateCcw, Tag, CheckCircle2 } from 'lucide-react';
+import { Search, RefreshCw, Filter, AlertCircle, RotateCcw, Tag, CheckCircle2, AlertTriangle, Bug } from 'lucide-react';
 import { processManualRefund } from '@/lib/refunds';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
@@ -21,6 +22,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
   const [searchType, setSearchType] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('');
+  const [errorModalOrder, setErrorModalOrder] = useState(null);
   const [page, setPage] = useState(1);
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
   const [hasAutoChecked, setHasAutoChecked] = useState(false);
@@ -445,12 +447,12 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
       <div className="grid grid-cols-12 gap-4 p-4 items-start bg-white hover:bg-gray-50 transition-colors min-h-[100px]">
         <div className="col-span-1.5 flex flex-col gap-1">
           <span className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 w-fit ${order.status === 'completed' ? 'bg-green-100 text-green-700' :
-              order.status === 'processing' || order.status === 'in progress' ? 'bg-blue-100 text-blue-700' :
-                order.status === 'partial' ? 'bg-orange-100 text-orange-700' :
-                  order.status === 'canceled' || order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-                    order.status === 'refunds' ? 'bg-purple-100 text-purple-700' :
-                      order.status === 'refunded' ? 'bg-gray-100 text-gray-700' :
-                        'bg-yellow-100 text-yellow-700'
+            order.status === 'processing' || order.status === 'in progress' ? 'bg-blue-100 text-blue-700' :
+              order.status === 'partial' ? 'bg-orange-100 text-orange-700' :
+                order.status === 'canceled' || order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                  order.status === 'refunds' ? 'bg-purple-100 text-purple-700' :
+                    order.status === 'refunded' ? 'bg-gray-100 text-gray-700' :
+                      'bg-yellow-100 text-yellow-700'
             }`}>
             {order.status === 'refunded' ? 'already refunded' : (order.status || 'pending')}
           </span>
@@ -523,33 +525,51 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
           })()}
         </div>
         <div className="col-span-1">
-          {(() => {
-            // Show which panel(s) have IDs
-            const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id > 0;
-            const hasJbsmmpanel = order.jbsmmpanel_order_id && String(order.jbsmmpanel_order_id).toLowerCase() !== "order not placed at jbsmmpanel";
-            const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
-
-            const panelIds = [];
-            if (hasSmmcost) panelIds.push(`SMMCost: ${order.smmcost_order_id}`);
-            if (hasJbsmmpanel) panelIds.push(`JBSMMPanel: ${order.jbsmmpanel_order_id}`);
-            if (hasSmmgen) panelIds.push(`SMMGen: ${order.smmgen_order_id}`);
-
-            if (panelIds.length > 1) {
-              return (
-                <div className="text-xs">
-                  {panelIds.map((id, index) => (
-                    <p key={index} className={index === 0 ? "text-gray-900" : "text-gray-600 mt-0.5"}>
-                      {id}
-                    </p>
-                  ))}
-                </div>
-              );
-            } else if (panelIds.length === 1) {
-              return <p className="text-xs text-gray-600">{panelIds[0]}</p>;
-            } else {
-              return <p className="text-xs text-gray-400 italic">None</p>;
-            }
-          })()}
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-1.5 min-w-[120px]">
+              <span className="text-xs text-gray-500 w-12">Gen:</span>
+              {order.smmgen_order_id ? (
+                order.smmgen_order_id === "order not placed at smm gen" ? (
+                  <span className="text-xs text-red-500 font-medium whitespace-normal">Not Placed</span>
+                ) : (
+                  <span className="text-xs font-mono bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">{order.smmgen_order_id}</span>
+                )
+              ) : (
+                <span className="text-xs text-gray-400 italic">None</span>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5 min-w-[120px]">
+              <span className="text-xs text-gray-500 w-12">Cost:</span>
+              {order.smmcost_order_id ? (
+                String(order.smmcost_order_id).toLowerCase().includes("not placed") ? (
+                  <span className="text-xs text-red-500 font-medium whitespace-normal">Not Placed</span>
+                ) : (
+                  <span className="text-xs font-mono bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">{order.smmcost_order_id}</span>
+                )
+              ) : (
+                <span className="text-xs text-gray-400 italic">None</span>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5 min-w-[120px]">
+              <span className="text-xs text-gray-500 w-12">JB:</span>
+              {order.jbsmmpanel_order_id ? (
+                <span className="text-xs font-mono bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">{order.jbsmmpanel_order_id}</span>
+              ) : (
+                <span className="text-xs text-gray-400 italic">None</span>
+              )}
+            </div>
+            {order.provider_error_details && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 flex items-center gap-1 mt-1 border border-red-100"
+                onClick={() => setErrorModalOrder(order)}
+              >
+                <Bug className="w-3 h-3" />
+                View Error Log
+              </Button>
+            )}
+          </div>
         </div>
         <div className="col-span-1">
           <p className="font-semibold text-gray-900 text-base">{order.quantity}</p>
@@ -635,10 +655,10 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                   size="sm"
                   disabled={order.refund_status === 'pending'}
                   className={`w-full min-h-[44px] ${order.refund_status === 'failed'
-                      ? "text-orange-600 hover:text-orange-700 border-orange-300 text-xs"
-                      : order.refund_status === 'pending'
-                        ? "text-gray-400 border-gray-300 text-xs cursor-not-allowed"
-                        : "text-red-600 hover:text-red-700 text-xs"
+                    ? "text-orange-600 hover:text-orange-700 border-orange-300 text-xs"
+                    : order.refund_status === 'pending'
+                      ? "text-gray-400 border-gray-300 text-xs cursor-not-allowed"
+                      : "text-red-600 hover:text-red-700 text-xs"
                     }`}
                   title={order.refund_status === 'pending' ? 'Refund in progress...' : undefined}
                 >
@@ -668,12 +688,12 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-2">
               <span className={`px-3 py-1.5 rounded-full text-xs font-medium ${order.status === 'completed' ? 'bg-green-100 text-green-700' :
-                  order.status === 'processing' || order.status === 'in progress' ? 'bg-blue-100 text-blue-700' :
-                    order.status === 'partial' ? 'bg-orange-100 text-orange-700' :
-                      order.status === 'canceled' || order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-                        order.status === 'refunds' ? 'bg-purple-100 text-purple-700' :
-                          order.status === 'refunded' ? 'bg-gray-100 text-gray-700' :
-                            'bg-yellow-100 text-yellow-700'
+                order.status === 'processing' || order.status === 'in progress' ? 'bg-blue-100 text-blue-700' :
+                  order.status === 'partial' ? 'bg-orange-100 text-orange-700' :
+                    order.status === 'canceled' || order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                      order.status === 'refunds' ? 'bg-purple-100 text-purple-700' :
+                        order.status === 'refunded' ? 'bg-gray-100 text-gray-700' :
+                          'bg-yellow-100 text-yellow-700'
                 }`}>
                 {order.status === 'refunded' ? 'already refunded' : (order.status || 'pending')}
               </span>
@@ -762,6 +782,51 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
           </div>
           <div className="text-right">
             <p className="font-semibold text-gray-900 text-lg">₵{order.total_cost?.toFixed(2) || '0.00'}</p>
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-1.5 min-w-[120px]">
+                <span className="text-xs text-gray-500 w-12">Gen:</span>
+                {order.smmgen_order_id ? (
+                  order.smmgen_order_id === "order not placed at smm gen" ? (
+                    <span className="text-xs text-red-500 font-medium whitespace-normal">Not Placed</span>
+                  ) : (
+                    <span className="text-xs font-mono bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">{order.smmgen_order_id}</span>
+                  )
+                ) : (
+                  <span className="text-xs text-gray-400 italic">None</span>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 min-w-[120px]">
+                <span className="text-xs text-gray-500 w-12">Cost:</span>
+                {order.smmcost_order_id ? (
+                  String(order.smmcost_order_id).toLowerCase().includes("not placed") ? (
+                    <span className="text-xs text-red-500 font-medium whitespace-normal">Not Placed</span>
+                  ) : (
+                    <span className="text-xs font-mono bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">{order.smmcost_order_id}</span>
+                  )
+                ) : (
+                  <span className="text-xs text-gray-400 italic">None</span>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 min-w-[120px]">
+                <span className="text-xs text-gray-500 w-12">JB:</span>
+                {order.jbsmmpanel_order_id ? (
+                  <span className="text-xs font-mono bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">{order.jbsmmpanel_order_id}</span>
+                ) : (
+                  <span className="text-xs text-gray-400 italic">None</span>
+                )}
+              </div>
+              {order.provider_error_details && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 flex items-center gap-1 mt-1 border border-red-100"
+                  onClick={() => setErrorModalOrder(order)}
+                >
+                  <Bug className="w-3 h-3" />
+                  View Error Log
+                </Button>
+              )}
+            </div>
             <p className="text-xs text-gray-500">{order.quantity} units</p>
           </div>
         </div>
@@ -845,10 +910,10 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                 size="sm"
                 disabled={order.refund_status === 'pending'}
                 className={`w-full min-h-[44px] ${order.refund_status === 'failed'
-                    ? "text-orange-600 hover:text-orange-700 border-orange-300"
-                    : order.refund_status === 'pending'
-                      ? "text-gray-400 border-gray-300 cursor-not-allowed"
-                      : "text-red-600 hover:text-red-700"
+                  ? "text-orange-600 hover:text-orange-700 border-orange-300"
+                  : order.refund_status === 'pending'
+                    ? "text-gray-400 border-gray-300 cursor-not-allowed"
+                    : "text-red-600 hover:text-red-700"
                   }`}
                 title={order.refund_status === 'pending' ? 'Refund in progress...' : undefined}
               >
@@ -1071,6 +1136,14 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
           </div>
         </>
       )}
+
+      {/* Detail Modals */}
+      <OrderErrorModal
+        isOpen={!!errorModalOrder}
+        onClose={() => setErrorModalOrder(null)}
+        orderId={errorModalOrder?.id}
+        errorDetails={errorModalOrder?.provider_error_details}
+      />
     </div>
   );
 });

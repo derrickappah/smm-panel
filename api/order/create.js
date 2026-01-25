@@ -166,10 +166,11 @@ export default async function handler(req, res) {
             } catch (pError) {
                 console.error('Provider Error:', pError);
 
-                // Track failure
+                // Track failure with detailed logs
                 await supabase.from('orders').update({
                     provider_error_count: 1,
-                    last_provider_error: pError.message
+                    last_provider_error: pError.message,
+                    provider_error_details: pError.providerDetails || null
                 }).eq('id', order_id);
 
                 // Log to system_events

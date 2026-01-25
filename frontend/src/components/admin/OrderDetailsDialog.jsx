@@ -39,20 +39,20 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
   // Helper function to get Order ID based on priority
   const getOrderId = (order) => {
     // Check if smmcost_order_id exists and is valid (not "order not placed at smmcost")
-    const hasSmmcost = order.smmcost_order_id && 
+    const hasSmmcost = order.smmcost_order_id &&
       String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost" &&
       order.smmcost_order_id > 0;
-    
+
     // Check if jbsmmpanel_order_id exists and is valid
-    const hasJbsmmpanel = order.jbsmmpanel_order_id && 
+    const hasJbsmmpanel = order.jbsmmpanel_order_id &&
       String(order.jbsmmpanel_order_id).toLowerCase() !== "order not placed at jbsmmpanel";
-    
+
     // Check if smmgen_order_id exists and is valid (not internal UUID or "order not placed")
     const isInternalUuid = order.smmgen_order_id === order.id;
-    const hasSmmgen = order.smmgen_order_id && 
-      order.smmgen_order_id !== "order not placed at smm gen" && 
+    const hasSmmgen = order.smmgen_order_id &&
+      order.smmgen_order_id !== "order not placed at smm gen" &&
       !isInternalUuid;
-    
+
     // Priority: SMMCost > JB SMM Panel > SMMGen
     if (hasSmmcost) {
       return { id: order.smmcost_order_id, type: 'smmcost' };
@@ -82,14 +82,14 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
   const orderIdInfo = getOrderId(order);
 
   // Check panel order IDs
-  const hasSmmcost = order.smmcost_order_id && 
+  const hasSmmcost = order.smmcost_order_id &&
     String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost" &&
     order.smmcost_order_id > 0;
-  const hasJbsmmpanel = order.jbsmmpanel_order_id && 
+  const hasJbsmmpanel = order.jbsmmpanel_order_id &&
     String(order.jbsmmpanel_order_id).toLowerCase() !== "order not placed at jbsmmpanel";
   const isInternalUuid = order.smmgen_order_id === order.id;
-  const hasSmmgen = order.smmgen_order_id && 
-    order.smmgen_order_id !== "order not placed at smm gen" && 
+  const hasSmmgen = order.smmgen_order_id &&
+    order.smmgen_order_id !== "order not placed at smm gen" &&
     !isInternalUuid;
 
   return (
@@ -194,10 +194,10 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
                   <LinkIcon className="w-5 h-5 text-indigo-600" />
                   <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Link</h4>
                 </div>
-                <a 
-                  href={order.link} 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
+                <a
+                  href={order.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="text-sm text-indigo-600 hover:text-indigo-700 hover:underline break-all"
                 >
                   {order.link}

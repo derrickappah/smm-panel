@@ -16,7 +16,7 @@ const OrderHistory = ({ user, onLogout }) => {
   const [loading, setLoading] = useState(true);
   const [checkingStatus, setCheckingStatus] = useState({});
   const hasCheckedStatus = useRef(false);
-  
+
   // Search and filter states
   const [orderSearch, setOrderSearch] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState('all');
@@ -105,10 +105,10 @@ const OrderHistory = ({ user, onLogout }) => {
   // Map SMMGen status to exact SMMGen status format (normalized to lowercase)
   const mapSMMGenStatus = useCallback((smmgenStatus) => {
     if (!smmgenStatus) return null;
-    
+
     const statusString = String(smmgenStatus).trim();
     const statusLower = statusString.toLowerCase();
-    
+
     // Map to exact SMMGen statuses (normalized to lowercase)
     if (statusLower === 'pending' || statusLower.includes('pending')) {
       return 'pending';
@@ -131,7 +131,7 @@ const OrderHistory = ({ user, onLogout }) => {
     if (statusLower === 'refunds' || statusLower.includes('refund')) {
       return 'refunds';
     }
-    
+
     return null; // Unknown status, don't update
   }, []);
 
@@ -139,12 +139,12 @@ const OrderHistory = ({ user, onLogout }) => {
   const checkOrderStatus = useCallback(async (order) => {
     // Check if order has any valid panel order ID
     const isInternalUuid = order.smmgen_order_id === order.id;
-    const hasSmmgenId = order.smmgen_order_id && 
-                       order.smmgen_order_id !== "order not placed at smm gen" && 
-                       !isInternalUuid;
+    const hasSmmgenId = order.smmgen_order_id &&
+      order.smmgen_order_id !== "order not placed at smm gen" &&
+      !isInternalUuid;
     const hasSmmcostId = order.smmcost_order_id && String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost";
     const hasJbsmmpanelId = order.jbsmmpanel_order_id && order.jbsmmpanel_order_id > 0;
-    
+
     if (!hasSmmgenId && !hasSmmcostId && !hasJbsmmpanelId) {
       console.log(`Skipping status check for order ${order.id} - no valid panel order ID`);
       return;
@@ -269,14 +269,14 @@ const OrderHistory = ({ user, onLogout }) => {
     const searchLower = orderSearch.toLowerCase();
     const service = services.find(s => s.id === o.service_id);
     const serviceName = service?.name || '';
-    const matchesSearch = 
+    const matchesSearch =
       !orderSearch ||
       serviceName.toLowerCase().includes(searchLower) ||
       o.link.toLowerCase().includes(searchLower) ||
       o.id.toLowerCase().includes(searchLower);
-    
+
     const matchesStatus = orderStatusFilter === 'all' || o.status === orderStatusFilter;
-    
+
     return matchesSearch && matchesStatus;
   });
 
@@ -376,10 +376,10 @@ const OrderHistory = ({ user, onLogout }) => {
                       {paginatedOrders.map((order) => {
                         const service = services.find(s => s.id === order.service_id);
                         const isPackageOrder = !!order.promotion_package_id;
-                        const serviceName = isPackageOrder 
+                        const serviceName = isPackageOrder
                           ? order.promotion_packages?.name || 'Package'
                           : service?.name || 'Unknown Service';
-                        
+
                         return (
                           <div
                             key={order.id}
@@ -407,16 +407,16 @@ const OrderHistory = ({ user, onLogout }) => {
                                   const serviceHasSmmcost = orderService?.smmcost_service_id && orderService.smmcost_service_id > 0;
                                   const serviceHasSmmgen = orderService?.smmgen_service_id;
                                   const serviceHasJbsmmpanel = orderService?.jbsmmpanel_service_id && orderService.jbsmmpanel_service_id > 0;
-                                  
+
                                   // Prioritize: SMMCost > JB SMM Panel > SMMGen
                                   // Check if smmgen_order_id is the internal UUID (set by trigger) - if so, ignore it
                                   const isInternalUuid = order.smmgen_order_id === order.id;
                                   const hasSmmcost = order.smmcost_order_id && String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost";
                                   const hasJbsmmpanel = order.jbsmmpanel_order_id && order.jbsmmpanel_order_id > 0; // JB SMM Panel uses numeric IDs
-                                  const hasSmmgen = order.smmgen_order_id && 
-                                                  order.smmgen_order_id !== "order not placed at smm gen" && 
-                                                  !isInternalUuid; // Ignore if it's just the internal UUID
-                                  
+                                  const hasSmmgen = order.smmgen_order_id &&
+                                    order.smmgen_order_id !== "order not placed at smm gen" &&
+                                    !isInternalUuid; // Ignore if it's just the internal UUID
+
                                   if (hasSmmcost) {
                                     // SMMCost order ID exists and is valid
                                     return <p className="font-medium text-gray-900 text-sm">{order.smmcost_order_id}</p>;
@@ -482,28 +482,28 @@ const OrderHistory = ({ user, onLogout }) => {
                                   const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id !== "order not placed at smmcost";
                                   const hasJbsmmpanel = order.jbsmmpanel_order_id && order.jbsmmpanel_order_id > 0;
                                   const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
-                                  
+
                                   if (hasSmmcost || hasJbsmmpanel || hasSmmgen) {
                                     return (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => checkOrderStatus(order)}
-                                    disabled={checkingStatus[order.id]}
-                                    className="text-xs h-8 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                                  >
-                                    {checkingStatus[order.id] ? (
-                                      <>
-                                        <Loader className="w-3 h-3 mr-1 animate-spin" />
-                                        Checking...
-                                      </>
-                                    ) : (
-                                      <>
-                                        <RefreshCw className="w-3 h-3 mr-1" />
-                                        Check
-                                      </>
-                                    )}
-                                  </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => checkOrderStatus(order)}
+                                        disabled={checkingStatus[order.id]}
+                                        className="text-xs h-8 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                                      >
+                                        {checkingStatus[order.id] ? (
+                                          <>
+                                            <Loader className="w-3 h-3 mr-1 animate-spin" />
+                                            Checking...
+                                          </>
+                                        ) : (
+                                          <>
+                                            <RefreshCw className="w-3 h-3 mr-1" />
+                                            Check
+                                          </>
+                                        )}
+                                      </Button>
                                     );
                                   }
                                   return null;
@@ -551,9 +551,8 @@ const OrderHistory = ({ user, onLogout }) => {
                               variant={ordersPage === pageNum ? "default" : "outline"}
                               size="sm"
                               onClick={() => setOrdersPage(pageNum)}
-                              className={`w-9 h-9 p-0 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                                ordersPage === pageNum ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : ''
-                              }`}
+                              className={`w-9 h-9 p-0 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${ordersPage === pageNum ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : ''
+                                }`}
                             >
                               {pageNum}
                             </Button>

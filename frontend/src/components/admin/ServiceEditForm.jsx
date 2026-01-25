@@ -27,13 +27,13 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    
+
     // Validation: Minimum 2 services required for combo
     if (formData.is_combo && formData.combo_service_ids.length < 2) {
       alert('A combo service must include at least 2 component services.');
       return;
     }
-    
+
     // Validation: Circular dependency check
     if (formData.is_combo && formData.combo_service_ids.length > 0) {
       for (const selectedServiceId of formData.combo_service_ids) {
@@ -44,7 +44,7 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
         }
       }
     }
-    
+
     const updateData = {
       platform: formData.platform,
       service_type: formData.service_type,
@@ -58,8 +58,8 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
       smmcost_service_id: formData.smmcost_service_id ? parseInt(formData.smmcost_service_id, 10) : null,
       jbsmmpanel_service_id: formData.jbsmmpanel_service_id ? parseInt(formData.jbsmmpanel_service_id, 10) : null,
       is_combo: Boolean(formData.is_combo),
-      combo_service_ids: formData.is_combo && formData.combo_service_ids.length > 0 
-        ? formData.combo_service_ids 
+      combo_service_ids: formData.is_combo && formData.combo_service_ids.length > 0
+        ? formData.combo_service_ids
         : null,
       combo_smmgen_service_ids: formData.is_combo && formData.combo_smmgen_service_ids.length > 0
         ? formData.combo_smmgen_service_ids
@@ -67,7 +67,7 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
       seller_only: Boolean(formData.seller_only),
       enabled: Boolean(formData.enabled) // Explicitly convert to boolean
     };
-    
+
     console.log('ServiceEditForm submitting:', updateData);
     onSave(updateData);
   };
@@ -160,14 +160,14 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
         />
       </div>
       <div className="grid md:grid-cols-3 gap-4">
-      <div>
-        <Label>SMMGen Service ID</Label>
-        <Input
-          placeholder="SMMGen API service ID (optional)"
-          value={formData.smmgen_service_id}
-          onChange={(e) => setFormData({ ...formData, smmgen_service_id: e.target.value })}
-        />
-        <p className="text-xs text-gray-500 mt-1">Enter the SMMGen API service ID for integration</p>
+        <div>
+          <Label>SMMGen Service ID</Label>
+          <Input
+            placeholder="SMMGen API service ID (optional)"
+            value={formData.smmgen_service_id}
+            onChange={(e) => setFormData({ ...formData, smmgen_service_id: e.target.value })}
+          />
+          <p className="text-xs text-gray-500 mt-1">Enter the SMMGen API service ID for integration</p>
         </div>
         <div>
           <Label>SMMCost Service ID</Label>
@@ -218,7 +218,7 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
           Enabled (visible to users)
         </Label>
       </div>
-      
+
       {/* Combo Service Options */}
       <div className="space-y-4 p-4 border border-gray-200 rounded-lg bg-gray-50">
         <div className="flex items-center space-x-2">
@@ -233,7 +233,7 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
             This is a combo service (combines multiple services)
           </Label>
         </div>
-        
+
         {formData.is_combo && (
           <div className="space-y-3 mt-3">
             <div>
@@ -270,7 +270,7 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
                   ))}
               </div>
             </div>
-            
+
             <div>
               <Label className="text-sm font-medium">SMMGen Service IDs (comma-separated)</Label>
               <Input
@@ -289,7 +289,7 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
           </div>
         )}
       </div>
-      
+
       <div className="flex gap-2">
         <Button type="submit" size="sm">Save</Button>
         <Button type="button" variant="outline" size="sm" onClick={onCancel}>Cancel</Button>

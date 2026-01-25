@@ -131,10 +131,21 @@ async function placeSMMGenOrder(service, link, quantity) {
     });
 
     if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.error || `SMMGen API error: ${response.status}`;
-        console.error(`[PROVIDER FAILURE] smmgen: ${errorMessage}`, { status: response.status });
-        throw new Error(errorMessage);
+        let errorData;
+        try {
+            errorData = await response.json();
+        } catch (e) {
+            errorData = { rawResponse: await response.text().catch(() => 'No response body') };
+        }
+
+        const errorMessage = errorData.error || errorData.message || `SMMGen API error: ${response.status}`;
+        console.error(`[PROVIDER FAILURE] smmgen: ${errorMessage}`, { status: response.status, details: errorData });
+
+        // Add full response data to the error object
+        const error = new Error(errorMessage);
+        error.providerDetails = errorData;
+        error.providerStatus = response.status;
+        throw error;
     }
 
     return await response.json();
@@ -161,10 +172,20 @@ async function placeJBSMMPanelOrder(service, link, quantity) {
     });
 
     if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.error || `JBSMMPanel API error: ${response.status}`;
-        console.error(`[PROVIDER FAILURE] jbsmmpanel: ${errorMessage}`, { status: response.status });
-        throw new Error(errorMessage);
+        let errorData;
+        try {
+            errorData = await response.json();
+        } catch (e) {
+            errorData = { rawResponse: await response.text().catch(() => 'No response body') };
+        }
+
+        const errorMessage = errorData.error || errorData.message || `JBSMMPanel API error: ${response.status}`;
+        console.error(`[PROVIDER FAILURE] jbsmmpanel: ${errorMessage}`, { status: response.status, details: errorData });
+
+        const error = new Error(errorMessage);
+        error.providerDetails = errorData;
+        error.providerStatus = response.status;
+        throw error;
     }
 
     return await response.json();
@@ -191,10 +212,20 @@ async function placeSMMCostOrder(service, link, quantity) {
     });
 
     if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.error || `SMMCost API error: ${response.status}`;
-        console.error(`[PROVIDER FAILURE] smmcost: ${errorMessage}`, { status: response.status });
-        throw new Error(errorMessage);
+        let errorData;
+        try {
+            errorData = await response.json();
+        } catch (e) {
+            errorData = { rawResponse: await response.text().catch(() => 'No response body') };
+        }
+
+        const errorMessage = errorData.error || errorData.message || `SMMCost API error: ${response.status}`;
+        console.error(`[PROVIDER FAILURE] smmcost: ${errorMessage}`, { status: response.status, details: errorData });
+
+        const error = new Error(errorMessage);
+        error.providerDetails = errorData;
+        error.providerStatus = response.status;
+        throw error;
     }
 
     return await response.json();
