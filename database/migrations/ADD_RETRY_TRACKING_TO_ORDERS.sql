@@ -32,8 +32,8 @@ COMMENT ON COLUMN orders.status IS 'Order status: pending, in progress, processi
 
 -- 4. Atomic Lockout Function for Retries
 CREATE OR REPLACE FUNCTION lock_order_for_retry(
-    p_order_id UUID,
-    p_user_id UUID DEFAULT NULL
+    p_order_id TEXT,
+    p_user_id TEXT DEFAULT NULL
 )
 RETURNS TABLE(
     success BOOLEAN,
@@ -44,10 +44,11 @@ DECLARE
     v_order RECORD;
 BEGIN
     -- Get order details and lock the row
+    -- Using explicit casting to handle potential type differences
     SELECT * INTO v_order
     FROM orders
     WHERE id = p_order_id
-    AND (p_user_id IS NULL OR user_id = p_user_id)
+    AND (p_user_id IS NULL OR user_id::text = p_user_id)
     FOR UPDATE NOWAIT; -- Lock the row, fail if already locked
 
     -- Check if found
@@ -84,4 +85,4 @@ EXCEPTION
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-GRANT EXECUTE ON FUNCTION lock_order_for_retry(UUID, UUID) TO service_role, authenticated;
+GRANT EXECUTE ON FUNCTION lock_order_for_retry(TEXT, TEXT) TO service_role, authenticated;
