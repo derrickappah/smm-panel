@@ -628,6 +628,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                 <SelectItem value="canceled">Canceled</SelectItem>
                 <SelectItem value="refunds">Refunds</SelectItem>
                 <SelectItem value="refunded">Already Refunded</SelectItem>
+                <SelectItem value="submission_failed">Placement Failed</SelectItem>
               </SelectContent>
             </Select>
             {!order.smmgen_order_id && !order.smmcost_order_id &&
@@ -898,6 +899,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               <SelectItem value="canceled">Canceled</SelectItem>
               <SelectItem value="refunds">Refunds</SelectItem>
               <SelectItem value="refunded">Already Refunded</SelectItem>
+              <SelectItem value="submission_failed">Placement Failed</SelectItem>
             </SelectContent>
           </Select>
           {!order.smmgen_order_id && !order.smmcost_order_id &&
@@ -917,6 +919,19 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                 {reorderMutation.isPending ? 'Sending...' : 'Reorder to SMMGen'}
               </Button>
             )}
+          {order.status === 'submission_failed' && (
+            <Button
+              onClick={() => safeRetryMutation.mutate(order.id)}
+              disabled={safeRetryMutation.isPending}
+              variant="outline"
+              size="sm"
+              className="w-full min-h-[44px] text-red-600 hover:text-red-700 border-red-300 hover:bg-red-50"
+              title="Safely retry placing this order at the provider"
+            >
+              <RotateCcw className={`w-3 h-3 mr-1 ${safeRetryMutation.isPending ? 'animate-spin' : ''}`} />
+              {safeRetryMutation.isPending ? 'Retrying...' : 'Safe Retry'}
+            </Button>
+          )}
           {(order.status === 'canceled' || order.status === 'cancelled') &&
             order.refund_status !== 'succeeded' &&
             order.status !== 'refunded' && (
@@ -1064,6 +1079,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                 <SelectItem value="canceled">Canceled</SelectItem>
                 <SelectItem value="refunds">Refunds</SelectItem>
                 <SelectItem value="refunded">Already Refunded</SelectItem>
+                <SelectItem value="submission_failed">Placement Failed</SelectItem>
               </SelectContent>
             </Select>
           </div>
