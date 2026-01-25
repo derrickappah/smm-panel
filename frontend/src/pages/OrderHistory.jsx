@@ -74,6 +74,8 @@ const OrderHistory = ({ user, onLogout }) => {
       case 'refunded':
       case 'refunds':
         return <XCircle className="w-5 h-5 text-purple-600" />;
+      case 'submission_failed':
+        return <XCircle className="w-5 h-5 text-red-500" />;
       case 'pending':
       default:
         return <Clock className="w-5 h-5 text-yellow-600" />;
@@ -96,6 +98,8 @@ const OrderHistory = ({ user, onLogout }) => {
       case 'refunded':
       case 'refunds':
         return 'bg-purple-100 text-purple-700 border-purple-200';
+      case 'submission_failed':
+        return 'bg-red-50 text-red-600 border-red-100';
       case 'pending':
       default:
         return 'bg-yellow-100 text-yellow-700 border-yellow-200';
@@ -196,6 +200,46 @@ const OrderHistory = ({ user, onLogout }) => {
       setCheckingStatus(prev => ({ ...prev, [order.id]: false }));
     }
   }, []);
+
+  const handleRetry = useCallback(async (order) => {
+    if (checkingStatus[order.id]) return;
+
+    setCheckingStatus(prev => ({ ...prev, [order.id]: true }));
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Please log in again to retry your order.');
+      }
+
+      const response = await fetch('/api/order/retry', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ order_id: order.id })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || result.error || 'Failed to retry order');
+      }
+
+      // Success
+      const { toast } = await import('sonner');
+      toast.success(result.message || 'Order successfully retried!');
+
+      // Refresh orders
+      fetchData();
+    } catch (error) {
+      console.error('Retry error:', error);
+      const { toast } = await import('sonner');
+      toast.error(error.message || 'An error occurred during retry.');
+    } finally {
+      setCheckingStatus(prev => ({ ...prev, [order.id]: false }));
+    }
+  }, [fetchData]);
 
   // Auto-check status for orders with SMMGen IDs on load (only once)
   useEffect(() => {
@@ -339,6 +383,7 @@ const OrderHistory = ({ user, onLogout }) => {
                   <SelectItem value="completed">Completed</SelectItem>
                   <SelectItem value="canceled">Canceled</SelectItem>
                   <SelectItem value="refunds">Refunds</SelectItem>
+                  <SelectItem value="submission_failed">Placement Failed</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -501,6 +546,30 @@ const OrderHistory = ({ user, onLogout }) => {
                                           <>
                                             <RefreshCw className="w-3 h-3 mr-1" />
                                             Check
+                                          </>
+                                        )}
+                                      </Button>
+                                    );
+                                  }
+
+                                  if (order.status === 'submission_failed') {
+                                    return (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => handleRetry(order)}
+                                        disabled={checkingStatus[order.id]}
+                                        className="text-xs h-8 px-3 border-red-200 text-red-600 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                                      >
+                                        {checkingStatus[order.id] ? (
+                                          <>
+                                            <Loader className="w-3 h-3 mr-1 animate-spin" />
+                                            Retrying...
+                                          </>
+                                        ) : (
+                                          <>
+                                            <RefreshCw className="w-3 h-3 mr-1" />
+                                            Retry
                                           </>
                                         )}
                                       </Button>

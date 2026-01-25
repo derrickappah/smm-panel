@@ -13,7 +13,7 @@ const PAGE_SIZE = 50; // Reduced from 1000 to match ITEMS_PER_PAGE in component
 // Now uses the optimized batch utility with last_status_check filtering
 const checkSMMGenStatusesInBackground = async (ordersToCheck) => {
   console.log(`Checking SMMGen status for ${ordersToCheck.length} orders in background`);
-  
+
   // Use the optimized batch utility
   const result = await checkOrdersStatusBatch(ordersToCheck, {
     concurrency: 10,
@@ -23,13 +23,13 @@ const checkSMMGenStatusesInBackground = async (ordersToCheck) => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'orders'] });
     }
   });
-  
+
   console.log(`Completed background SMMGen status check: ${result.checked} checked, ${result.updated} updated, ${result.errors.length} errors`);
 };
 
 // Fetch orders with pagination and server-side filtering
-const fetchOrders = async ({ 
-  pageParam = 0, 
+const fetchOrders = async ({
+  pageParam = 0,
   checkSMMGenStatus = false,
   searchTerm = '',
   searchType = 'all',
@@ -56,12 +56,12 @@ const fetchOrders = async ({
     } else if (statusFilter === 'failed_to_smmgen') {
       // Orders without any panel ID that are not completed or cancelled
       query = query.is('smmgen_order_id', null)
-                   .is('smmcost_order_id', null)
-                   .is('jbsmmpanel_order_id', null)
-                   .neq('status', 'completed')
-                   .neq('status', 'cancelled')
-                   .neq('status', 'canceled')
-                   .neq('status', 'refunded');
+        .is('smmcost_order_id', null)
+        .is('jbsmmpanel_order_id', null)
+        .neq('status', 'completed')
+        .neq('status', 'cancelled')
+        .neq('status', 'canceled')
+        .neq('status', 'refunded');
     } else {
       query = query.eq('status', statusFilter);
     }
@@ -72,16 +72,16 @@ const fetchOrders = async ({
     // Use UTC dates to avoid timezone issues
     const filterDate = new Date(dateFilter + 'T00:00:00.000Z');
     const filterDateEnd = new Date(dateFilter + 'T23:59:59.999Z');
-    
+
     query = query.gte('created_at', filterDate.toISOString())
-                 .lte('created_at', filterDateEnd.toISOString());
+      .lte('created_at', filterDateEnd.toISOString());
   }
 
   // Apply search filter based on search type
   if (searchTerm && searchTerm.trim()) {
     const trimmedSearch = searchTerm.trim();
     const searchPattern = `%${trimmedSearch}%`;
-    
+
     if (searchType === 'service_name') {
       // Search by service name (partial match, case-insensitive)
       try {
@@ -90,14 +90,14 @@ const fetchOrders = async ({
           .from('services')
           .select('id')
           .ilike('name', searchPattern);
-        
+
         if (serviceError) {
           console.warn('Service search error:', serviceError);
           // Log error but continue - don't return empty on error
         }
-        
+
         const matchingServiceIds = matchingServices?.map(s => s.id) || [];
-        
+
         if (matchingServiceIds.length > 0) {
           query = query.in('service_id', matchingServiceIds);
         } else {
@@ -117,14 +117,14 @@ const fetchOrders = async ({
           .from('promotion_packages')
           .select('id')
           .ilike('name', searchPattern);
-        
+
         if (packageError) {
           console.warn('Package search error:', packageError);
           // Log error but continue - don't return empty on error
         }
-        
+
         const matchingPackageIds = matchingPackages?.map(p => p.id) || [];
-        
+
         if (matchingPackageIds.length > 0) {
           query = query.in('promotion_package_id', matchingPackageIds);
         } else {
@@ -143,10 +143,10 @@ const fetchOrders = async ({
       // For TEXT fields (smmgen_order_id, smmcost_order_id), use ilike directly
       // For INTEGER (jbsmmpanel_order_id), try numeric match first, then text search
       const trimmedSearch = searchTerm.trim();
-      
+
       // Build conditions for text fields (UUID and TEXT columns)
       const textFieldsSearch = `id.ilike.${searchPattern},smmgen_order_id.ilike.${searchPattern},smmcost_order_id.ilike.${searchPattern}`;
-      
+
       // For numeric jbsmmpanel_order_id, check if search term is numeric
       const numericSearch = /^\d+$/.test(trimmedSearch);
       let numericCondition = '';
@@ -154,7 +154,7 @@ const fetchOrders = async ({
         // If search term is numeric, also search jbsmmpanel_order_id as number
         numericCondition = `,jbsmmpanel_order_id.eq.${trimmedSearch}`;
       }
-      
+
       // Combine text and numeric conditions
       const orderFieldsSearch = textFieldsSearch + numericCondition;
       query = query.or(orderFieldsSearch);
@@ -165,14 +165,14 @@ const fetchOrders = async ({
           .from('profiles')
           .select('id')
           .ilike('name', searchPattern);
-        
+
         if (profileError) {
           console.warn('User name search error:', profileError);
           // Log error but continue - don't return empty on error
         }
-        
+
         const matchingUserIds = matchingProfiles?.map(p => p.id) || [];
-        
+
         if (matchingUserIds.length > 0) {
           query = query.in('user_id', matchingUserIds);
         } else {
@@ -191,15 +191,15 @@ const fetchOrders = async ({
           .from('profiles')
           .select('id')
           .or(`name.ilike.${searchPattern},email.ilike.${searchPattern},phone_number.ilike.${searchPattern}`);
-        
+
         if (profileError) {
           console.warn('Profile search error:', profileError);
           // Log error but continue - return empty result
           return { data: [], nextPage: undefined, total: 0 };
         }
-        
+
         const matchingUserIds = matchingProfiles?.map(p => p.id) || [];
-        
+
         if (matchingUserIds.length > 0) {
           query = query.in('user_id', matchingUserIds);
         } else {
@@ -222,20 +222,20 @@ const fetchOrders = async ({
       // For INTEGER (jbsmmpanel_order_id), try numeric match if search term is numeric
       const trimmedSearch = searchTerm.trim();
       const numericSearch = /^\d+$/.test(trimmedSearch);
-      
+
       // Build conditions for text fields (UUID and TEXT columns)
       let orderFieldsSearch = `id.ilike.${searchPattern},smmgen_order_id.ilike.${searchPattern},smmcost_order_id.ilike.${searchPattern},link.ilike.${searchPattern}`;
-      
+
       // For numeric jbsmmpanel_order_id, add numeric condition if search term is numeric
       if (numericSearch) {
         orderFieldsSearch += `,jbsmmpanel_order_id.eq.${trimmedSearch}`;
       }
-      
+
       // Search services and packages for matching names
       let matchingServiceIds = [];
       let matchingPackageIds = [];
       let matchingUserIds = [];
-      
+
       // Search services - limit to 15 to prevent query from becoming too long
       try {
         const { data: matchingServices } = await supabase
@@ -247,7 +247,7 @@ const fetchOrders = async ({
       } catch (e) {
         console.warn('Service search in "all" mode failed:', e);
       }
-      
+
       // Search packages - limit to 15 to prevent query from becoming too long
       try {
         const { data: matchingPackages } = await supabase
@@ -259,7 +259,7 @@ const fetchOrders = async ({
       } catch (e) {
         console.warn('Package search in "all" mode failed:', e);
       }
-      
+
       // Search profiles (name, email, phone)
       // Limit to first 15 to prevent query from becoming too long
       try {
@@ -268,7 +268,7 @@ const fetchOrders = async ({
           .select('id')
           .or(`name.ilike.${searchPattern},email.ilike.${searchPattern},phone_number.ilike.${searchPattern}`)
           .limit(15);
-        
+
         if (!profileError) {
           matchingUserIds = matchingProfiles?.map(p => p.id) || [];
         } else {
@@ -277,14 +277,14 @@ const fetchOrders = async ({
       } catch (profileSearchError) {
         console.warn('Profile search failed in "all" mode:', profileSearchError);
       }
-      
+
       // Limit the number of IDs to prevent query from becoming too long
       // Supabase has limits on query/URL length, so we cap at 15 per type (45 total + 5 order fields = 50 max)
       const MAX_IDS_PER_TYPE = 15;
       const limitedUserIds = matchingUserIds.slice(0, MAX_IDS_PER_TYPE);
       const limitedServiceIds = matchingServiceIds.slice(0, MAX_IDS_PER_TYPE);
       const limitedPackageIds = matchingPackageIds.slice(0, MAX_IDS_PER_TYPE);
-      
+
       // Warn if we're truncating results
       if (matchingUserIds.length > MAX_IDS_PER_TYPE || matchingServiceIds.length > MAX_IDS_PER_TYPE || matchingPackageIds.length > MAX_IDS_PER_TYPE) {
         console.warn(`[useAdminOrders] Search term "${searchTerm}" matched too many results. Limiting to first ${MAX_IDS_PER_TYPE} per type.`, {
@@ -293,22 +293,22 @@ const fetchOrders = async ({
           packages: matchingPackageIds.length
         });
       }
-      
+
       // Build OR condition: order fields OR user_id OR service_id OR promotion_package_id
       const conditions = [orderFieldsSearch];
-      
+
       if (limitedUserIds.length > 0) {
         conditions.push(...limitedUserIds.map(id => `user_id.eq.${id}`));
       }
-      
+
       if (limitedServiceIds.length > 0) {
         conditions.push(...limitedServiceIds.map(id => `service_id.eq.${id}`));
       }
-      
+
       if (limitedPackageIds.length > 0) {
         conditions.push(...limitedPackageIds.map(id => `promotion_package_id.eq.${id}`));
       }
-      
+
       if (conditions.length > 0) {
         query = query.or(conditions.join(','));
       }
@@ -329,11 +329,11 @@ const fetchOrders = async ({
   }
 
   let finalOrders = data || [];
-  
+
   // Debug logging
-  console.log('fetchOrders result:', { 
-    pageParam, 
-    finalOrdersCount: finalOrders.length, 
+  console.log('fetchOrders result:', {
+    pageParam,
+    finalOrdersCount: finalOrders.length,
     totalCount: count,
     searchTerm,
     searchType,
@@ -371,12 +371,12 @@ const fetchAllOrders = async (checkSMMGenStatus = false) => {
   let allRecords = [];
   let from = 0;
   let hasMore = true;
-  
+
   // First, get total count to optimize fetching
   const { count, error: countError } = await supabase
     .from('orders')
     .select('*', { count: 'exact', head: true });
-  
+
   if (countError) {
     throw countError;
   }
@@ -384,7 +384,7 @@ const fetchAllOrders = async (checkSMMGenStatus = false) => {
   // Fetch all batches - optimized sequential fetching for large datasets
   while (hasMore) {
     const to = from + BATCH_SIZE - 1;
-    
+
     const { data, error } = await supabase
       .from('orders')
       .select('id, user_id, service_id, promotion_package_id, link, quantity, total_cost, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, created_at, completed_at, refund_status, last_status_check, services(name, platform, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id), promotion_packages(name, platform, service_type, smmgen_service_id), profiles(name, email, phone_number)')
@@ -422,9 +422,9 @@ const fetchAllOrders = async (checkSMMGenStatus = false) => {
 };
 
 export const useAdminOrders = (options = {}) => {
-  const { 
-    enabled = true, 
-    useInfinite = false, 
+  const {
+    enabled = true,
+    useInfinite = false,
     checkSMMGenStatus = false,
     searchTerm = '',
     searchType = 'all',
@@ -432,11 +432,11 @@ export const useAdminOrders = (options = {}) => {
     dateFilter = '',
     page = undefined // Default to undefined - if provided (even if 1), it's a display page request
   } = options;
-  
+
   // Check role at hook level (cached)
   const { data: userRole, isLoading: roleLoading } = useUserRole();
   const isAdmin = userRole?.isAdmin ?? false;
-  
+
   // Only enable queries if user is admin
   const queryEnabled = enabled && !roleLoading && isAdmin;
 
@@ -444,8 +444,8 @@ export const useAdminOrders = (options = {}) => {
     // For infinite query, still use pageParam but with filters
     return useInfiniteQuery({
       queryKey: ['admin', 'orders', 'infinite', { checkSMMGenStatus, searchTerm, searchType, statusFilter, dateFilter }],
-      queryFn: ({ pageParam }) => fetchOrders({ 
-        pageParam, 
+      queryFn: ({ pageParam }) => fetchOrders({
+        pageParam,
         checkSMMGenStatus,
         searchTerm,
         searchType,
@@ -466,7 +466,7 @@ export const useAdminOrders = (options = {}) => {
   // Check if this is a display page request (has page parameter) vs stats request (no page)
   const isDisplayPage = page !== undefined && page !== null;
   const hasFilters = searchTerm || searchType !== 'all' || statusFilter !== 'all' || dateFilter;
-  
+
   if (!useInfinite && !hasFilters && !isDisplayPage) {
     // Stats case - no page parameter provided, return array directly
     return useQuery({
@@ -483,7 +483,7 @@ export const useAdminOrders = (options = {}) => {
   return useQuery({
     queryKey: ['admin', 'orders', 'paginated', { checkSMMGenStatus, searchTerm, searchType, statusFilter, dateFilter, page: page || 1 }],
     queryFn: async () => {
-      const result = await fetchOrders({ 
+      const result = await fetchOrders({
         pageParam: (page || 1) - 1, // Convert 1-based page to 0-based pageParam, default to page 1 if not provided
         checkSMMGenStatus,
         searchTerm,
@@ -562,7 +562,7 @@ export const useUpdateOrder = () => {
             ...oldData,
             pages: oldData.pages.map((page) => {
               if (!page || !page.data) return page;
-              
+
               const updatedData = page.data.map((order) => {
                 if (order.id === orderId) {
                   return { ...order, ...updates };
@@ -651,12 +651,12 @@ export const useReorderToSMMGen = () => {
       }
 
       // Check if service or package has SMMGen service ID
-      const smmgenServiceId = order.promotion_package_id 
-        ? order.promotion_packages?.smmgen_service_id 
+      const smmgenServiceId = order.promotion_package_id
+        ? order.promotion_packages?.smmgen_service_id
         : order.services?.smmgen_service_id;
-      
+
       if (!smmgenServiceId) {
-        throw new Error(order.promotion_package_id 
+        throw new Error(order.promotion_package_id
           ? 'Promotion package does not have SMMGen service ID configured.'
           : 'Service does not have SMMGen service ID configured.');
       }
@@ -678,11 +678,11 @@ export const useReorderToSMMGen = () => {
       }
 
       // Extract SMMGen order ID from response
-      const smmgenOrderId = smmgenResponse.order || 
-                           smmgenResponse.order_id || 
-                           smmgenResponse.orderId || 
-                           smmgenResponse.id || 
-                           null;
+      const smmgenOrderId = smmgenResponse.order ||
+        smmgenResponse.order_id ||
+        smmgenResponse.orderId ||
+        smmgenResponse.id ||
+        null;
 
       if (!smmgenOrderId) {
         throw new Error('SMMGen API did not return an order ID.');
@@ -718,6 +718,44 @@ export const useReorderToSMMGen = () => {
     },
     onError: (error) => {
       toast.error(error.message || 'Failed to reorder to SMMGen');
+    },
+  });
+};
+
+export const useSafeRetryOrder = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (orderId) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await fetch('/api/admin/retry-order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ order_id: orderId })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || result.error || 'Failed to retry order');
+      }
+
+      return result;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'orders'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
+      toast.success(data.message || 'Order successfully retried!');
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to retry order');
     },
   });
 };

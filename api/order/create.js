@@ -168,8 +168,10 @@ export default async function handler(req, res) {
             } catch (pError) {
                 console.error('Provider Error:', pError);
 
-                // Track failure with detailed logs
+                // Update status to submission_failed instead of refunding
+                // This allows for a safe retry (manual or automatic) later
                 await supabase.from('orders').update({
+                    status: 'submission_failed',
                     provider_error_count: 1,
                     last_provider_error: pError.message,
                     provider_error_details: pError.providerDetails || null
@@ -192,16 +194,9 @@ export default async function handler(req, res) {
                     p_entity_id: order_id
                 });
 
-                // Refund balance if provider fails
-                await supabase.rpc('refund_failed_order', {
-                    p_order_id: order_id,
-                    p_user_id: user.id,
-                    p_amount: parseFloat(total_cost)
-                });
-
                 return res.status(502).json({
                     error: 'Provider Error',
-                    message: 'The provider failed to process your order. Your balance has been refunded.',
+                    message: 'The provider failed to process your order. It has been saved for retry. If it cannot be fulfilled, it will be refunded later.',
                     details: pError.message
                 });
             }

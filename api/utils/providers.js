@@ -28,6 +28,53 @@ export async function placeProviderOrder(provider, params) {
 }
 
 /**
+ * Searches for an existing order with matching parameters at the provider.
+ * This is used to prevent double orders during retries.
+ * 
+ * @param {string} provider - 'smmgen', 'jbsmmpanel', or 'smmcost'
+ * @param {Object} params - { service, link, quantity, maxAgeMins }
+ * @returns {Promise<Object|null>} Matching order or null
+ */
+export async function findMatchingProviderOrder(provider, params) {
+    const { service, link, quantity, maxAgeMins = 120 } = params;
+
+    try {
+        // Fetch last 100 orders from the provider
+        const recentOrders = await fetchProviderOrders(provider, 100);
+
+        if (!recentOrders || recentOrders.length === 0) return null;
+
+        const normalizedLink = link.trim().toLowerCase();
+        const now = Date.now();
+        const maxAgeMs = maxAgeMins * 60 * 1000;
+
+        // Find match in recent orders
+        const match = recentOrders.find(o => {
+            // Basic matching criteria
+            const linkMatch = o.link.trim().toLowerCase() === normalizedLink;
+            const quantityMatch = parseInt(o.quantity) === parseInt(quantity);
+            const serviceMatch = String(o.service) === String(service);
+
+            if (!linkMatch || !quantityMatch || !serviceMatch) return false;
+
+            // Time sanity check (if date is available)
+            if (o.date) {
+                const orderDate = new Date(o.date).getTime();
+                if (now - orderDate > maxAgeMs) return false;
+            }
+
+            return true;
+        });
+
+        return match || null;
+    } catch (error) {
+        console.error(`[PROVIDER RECON] Failed to find matching order at ${provider}:`, error.message);
+        // On error, we return null to allow the caller to decide whether to risk a duplicate or fail
+        return null;
+    }
+}
+
+/**
  * Fetches order status from a specific provider
  * @param {string} provider - 'smmgen', 'jbsmmpanel', or 'smmcost'
  * @param {string|number} providerOrderId - ID assigned by the provider

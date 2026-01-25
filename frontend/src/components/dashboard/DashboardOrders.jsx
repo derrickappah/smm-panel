@@ -19,6 +19,8 @@ const DashboardOrders = React.memo(({ orders, services }) => {
         return 'bg-red-100 text-red-700 border-red-200';
       } else if (statusLower === 'refunds' || statusLower.includes('refund')) {
         return 'bg-purple-100 text-purple-700 border-purple-200';
+      } else if (statusLower === 'submission_failed') {
+        return 'bg-red-50 text-red-600 border-red-100';
       } else {
         return 'bg-yellow-100 text-yellow-700 border-yellow-200';
       }
@@ -46,10 +48,10 @@ const DashboardOrders = React.memo(({ orders, services }) => {
         {orders.map((order) => {
           const service = services.find(s => s.id === order.service_id);
           const isPackageOrder = !!order.promotion_package_id;
-          const serviceName = isPackageOrder 
+          const serviceName = isPackageOrder
             ? order.promotion_packages?.name || 'Package'
             : service?.name || 'Service';
-          
+
           return (
             <div key={order.id} className={`bg-gray-50 border ${isPackageOrder ? 'border-purple-200' : 'border-gray-200'} p-4 rounded-lg hover:border-gray-300 transition-colors`}>
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
@@ -65,11 +67,23 @@ const DashboardOrders = React.memo(({ orders, services }) => {
                   </div>
                   <p className="text-xs sm:text-sm text-gray-600 mt-0.5">Quantity: {order.quantity?.toLocaleString() || '0'}</p>
                 </div>
-                <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+                <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
                   <p className="text-sm sm:text-base font-semibold text-gray-900">₵{order.total_cost?.toFixed(2) || '0.00'}</p>
-                  <span className={`text-xs font-medium px-2.5 py-1 rounded border ${getStatusStyles(order.status)}`}>
-                    {order.status}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-medium px-2.5 py-1 rounded border ${getStatusStyles(order.status)}`}>
+                      {order.status === 'submission_failed' ? 'Placement Failed' : order.status}
+                    </span>
+                    {order.status === 'submission_failed' && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => navigate('/orders')}
+                        className="text-xs h-7 px-2 border-red-200 text-red-600 hover:bg-red-50"
+                      >
+                        Retry
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

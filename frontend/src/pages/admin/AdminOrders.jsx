@@ -1,6 +1,6 @@
 import React, { memo, useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useAdminOrders, useUpdateOrder, useReorderToSMMGen } from '@/hooks/useAdminOrders';
+import { useAdminOrders, useUpdateOrder, useReorderToSMMGen, useSafeRetryOrder } from '@/hooks/useAdminOrders';
 import { useDebounce } from '@/hooks/useDebounce';
 import VirtualizedList from '@/components/VirtualizedList';
 import ResponsiveTable from '@/components/admin/ResponsiveTable';
@@ -72,6 +72,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
 
   const updateOrderMutation = useUpdateOrder();
   const reorderMutation = useReorderToSMMGen();
+  const safeRetryMutation = useSafeRetryOrder();
 
   // Fetch all pending/processing/in-progress orders from database
   const fetchPendingOrders = useCallback(async () => {
@@ -452,7 +453,8 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                 order.status === 'canceled' || order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
                   order.status === 'refunds' ? 'bg-purple-100 text-purple-700' :
                     order.status === 'refunded' ? 'bg-gray-100 text-gray-700' :
-                      'bg-yellow-100 text-yellow-700'
+                      order.status === 'submission_failed' ? 'bg-red-50 text-red-600 border border-red-100' :
+                        'bg-yellow-100 text-yellow-700'
             }`}>
             {order.status === 'refunded' ? 'already refunded' : (order.status || 'pending')}
           </span>
@@ -646,6 +648,19 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                   {reorderMutation.isPending ? 'Sending...' : 'Reorder'}
                 </Button>
               )}
+            {order.status === 'submission_failed' && (
+              <Button
+                onClick={() => safeRetryMutation.mutate(order.id)}
+                disabled={safeRetryMutation.isPending}
+                variant="outline"
+                size="sm"
+                className="w-full min-h-[44px] text-xs text-red-600 hover:text-red-700 border-red-300 hover:bg-red-50"
+                title="Safely retry placing this order at the provider"
+              >
+                <RotateCcw className={`w-3 h-3 mr-1 ${safeRetryMutation.isPending ? 'animate-spin' : ''}`} />
+                {safeRetryMutation.isPending ? 'Retrying...' : 'Safe Retry'}
+              </Button>
+            )}
             {(order.status === 'canceled' || order.status === 'cancelled') &&
               order.refund_status !== 'succeeded' &&
               order.status !== 'refunded' && (
@@ -693,7 +708,8 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                     order.status === 'canceled' || order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
                       order.status === 'refunds' ? 'bg-purple-100 text-purple-700' :
                         order.status === 'refunded' ? 'bg-gray-100 text-gray-700' :
-                          'bg-yellow-100 text-yellow-700'
+                          order.status === 'submission_failed' ? 'bg-red-50 text-red-600 border border-red-100' :
+                            'bg-yellow-100 text-yellow-700'
                 }`}>
                 {order.status === 'refunded' ? 'already refunded' : (order.status || 'pending')}
               </span>
