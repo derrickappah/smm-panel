@@ -87,12 +87,21 @@ GRANT EXECUTE ON FUNCTION lock_order_for_retry(TEXT, TEXT) TO service_role, auth
 CREATE OR REPLACE FUNCTION auto_mark_submission_failed()
 RETURNS TRIGGER AS $$
 BEGIN
+    -- 1. Mark 'Order not placed' text as submission_failed
     IF (NEW.smmgen_order_id ILIKE '%Order not placed%' OR 
         NEW.smmcost_order_id::text ILIKE '%Order not placed%' OR 
         NEW.jbsmmpanel_order_id::text ILIKE '%Order not placed%') 
        AND NEW.status != 'submission_failed' THEN
         NEW.status := 'submission_failed';
     END IF;
+
+    -- 2. Mark legacy UUID IDs as canceled
+    -- UUID pattern: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+    IF (NEW.id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') 
+       AND NEW.status NOT IN ('canceled', 'cancelled', 'refunded', 'completed') THEN
+        NEW.status := 'canceled';
+    END IF;
+
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -103,11 +112,17 @@ BEFORE INSERT OR UPDATE ON orders
 FOR EACH ROW
 EXECUTE FUNCTION auto_mark_submission_failed();
 
--- 6. Cleanup Existing Legacy Failed Records
--- One-time sync to move legacy text-failures to the new formal status
+-- 6. Cleanup Existing Legacy Records
+-- Fix 'Order not placed' to submission_failed
 UPDATE orders
 SET status = 'submission_failed'
 WHERE (smmgen_order_id ILIKE '%Order not placed%' OR 
        smmcost_order_id::text ILIKE '%Order not placed%' OR 
        jbsmmpanel_order_id::text ILIKE '%Order not placed%')
 AND status NOT IN ('submission_failed', 'completed', 'cancelled', 'canceled', 'refunded');
+
+-- Fix UUID-style IDs to canceled
+UPDATE orders
+SET status = 'canceled'
+WHERE id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+AND status NOT IN ('canceled', 'cancelled', 'refunded', 'completed');
