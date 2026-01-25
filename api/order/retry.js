@@ -32,7 +32,11 @@ export default async function handler(req, res) {
 
         if (lockError) {
             console.error('[RETRY LOCK ERROR]:', lockError);
-            return res.status(500).json({ error: 'Database lock error', details: lockError.message });
+            return res.status(500).json({
+                error: 'Database lock error',
+                message: lockError.message,
+                details: lockError.details || lockError.hint
+            });
         }
 
         const lockData = Array.isArray(lockResult) ? lockResult[0] : lockResult;
