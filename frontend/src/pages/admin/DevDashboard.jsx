@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import SEO from '@/components/SEO';
 import { toast } from 'sonner';
+import { AlertCircle, Lock } from 'lucide-react';
 
 const formatLatency = (mins) => {
     if (!mins) return '0M';
@@ -22,7 +23,27 @@ const formatLatency = (mins) => {
 
 const DevDashboard = ({ user }) => {
     const [reconciling, setReconciling] = useState(false);
+    const [scanning, setScanning] = useState(false);
     const [reconData, setReconData] = useState(null);
+
+    const runDeepScan = async () => {
+        setScanning(true);
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const response = await fetch('/api/admin/run-security-scan', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${session?.access_token}` }
+            });
+            if (!response.ok) throw new Error('Scan failed');
+            const data = await response.json();
+            toast.success(`Scan Complete: Found ${data.ghost_orders} Ghost Orders, ${data.spam_clusters} Abuse Clusters`);
+            refetch();
+        } catch (err) {
+            toast.error(err.message);
+        } finally {
+            setScanning(false);
+        }
+    };
 
     const { data: monitorData, isLoading, error, refetch } = useQuery({
         queryKey: ['admin', 'monitor-system'],
@@ -184,6 +205,16 @@ const DevDashboard = ({ user }) => {
                     <p className="text-sm text-emerald-300 mt-1 font-bold">REAL-TIME TELEMETRY FEED: {monitorData?.timestamp}</p>
                 </div>
                 <div className="flex items-center gap-3">
+                    <Button
+                        variant="default"
+                        size="sm"
+                        onClick={runDeepScan}
+                        disabled={scanning}
+                        className="bg-red-900/20 border-red-500/30 hover:bg-red-900/40 text-red-500 text-xs border"
+                    >
+                        <Lock className={`w-3 h-3 mr-2 ${scanning ? 'animate-pulse' : ''}`} />
+                        {scanning ? 'SCANNING_THREATS...' : 'RUN_DEEP_SCAN'}
+                    </Button>
                     <Button
                         variant="destructive"
                         size="sm"

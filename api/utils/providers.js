@@ -48,6 +48,135 @@ export async function fetchProviderOrderStatus(provider, providerOrderId) {
     }
 }
 
+
+
+/**
+ * Fetches recent orders from a provider (for reconciliation)
+ * @param {string} provider - Provider name
+ * @param {number} limit - Max orders to fetch (default 100)
+ * @returns {Promise<Array>} List of orders { id, service, link, quantity, status, charge }
+ */
+export async function fetchProviderOrders(provider, limit = 100) {
+    switch (provider.toLowerCase()) {
+        case 'smmgen':
+            return await fetchSMMGenRecentOrders(limit);
+        case 'jbsmmpanel':
+            return await fetchJBSMMPanelRecentOrders(limit);
+        case 'smmcost':
+            return await fetchSMMCostRecentOrders(limit);
+        default:
+            console.warn(`Provider ${provider} does not support order listing.`);
+            return [];
+    }
+}
+
+async function fetchSMMGenRecentOrders(limit) {
+    const SMMGEN_API_URL = process.env.SMMGEN_API_URL || 'https://smmgen.com/api/v2';
+    const SMMGEN_API_KEY = process.env.SMMGEN_API_KEY;
+
+    if (!SMMGEN_API_KEY) return [];
+
+    try {
+        const response = await fetch(SMMGEN_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                key: SMMGEN_API_KEY,
+                action: 'orders',
+                limit: limit
+            })
+        });
+
+        if (!response.ok) return [];
+        const data = await response.json();
+        // Normalize
+        return Array.isArray(data) ? data.map(o => ({
+            id: String(o.order),
+            service: String(o.service),
+            link: o.link,
+            quantity: parseInt(o.quantity),
+            status: o.status,
+            charge: parseFloat(o.charge),
+            date: o.date // often YYYY-MM-DD HH:mm:ss
+        })) : [];
+    } catch (e) {
+        console.error('SMMGen fetch orders failed:', e);
+        return [];
+    }
+}
+
+async function fetchJBSMMPanelRecentOrders(limit) {
+    const JBSMMPANEL_API_URL = process.env.JBSMMPANEL_API_URL || 'https://jbsmmpanel.com/api/v2';
+    const JBSMMPANEL_API_KEY = process.env.JBSMMPANEL_API_KEY;
+
+    if (!JBSMMPANEL_API_KEY) return [];
+
+    try {
+        const params = new URLSearchParams({
+            key: JBSMMPANEL_API_KEY,
+            action: 'orders',
+            limit: String(limit)
+        });
+
+        const response = await fetch(JBSMMPANEL_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params
+        });
+
+        if (!response.ok) return [];
+        const data = await response.json();
+        return Array.isArray(data) ? data.map(o => ({
+            id: String(o.order),
+            service: String(o.service),
+            link: o.link,
+            quantity: parseInt(o.quantity),
+            status: o.status,
+            charge: parseFloat(o.charge),
+            date: o.date
+        })) : [];
+    } catch (e) {
+        console.error('JBSMM fetch orders failed:', e);
+        return [];
+    }
+}
+
+async function fetchSMMCostRecentOrders(limit) {
+    const SMMCOST_API_URL = process.env.SMMCOST_API_URL || 'https://smmcost.com/api/v2';
+    const SMMCOST_API_KEY = process.env.SMMCOST_API_KEY;
+
+    if (!SMMCOST_API_KEY) return [];
+
+    try {
+        const params = new URLSearchParams({
+            key: SMMCOST_API_KEY,
+            action: 'orders',
+            limit: String(limit)
+        });
+
+        const response = await fetch(SMMCOST_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params
+        });
+
+        if (!response.ok) return [];
+        const data = await response.json();
+        return Array.isArray(data) ? data.map(o => ({
+            id: String(o.order),
+            service: String(o.service),
+            link: o.link,
+            quantity: parseInt(o.quantity),
+            status: o.status,
+            charge: parseFloat(o.charge),
+            date: o.date
+        })) : [];
+    } catch (e) {
+        console.error('SMMCost fetch orders failed:', e);
+        return [];
+    }
+}
+
 async function fetchSMMGenStatus(providerOrderId) {
     const SMMGEN_API_URL = process.env.SMMGEN_API_URL || 'https://smmgen.com/api/v2';
     const SMMGEN_API_KEY = process.env.SMMGEN_API_KEY;

@@ -65,6 +65,10 @@ export default async function handler(req, res) {
             .order('discrepancy', { ascending: false })
             .limit(1000);
 
+        // 6. Get Security & Ghost Order Stats
+        const { count: ghostCount } = await supabase.from('security_ghost_orders').select('*', { count: 'exact', head: true }).eq('is_resolved', false);
+        const { count: suspiciousCount } = await supabase.from('security_suspicious_activity').select('*', { count: 'exact', head: true }).eq('is_resolved', false);
+
         return res.status(200).json({
             success: true,
             timestamp: new Date().toISOString(),
@@ -74,6 +78,10 @@ export default async function handler(req, res) {
                     last_success: summaryData.last_provider_success,
                     failures_30m: providerFailures30m || 0,
                     status: (providerFailures30m > 5) ? 'WARNING' : 'HEALTHY'
+                },
+                advanced_security: {
+                    ghost_orders: ghostCount || 0,
+                    suspicious_activity: suspiciousCount || 0
                 }
             },
             details: {
