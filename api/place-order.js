@@ -57,7 +57,7 @@ export default async function handler(req, res) {
     }
 
     // URL Validation (Defensive)
-    const urlPattern = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([\/\w .-]*)*\/?$/;
+    const urlPattern = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([\/\w .?=@&%+-]*)*\/?$/;
     if (!urlPattern.test(link)) {
       return res.status(400).json({
         error: 'Invalid URL format'
