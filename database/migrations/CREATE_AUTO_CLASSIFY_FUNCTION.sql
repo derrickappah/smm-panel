@@ -92,8 +92,17 @@ BEGIN
             );
         END;
     END IF;
+
+    -- If amount is negative, it's almost certainly an order or debit
+    IF p_amount < 0 THEN
+        RETURN jsonb_build_object(
+            'type', 'order',
+            'description', format('Order service charge of ₵%s', ABS(p_amount)),
+            'auto_classified', true
+        );
+    END IF;
     
-    -- Default to unknown if no pattern matches
+    -- Default to unknown for unhandled positive amounts
     RETURN jsonb_build_object(
         'type', 'unknown',
         'description', format('Unclassified balance change of ₵%s', ABS(p_amount)),

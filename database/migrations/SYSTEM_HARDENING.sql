@@ -48,13 +48,21 @@ SELECT
         CASE 
             WHEN t.status = 'approved' THEN
                 CASE 
-                    -- These add to balance (positive)
+                    -- These ALWAYS add to balance (credits)
                     WHEN t.type IN ('deposit', 'refund', 'referral_bonus') THEN ABS(t.amount)
-                    -- Manual adjustments can be positive or negative
-                    WHEN t.type = 'manual_adjustment' THEN t.amount
-                    -- Orders subtract from balance (negative)
+                    
+                    -- Orders ALWAYS subtract from balance (debits)
                     WHEN t.type = 'order' THEN -ABS(t.amount)
-                    ELSE 0
+                    
+                    -- Manual adjustments depend on context (stored in description)
+                    WHEN t.type = 'manual_adjustment' THEN
+                        CASE 
+                            WHEN t.description LIKE '%debit%' OR t.description LIKE '%removal%' THEN -ABS(t.amount)
+                            ELSE ABS(t.amount) -- Default to credit if not explicitly debit
+                        END
+                        
+                    -- Unknown fallback: let's treat them as credits if positive, but they shouldn't exist anymore
+                    ELSE ABS(t.amount)
                 END
             ELSE 0
         END
@@ -63,19 +71,22 @@ SELECT
         CASE 
             WHEN t.status = 'approved' THEN
                 CASE 
-                    -- These add to balance (positive)
                     WHEN t.type IN ('deposit', 'refund', 'referral_bonus') THEN ABS(t.amount)
-                    -- Manual adjustments can be positive or negative
-                    WHEN t.type = 'manual_adjustment' THEN t.amount
-                    -- Orders subtract from balance (negative)
                     WHEN t.type = 'order' THEN -ABS(t.amount)
-                    ELSE 0
+                    WHEN t.type = 'manual_adjustment' THEN
+                        CASE 
+                            WHEN t.description LIKE '%debit%' OR t.description LIKE '%removal%' THEN -ABS(t.amount)
+                            ELSE ABS(t.amount)
+                        END
+                    ELSE ABS(t.amount)
                 END
             ELSE 0
         END
     ), 0) as discrepancy
 FROM profiles p
 LEFT JOIN transactions t ON p.id = t.user_id
+-- Filter out ignored users
+WHERE NOT EXISTS (SELECT 1 FROM ledger_balance_exceptions WHERE user_id = p.id)
 GROUP BY p.id, p.email, p.balance
 HAVING p.balance != 0 OR EXISTS (SELECT 1 FROM transactions WHERE user_id = p.id);
 
