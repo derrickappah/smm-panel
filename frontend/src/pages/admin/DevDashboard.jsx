@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import {
     Server, ShieldAlert, Activity, CreditCard,
     ShoppingCart, AlertTriangle, CheckCircle, Clock,
-    RefreshCw, TrendingDown, TrendingUp, Search, Crosshair, ExternalLink
+    RefreshCw, TrendingDown, TrendingUp, Search, Crosshair, ExternalLink, EyeOff
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -72,6 +72,35 @@ const DevDashboard = ({ user }) => {
             toast.error(err.message);
         } finally {
             setReconciling(false);
+        }
+    };
+
+    const handleIgnoreAnomaly = async (userId, userEmail) => {
+        if (!confirm(`Are you sure you want to ignore anomalies for ${userEmail}? This will hide them from the dashboard.`)) return;
+
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const response = await fetch('/api/admin/ignore-anomaly', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${session?.access_token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    userId,
+                    reason: 'Manually ignored from dashboard'
+                })
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Failed to ignore anomaly');
+            }
+
+            toast.success(`Anomaly ignored for ${userEmail}`);
+            refetch(); // Refresh list immediately
+        } catch (err) {
+            toast.error(err.message);
         }
     };
 
@@ -391,22 +420,41 @@ const DevDashboard = ({ user }) => {
                                     <TableHead className="font-mono text-[10px] text-gray-200 uppercase font-bold text-right">Cached Bal</TableHead>
                                     <TableHead className="font-mono text-[10px] text-gray-200 uppercase font-bold text-right">Ledger sum</TableHead>
                                     <TableHead className="font-mono text-[10px] text-gray-200 uppercase font-bold text-right">Discrepancy</TableHead>
+                                    <TableHead className="font-mono text-[10px] text-gray-200 uppercase font-bold text-right">Action</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {d.balance_anomalies.map((item) => (
                                     <TableRow
                                         key={item.user_id}
-                                        className="border-gray-800 hover:bg-gray-900/40 cursor-pointer"
-                                        onClick={() => window.open(`/admin/users?search=${item.email}`, '_blank')}
+                                        className="border-gray-800 hover:bg-gray-900/40"
                                     >
-                                        <TableCell className="text-gray-100 font-bold">{item.email}</TableCell>
+                                        <TableCell
+                                            className="text-gray-100 font-bold cursor-pointer hover:underline"
+                                            onClick={() => window.open(`/admin/users?search=${item.email}`, '_blank')}
+                                        >
+                                            {item.email}
+                                        </TableCell>
                                         <TableCell className="text-right text-gray-300 font-mono">GH₵{item.cached_balance}</TableCell>
                                         <TableCell className="text-right text-gray-300 font-mono">GH₵{item.ledger_balance}</TableCell>
                                         <TableCell className="text-right">
                                             <Badge className={`font-bold ${item.discrepancy > 0 ? 'bg-red-500/30 text-red-500' : 'bg-emerald-500/30 text-emerald-500'}`}>
                                                 {item.discrepancy > 0 ? '+' : ''}{item.discrepancy}
                                             </Badge>
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-6 w-6 p-0 hover:bg-gray-800 text-gray-400 hover:text-white"
+                                                title="Ignore this anomaly"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleIgnoreAnomaly(item.user_id, item.email);
+                                                }}
+                                            >
+                                                <EyeOff className="w-3 h-3" />
+                                            </Button>
                                         </TableCell>
                                     </TableRow>
                                 ))}
