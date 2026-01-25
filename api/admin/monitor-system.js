@@ -63,7 +63,7 @@ export default async function handler(req, res) {
             .select('*')
             .neq('discrepancy', 0)
             .order('discrepancy', { ascending: false })
-            .limit(10);
+            .limit(1000);
 
         return res.status(200).json({
             success: true,

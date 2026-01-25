@@ -410,7 +410,7 @@ const DevDashboard = ({ user }) => {
                                 DETAILED_BALANCE_ANOMALIES
                             </CardTitle>
                             <CardDescription className="text-xs text-red-400 font-mono uppercase">
-                                Accounts where database balance differs from transaction ledger (Top 10)
+                                Accounts where database balance differs from transaction ledger (Top 1000)
                             </CardDescription>
                         </div>
                         <Button
