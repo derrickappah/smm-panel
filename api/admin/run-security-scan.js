@@ -14,10 +14,18 @@ export default async function handler(req, res) {
         if (!isAdmin) return res.status(403).json({ error: 'Unauthorized' });
 
         // Run both scans in parallel
+        console.log('[SCAN] Starting parallel security scan...');
         const [ghostResult, abuseResult] = await Promise.all([
-            runGhostOrderDetection(),
-            runSuspiciousActivityDetection()
+            runGhostOrderDetection().catch(err => {
+                console.error('[SCAN] Ghost detection failed:', err);
+                return { ghost_orders: 0, error: err.message };
+            }),
+            runSuspiciousActivityDetection().catch(err => {
+                console.error('[SCAN] Abuse detection failed:', err);
+                return { spam: 0, spikes: 0, error: err.message };
+            })
         ]);
+        console.log('[SCAN] Scan complete.', { ghostResult, abuseResult });
 
         return res.status(200).json({
             success: true,
