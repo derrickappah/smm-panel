@@ -13,7 +13,7 @@ export default async function handler(req, res) {
 
     try {
         const { user, supabase: userSupabase } = await verifyAuth(req);
-        const { service_id, package_id, link, quantity, total_cost } = req.body;
+        const { service_id, package_id, link, quantity, total_cost, comments } = req.body;
 
         // 1. Basic Validation
         if (!link || !quantity || !total_cost || (!service_id && !package_id)) {
@@ -139,7 +139,8 @@ export default async function handler(req, res) {
                 const providerResponse = await placeProviderOrder(provider, {
                     service: provider_service_id,
                     link: link.trim(),
-                    quantity: quantity
+                    quantity: quantity,
+                    comments: comments ? String(comments).trim() : undefined
                 });
 
                 const providerOrderId = extractOrderId(providerResponse);
@@ -165,6 +166,7 @@ export default async function handler(req, res) {
                         new_balance: rpcResult.new_balance
                     });
                 } else {
+                    console.error('[PROVIDER RESPONSE ERROR] Provider returned success but no order ID:', providerResponse);
                     const error = new Error('Provider failed to return order ID');
                     error.providerDetails = providerResponse; // Capture the unexpected success response
                     throw error;
