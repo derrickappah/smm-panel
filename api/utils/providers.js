@@ -13,17 +13,17 @@ const REQUEST_TIMEOUT = 30000;
  * @returns {Promise<Object>} Provider response
  */
 export async function placeProviderOrder(provider, params) {
-    const { service, link, quantity } = params;
+    const { service, link, quantity, comments } = params;
 
     switch (provider.toLowerCase()) {
         case 'smmgen':
-            return await placeSMMGenOrder(service, link, quantity);
+            return await placeSMMGenOrder(service, link, quantity, comments);
         case 'jbsmmpanel':
-            return await placeJBSMMPanelOrder(service, link, quantity);
+            return await placeJBSMMPanelOrder(service, link, quantity, comments);
         case 'smmcost':
-            return await placeSMMCostOrder(service, link, quantity);
+            return await placeSMMCostOrder(service, link, quantity, comments);
         case 'worldofsmm':
-            return await placeWorldOfSMMOrder(service, link, quantity);
+            return await placeWorldOfSMMOrder(service, link, quantity, comments);
         default:
             throw new Error(`Unsupported provider: ${provider}`);
     }
@@ -294,7 +294,7 @@ async function fetchSMMCostStatus(providerOrderId) {
     return await response.json();
 }
 
-async function placeSMMGenOrder(service, link, quantity) {
+async function placeSMMGenOrder(service, link, quantity, comments) {
     const SMMGEN_API_URL = process.env.SMMGEN_API_URL || 'https://smmgen.com/api/v2';
     const SMMGEN_API_KEY = process.env.SMMGEN_API_KEY;
 
@@ -308,7 +308,8 @@ async function placeSMMGenOrder(service, link, quantity) {
             action: 'add',
             service: String(service).trim(),
             link: link.trim(),
-            quantity: parseInt(quantity, 10)
+            quantity: parseInt(quantity, 10),
+            comments: comments ? String(comments).trim() : undefined
         })
     });
 
@@ -333,19 +334,28 @@ async function placeSMMGenOrder(service, link, quantity) {
     return await response.json();
 }
 
-async function placeJBSMMPanelOrder(service, link, quantity) {
+async function placeJBSMMPanelOrder(service, link, quantity, comments) {
     const JBSMMPANEL_API_URL = process.env.JBSMMPANEL_API_URL || 'https://jbsmmpanel.com/api/v2';
     const JBSMMPANEL_API_KEY = process.env.JBSMMPANEL_API_KEY;
 
     if (!JBSMMPANEL_API_KEY) throw new Error('JBSMMPanel API key not configured');
 
-    const requestBody = new URLSearchParams({
+    // Remove undefined comments from params if URLSearchParams includes "undefined" string
+    // URLSearchParams doesn't handle undefined values well (converts to "undefined" string)
+    // We need to construct the object carefully first
+    const params = {
         key: JBSMMPANEL_API_KEY,
         action: 'add',
         service: String(service).trim(),
         link: link.trim(),
         quantity: String(quantity)
-    }).toString();
+    };
+
+    if (comments) {
+        params.comments = String(comments).trim();
+    }
+
+    const requestBody = new URLSearchParams(params).toString();
 
     const response = await fetch(JBSMMPANEL_API_URL, {
         method: 'POST',
@@ -373,19 +383,25 @@ async function placeJBSMMPanelOrder(service, link, quantity) {
     return await response.json();
 }
 
-async function placeSMMCostOrder(service, link, quantity) {
+async function placeSMMCostOrder(service, link, quantity, comments) {
     const SMMCOST_API_URL = process.env.SMMCOST_API_URL || 'https://smmcost.com/api/v2';
     const SMMCOST_API_KEY = process.env.SMMCOST_API_KEY;
 
     if (!SMMCOST_API_KEY) throw new Error('SMMCost API key not configured');
 
-    const requestBody = new URLSearchParams({
+    const params = {
         key: SMMCOST_API_KEY,
         action: 'add',
         service: String(service).trim(),
         link: link.trim(),
         quantity: String(quantity)
-    }).toString();
+    };
+
+    if (comments) {
+        params.comments = String(comments).trim();
+    }
+
+    const requestBody = new URLSearchParams(params).toString();
 
     const response = await fetch(SMMCOST_API_URL, {
         method: 'POST',
@@ -471,19 +487,25 @@ async function fetchWorldOfSMMStatus(providerOrderId) {
     return await response.json();
 }
 
-async function placeWorldOfSMMOrder(service, link, quantity) {
+async function placeWorldOfSMMOrder(service, link, quantity, comments) {
     const WORLDOFSMM_API_URL = process.env.WORLDOFSMM_API_URL || 'https://worldofsmm.com/api/v2';
     const WORLDOFSMM_API_KEY = process.env.WORLDOFSMM_API_KEY;
 
     if (!WORLDOFSMM_API_KEY) throw new Error('World of SMM API key not configured');
 
-    const requestBody = new URLSearchParams({
+    const params = {
         key: WORLDOFSMM_API_KEY,
         action: 'add',
         service: String(service).trim(),
         link: link.trim(),
         quantity: String(quantity)
-    }).toString();
+    };
+
+    if (comments) {
+        params.comments = String(comments).trim();
+    }
+
+    const requestBody = new URLSearchParams(params).toString();
 
     const response = await fetch(WORLDOFSMM_API_URL, {
         method: 'POST',

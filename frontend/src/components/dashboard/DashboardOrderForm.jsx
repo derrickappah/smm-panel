@@ -5,13 +5,13 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, Layers, Tag } from 'lucide-react';
 
-const DashboardOrderForm = React.memo(({ 
+const DashboardOrderForm = React.memo(({
   services = [],
   packages = [],
-  orderForm, 
-  setOrderForm, 
-  handleOrder, 
-  loading 
+  orderForm,
+  setOrderForm,
+  handleOrder,
+  loading
 }) => {
   const [serviceSearch, setServiceSearch] = useState('');
   const [selectOpen, setSelectOpen] = useState(false);
@@ -29,12 +29,12 @@ const DashboardOrderForm = React.memo(({
     });
   }, [services]);
 
-  const selectedService = useMemo(() => 
+  const selectedService = useMemo(() =>
     sortedServices.find(s => s.id === orderForm.service_id),
     [sortedServices, orderForm.service_id]
   );
 
-  const selectedPackage = useMemo(() => 
+  const selectedPackage = useMemo(() =>
     packages.find(p => p.id === orderForm.package_id),
     [packages, orderForm.package_id]
   );
@@ -42,7 +42,7 @@ const DashboardOrderForm = React.memo(({
   const filteredServices = useMemo(() => {
     if (!serviceSearch.trim()) return sortedServices;
     const searchLower = serviceSearch.toLowerCase();
-    return sortedServices.filter(service => 
+    return sortedServices.filter(service =>
       service.name?.toLowerCase().includes(searchLower) ||
       service.platform?.toLowerCase().includes(searchLower) ||
       service.service_type?.toLowerCase().includes(searchLower) ||
@@ -53,7 +53,7 @@ const DashboardOrderForm = React.memo(({
   const filteredPackages = useMemo(() => {
     if (!serviceSearch.trim()) return packages;
     const searchLower = serviceSearch.toLowerCase();
-    return packages.filter(pkg => 
+    return packages.filter(pkg =>
       pkg.name?.toLowerCase().includes(searchLower) ||
       pkg.platform?.toLowerCase().includes(searchLower) ||
       pkg.service_type?.toLowerCase().includes(searchLower) ||
@@ -66,31 +66,31 @@ const DashboardOrderForm = React.memo(({
     if (selectedPackage) {
       return selectedPackage.price.toFixed(2);
     }
-    
+
     // Otherwise calculate from service
     if (!selectedService || !orderForm.quantity) return '0.00';
-    
+
     const quantity = parseInt(orderForm.quantity);
     if (isNaN(quantity) || quantity <= 0) return '0.00';
-    
+
     if (selectedService.is_combo && selectedService.combo_service_ids?.length > 0) {
       const componentServices = selectedService.combo_service_ids
         .map(serviceId => sortedServices.find(s => s.id === serviceId))
         .filter(s => s !== undefined);
-      
+
       if (componentServices.length === 0) {
         const rateUnit = selectedService.rate_unit || 1000;
         return ((quantity / rateUnit) * selectedService.rate).toFixed(2);
       }
-      
+
       const totalCost = componentServices.reduce((sum, componentService) => {
         const rateUnit = componentService.rate_unit || 1000;
         return sum + ((quantity / rateUnit) * componentService.rate);
       }, 0);
-      
+
       return totalCost.toFixed(2);
     }
-    
+
     const rateUnit = selectedService.rate_unit || 1000;
     return ((quantity / rateUnit) * selectedService.rate).toFixed(2);
   }, [selectedService, selectedPackage, orderForm.quantity, sortedServices]);
@@ -113,9 +113,9 @@ const DashboardOrderForm = React.memo(({
 
   const handlePackageSelect = useCallback((packageId) => {
     const pkg = packages.find(p => p.id === packageId);
-    setOrderForm(prev => ({ 
-      ...prev, 
-      package_id: packageId, 
+    setOrderForm(prev => ({
+      ...prev,
+      package_id: packageId,
       service_id: '',
       quantity: pkg ? pkg.quantity.toString() : prev.quantity
     }));
@@ -146,20 +146,31 @@ const DashboardOrderForm = React.memo(({
     setOrderForm(prev => ({ ...prev, quantity: e.target.value }));
   }, [setOrderForm]);
 
+  const handleCommentsChange = useCallback((e) => {
+    setOrderForm(prev => ({ ...prev, comments: e.target.value }));
+  }, [setOrderForm]);
+
+  const isCustomCommentsService = useMemo(() => {
+    if (!selectedService) return false;
+    return selectedService.service_type === 'custom_comments' ||
+      selectedService.name?.toLowerCase().includes('custom comments') ||
+      selectedService.name?.toLowerCase().includes('custom comment');
+  }, [selectedService]);
+
   // Helper function to parse markdown-style formatting (bold and italic)
   const formatDescription = useCallback((text) => {
     if (!text) return null;
-    
+
     // Split by line breaks first to preserve them
     const lines = text.split('\n');
     const result = [];
-    
+
     lines.forEach((line, lineIndex) => {
       // Process each line for formatting
       const parts = [];
       let currentIndex = 0;
       let keyCounter = 0;
-      
+
       // Process bold (**text**) and italic (*text*) formatting
       while (currentIndex < line.length) {
         // Check for bold (**text**)
@@ -173,7 +184,7 @@ const DashboardOrderForm = React.memo(({
           currentIndex += boldMatch[0].length;
           continue;
         }
-        
+
         // Check for italic (*text*) - but not if it's part of bold
         const italicMatch = line.substring(currentIndex).match(/^\*([^*]+)\*/);
         if (italicMatch) {
@@ -185,11 +196,11 @@ const DashboardOrderForm = React.memo(({
           currentIndex += italicMatch[0].length;
           continue;
         }
-        
+
         // Find the next formatting marker
         const nextBold = line.indexOf('**', currentIndex);
         const nextItalic = line.indexOf('*', currentIndex);
-        
+
         let nextMarker = -1;
         if (nextBold !== -1 && nextItalic !== -1) {
           nextMarker = Math.min(nextBold, nextItalic);
@@ -198,7 +209,7 @@ const DashboardOrderForm = React.memo(({
         } else if (nextItalic !== -1) {
           nextMarker = nextItalic;
         }
-        
+
         if (nextMarker !== -1) {
           parts.push(
             <span key={`part-${lineIndex}-${keyCounter++}`}>
@@ -216,7 +227,7 @@ const DashboardOrderForm = React.memo(({
           break;
         }
       }
-      
+
       // Add the line content (even if empty, to preserve line breaks)
       if (parts.length > 0) {
         result.push(
@@ -230,13 +241,13 @@ const DashboardOrderForm = React.memo(({
           <span key={`line-${lineIndex}`}>&nbsp;</span>
         );
       }
-      
+
       // Add line break after each line except the last one
       if (lineIndex < lines.length - 1) {
         result.push(<br key={`br-${lineIndex}`} />);
       }
     });
-    
+
     return result;
   }, []);
 
@@ -259,9 +270,9 @@ const DashboardOrderForm = React.memo(({
               autoComplete="off"
               id="service-search-input"
             />
-            
+
             {selectOpen && (filteredServices.length > 0 || filteredPackages.length > 0) && (
-              <div 
+              <div
                 className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-[300px] overflow-y-auto"
                 onMouseDown={(e) => e.preventDefault()}
               >
@@ -300,7 +311,7 @@ const DashboardOrderForm = React.memo(({
                       ))}
                     </>
                   )}
-                  
+
                   {filteredServices.length > 0 && (
                     <>
                       {filteredPackages.length > 0 && (
@@ -348,17 +359,17 @@ const DashboardOrderForm = React.memo(({
               </div>
             )}
           </div>
-          
-          <Select 
+
+          <Select
             value={orderForm.service_id || ''}
-            onValueChange={() => {}}
+            onValueChange={() => { }}
             style={{ display: 'none' }}
           >
             <SelectTrigger style={{ display: 'none' }}>
               <SelectValue />
             </SelectTrigger>
           </Select>
-          
+
           {orderForm.package_id && selectedPackage && (
             <div className="mt-3 p-3 bg-purple-50 border-2 border-purple-300 rounded-lg">
               <div className="flex items-center gap-2 mb-1">
@@ -372,7 +383,7 @@ const DashboardOrderForm = React.memo(({
               </p>
             </div>
           )}
-          
+
           {orderForm.service_id && selectedService && (
             <div className="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
               <p className="text-sm font-medium text-gray-900">
@@ -383,7 +394,7 @@ const DashboardOrderForm = React.memo(({
               </p>
             </div>
           )}
-          
+
           {serviceSearch && (
             <p className="text-xs text-gray-500 mt-2">
               {filteredServices.length} service{filteredServices.length !== 1 ? 's' : ''} found
@@ -451,6 +462,24 @@ const DashboardOrderForm = React.memo(({
           )}
         </div>
 
+        {isCustomCommentsService && (
+          <div className="animate-fadeIn">
+            <Label htmlFor="comments" className="text-sm font-medium text-gray-700 mb-2 block">
+              Custom Comments
+              <span className="ml-1 text-xs font-normal text-gray-500">(One comment per line)</span>
+            </Label>
+            <textarea
+              id="comments"
+              data-testid="order-comments-input"
+              placeholder="Nice post!&#10;Love this content&#10;Amazing work"
+              value={orderForm.comments || ''}
+              onChange={handleCommentsChange}
+              rows={5}
+              className="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 min-h-[120px] p-3 text-sm"
+            />
+          </div>
+        )}
+
         <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-lg">
           <p className="text-xs sm:text-sm text-gray-600 mb-1">Estimated Cost</p>
           <p data-testid="order-estimated-cost" className="text-xl sm:text-2xl font-bold text-indigo-600">₵{estimatedCost}</p>
@@ -465,7 +494,7 @@ const DashboardOrderForm = React.memo(({
           {loading ? 'Processing...' : 'Place Order'}
         </Button>
       </form>
-      
+
       {(selectedService?.description || selectedPackage?.description) && (
         <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
           <p className="text-sm font-medium text-gray-900 mb-2">Description</p>

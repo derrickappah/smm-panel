@@ -47,7 +47,7 @@ export default async function handler(req, res) {
     const { user, supabase: userSupabase } = await verifyAuth(req);
 
     // Get request body
-    const { service_id, package_id, link, quantity, total_cost, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id } = req.body;
+    const { service_id, package_id, link, quantity, total_cost, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, comments } = req.body;
 
     // Validate required fields
     if (!link || typeof link !== 'string' || link.trim() === '') {
@@ -169,6 +169,9 @@ export default async function handler(req, res) {
       }
     });
 
+    // Validate comments if present
+    const commentsString = comments ? String(comments).trim() : null;
+
     // 1b. Rate Limit Check (Defensive)
     const { count: recentOrderCount } = await supabase
       .from('orders')
@@ -238,7 +241,8 @@ export default async function handler(req, res) {
             package_id: package_id || null,
             link: link.trim(),
             quantity: quantityNum,
-            total_cost: totalCostNum
+            total_cost: totalCostNum,
+            comments: commentsString
           },
           req
         });
@@ -275,7 +279,8 @@ export default async function handler(req, res) {
       smmgen_order_id_type: typeof smmgenOrderIdString,
       smmcost_order_id_type: typeof smmcostOrderIdString,
       jbsmmpanel_order_id_type: typeof jbsmmpanelOrderIdInt,
-      worldofsmm_order_id_type: typeof worldofsmmOrderIdString
+      worldofsmm_order_id_type: typeof worldofsmmOrderIdString,
+      comments_length: commentsString ? commentsString.length : 0
     });
 
     // Call the atomic database function to place order and deduct balance
@@ -290,7 +295,8 @@ export default async function handler(req, res) {
       p_smmgen_order_id: smmgenOrderIdString,
       p_smmcost_order_id: smmcostOrderIdString,
       p_jbsmmpanel_order_id: jbsmmpanelOrderIdInt,
-      p_worldofsmm_order_id: worldofsmmOrderIdString
+      p_worldofsmm_order_id: worldofsmmOrderIdString,
+      p_comments: commentsString
     });
 
     if (rpcError) {
@@ -311,7 +317,8 @@ export default async function handler(req, res) {
           p_smmgen_order_id: smmgenOrderIdString,
           p_smmcost_order_id: smmcostOrderIdString,
           p_jbsmmpanel_order_id: jbsmmpanelOrderIdInt,
-          p_worldofsmm_order_id: worldofsmmOrderIdString
+          p_worldofsmm_order_id: worldofsmmOrderIdString,
+          p_comments: commentsString
         }
       });
       return res.status(500).json({
@@ -348,7 +355,9 @@ export default async function handler(req, res) {
           package_id: package_id || null,
           link: link.trim(),
           quantity: quantityNum,
+          quantity: quantityNum,
           total_cost: totalCostNum,
+          comments: commentsString,
           error: orderResult.message
         },
         req
@@ -390,7 +399,8 @@ export default async function handler(req, res) {
         old_balance: orderResult.old_balance,
         new_balance: orderResult.new_balance,
         smmgen_order_id: smmgenOrderIdString,
-        worldofsmm_order_id: worldofsmmOrderIdString
+        worldofsmm_order_id: worldofsmmOrderIdString,
+        comments: commentsString
       },
       req
     });
