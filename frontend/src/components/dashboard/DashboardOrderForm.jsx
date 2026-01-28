@@ -147,7 +147,16 @@ const DashboardOrderForm = React.memo(({
   }, [setOrderForm]);
 
   const handleCommentsChange = useCallback((e) => {
-    setOrderForm(prev => ({ ...prev, comments: e.target.value }));
+    const comments = e.target.value;
+
+    // Count non-empty lines for quantity
+    const lineCount = comments.split('\n').filter(line => line.trim() !== '').length;
+
+    setOrderForm(prev => ({
+      ...prev,
+      comments: comments,
+      quantity: lineCount > 0 ? lineCount.toString() : ''
+    }));
   }, [setOrderForm]);
 
   const isCustomCommentsService = useMemo(() => {
@@ -424,7 +433,7 @@ const DashboardOrderForm = React.memo(({
             placeholder="1000"
             value={orderForm.quantity}
             onChange={handleQuantityChange}
-            disabled={!!selectedPackage}
+            disabled={!!selectedPackage || isCustomCommentsService}
             className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
           />
           {selectedPackage && (
@@ -434,7 +443,12 @@ const DashboardOrderForm = React.memo(({
               </p>
             </div>
           )}
-          {selectedService && (
+          {isCustomCommentsService && (
+            <div className="mt-2 text-xs text-indigo-600 font-medium">
+              Quantity is automatically set based on the number of comments ({orderForm.quantity || 0}).
+            </div>
+          )}
+          {selectedService && !isCustomCommentsService && (
             <div className="mt-2 space-y-1">
               <p className="text-xs sm:text-sm text-gray-600">
                 Min: {selectedService.min_quantity} | Max: {selectedService.max_quantity}
