@@ -10,7 +10,8 @@ import { verifyAuth, getServiceRoleClient } from './utils/auth.js';
 import {
     mapSMMGenStatus,
     mapSMMCostStatus,
-    mapJBSMMPanelStatus
+    mapJBSMMPanelStatus,
+    mapWorldOfSMMStatus
 } from './utils/statusMapping.js';
 
 const REQUEST_TIMEOUT = 15000; // 15 seconds per provider call
@@ -62,7 +63,8 @@ export default async function handler(req, res) {
         const groups = {
             smmgen: orders.filter(o => o.smmgen_order_id && o.smmgen_order_id !== "order not placed at smm gen" && o.smmgen_order_id !== o.id),
             smmcost: orders.filter(o => o.smmcost_order_id && String(o.smmcost_order_id).toLowerCase() !== "order not placed at smmcost"),
-            jbsmmpanel: orders.filter(o => o.jbsmmpanel_order_id && Number(o.jbsmmpanel_order_id) > 0)
+            jbsmmpanel: orders.filter(o => o.jbsmmpanel_order_id && Number(o.jbsmmpanel_order_id) > 0),
+            worldofsmm: orders.filter(o => o.worldofsmm_order_id && o.worldofsmm_order_id !== "order not placed at worldofsmm")
         };
 
         const results = {
@@ -176,6 +178,34 @@ export default async function handler(req, res) {
                     }
                 } catch (err) {
                     results.errors.push({ id: order.id, provider: 'jbsmmpanel', error: err.message });
+                }
+            }
+        }
+
+        // 7. Process World of SMM orders
+        if (groups.worldofsmm.length > 0) {
+            const API_URL = process.env.WORLDOFSMM_API_URL || 'https://worldofsmm.com/api/v2';
+            const API_KEY = process.env.WORLDOFSMM_API_KEY;
+
+            for (const order of groups.worldofsmm) {
+                results.checked++;
+                try {
+                    const response = await fetch(API_URL, {
+                        method: 'POST',
+                        body: new URLSearchParams({ key: API_KEY, action: 'status', order: order.worldofsmm_order_id })
+                    });
+                    const data = await response.json();
+                    const rawStatus = data.status || data.Status;
+                    const mappedStatus = mapWorldOfSMMStatus(rawStatus);
+
+                    if (mappedStatus && mappedStatus !== order.status) {
+                        if (await updateOrder(order.id, mappedStatus)) {
+                            results.updated++;
+                            results.details.push({ id: order.id, old: order.status, new: mappedStatus, provider: 'worldofsmm' });
+                        }
+                    }
+                } catch (err) {
+                    results.errors.push({ id: order.id, provider: 'worldofsmm', error: err.message });
                 }
             }
         }

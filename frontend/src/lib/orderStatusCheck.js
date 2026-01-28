@@ -5,6 +5,7 @@ import { supabase } from './supabase';
 import { getSMMGenOrderStatus } from './smmgen';
 import { getSMMCostOrderStatus } from './smmcost';
 import { getJBSMMPanelOrderStatus } from './jbsmmpanel';
+import { getWorldOfSMMOrderStatus } from './worldofsmm';
 import { saveOrderStatusHistory } from './orderStatusHistory';
 
 /**
@@ -38,6 +39,28 @@ const mapSMMCostStatus = (smmcostStatus) => {
   if (!smmcostStatus) return null;
 
   const statusString = String(smmcostStatus).trim();
+  const statusLower = statusString.toLowerCase();
+
+  if (statusLower === 'pending' || statusLower.includes('pending')) return 'pending';
+  if (statusLower === 'in progress' || statusLower.includes('in progress')) return 'in progress';
+  if (statusLower === 'completed' || statusLower.includes('completed')) return 'completed';
+  if (statusLower === 'partial' || statusLower.includes('partial')) return 'partial';
+  if (statusLower === 'processing' || statusLower.includes('processing')) return 'processing';
+  if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower.includes('cancel')) return 'canceled';
+  if (statusLower === 'refunds' || statusLower.includes('refund')) return 'refunds';
+
+  return null;
+};
+
+/**
+ * Map World of SMM status to our status format
+ * @param {string} worldofsmmStatus - Status from World of SMM API
+ * @returns {string|null} Mapped status or null if unknown
+ */
+const mapWorldOfSMMStatus = (worldofsmmStatus) => {
+  if (!worldofsmmStatus) return null;
+
+  const statusString = String(worldofsmmStatus).trim();
   const statusLower = statusString.toLowerCase();
 
   if (statusLower === 'pending' || statusLower.includes('pending')) return 'pending';
@@ -111,7 +134,7 @@ const mapJBSMMPanelStatus = (jbsmmpanelStatus) => {
  * @returns {boolean} True if order should be checked
  */
 export const shouldCheckOrder = (order, minIntervalMinutes = 5) => {
-  // Check if order has SMMGen, SMMCost, or JB SMM Panel order ID
+  // Check if order has SMMGen, SMMCost, JB SMM Panel, or World of SMM order ID
   // Ignore smmgen_order_id if it's the internal UUID (set by trigger)
   const isInternalUuid = order.smmgen_order_id === order.id;
   const hasSmmgenId = order.smmgen_order_id &&
@@ -123,6 +146,7 @@ export const shouldCheckOrder = (order, minIntervalMinutes = 5) => {
   const hasJbsmmpanelId = jbsmmpanelId &&
     String(jbsmmpanelId).toLowerCase() !== "order not placed at jbsmmpanel" &&
     Number(jbsmmpanelId) > 0;
+  const hasWorldofsmmId = order.worldofsmm_order_id && String(order.worldofsmm_order_id).toLowerCase() !== "order not placed at worldofsmm";
 
   // Debug logging for JB SMM Panel orders
   if (jbsmmpanelId) {
@@ -145,7 +169,7 @@ export const shouldCheckOrder = (order, minIntervalMinutes = 5) => {
   }
 
   // Skip if no valid order ID from any panel
-  if (!hasSmmgenId && !hasSmmcostId && !hasJbsmmpanelId) {
+  if (!hasSmmgenId && !hasSmmcostId && !hasJbsmmpanelId && !hasWorldofsmmId) {
     if (jbsmmpanelId) {
       console.log('[orderStatusCheck] shouldCheckOrder - Skipping JB SMM Panel order (no valid ID):', {
         orderId: order.id,
@@ -253,7 +277,7 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
 
   try {
 
-    // Check if order has SMMGen, SMMCost, or JB SMM Panel order ID
+    // Check if order has SMMGen, SMMCost, JB SMM Panel, or World of SMM order ID
     // Ignore smmgen_order_id if it's the internal UUID (set by trigger)
     const isInternalUuid = order.smmgen_order_id === order.id;
     const hasSmmgenId = order.smmgen_order_id &&
@@ -265,9 +289,16 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
     const hasJbsmmpanelId = jbsmmpanelId &&
       String(jbsmmpanelId).toLowerCase() !== "order not placed at jbsmmpanel" &&
       Number(jbsmmpanelId) > 0;
+    const hasWorldofsmmId = order.worldofsmm_order_id && String(order.worldofsmm_order_id).toLowerCase() !== "order not placed at worldofsmm";
 
-    // Prioritize: SMMCost > JB SMM Panel > SMMGen
-    if (hasSmmcostId) {
+    // Prioritize: WorldOfSMM > SMMCost > JB SMM Panel > SMMGen
+    if (hasWorldofsmmId) {
+      // Get status from World of SMM
+      statusData = await getWorldOfSMMOrderStatus(order.worldofsmm_order_id);
+      const worldofsmmStatus = statusData?.status || statusData?.Status;
+      mappedStatus = mapWorldOfSMMStatus(worldofsmmStatus);
+      panelSource = 'worldofsmm';
+    } else if (hasSmmcostId) {
       // Get status from SMMCost (parse the order ID since it's stored as TEXT but API expects a number)
       statusData = await getSMMCostOrderStatus(parseInt(order.smmcost_order_id, 10));
       const smmcostStatus = statusData?.status || statusData?.Status;
@@ -531,6 +562,7 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
       smmgenOrderId: order.smmgen_order_id,
       smmcostOrderId: order.smmcost_order_id,
       jbsmmpanelOrderId: order.jbsmmpanel_order_id,
+      worldofsmmOrderId: order.worldofsmm_order_id,
       panelSource: panelSource || 'unknown'
     });
     result.error = error.message;
@@ -646,7 +678,8 @@ export const checkOrdersStatusBatch = async (orders, options = {}) => {
         const hasJbsmmpanelId = jbsmmpanelId &&
           String(jbsmmpanelId).toLowerCase() !== "order not placed at jbsmmpanel" &&
           Number(jbsmmpanelId) > 0;
-        const hasValidId = hasSmmgenId || hasSmmcostId || hasJbsmmpanelId;
+        const hasWorldofsmmId = order.worldofsmm_order_id && String(order.worldofsmm_order_id).toLowerCase() !== "order not placed at worldofsmm";
+        const hasValidId = hasSmmgenId || hasSmmcostId || hasJbsmmpanelId || hasWorldofsmmId;
         const isCompleted = order.status === 'completed' || order.status === 'refunded';
         const recentlyChecked = minIntervalMinutes > 0 && order.last_status_check &&
           (new Date() - new Date(order.last_status_check)) / (1000 * 60) < minIntervalMinutes;
@@ -657,7 +690,9 @@ export const checkOrdersStatusBatch = async (orders, options = {}) => {
           hasSmmgenId,
           hasSmmcostId,
           hasJbsmmpanelId,
+          hasWorldofsmmId,
           jbsmmpanel_order_id: order.jbsmmpanel_order_id,
+          worldofsmm_order_id: order.worldofsmm_order_id,
           isCompleted,
           recentlyChecked,
           status: order.status,
@@ -791,8 +826,9 @@ export const checkOrdersStatusBatch = async (orders, options = {}) => {
     const hasJbsmmpanelId = jbsmmpanelId &&
       String(jbsmmpanelId).toLowerCase() !== "order not placed at jbsmmpanel" &&
       Number(jbsmmpanelId) > 0;
+    const hasWorldofsmmId = order.worldofsmm_order_id && String(order.worldofsmm_order_id).toLowerCase() !== "order not placed at worldofsmm";
     return !shouldCheckOrder(order, minIntervalMinutes) &&
-      (hasSmmgenId || hasSmmcostId || hasJbsmmpanelId) &&
+      (hasSmmgenId || hasSmmcostId || hasJbsmmpanelId || hasWorldofsmmId) &&
       order.status !== 'completed' &&
       order.status !== 'refunded';
   });

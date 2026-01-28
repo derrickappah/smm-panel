@@ -98,3 +98,25 @@ export const mapJBSMMPanelStatus = (jbsmmpanelStatus) => {
 
     return null;
 };
+
+/**
+ * Map World of SMM status to our status format
+ * @param {string} worldofsmmStatus - Status from World of SMM API
+ * @returns {string|null} Mapped status or null if unknown
+ */
+export const mapWorldOfSMMStatus = (worldofsmmStatus) => {
+    if (!worldofsmmStatus) return null;
+
+    const statusString = String(worldofsmmStatus).trim();
+    const statusLower = statusString.toLowerCase();
+
+    if (statusLower === 'pending' || statusLower.includes('pending')) return 'pending';
+    if (statusLower === 'in progress' || statusLower.includes('in progress')) return 'in progress';
+    if (statusLower === 'completed' || statusLower.includes('completed')) return 'completed';
+    if (statusLower === 'partial' || statusLower.includes('partial')) return 'partial';
+    if (statusLower === 'processing' || statusLower.includes('processing')) return 'processing';
+    if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower.includes('cancel')) return 'canceled';
+    if (statusLower === 'refunds' || statusLower.includes('refund')) return 'refunds';
+
+    return null;
+};

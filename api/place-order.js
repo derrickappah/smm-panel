@@ -47,7 +47,7 @@ export default async function handler(req, res) {
     const { user, supabase: userSupabase } = await verifyAuth(req);
 
     // Get request body
-    const { service_id, package_id, link, quantity, total_cost, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id } = req.body;
+    const { service_id, package_id, link, quantity, total_cost, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id } = req.body;
 
     // Validate required fields
     if (!link || typeof link !== 'string' || link.trim() === '') {
@@ -142,6 +142,11 @@ export default async function handler(req, res) {
       }
     }
 
+    // Ensure worldofsmm_order_id is a string (database expects TEXT)
+    const worldofsmmOrderIdString = worldofsmm_order_id
+      ? String(worldofsmm_order_id)
+      : null;
+
     // Log what we received and converted
     console.log('API received order IDs:', {
       smmcost_order_id: {
@@ -155,6 +160,12 @@ export default async function handler(req, res) {
         originalType: typeof jbsmmpanel_order_id,
         converted: jbsmmpanelOrderIdInt,
         convertedType: typeof jbsmmpanelOrderIdInt
+      },
+      worldofsmm_order_id: {
+        original: worldofsmm_order_id,
+        originalType: typeof worldofsmm_order_id,
+        converted: worldofsmmOrderIdString,
+        convertedType: typeof worldofsmmOrderIdString
       }
     });
 
@@ -263,7 +274,8 @@ export default async function handler(req, res) {
       p_jbsmmpanel_order_id: jbsmmpanelOrderIdInt,
       smmgen_order_id_type: typeof smmgenOrderIdString,
       smmcost_order_id_type: typeof smmcostOrderIdString,
-      jbsmmpanel_order_id_type: typeof jbsmmpanelOrderIdInt
+      jbsmmpanel_order_id_type: typeof jbsmmpanelOrderIdInt,
+      worldofsmm_order_id_type: typeof worldofsmmOrderIdString
     });
 
     // Call the atomic database function to place order and deduct balance
@@ -277,7 +289,8 @@ export default async function handler(req, res) {
       p_package_id: package_id || null,
       p_smmgen_order_id: smmgenOrderIdString,
       p_smmcost_order_id: smmcostOrderIdString,
-      p_jbsmmpanel_order_id: jbsmmpanelOrderIdInt
+      p_jbsmmpanel_order_id: jbsmmpanelOrderIdInt,
+      p_worldofsmm_order_id: worldofsmmOrderIdString
     });
 
     if (rpcError) {
@@ -297,7 +310,8 @@ export default async function handler(req, res) {
           p_package_id: package_id || null,
           p_smmgen_order_id: smmgenOrderIdString,
           p_smmcost_order_id: smmcostOrderIdString,
-          p_jbsmmpanel_order_id: jbsmmpanelOrderIdInt
+          p_jbsmmpanel_order_id: jbsmmpanelOrderIdInt,
+          p_worldofsmm_order_id: worldofsmmOrderIdString
         }
       });
       return res.status(500).json({
@@ -375,7 +389,8 @@ export default async function handler(req, res) {
         total_cost: totalCostNum,
         old_balance: orderResult.old_balance,
         new_balance: orderResult.new_balance,
-        smmgen_order_id: smmgenOrderIdString
+        smmgen_order_id: smmgenOrderIdString,
+        worldofsmm_order_id: worldofsmmOrderIdString
       },
       req
     });
