@@ -199,9 +199,10 @@ export default async function handler(req, res) {
                 });
 
                 return res.status(502).json({
-                    error: 'Provider Error',
+                    error: pError.message || 'Provider Error',
                     message: 'The provider failed to process your order. It has been saved for retry. If it cannot be fulfilled, it will be refunded later.',
-                    details: pError.message
+                    details: pError.message,
+                    provider: provider
                 });
             }
         }
