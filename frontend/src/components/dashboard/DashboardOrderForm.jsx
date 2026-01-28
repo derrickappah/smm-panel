@@ -489,7 +489,7 @@ const DashboardOrderForm = React.memo(({
               value={orderForm.comments || ''}
               onChange={handleCommentsChange}
               rows={5}
-              className="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 min-h-[120px] p-3 text-sm"
+              className="w-full rounded-lg border-blue-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 min-h-[120px] p-3 text-sm"
             />
           </div>
         )}
