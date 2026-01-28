@@ -117,7 +117,7 @@ const SortableServiceItem = memo(({ service, editingService, onEdit, onToggle, o
                   Includes {service.combo_service_ids.length} service{service.combo_service_ids.length !== 1 ? 's' : ''}
                 </p>
               )}
-              {(service.smmgen_service_id || service.smmcost_service_id || service.jbsmmpanel_service_id) && (
+              {(service.smmgen_service_id || service.smmcost_service_id || service.jbsmmpanel_service_id || service.worldofsmm_service_id) && (
                 <div className="flex flex-wrap gap-2 text-xs text-gray-500 mt-1">
                   {service.smmgen_service_id && (
                     <span>SMMGen ID: {service.smmgen_service_id}</span>
@@ -767,7 +767,7 @@ const AdminServices = memo(() => {
                           Includes {service.combo_service_ids.length} service{service.combo_service_ids.length !== 1 ? 's' : ''}
                         </p>
                       )}
-                      {(service.smmgen_service_id || service.smmcost_service_id) && (
+                      {(service.smmgen_service_id || service.smmcost_service_id || service.jbsmmpanel_service_id || service.worldofsmm_service_id) && (
                         <div className="flex flex-wrap gap-2 text-xs text-gray-500 mt-1">
                           {service.smmgen_service_id && (
                             <span>SMMGen ID: {service.smmgen_service_id}</span>

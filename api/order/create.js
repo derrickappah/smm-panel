@@ -72,6 +72,9 @@ export default async function handler(req, res) {
             } else if (service.smmgen_service_id) {
                 provider = 'smmgen';
                 provider_service_id = service.smmgen_service_id;
+            } else if (service.worldofsmm_service_id) {
+                provider = 'worldofsmm';
+                provider_service_id = service.worldofsmm_service_id;
             }
 
             // Quantity validation
@@ -147,6 +150,7 @@ export default async function handler(req, res) {
                     if (provider === 'smmgen') updateData.smmgen_order_id = String(providerOrderId);
                     if (provider === 'smmcost') updateData.smmcost_order_id = String(providerOrderId);
                     if (provider === 'jbsmmpanel') updateData.jbsmmpanel_order_id = parseInt(providerOrderId);
+                    if (provider === 'worldofsmm') updateData.worldofsmm_order_id = String(providerOrderId);
 
                     await supabase.from('orders').update({
                         ...updateData,

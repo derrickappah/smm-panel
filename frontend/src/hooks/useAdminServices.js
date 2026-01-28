@@ -8,7 +8,7 @@ const fetchServices = async () => {
   // Try with rate_unit first, fallback to without it if column doesn't exist
   let { data, error } = await supabase
     .from('services')
-    .select('id, name, description, rate, rate_unit, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only')
+    .select('id, name, description, rate, rate_unit, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only')
     .order('display_order', { ascending: true })
     .order('created_at', { ascending: false });
 
@@ -17,12 +17,12 @@ const fetchServices = async () => {
     console.warn('rate_unit column not found, fetching without it:', error.message);
     const fallbackResult = await supabase
       .from('services')
-      .select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only')
+      .select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only')
       .order('display_order', { ascending: true })
       .order('created_at', { ascending: false });
-    
+
     if (fallbackResult.error) throw fallbackResult.error;
-    
+
     // Add default rate_unit for backward compatibility
     return (fallbackResult.data || []).map(service => ({ ...service, rate_unit: 1000 }));
   }
@@ -33,11 +33,11 @@ const fetchServices = async () => {
 
 export const useAdminServices = (options = {}) => {
   const { enabled = true } = options;
-  
+
   // Check role at hook level (cached)
   const { data: userRole, isLoading: roleLoading } = useUserRole();
   const isAdmin = userRole?.isAdmin ?? false;
-  
+
   // Only enable queries if user is admin
   const queryEnabled = enabled && !roleLoading && isAdmin;
 
@@ -62,9 +62,9 @@ export const useCreateService = () => {
           .select('display_order')
           .order('display_order', { ascending: false })
           .limit(1);
-        
-        const maxOrder = existingServices && existingServices.length > 0 
-          ? existingServices[0].display_order 
+
+        const maxOrder = existingServices && existingServices.length > 0
+          ? existingServices[0].display_order
           : -1;
         serviceData.display_order = maxOrder + 1;
       }
@@ -159,7 +159,7 @@ export const useReorderServices = () => {
       );
 
       const results = await Promise.all(updatePromises);
-      
+
       // Check for errors
       const errors = results.filter(result => result.error);
       if (errors.length > 0) {

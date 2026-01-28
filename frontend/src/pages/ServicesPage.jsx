@@ -19,7 +19,7 @@ const ServicesPage = ({ user, onLogout }) => {
   const { data: promotionPackages = [] } = usePromotionPackages();
   const [selectedPlatform, setSelectedPlatform] = useState('all');
   const [loading, setLoading] = useState(true);
-  
+
   // Get platform from URL query if present
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -52,36 +52,36 @@ const ServicesPage = ({ user, onLogout }) => {
       // Fetch services from Supabase only
       // Only fetch enabled services for users
       // Try with rate_unit first, fallback to without it if column doesn't exist
-      let query = supabase.from('services').select('id, name, description, rate, rate_unit, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only').eq('enabled', true);
-      
+      let query = supabase.from('services').select('id, name, description, rate, rate_unit, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only').eq('enabled', true);
+
       if (selectedPlatform !== 'all') {
         query = query.eq('platform', selectedPlatform);
       }
-      
+
       let { data, error } = await query
         .order('display_order', { ascending: true })
         .order('created_at', { ascending: false });
-      
+
       // If rate_unit column doesn't exist, try without it
       if (error && (error.message?.includes('rate_unit') || error.code === '42703')) {
         console.warn('rate_unit column not found, fetching without it:', error.message);
-        let fallbackQuery = supabase.from('services').select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only').eq('enabled', true);
-        
+        let fallbackQuery = supabase.from('services').select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only').eq('enabled', true);
+
         if (selectedPlatform !== 'all') {
           fallbackQuery = fallbackQuery.eq('platform', selectedPlatform);
         }
-        
+
         const fallbackResult = await fallbackQuery
           .order('display_order', { ascending: true })
           .order('created_at', { ascending: false });
-        
+
         if (fallbackResult.error) throw fallbackResult.error;
-        
+
         // Add default rate_unit for backward compatibility
         setServices((fallbackResult.data || []).map(service => ({ ...service, rate_unit: 1000 })));
         return;
       }
-      
+
       if (error) throw error;
       setServices(data || []);
     } catch (error) {
@@ -92,17 +92,17 @@ const ServicesPage = ({ user, onLogout }) => {
     }
   };
 
-  const filteredServices = selectedPlatform === 'all' 
-    ? services 
+  const filteredServices = selectedPlatform === 'all'
+    ? services
     : services.filter(s => s.platform === selectedPlatform);
 
   const filteredPackages = selectedPlatform === 'all'
     ? promotionPackages
     : promotionPackages.filter(p => p.platform === selectedPlatform);
-  
+
   const scrollContainerRef = useRef(null);
   const isScrollingRef = useRef(false);
-  
+
   // Duplicate items for infinite scroll
   const infinitePackages = useMemo(() => {
     if (filteredPackages.length === 0) return [];
@@ -115,7 +115,7 @@ const ServicesPage = ({ user, onLogout }) => {
 
     const handleScroll = () => {
       if (isScrollingRef.current) return;
-      
+
       const scrollLeft = container.scrollLeft;
       const containerWidth = container.clientWidth;
       const cardWidth = 180 + 16; // min-w-[180px] + gap-4
@@ -198,7 +198,7 @@ const ServicesPage = ({ user, onLogout }) => {
         'buy likes',
         'buy views'
       ];
-      
+
       return {
         title: 'SMM Services - Instagram, TikTok, YouTube, Facebook, Twitter',
         description: 'Browse our comprehensive SMM services for Instagram followers, TikTok views, YouTube subscribers, Facebook likes, and Twitter followers. Buy Instagram followers Ghana, TikTok views, YouTube subscribers. Competitive rates, instant delivery, secure payment.',
@@ -210,7 +210,7 @@ const ServicesPage = ({ user, onLogout }) => {
       const platformName = selectedPlatform.charAt(0).toUpperCase() + selectedPlatform.slice(1);
       const platformKeywords = getServiceKeywords(platformName, '');
       const metaTags = generatePlatformMetaTags(selectedPlatform);
-      
+
       return {
         title: metaTags.title,
         description: metaTags.description,
@@ -222,7 +222,7 @@ const ServicesPage = ({ user, onLogout }) => {
 
   const structuredData = useMemo(() => {
     if (services.length === 0) return null;
-    
+
     const serviceListSchema = generateServiceListSchema(services);
     return serviceListSchema;
   }, [services]);
@@ -294,7 +294,7 @@ const ServicesPage = ({ user, onLogout }) => {
               <Tag className="w-5 h-5 text-purple-600" />
               <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Special Promotion Packages</h2>
             </div>
-            <div 
+            <div
               ref={scrollContainerRef}
               className="flex overflow-x-auto snap-x snap-mandatory gap-4 sm:gap-6 pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:snap-none animate-slideUp mb-8 scrollbar-hide"
               style={{ scrollSnapType: 'x mandatory' }}
@@ -366,68 +366,68 @@ const ServicesPage = ({ user, onLogout }) => {
               </div>
             )}
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 animate-slideUp">
-            {filteredServices.map((service, index) => {
-              const getPlatformBadgeColor = () => {
-                const platform = service.platform?.toLowerCase();
-                switch (platform) {
-                  case 'instagram':
-                    return 'bg-pink-100 text-pink-700 border-pink-200';
-                  case 'youtube':
-                    return 'bg-red-100 text-red-700 border-red-200';
-                  case 'facebook':
-                    return 'bg-blue-100 text-blue-700 border-blue-200';
-                  case 'twitter':
-                    return 'bg-sky-100 text-sky-700 border-sky-200';
-                  case 'tiktok':
-                    return 'bg-gray-100 text-gray-700 border-gray-200';
-                  case 'whatsapp':
-                    return 'bg-green-100 text-green-700 border-green-200';
-                  case 'telegram':
-                    return 'bg-blue-100 text-blue-700 border-blue-200';
-                  default:
-                    return 'bg-indigo-100 text-indigo-700 border-indigo-200';
-                }
-              };
-              return (
-                <div
-                  key={service.id}
-                  data-testid={`service-card-${service.id}`}
-                  onClick={() => handleServiceClick(service)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      handleServiceClick(service);
-                    }
-                  }}
-                  tabIndex={0}
-                  className="bg-white border border-gray-200 rounded-lg p-5 sm:p-6 shadow-sm hover:shadow-md hover:border-gray-300 cursor-pointer transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                  style={{ animationDelay: `${index * 0.05}s` }}
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <span className={`text-xs font-medium px-2.5 py-1 rounded border ${getPlatformBadgeColor()}`}>
-                        {service.platform}
-                      </span>
+              {filteredServices.map((service, index) => {
+                const getPlatformBadgeColor = () => {
+                  const platform = service.platform?.toLowerCase();
+                  switch (platform) {
+                    case 'instagram':
+                      return 'bg-pink-100 text-pink-700 border-pink-200';
+                    case 'youtube':
+                      return 'bg-red-100 text-red-700 border-red-200';
+                    case 'facebook':
+                      return 'bg-blue-100 text-blue-700 border-blue-200';
+                    case 'twitter':
+                      return 'bg-sky-100 text-sky-700 border-sky-200';
+                    case 'tiktok':
+                      return 'bg-gray-100 text-gray-700 border-gray-200';
+                    case 'whatsapp':
+                      return 'bg-green-100 text-green-700 border-green-200';
+                    case 'telegram':
+                      return 'bg-blue-100 text-blue-700 border-blue-200';
+                    default:
+                      return 'bg-indigo-100 text-indigo-700 border-indigo-200';
+                  }
+                };
+                return (
+                  <div
+                    key={service.id}
+                    data-testid={`service-card-${service.id}`}
+                    onClick={() => handleServiceClick(service)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleServiceClick(service);
+                      }
+                    }}
+                    tabIndex={0}
+                    className="bg-white border border-gray-200 rounded-lg p-5 sm:p-6 shadow-sm hover:shadow-md hover:border-gray-300 cursor-pointer transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                    style={{ animationDelay: `${index * 0.05}s` }}
+                  >
+                    <div className="flex items-start justify-between mb-4">
+                      <div>
+                        <span className={`text-xs font-medium px-2.5 py-1 rounded border ${getPlatformBadgeColor()}`}>
+                          {service.platform}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xl sm:text-2xl font-bold text-gray-900">₵{service.rate}</p>
+                        <p className="text-xs text-gray-600">per {service.rate_unit || 1000}</p>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-xl sm:text-2xl font-bold text-gray-900">₵{service.rate}</p>
-                      <p className="text-xs text-gray-600">per {service.rate_unit || 1000}</p>
+                    <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-2">
+                      {service.name}
+                    </h3>
+                    <p className="text-sm text-gray-600 mb-4 line-clamp-2">{service.description}</p>
+                    <div className="flex justify-between items-center text-xs text-gray-600 pt-4 border-t border-gray-200">
+                      <div className="flex gap-3 sm:gap-4">
+                        <span className="font-medium">Min: {service.min_quantity.toLocaleString()}</span>
+                        <span className="font-medium">Max: {service.max_quantity.toLocaleString()}</span>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-indigo-600" />
                     </div>
                   </div>
-                  <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-2">
-                    {service.name}
-                  </h3>
-                  <p className="text-sm text-gray-600 mb-4 line-clamp-2">{service.description}</p>
-                  <div className="flex justify-between items-center text-xs text-gray-600 pt-4 border-t border-gray-200">
-                    <div className="flex gap-3 sm:gap-4">
-                      <span className="font-medium">Min: {service.min_quantity.toLocaleString()}</span>
-                      <span className="font-medium">Max: {service.max_quantity.toLocaleString()}</span>
-                    </div>
-                    <ArrowRight className="w-4 h-4 text-indigo-600" />
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
             </div>
           </>
         )}
