@@ -22,6 +22,8 @@ export async function placeProviderOrder(provider, params) {
             return await placeJBSMMPanelOrder(service, link, quantity);
         case 'smmcost':
             return await placeSMMCostOrder(service, link, quantity);
+        case 'worldofsmm':
+            return await placeWorldOfSMMOrder(service, link, quantity);
         default:
             throw new Error(`Unsupported provider: ${provider}`);
     }
@@ -90,6 +92,8 @@ export async function fetchProviderOrderStatus(provider, providerOrderId) {
             return await fetchJBSMMPanelStatus(providerOrderId);
         case 'smmcost':
             return await fetchSMMCostStatus(providerOrderId);
+        case 'worldofsmm':
+            return await fetchWorldOfSMMStatus(providerOrderId);
         default:
             throw new Error(`Unsupported status check provider: ${provider}`);
     }
@@ -111,6 +115,8 @@ export async function fetchProviderOrders(provider, limit = 100) {
             return await fetchJBSMMPanelRecentOrders(limit);
         case 'smmcost':
             return await fetchSMMCostRecentOrders(limit);
+        case 'worldofsmm':
+            return await fetchWorldOfSMMRecentOrders(limit);
         default:
             console.warn(`Provider ${provider} does not support order listing.`);
             return [];
@@ -397,6 +403,104 @@ async function placeSMMCostOrder(service, link, quantity) {
 
         const errorMessage = errorData.error || errorData.message || `SMMCost API error: ${response.status}`;
         console.error(`[PROVIDER FAILURE] smmcost: ${errorMessage}`, { status: response.status, details: errorData });
+
+        const error = new Error(errorMessage);
+        error.providerDetails = errorData;
+        error.providerStatus = response.status;
+        throw error;
+    }
+
+    return await response.json();
+}
+
+async function fetchWorldOfSMMRecentOrders(limit) {
+    const WORLDOFSMM_API_URL = process.env.WORLDOFSMM_API_URL || 'https://worldofsmm.com/api/v2';
+    const WORLDOFSMM_API_KEY = process.env.WORLDOFSMM_API_KEY;
+
+    if (!WORLDOFSMM_API_KEY) return [];
+
+    try {
+        const params = new URLSearchParams({
+            key: WORLDOFSMM_API_KEY,
+            action: 'orders',
+            limit: String(limit)
+        });
+
+        const response = await fetch(WORLDOFSMM_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params
+        });
+
+        if (!response.ok) return [];
+        const data = await response.json();
+        return Array.isArray(data) ? data.map(o => ({
+            id: String(o.order),
+            service: String(o.service),
+            link: o.link,
+            quantity: parseInt(o.quantity),
+            status: o.status,
+            charge: parseFloat(o.charge),
+            date: o.date
+        })) : [];
+    } catch (e) {
+        console.error('World of SMM fetch orders failed:', e);
+        return [];
+    }
+}
+
+async function fetchWorldOfSMMStatus(providerOrderId) {
+    const WORLDOFSMM_API_URL = process.env.WORLDOFSMM_API_URL || 'https://worldofsmm.com/api/v2';
+    const WORLDOFSMM_API_KEY = process.env.WORLDOFSMM_API_KEY;
+
+    if (!WORLDOFSMM_API_KEY) throw new Error('World of SMM API key not configured');
+
+    const requestBody = new URLSearchParams({
+        key: WORLDOFSMM_API_KEY,
+        action: 'status',
+        order: String(providerOrderId)
+    }).toString();
+
+    const response = await fetch(WORLDOFSMM_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: requestBody
+    });
+
+    if (!response.ok) throw new Error(`World of SMM API error: ${response.status}`);
+    return await response.json();
+}
+
+async function placeWorldOfSMMOrder(service, link, quantity) {
+    const WORLDOFSMM_API_URL = process.env.WORLDOFSMM_API_URL || 'https://worldofsmm.com/api/v2';
+    const WORLDOFSMM_API_KEY = process.env.WORLDOFSMM_API_KEY;
+
+    if (!WORLDOFSMM_API_KEY) throw new Error('World of SMM API key not configured');
+
+    const requestBody = new URLSearchParams({
+        key: WORLDOFSMM_API_KEY,
+        action: 'add',
+        service: String(service).trim(),
+        link: link.trim(),
+        quantity: String(quantity)
+    }).toString();
+
+    const response = await fetch(WORLDOFSMM_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: requestBody
+    });
+
+    if (!response.ok) {
+        let errorData;
+        try {
+            errorData = await response.json();
+        } catch (e) {
+            errorData = { rawResponse: await response.text().catch(() => 'No response body') };
+        }
+
+        const errorMessage = errorData.error || errorData.message || `World of SMM API error: ${response.status}`;
+        console.error(`[PROVIDER FAILURE] worldofsmm: ${errorMessage}`, { status: response.status, details: errorData });
 
         const error = new Error(errorMessage);
         error.providerDetails = errorData;

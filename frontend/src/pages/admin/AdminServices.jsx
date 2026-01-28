@@ -49,8 +49,8 @@ const SortableServiceItem = memo(({ service, editingService, onEdit, onToggle, o
       ref={setNodeRef}
       style={style}
       className={`p-4 rounded-xl transition-all ${service.enabled === false
-          ? 'bg-gray-100/50 border-2 border-gray-300 opacity-75'
-          : 'bg-white/50 border-2 border-green-200'
+        ? 'bg-gray-100/50 border-2 border-gray-300 opacity-75'
+        : 'bg-white/50 border-2 border-green-200'
         } ${isDragging ? 'cursor-grabbing' : ''}`}
     >
       {editingService?.id === service.id ? (
@@ -127,6 +127,9 @@ const SortableServiceItem = memo(({ service, editingService, onEdit, onToggle, o
                   )}
                   {service.jbsmmpanel_service_id && (
                     <span>JB SMM Panel ID: {service.jbsmmpanel_service_id}</span>
+                  )}
+                  {service.worldofsmm_service_id && (
+                    <span>World of SMM ID: {service.worldofsmm_service_id}</span>
                   )}
                 </div>
               )}
@@ -209,6 +212,7 @@ const AdminServices = memo(() => {
     smmgen_service_id: '',
     smmcost_service_id: '',
     jbsmmpanel_service_id: '',
+    worldofsmm_service_id: '',
     is_combo: false,
     combo_service_ids: [],
     combo_smmgen_service_ids: [],
@@ -266,6 +270,7 @@ const AdminServices = memo(() => {
         smmgen_service_id: serviceForm.smmgen_service_id || null,
         smmcost_service_id: serviceForm.smmcost_service_id ? parseInt(serviceForm.smmcost_service_id, 10) : null,
         jbsmmpanel_service_id: serviceForm.jbsmmpanel_service_id ? parseInt(serviceForm.jbsmmpanel_service_id, 10) : null,
+        worldofsmm_service_id: serviceForm.worldofsmm_service_id || null,
         is_combo: serviceForm.is_combo || false,
         combo_service_ids: serviceForm.is_combo && serviceForm.combo_service_ids.length > 0
           ? serviceForm.combo_service_ids
@@ -289,6 +294,7 @@ const AdminServices = memo(() => {
         smmgen_service_id: '',
         smmcost_service_id: '',
         jbsmmpanel_service_id: '',
+        worldofsmm_service_id: '',
         is_combo: false,
         combo_service_ids: [],
         combo_smmgen_service_ids: [],
@@ -546,6 +552,15 @@ const AdminServices = memo(() => {
               />
               <p className="text-xs text-gray-500 mt-1">Enter the JB SMM Panel API service ID for integration</p>
             </div>
+            <div>
+              <Label>World of SMM Service ID</Label>
+              <Input
+                placeholder="World of SMM API service ID (optional)"
+                value={serviceForm.worldofsmm_service_id}
+                onChange={(e) => setServiceForm({ ...serviceForm, worldofsmm_service_id: e.target.value })}
+              />
+              <p className="text-xs text-gray-500 mt-1">Enter the World of SMM API service ID for integration</p>
+            </div>
           </div>
 
           {/* Combo Service Options */}
@@ -693,8 +708,8 @@ const AdminServices = memo(() => {
               <div
                 key={service.id}
                 className={`p-4 rounded-xl transition-all ${service.enabled === false
-                    ? 'bg-gray-100/50 border-2 border-gray-300 opacity-75'
-                    : 'bg-white/50 border-2 border-green-200'
+                  ? 'bg-gray-100/50 border-2 border-gray-300 opacity-75'
+                  : 'bg-white/50 border-2 border-green-200'
                   }`}
               >
                 {editingService?.id === service.id ? (
@@ -759,6 +774,9 @@ const AdminServices = memo(() => {
                           )}
                           {service.smmcost_service_id && (
                             <span>SMMCost ID: {service.smmcost_service_id}</span>
+                          )}
+                          {service.worldofsmm_service_id && (
+                            <span>World of SMM ID: {service.worldofsmm_service_id}</span>
                           )}
                         </div>
                       )}

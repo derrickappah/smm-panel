@@ -5,8 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/sheet';
 import SEO from '@/components/SEO';
-import { 
-  Users, ShoppingCart, DollarSign, Package, Wallet, Receipt, 
+import {
+  Users, ShoppingCart, DollarSign, Package, Wallet, Receipt,
   MessageSquare, UserPlus, RefreshCw, BarChart3, Menu, X, LayoutDashboard, Tag,
   ChevronLeft, ChevronRight, FileText, Server, HelpCircle, CreditCard, Scale, Bell, Video
 } from 'lucide-react';
@@ -33,6 +33,7 @@ const AdminActivityLogs = lazy(() => import('@/pages/admin/AdminActivityLogs'));
 const AdminSMMCost = lazy(() => import('@/pages/admin/AdminSMMCost'));
 const AdminSMMGen = lazy(() => import('@/pages/admin/AdminSMMGen'));
 const AdminJBSMMPanel = lazy(() => import('@/pages/admin/AdminJBSMMPanel'));
+const AdminWorldOfSMM = lazy(() => import('@/pages/admin/AdminWorldOfSMM'));
 const AdminMoolre = lazy(() => import('@/pages/admin/AdminMoolre'));
 const AdminFAQ = lazy(() => import('@/pages/admin/AdminFAQ'));
 const AdminTerms = lazy(() => import('@/pages/admin/AdminTerms'));
@@ -57,7 +58,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
-  
+
   // Get active section from URL pathname
   const activeSection = useMemo(() => {
     const path = location.pathname;
@@ -80,6 +81,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
         'smmcost': 'smmcost',
         'smmgen': 'smmgen',
         'jbsmmpanel': 'jbsmmpanel',
+        'worldofsmm': 'worldofsmm',
         'moolre': 'moolre',
         'faq': 'faq',
         'terms': 'terms',
@@ -90,7 +92,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     }
     return 'dashboard';
   }, [location.pathname]);
-  
+
   const [dateRangeStart, setDateRangeStart] = useState('');
   const [dateRangeEnd, setDateRangeEnd] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -160,17 +162,17 @@ const AdminDashboard = memo(({ user, onLogout }) => {
   });
 
   // Fetch data for AdminStats (minimal data needed)
-  const { data: ordersData } = useAdminOrders({ 
+  const { data: ordersData } = useAdminOrders({
     enabled: activeSection === 'dashboard',
-    useInfinite: false 
+    useInfinite: false
   });
-  const { data: depositsData } = useAdminDeposits({ 
+  const { data: depositsData } = useAdminDeposits({
     enabled: activeSection === 'dashboard',
-    useInfinite: false 
+    useInfinite: false
   });
-  const { data: transactionsData } = useAdminTransactions({ 
+  const { data: transactionsData } = useAdminTransactions({
     enabled: activeSection === 'dashboard',
-    useInfinite: false 
+    useInfinite: false
   });
   const { data: referralStats = { total_referrals: 0, pending_bonuses: 0 } } = useReferralStats();
 
@@ -271,11 +273,11 @@ const AdminDashboard = memo(({ user, onLogout }) => {
           .select('status')
           .eq('type', 'deposit')
           .eq('status', 'pending');
-        
+
         const pendingDeposits = depositsResult.error && depositsResult.error.code !== '42P01'
           ? 0
           : (depositsResult.data?.length || 0);
-        
+
         return { open_tickets: 0, pending_deposits: pendingDeposits };
       }
 
@@ -296,7 +298,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
       const openTickets = pendingTicketsResult.error && pendingTicketsResult.error.code !== '42P01'
         ? 0
         : (pendingTicketsResult.data?.length || 0);
-      
+
       const pendingDeposits = depositsResult.error && depositsResult.error.code !== '42P01'
         ? 0
         : (depositsResult.data?.length || 0);
@@ -325,6 +327,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     smmcost: 'SMMCost Integration',
     smmgen: 'SMMGen Integration',
     jbsmmpanel: 'JB SMM Panel Integration',
+    worldofsmm: 'World of SMM Integration',
     moolre: 'Moolre Transactions'
   };
 
@@ -349,6 +352,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     { id: 'smmcost', label: 'SMMCost', icon: Server },
     { id: 'smmgen', label: 'SMMGen', icon: Server },
     { id: 'jbsmmpanel', label: 'JB SMM Panel', icon: Server },
+    { id: 'worldofsmm', label: 'World of SMM', icon: Server },
     { id: 'moolre', label: 'Moolre', icon: CreditCard },
   ];
 
@@ -356,8 +360,8 @@ const AdminDashboard = memo(({ user, onLogout }) => {
   if (isLoadingSettings || isLoadingStats) {
     return (
       <>
-        <SEO 
-          title="Admin Dashboard" 
+        <SEO
+          title="Admin Dashboard"
           description="Manage users, orders, services, and platform settings"
         />
         <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50">
@@ -422,8 +426,8 @@ const AdminDashboard = memo(({ user, onLogout }) => {
 
   return (
     <>
-      <SEO 
-        title="Admin Dashboard" 
+      <SEO
+        title="Admin Dashboard"
         description="Manage users, orders, services, and platform settings"
       />
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 overflow-x-hidden">
@@ -458,11 +462,10 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                           <SheetClose key={item.id} asChild>
                             <button
                               onClick={() => handleSectionChange(item.id)}
-                              className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left transition-colors duration-200 ${
-                                activeSection === item.id
+                              className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left transition-colors duration-200 ${activeSection === item.id
                                   ? 'bg-indigo-600 text-white'
                                   : 'text-gray-700 hover:bg-gray-100'
-                              }`}
+                                }`}
                             >
                               <Icon className="w-5 h-5" />
                               <span className="font-medium text-sm flex-1">{item.label}</span>
@@ -528,24 +531,21 @@ const AdminDashboard = memo(({ user, onLogout }) => {
         <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 pt-20 md:pt-6 sm:py-8 overflow-x-hidden">
           <div className="flex flex-col lg:flex-row gap-6 w-full">
             {/* Sidebar Navigation - Desktop */}
-            <aside 
-              className={`hidden lg:flex lg:flex-col lg:flex-shrink-0 bg-white border-r border-gray-200 fixed left-0 top-0 h-screen transition-all duration-300 ease-in-out z-30 ${
-                sidebarCollapsed ? 'w-16' : 'w-64'
-              }`}
+            <aside
+              className={`hidden lg:flex lg:flex-col lg:flex-shrink-0 bg-white border-r border-gray-200 fixed left-0 top-0 h-screen transition-all duration-300 ease-in-out z-30 ${sidebarCollapsed ? 'w-16' : 'w-64'
+                }`}
             >
               <div className="flex flex-col h-full overflow-y-auto">
                 {/* Header with Toggle */}
-                <div className={`flex items-center p-4 border-b border-gray-200 ${
-                  sidebarCollapsed ? 'justify-center' : 'justify-between'
-                }`}>
+                <div className={`flex items-center p-4 border-b border-gray-200 ${sidebarCollapsed ? 'justify-center' : 'justify-between'
+                  }`}>
                   {!sidebarCollapsed && (
                     <h2 className="text-xl font-bold text-gray-900">Admin Panel</h2>
                   )}
                   <button
                     onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                    className={`p-1.5 rounded-md hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                      sidebarCollapsed ? '' : 'ml-auto'
-                    }`}
+                    className={`p-1.5 rounded-md hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 ${sidebarCollapsed ? '' : 'ml-auto'
+                      }`}
                     aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
                   >
                     {sidebarCollapsed ? (
@@ -561,9 +561,8 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                   <div className="mb-6">
                     <button
                       onClick={() => navigate('/dashboard')}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 text-gray-700 hover:bg-gray-100 mb-2 ${
-                        sidebarCollapsed ? 'justify-center' : ''
-                      }`}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 text-gray-700 hover:bg-gray-100 mb-2 ${sidebarCollapsed ? 'justify-center' : ''
+                        }`}
                       title={sidebarCollapsed ? 'User Dashboard' : ''}
                     >
                       <LayoutDashboard className="w-5 h-5 flex-shrink-0" />
@@ -578,11 +577,10 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                           <button
                             key={item.id}
                             onClick={() => handleSectionChange(item.id)}
-                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 relative ${
-                              activeSection === item.id
+                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 relative ${activeSection === item.id
                                 ? 'bg-indigo-600 text-white hover:bg-indigo-700'
                                 : 'text-gray-700 hover:bg-gray-100'
-                            } ${sidebarCollapsed ? 'justify-center' : ''}`}
+                              } ${sidebarCollapsed ? 'justify-center' : ''}`}
                             title={sidebarCollapsed ? item.label : ''}
                           >
                             <Icon className="w-5 h-5 flex-shrink-0" />
@@ -606,7 +604,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                       })}
                     </nav>
                   </div>
-                  
+
                   {/* User Info at Bottom */}
                   <div className="mt-auto pt-4 border-t border-gray-200">
                     <div className={`px-3 py-3 space-y-2 ${sidebarCollapsed ? 'flex flex-col items-center' : ''}`}>
@@ -647,16 +645,15 @@ const AdminDashboard = memo(({ user, onLogout }) => {
             </aside>
 
             {/* Spacer for fixed sidebar */}
-            <div className={`hidden lg:block flex-shrink-0 transition-all duration-300 ease-in-out ${
-              sidebarCollapsed ? 'w-16' : 'w-64'
-            }`}></div>
+            <div className={`hidden lg:block flex-shrink-0 transition-all duration-300 ease-in-out ${sidebarCollapsed ? 'w-16' : 'w-64'
+              }`}></div>
 
             {/* Content Area */}
-            <Tabs 
-              value={activeSection} 
+            <Tabs
+              value={activeSection}
               onValueChange={(value) => {
                 navigate(`/admin/${value}`);
-              }} 
+              }}
               className="flex-1 min-w-0"
             >
               <div className="w-full">
@@ -770,6 +767,13 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                 <TabsContent value="jbsmmpanel" className="lg:mt-0">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminJBSMMPanel />
+                  </Suspense>
+                </TabsContent>
+
+                {/* World of SMM Section */}
+                <TabsContent value="worldofsmm" className="lg:mt-0">
+                  <Suspense fallback={<ComponentLoader />}>
+                    <AdminWorldOfSMM />
                   </Suspense>
                 </TabsContent>
 
