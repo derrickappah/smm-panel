@@ -3320,8 +3320,6 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         </div>
       </div>
 
-      {/* WhatsApp Floating Button */}
-      <WhatsAppButton message="i need help with my order ..." />
     </div>
   );
 };

@@ -411,8 +411,8 @@ const AuthPage = () => {
                 setEmailError('');
               }}
               className={`flex-1 h-10 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${isLogin
-                  ? 'bg-indigo-600 text-white hover:bg-indigo-700'
-                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
                 }`}
             >
               Login
@@ -424,8 +424,8 @@ const AuthPage = () => {
                 setEmailError('');
               }}
               className={`flex-1 h-10 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${!isLogin
-                  ? 'bg-indigo-600 text-white hover:bg-indigo-700'
-                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
                 }`}
             >
               Register
@@ -477,8 +477,8 @@ const AuthPage = () => {
                     }}
                     required={!isLogin}
                     className={`w-full h-11 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${phoneError
-                        ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
-                        : 'border-gray-300'
+                      ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+                      : 'border-gray-300'
                       }`}
                   />
                   {phoneError && (
@@ -516,8 +516,8 @@ const AuthPage = () => {
                 }}
                 required
                 className={`w-full h-11 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${emailError
-                    ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
-                    : 'border-gray-300'
+                  ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+                  : 'border-gray-300'
                   }`}
               />
               {emailError && (
@@ -643,8 +643,6 @@ const AuthPage = () => {
         onAccept={() => setTermsAccepted(true)}
       />
 
-      {/* WhatsApp Floating Button */}
-      <WhatsAppButton message="i have problem loging in" />
     </div>
   );
 };
