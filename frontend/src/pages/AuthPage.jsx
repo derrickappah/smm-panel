@@ -10,7 +10,6 @@ import { supabase, isConfigured } from '@/lib/supabase';
 import { logLoginAttempt } from '@/lib/activityLogger';
 import SEO from '@/components/SEO';
 import TermsDialog from '@/components/TermsDialog';
-import WhatsAppButton from '@/components/WhatsAppButton';
 
 // Email validation function with TLD validation
 const isValidEmail = (email) => {
@@ -23,14 +22,14 @@ const isValidEmail = (email) => {
   // Extract TLD (top-level domain) from email
   const parts = email.split('@');
   if (parts.length !== 2) return false;
-  
+
   const domain = parts[1];
   const domainParts = domain.split('.');
   if (domainParts.length < 2) return false;
-  
+
   // Get the TLD (last part after the last dot)
   const tld = domainParts[domainParts.length - 1].toLowerCase();
-  
+
   // Comprehensive list of valid TLDs (common and country codes)
   const validTlds = [
     // Generic TLDs
@@ -74,7 +73,7 @@ const isValidEmail = (email) => {
     'ye', 'yt',
     'za', 'zm', 'zw'
   ];
-  
+
   // Check if TLD is valid
   return validTlds.includes(tld);
 };
@@ -83,7 +82,7 @@ const isValidEmail = (email) => {
 const isValidGhanaPhone = (phone) => {
   // Remove all non-digit characters for validation
   const cleaned = phone.replace(/\D/g, '');
-  
+
   // Only accept exactly 10 digits starting with 0
   return /^0\d{9}$/.test(cleaned);
 };
@@ -91,12 +90,12 @@ const isValidGhanaPhone = (phone) => {
 const formatGhanaPhone = (value) => {
   // Remove all non-digit characters
   let cleaned = value.replace(/\D/g, '');
-  
+
   // Only allow digits, must start with 0
   if (cleaned.length === 0) {
     return '';
   }
-  
+
   // If first digit is not 0, add 0 at the start
   if (!cleaned.startsWith('0')) {
     // If user typed digits without 0, add 0
@@ -107,10 +106,10 @@ const formatGhanaPhone = (value) => {
       cleaned = '0' + cleaned.substring(0, 9);
     }
   }
-  
+
   // Limit to 10 digits maximum
   cleaned = cleaned.substring(0, 10);
-  
+
   return cleaned;
 };
 
@@ -224,7 +223,7 @@ const AuthPage = () => {
 
         if (error) {
           let errorMsg = 'Login failed';
-          
+
           if (error.message?.includes('Invalid login credentials') || error.message?.includes('invalid_credentials')) {
             errorMsg = 'Invalid email or password';
           } else if (error.message?.includes('Email not confirmed')) {
@@ -232,14 +231,14 @@ const AuthPage = () => {
           } else {
             errorMsg = error.message || 'Login failed. Please try again.';
           }
-          
+
           // Log failed login attempt
           await logLoginAttempt({
             success: false,
             email: formData.email.trim(),
             error: errorMsg
           });
-          
+
           toast.error(errorMsg);
           setLoading(false);
           return;
@@ -251,9 +250,9 @@ const AuthPage = () => {
             success: true,
             email: formData.email.trim()
           });
-          
+
           toast.success('Welcome back!');
-          
+
           // Create profile if it doesn't exist (non-blocking)
           try {
             const { error: profileError } = await supabase.from('profiles').insert({
@@ -280,7 +279,7 @@ const AuthPage = () => {
         try {
           // Phone number is already in 0XXXXXXXXX format from formatting function
           const normalizedPhone = formData.phone_number.trim().replace(/\D/g, '');
-          
+
           const signupMetadata = {
             name: formData.name.trim(),
             phone_number: normalizedPhone,
@@ -304,7 +303,7 @@ const AuthPage = () => {
           if (error) {
             console.error('Supabase signup error:', error);
             let errorMsg = 'Signup failed';
-            
+
             // Handle specific error cases
             if (error.status === 422) {
               // 422 Unprocessable Content - usually means validation failed
@@ -332,7 +331,7 @@ const AuthPage = () => {
             } else {
               errorMsg = error.message || 'Signup failed. Please try again.';
             }
-            
+
             toast.error(errorMsg);
             setLoading(false);
             return;
@@ -393,9 +392,9 @@ const AuthPage = () => {
         {/* Logo */}
         <div className="text-center mb-6 sm:mb-8 animate-fadeIn">
           <div className="inline-flex items-center justify-center mb-3 sm:mb-4">
-            <img 
-              src="/download.png" 
-              alt="BoostUp GH Logo" 
+            <img
+              src="/download.png"
+              alt="BoostUp GH Logo"
               className="h-8 sm:h-10 max-w-full"
             />
           </div>
@@ -411,11 +410,10 @@ const AuthPage = () => {
                 setIsLogin(true);
                 setEmailError('');
               }}
-              className={`flex-1 h-10 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                isLogin
+              className={`flex-1 h-10 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${isLogin
                   ? 'bg-indigo-600 text-white hover:bg-indigo-700'
                   : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-              }`}
+                }`}
             >
               Login
             </Button>
@@ -425,11 +423,10 @@ const AuthPage = () => {
                 setIsLogin(false);
                 setEmailError('');
               }}
-              className={`flex-1 h-10 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                !isLogin
+              className={`flex-1 h-10 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${!isLogin
                   ? 'bg-indigo-600 text-white hover:bg-indigo-700'
                   : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-              }`}
+                }`}
             >
               Register
             </Button>
@@ -479,11 +476,10 @@ const AuthPage = () => {
                       }
                     }}
                     required={!isLogin}
-                    className={`w-full h-11 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
-                      phoneError
+                    className={`w-full h-11 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${phoneError
                         ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
                         : 'border-gray-300'
-                    }`}
+                      }`}
                   />
                   {phoneError && (
                     <p className="mt-1 text-sm text-red-600">{phoneError}</p>
@@ -519,11 +515,10 @@ const AuthPage = () => {
                   }
                 }}
                 required
-                className={`w-full h-11 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
-                  emailError
+                className={`w-full h-11 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${emailError
                     ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
                     : 'border-gray-300'
-                }`}
+                  }`}
               />
               {emailError && (
                 <p className="mt-1 text-sm text-red-600">{emailError}</p>

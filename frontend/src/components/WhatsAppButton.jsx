@@ -116,8 +116,7 @@ const WhatsAppButton = ({ message, className = "" }) => {
   const handleWhatsAppClick = (e) => {
     // Only open WhatsApp if we haven't dragged (i.e., it was just a click)
     if (!hasDragged) {
-      const phoneNumber = "+233550069661"; // Ghana WhatsApp number
-      const whatsappUrl = `https://wa.me/${phoneNumber}`;
+      const whatsappUrl = `https://whatsapp.com/channel/0029Vb7fjZU0wajj6MK0LP2l`;
 
       // Open WhatsApp in new tab/window
       window.open(whatsappUrl, '_blank');

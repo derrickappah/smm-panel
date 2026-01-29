@@ -8,6 +8,7 @@ import { Analytics } from "@vercel/analytics/react";
 import SupabaseSetup from "@/components/SupabaseSetup";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import WhatsAppButton from "@/components/WhatsAppButton";
 import { supabase, isConfigured } from "@/lib/supabase";
 import { queryClient } from "@/lib/queryClient";
 import { prefetchPaymentSettings } from "@/hooks/usePaymentMethods";
@@ -768,6 +769,7 @@ function App() {
                   />
                 </Routes>
               </Suspense>
+              <WhatsAppButton />
             </BrowserRouter>
             <SpeedInsights />
             <Analytics />

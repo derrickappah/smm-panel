@@ -19,7 +19,6 @@ import { useDashboardData } from '@/hooks/useDashboardData';
 import { usePaymentMethods } from '@/hooks/usePaymentMethods';
 import { usePromotionPackages } from '@/hooks/useAdminPromotionPackages';
 import { useDepositPolling } from '@/hooks/useDepositPolling';
-import WhatsAppButton from '@/components/WhatsAppButton';
 // Paystack will be loaded via react-paystack package
 
 const Dashboard = ({ user, onLogout, onUpdateUser }) => {

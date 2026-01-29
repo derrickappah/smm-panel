@@ -11,7 +11,6 @@ import Testimonials from '@/components/landing/Testimonials';
 import HowItWorks from '@/components/landing/HowItWorks';
 import PricingPreview from '@/components/landing/PricingPreview';
 import FAQ from '@/components/landing/FAQ';
-import WhatsAppButton from '@/components/WhatsAppButton';
 import { generateOrganizationSchema, generateWebSiteSchema, generateFAQSchema } from '@/utils/schema';
 import { primaryKeywords, longTailKeywords, questionKeywords, locationKeywords } from '@/data/keywords';
 import { useFAQ } from '@/hooks/useFAQ';
@@ -34,11 +33,11 @@ const AnimatedNumber = ({ value, duration = 2000, formatter = (v) => v.toLocaleS
       const now = Date.now();
       const elapsed = now - startTime;
       const progress = Math.min(elapsed / duration, 1);
-      
+
       // Easing function for smooth animation
       const easeOutCubic = 1 - Math.pow(1 - progress, 3);
       const currentValue = Math.floor(startValue + (endValue - startValue) * easeOutCubic);
-      
+
       setDisplayValue(currentValue);
 
       if (progress < 1) {
@@ -183,38 +182,38 @@ const LandingPage = () => {
     queryKey: ['landing-stats'],
     queryFn: async () => {
       const BATCH_SIZE = 1000; // Fetch in batches for optimal performance
-      
+
       // Fetch all completed orders using batched pagination
       const fetchAllCompletedOrders = async () => {
         let allOrders = [];
         let from = 0;
         let hasMore = true;
-        
+
         // First, get total count of completed orders
         const { count, error: countError } = await supabase
           .from('orders')
           .select('*', { count: 'exact', head: true })
           .eq('status', 'completed');
-        
+
         if (countError) {
           throw countError;
         }
-        
+
         // Fetch all batches - optimized sequential fetching for large datasets
         while (hasMore) {
           const to = from + BATCH_SIZE - 1;
-          
+
           const { data, error } = await supabase
             .from('orders')
             .select('quantity, promotion_package_id, services(name, service_type), promotion_packages(name, service_type)')
             .eq('status', 'completed')
             .order('created_at', { ascending: false })
             .range(from, to);
-          
+
           if (error) {
             throw error;
           }
-          
+
           if (data && data.length > 0) {
             allOrders = allOrders.concat(data);
             hasMore = data.length === BATCH_SIZE && allOrders.length < (count || Infinity);
@@ -223,10 +222,10 @@ const LandingPage = () => {
             hasMore = false;
           }
         }
-        
+
         return allOrders;
       };
-      
+
       const [ordersDataResult, ordersCountResult, usersResult] = await Promise.allSettled([
         fetchAllCompletedOrders(),
         supabase
@@ -255,14 +254,14 @@ const LandingPage = () => {
 
       if (ordersDataResult.status === 'fulfilled' && ordersDataResult.value) {
         const ordersData = Array.isArray(ordersDataResult.value) ? ordersDataResult.value : [];
-        
+
         ordersData.forEach(order => {
           const quantity = parseInt(order.quantity || 0);
           if (isNaN(quantity) || quantity <= 0) return;
 
           // Check if this is a promotion package order or regular service order
           const isPromotionPackage = !!order.promotion_package_id;
-          
+
           // Use promotion package data if available, otherwise use service data
           // Match the exact logic from admin stats
           const serviceType = isPromotionPackage
@@ -414,15 +413,15 @@ const LandingPage = () => {
       <nav className="bg-white border-b border-gray-200 fixed top-0 left-0 right-0 z-50 shadow-sm">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-4 flex justify-between items-center">
           <div className="flex items-center">
-            <img 
-              src="/download.png" 
-              alt="BoostUp GH Logo" 
+            <img
+              src="/download.png"
+              alt="BoostUp GH Logo"
               className="h-8 sm:h-10 max-w-full"
             />
           </div>
-          <Button 
+          <Button
             data-testid="nav-get-started-btn"
-            onClick={() => navigate('/auth')} 
+            onClick={() => navigate('/auth')}
             className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 sm:px-4 md:px-6 py-2 h-9 sm:h-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors duration-200 text-sm sm:text-base"
           >
             Get Started
@@ -462,19 +461,19 @@ const LandingPage = () => {
           <p className="text-base sm:text-lg md:text-xl text-gray-600 mb-8 sm:mb-10 md:mb-12 max-w-2xl mx-auto leading-relaxed">
             The most reliable SMM panel for boosting your followers, likes, views, and engagement across all major platforms. Join thousands of satisfied customers today.
           </p>
-          
+
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 justify-center items-stretch sm:items-center mb-10 sm:mb-12 md:mb-16">
-            <Button 
+            <Button
               data-testid="hero-get-started-btn"
-              onClick={() => navigate('/auth')} 
+              onClick={() => navigate('/auth')}
               size="lg"
               className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-8 sm:px-10 py-3.5 sm:py-4 h-auto text-base sm:text-lg font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl w-full sm:w-auto min-w-[200px]"
             >
               Start Boosting Now
               <ArrowRight className="ml-2 w-5 h-5" />
             </Button>
-            <Button 
+            <Button
               onClick={() => {
                 const element = document.getElementById('pricing-preview');
                 element?.scrollIntoView({ behavior: 'smooth' });
@@ -636,8 +635,8 @@ const LandingPage = () => {
           </h2>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
             {features.map((feature, index) => (
-              <div 
-                key={index} 
+              <div
+                key={index}
                 className="bg-white border border-gray-200 rounded-lg p-5 sm:p-6 md:p-8 shadow-sm hover:shadow-lg transition-all duration-200"
               >
                 <div className={`w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 bg-gradient-to-br ${feature.color} rounded-lg flex items-center justify-center mb-4 sm:mb-6 shadow-md`}>
@@ -668,9 +667,9 @@ const LandingPage = () => {
           <p className="text-sm sm:text-base md:text-lg text-gray-600 mb-4 sm:mb-6 md:mb-8">
             Join thousands of satisfied customers and start growing today. No credit card required to get started.
           </p>
-          <Button 
+          <Button
             data-testid="cta-get-started-btn"
-            onClick={() => navigate('/auth')} 
+            onClick={() => navigate('/auth')}
             size="lg"
             className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-6 sm:px-8 py-3 sm:py-4 h-12 sm:h-14 text-base sm:text-lg rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl"
           >
@@ -689,9 +688,6 @@ const LandingPage = () => {
 
       {/* Back to Top Button */}
       <BackToTop />
-
-      {/* WhatsApp Floating Button */}
-      <WhatsAppButton />
     </div>
   );
 };
