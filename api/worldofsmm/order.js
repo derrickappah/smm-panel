@@ -1,10 +1,13 @@
 // Vercel Serverless Function for World of SMM Orders
 
+import { verifyAdmin } from '../utils/auth.js';
+import { rateLimit } from '../middleware/rateLimit.js';
+
 const REQUEST_TIMEOUT = 30000; // 30 seconds
 
 export default async function handler(req, res) {
-    // Enable CORS
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    // Enable CORS - restricted to app domain only
+    res.setHeader('Access-Control-Allow-Origin', process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://yourdomain.com');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
@@ -18,9 +21,22 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
+    // 🔴 SECURITY PATCH: Global Rate Limiting
+    const rateLimitResult = await rateLimit(req, res);
+    if (rateLimitResult.blocked) {
+        return res.status(429).json({ error: rateLimitResult.message });
+    }
+
     const startTime = Date.now();
 
     try {
+        // SECURITY: Only admins can call this direct proxy endpoint
+        // Standard users must use /api/place-order
+        const { isAdmin } = await verifyAdmin(req).catch(() => ({ isAdmin: false }));
+        if (!isAdmin) {
+            return res.status(403).json({ error: 'Unauthorized: Direct provider access restricted to admins' });
+        }
+
         const { service, link, quantity } = req.body;
 
         // Input validation

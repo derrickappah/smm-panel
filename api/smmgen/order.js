@@ -1,13 +1,31 @@
 // Vercel Serverless Function for SMMGen Orders
 // This replaces the need for a separate backend server
+import { verifyAdmin } from '../utils/auth.js';
+import { rateLimit } from '../middleware/rateLimit.js';
 
 const REQUEST_TIMEOUT = 30000; // 30 seconds
 
 export default async function handler(req, res) {
-  // Enable CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  // Enable CORS - restricted to app domain only
+  res.setHeader('Access-Control-Allow-Origin', process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://yourdomain.com');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  // Only allow POST requests
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // 🔴 SECURITY PATCH: Global Rate Limiting
+  const rateLimitResult = await rateLimit(req, res);
+  if (rateLimitResult.blocked) {
+    return res.status(429).json({ error: rateLimitResult.message });
+  }
 
   // Handle preflight requests
   if (req.method === 'OPTIONS') {

@@ -25,10 +25,11 @@
 
 import { verifyAuth, getServiceRoleClient } from './utils/auth.js';
 import { logUserAction } from './utils/activityLogger.js';
+import { rateLimit } from './middleware/rateLimit.js';
 
 export default async function handler(req, res) {
-  // Enable CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  // Enable CORS - restricted to app domain only
+  res.setHeader('Access-Control-Allow-Origin', process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://yourdomain.com');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
@@ -40,6 +41,12 @@ export default async function handler(req, res) {
   // Only allow POST requests
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // 🔴 SECURITY PATCH: Global Rate Limiting
+  const rateLimitResult = await rateLimit(req, res);
+  if (rateLimitResult.blocked) {
+    return res.status(429).json({ error: rateLimitResult.message });
   }
 
   try {
@@ -109,6 +116,64 @@ export default async function handler(req, res) {
       return res.status(400).json({
         error: 'Invalid package_id format. Must be a valid UUID.'
       });
+    }
+
+    // Connect to database to fetch service details
+    const supabaseService = getServiceRoleClient();
+
+    // 🔴 SECURITY PATCH: Server-Side Price Calculation
+    // Never trust total_cost from frontend
+    if (service_id) {
+      const { data: serviceData, error: serviceError } = await supabaseService
+        .from('services')
+        .select('rate, min_quantity, max_quantity, category')
+        .eq('id', service_id)
+        .single();
+
+      if (serviceError || !serviceData) {
+        return res.status(400).json({ error: 'Invalid service ID or service not found' });
+      }
+
+      // Calculate expected cost: rate is usually per 1000 items
+      // Adjust calculation based on your specific rate logic (assuming rate is per 1000)
+      const ratePer1k = Number(serviceData.rate);
+      const expectedCost = (ratePer1k * quantityNum) / 1000;
+
+      // Allow small floating point difference (0.01)
+      if (Math.abs(expectedCost - totalCostNum) > 0.01) {
+        console.error(`Price mismatch attempt: User sent ${totalCostNum}, expected ${expectedCost} for service ${service_id}`);
+        return res.status(400).json({
+          error: 'Price mismatch. Please refresh and try again.',
+          details: 'Calculated cost does not match provided cost.' // Don't reveal exact numbers to attacker
+        });
+      }
+
+      // Also validate min/max quantity server-side
+      if (quantityNum < serviceData.min_quantity) {
+        return res.status(400).json({ error: `Quantity too low. Minimum is ${serviceData.min_quantity}` });
+      }
+      if (quantityNum > serviceData.max_quantity) {
+        return res.status(400).json({ error: `Quantity too high. Maximum is ${serviceData.max_quantity}` });
+      }
+    }
+
+    // For packages, we should also validate price, but that depends on package logic.
+    // Assuming package has fixed price/quantity.
+    if (package_id) {
+      const { data: packageData, error: packageError } = await supabaseService
+        .from('promotion_packages')
+        .select('price')
+        .eq('id', package_id)
+        .single();
+
+      if (packageError || !packageData) {
+        return res.status(400).json({ error: 'Invalid package ID' });
+      }
+
+      // Exact price check for packages
+      if (Math.abs(Number(packageData.price) - totalCostNum) > 0.01) {
+        return res.status(400).json({ error: 'Price mismatch for package.' });
+      }
     }
 
     // Get service role client for RPC call
