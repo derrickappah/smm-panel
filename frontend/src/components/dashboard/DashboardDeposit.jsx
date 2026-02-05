@@ -65,10 +65,10 @@ const DashboardDeposit = React.memo(({
     }
   }, [setManualDepositForm]);
 
-  const allMethodsDisabled = useMemo(() => 
-    !paymentMethodSettings.paystack_enabled && 
-    !paymentMethodSettings.manual_enabled && 
-    !paymentMethodSettings.hubtel_enabled && 
+  const allMethodsDisabled = useMemo(() =>
+    !paymentMethodSettings.paystack_enabled &&
+    !paymentMethodSettings.manual_enabled &&
+    !paymentMethodSettings.hubtel_enabled &&
     !paymentMethodSettings.korapay_enabled &&
     !paymentMethodSettings.moolre_enabled &&
     !paymentMethodSettings.moolre_web_enabled,
@@ -82,7 +82,7 @@ const DashboardDeposit = React.memo(({
   useEffect(() => {
     if (isPollingDeposit && pendingTransaction) {
       setCountdown(60); // Reset to 60 seconds
-      
+
       // Countdown interval
       const countdownInterval = setInterval(() => {
         setCountdown((prev) => {
@@ -105,19 +105,19 @@ const DashboardDeposit = React.memo(({
   const highlightWords = useCallback((text, phoneNumber, accountName) => {
     // Keywords to highlight
     const keywords = ['PAYMENT', 'USERNAME', 'SCREENSHOT'];
-    
+
     // Create a regex pattern that matches keywords, phone number, or account name
     const pattern = new RegExp(
       `(${keywords.join('|')}|${phoneNumber.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}|${accountName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`,
       'gi'
     );
-    
+
     // Split text by the pattern, keeping the matches
     const parts = text.split(pattern);
-    
+
     return parts.map((part, index) => {
       const upperPart = part.toUpperCase();
-      
+
       // Check if it's a keyword
       if (keywords.some(keyword => upperPart === keyword)) {
         return (
@@ -126,7 +126,7 @@ const DashboardDeposit = React.memo(({
           </span>
         );
       }
-      
+
       // Check if it's the phone number
       if (part === phoneNumber) {
         return (
@@ -135,7 +135,7 @@ const DashboardDeposit = React.memo(({
           </span>
         );
       }
-      
+
       // Check if it's the account name
       if (part === accountName) {
         return (
@@ -144,7 +144,7 @@ const DashboardDeposit = React.memo(({
           </span>
         );
       }
-      
+
       // Regular text
       return <span key={index}>{part}</span>;
     });
@@ -174,18 +174,17 @@ const DashboardDeposit = React.memo(({
           </div>
         )}
       </div>
-      
+
       {enabledMethods.length > 1 && depositMethod !== null && (
         <div className="flex gap-2 mb-6 p-1 bg-gray-100 rounded-lg">
           {paymentMethodSettings.paystack_enabled && (
             <button
               type="button"
               onClick={() => setDepositMethod('paystack')}
-              className={`flex-1 py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                depositMethod === 'paystack'
-                  ? 'bg-white text-indigo-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-              }`}
+              className={`flex-1 py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'paystack'
+                ? 'bg-white text-indigo-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
             >
               Paystack
             </button>
@@ -194,11 +193,10 @@ const DashboardDeposit = React.memo(({
             <button
               type="button"
               onClick={() => setDepositMethod('manual')}
-              className={`flex-1 py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                depositMethod === 'manual'
-                  ? 'bg-white text-indigo-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-              }`}
+              className={`flex-1 py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'manual'
+                ? 'bg-white text-indigo-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
             >
               Mobile Money
             </button>
@@ -207,11 +205,10 @@ const DashboardDeposit = React.memo(({
             <button
               type="button"
               onClick={() => setDepositMethod('hubtel')}
-              className={`flex-1 py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                depositMethod === 'hubtel'
-                  ? 'bg-white text-indigo-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-              }`}
+              className={`flex-1 py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'hubtel'
+                ? 'bg-white text-indigo-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
             >
               Hubtel
             </button>
@@ -220,11 +217,10 @@ const DashboardDeposit = React.memo(({
             <button
               type="button"
               onClick={() => setDepositMethod('korapay')}
-              className={`flex-1 py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                depositMethod === 'korapay'
-                  ? 'bg-white text-indigo-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-              }`}
+              className={`flex-1 py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'korapay'
+                ? 'bg-white text-indigo-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
             >
               Korapay
             </button>
@@ -233,11 +229,10 @@ const DashboardDeposit = React.memo(({
             <button
               type="button"
               onClick={() => setDepositMethod('moolre')}
-              className={`flex-1 py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                depositMethod === 'moolre'
-                  ? 'bg-white text-indigo-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-              }`}
+              className={`flex-1 py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'moolre'
+                ? 'bg-white text-indigo-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
             >
               Moolre
             </button>
@@ -246,11 +241,10 @@ const DashboardDeposit = React.memo(({
             <button
               type="button"
               onClick={() => setDepositMethod('moolre_web')}
-              className={`flex-1 py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                depositMethod === 'moolre_web'
-                  ? 'bg-white text-indigo-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-              }`}
+              className={`flex-1 py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'moolre_web'
+                ? 'bg-white text-indigo-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
             >
               Moolre MoMo
             </button>
@@ -300,13 +294,13 @@ const DashboardDeposit = React.memo(({
               <span className="font-semibold">Having issues with deposits?</span>
               <br />
               <span className="mt-1 block">Text us on WhatsApp: </span>
-              <a 
-                href="https://wa.me/+233550069661" 
-                target="_blank" 
+              <a
+                href="https://wa.me/233256650926"
+                target="_blank"
                 rel="noopener noreferrer"
                 className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
               >
-                0550069661
+                0256650926
               </a>
             </p>
           </div>
@@ -342,25 +336,25 @@ const DashboardDeposit = React.memo(({
             {(() => {
               // Parse instructions - split by \n and format
               const instructionLines = manualDepositDetails.instructions.split('\n').filter(line => line.trim());
-              
+
               return (
                 <ol className="list-decimal list-inside space-y-3 text-gray-900 text-base sm:text-lg">
                   {instructionLines.map((line, index) => {
                     // Replace phone number placeholder if exists (any 10-digit number)
                     let processedLine = line.replace(/\d{10}/g, manualDepositDetails.phone_number);
-                    
+
                     // Replace account name if it matches the old format
                     if (line.includes('MTN') && line.includes('APPIAH')) {
                       processedLine = processedLine.replace(/MTN\s*-\s*APPIAH\s*MANASSEH\s*ATTAH/gi, manualDepositDetails.account_name);
-                    } else if (line.trim() === manualDepositDetails.account_name || 
-                               (index === 1 && !line.includes('PAYMENT') && !line.includes('USERNAME') && !line.includes('SCREENSHOT') && !line.match(/\d{10}/))) {
+                    } else if (line.trim() === manualDepositDetails.account_name ||
+                      (index === 1 && !line.includes('PAYMENT') && !line.includes('USERNAME') && !line.includes('SCREENSHOT') && !line.match(/\d{10}/))) {
                       // If it's the account name line (usually second line without keywords)
                       processedLine = manualDepositDetails.account_name;
                     }
-                    
+
                     // Check if this line is just the account name
                     const isAccountNameLine = processedLine.trim() === manualDepositDetails.account_name;
-                    
+
                     return (
                       <li key={index} className={isAccountNameLine ? 'font-semibold' : ''}>
                         {isAccountNameLine ? (
@@ -438,13 +432,13 @@ const DashboardDeposit = React.memo(({
               <span className="font-semibold">Having issues with deposits?</span>
               <br />
               <span className="mt-1 block">Text us on WhatsApp: </span>
-              <a 
-                href="https://wa.me/233550069661" 
-                target="_blank" 
+              <a
+                href="https://wa.me/233256650926"
+                target="_blank"
                 rel="noopener noreferrer"
                 className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
               >
-                0550069661
+                0256650926
               </a>
             </p>
           </div>
@@ -480,13 +474,13 @@ const DashboardDeposit = React.memo(({
               <span className="font-semibold">Having issues with deposits?</span>
               <br />
               <span className="mt-1 block">Text us on WhatsApp: </span>
-              <a 
-                href="https://wa.me/233550069661" 
-                target="_blank" 
+              <a
+                href="https://wa.me/233256650926"
+                target="_blank"
                 rel="noopener noreferrer"
                 className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
               >
-                0550069661
+                0256650926
               </a>
             </p>
           </div>
@@ -508,7 +502,7 @@ const DashboardDeposit = React.memo(({
                   </p>
                 </div>
               )}
-              
+
               {moolrePaymentStatus === 'success' && (
                 <div className="text-center">
                   <div className="relative w-32 h-32 mx-auto mb-6">
@@ -524,7 +518,7 @@ const DashboardDeposit = React.memo(({
                   </p>
                 </div>
               )}
-              
+
               {moolrePaymentStatus === 'failed' && (
                 <div className="text-center">
                   <div className="relative w-32 h-32 mx-auto mb-6">
@@ -631,9 +625,8 @@ const DashboardDeposit = React.memo(({
                   placeholder="Enter 6-digit OTP"
                   value={moolreOtpCode}
                   onChange={(e) => setMoolreOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  className={`w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-center text-lg tracking-widest ${
-                    moolreOtpError ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : ''
-                  }`}
+                  className={`w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-center text-lg tracking-widest ${moolreOtpError ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : ''
+                    }`}
                   maxLength={6}
                   required
                   autoFocus
@@ -720,13 +713,13 @@ const DashboardDeposit = React.memo(({
               <span className="font-semibold">Having issues with deposits?</span>
               <br />
               <span className="mt-1 block">Text us on WhatsApp: </span>
-              <a 
-                href="https://wa.me/233550069661" 
-                target="_blank" 
+              <a
+                href="https://wa.me/233256650926"
+                target="_blank"
                 rel="noopener noreferrer"
                 className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
               >
-                0550069661
+                0256650926
               </a>
             </p>
           </div>
@@ -787,13 +780,13 @@ const DashboardDeposit = React.memo(({
               <span className="font-semibold">Having issues with deposits?</span>
               <br />
               <span className="mt-1 block">Text us on WhatsApp: </span>
-              <a 
-                href="https://wa.me/233550069661" 
-                target="_blank" 
+              <a
+                href="https://wa.me/233256650926"
+                target="_blank"
                 rel="noopener noreferrer"
                 className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
               >
-                0550069661
+                0256650926
               </a>
             </p>
           </div>
