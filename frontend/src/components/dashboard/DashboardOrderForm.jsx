@@ -264,7 +264,7 @@ const DashboardOrderForm = React.memo(({
   }, []);
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-6 sm:p-8 shadow-sm animate-slideUp" id="order-form-section">
+    <div className="bg-white border-2 border-gray-300 rounded-lg p-6 sm:p-8 shadow-xl animate-slideUp" id="order-form-section">
       <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">Place New Order</h2>
       <form onSubmit={handleOrder} className="space-y-4">
         <div className="relative">
