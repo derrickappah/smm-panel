@@ -153,7 +153,7 @@ const DashboardDeposit = React.memo(({
   return (
     <div className="bg-white border-2 border-gray-300 rounded-lg p-6 sm:p-8 shadow-xl animate-slideUp">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Add Funds</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Deposit Here</h2>
         {isPollingDeposit && pendingTransaction && (
           <div className="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg">
             <div className="flex items-center gap-2 mb-2">
