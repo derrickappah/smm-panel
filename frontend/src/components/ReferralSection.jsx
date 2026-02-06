@@ -20,19 +20,19 @@ const ReferralSection = ({ user }) => {
   useEffect(() => {
     if (user) {
       fetchReferralData();
-      
+
       // If no referral code found, set up polling to check again
       // This handles cases where code is being generated
       if (!referralCode) {
         const pollInterval = setInterval(() => {
           fetchReferralData();
         }, 2000); // Check every 2 seconds
-        
+
         // Stop polling after 30 seconds or when code is found
         const timeout = setTimeout(() => {
           clearInterval(pollInterval);
         }, 30000);
-        
+
         return () => {
           clearInterval(pollInterval);
           clearTimeout(timeout);
@@ -58,7 +58,7 @@ const ReferralSection = ({ user }) => {
       } else if (profile) {
         const code = profile.referral_code || '';
         setReferralCode(code);
-        
+
         // If user was just created (within last 5 minutes) and no code, keep polling
         if (!code && profile.created_at) {
           const createdTime = new Date(profile.created_at).getTime();
@@ -99,7 +99,7 @@ const ReferralSection = ({ user }) => {
       } else if (referralsData && referralsData.length > 0) {
         // Fetch referee profiles separately
         const refereeIds = referralsData.map(ref => ref.referee_id);
-        
+
         const { data: refereeProfiles, error: profilesError } = await supabase
           .from('profiles')
           .select('id, email, name, created_at')
@@ -113,7 +113,7 @@ const ReferralSection = ({ user }) => {
         // Combine referral data with referee profiles
         const referralsWithProfiles = referralsData.map(referral => {
           const refereeProfile = refereeProfiles?.find(p => p.id === referral.referee_id);
-          
+
           // Extract name - use email prefix if name is null/empty
           let displayName = 'User';
           if (refereeProfile) {
@@ -123,7 +123,7 @@ const ReferralSection = ({ user }) => {
               displayName = refereeProfile.email.split('@')[0];
             }
           }
-          
+
           return {
             ...referral,
             referee: {
@@ -190,7 +190,7 @@ const ReferralSection = ({ user }) => {
 
   if (loading) {
     return (
-      <Card>
+      <Card className="border-2 border-gray-300 shadow-xl">
         <CardHeader>
           <CardTitle>Referral Program</CardTitle>
           <CardDescription>Loading referral information...</CardDescription>
@@ -202,7 +202,7 @@ const ReferralSection = ({ user }) => {
   return (
     <div className="space-y-6">
       {/* Referral Code and Link Section */}
-      <Card>
+      <Card className="border-2 border-gray-300 shadow-xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Gift className="w-5 h-5" />
@@ -278,7 +278,7 @@ const ReferralSection = ({ user }) => {
 
       {/* Stats Section */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <Card>
+        <Card className="border-2 border-gray-300 shadow-xl">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
@@ -290,7 +290,7 @@ const ReferralSection = ({ user }) => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-2 border-gray-300 shadow-xl">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
@@ -304,7 +304,7 @@ const ReferralSection = ({ user }) => {
           </CardContent>
         </Card>
 
-        <Card className="col-span-2 md:col-span-1">
+        <Card className="border-2 border-gray-300 shadow-xl col-span-2 md:col-span-1">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
@@ -318,7 +318,7 @@ const ReferralSection = ({ user }) => {
       </div>
 
       {/* Referred Users List */}
-      <Card>
+      <Card className="border-2 border-gray-300 shadow-xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <UserPlus className="w-5 h-5" />
@@ -350,16 +350,16 @@ const ReferralSection = ({ user }) => {
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
                           <span className="text-indigo-600 font-semibold">
-                            {referee?.name?.charAt(0)?.toUpperCase() || 
-                             referee?.email?.charAt(0)?.toUpperCase() || 
-                             '?'}
+                            {referee?.name?.charAt(0)?.toUpperCase() ||
+                              referee?.email?.charAt(0)?.toUpperCase() ||
+                              '?'}
                           </span>
                         </div>
                         <div>
                           <p className="font-medium text-gray-900">
-                            {referee?.name || 
-                             (referee?.email ? referee.email.split('@')[0] : null) || 
-                             'User'}
+                            {referee?.name ||
+                              (referee?.email ? referee.email.split('@')[0] : null) ||
+                              'User'}
                           </p>
                           {referee?.email ? (
                             <p className="text-sm text-gray-500">{referee.email}</p>

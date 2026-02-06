@@ -32,7 +32,7 @@ const DashboardOrders = React.memo(({ orders, services }) => {
   }
 
   return (
-    <div className="mt-6 sm:mt-8 bg-white border border-gray-200 rounded-lg p-6 sm:p-8 shadow-sm animate-slideUp">
+    <div className="mt-6 sm:mt-8 bg-white border-2 border-gray-300 rounded-lg p-6 sm:p-8 shadow-xl animate-slideUp">
       <div className="flex items-center justify-between mb-6 gap-4">
         <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Recent Orders</h2>
         <Button
