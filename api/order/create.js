@@ -191,7 +191,7 @@ export default async function handler(req, res) {
                         });
                     }
                 } catch (pError) {
-                    console.error(`[COMBO COMPONENT ERROR] ${component.provider}:`, pError.message);
+                    console.error(`[COMPONENT ERROR] ${component.provider}:`, pError.message);
                     lastError = pError.message;
                     componentResults.push({
                         provider: component.provider,
@@ -239,17 +239,23 @@ export default async function handler(req, res) {
 
                 return res.status(502).json({
                     error: lastError || 'Provider Error',
-                    message: 'All components of this combo failed to process. It has been saved for retry.',
+                    message: 'Failed to submit order to provider. It has been saved for retry.',
                     details: componentResults
                 });
             }
         }
 
-        // Success (Local Only or No Provider needed)
+        // No provider configured - mark as pending manual processing
+        await supabase.from('orders').update({
+            status: 'pending',
+            submitted_at: new Date().toISOString()
+        }).eq('id', order_id);
+
         return res.status(200).json({
             success: true,
             order_id,
-            new_balance: rpcResult.new_balance
+            new_balance: rpcResult.new_balance,
+            warning: 'No provider configured for this service'
         });
 
     } catch (error) {
