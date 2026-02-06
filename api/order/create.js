@@ -95,6 +95,16 @@ export default async function handler(req, res) {
             if (quantity < service.min_quantity || quantity > service.max_quantity) {
                 return res.status(400).json({ error: `Quantity must be between ${service.min_quantity} and ${service.max_quantity}` });
             }
+
+            // DEBUG: Log provider detection
+            console.log('[ORDER DEBUG] Service provider detection:', {
+                service_id: service.id,
+                service_name: service.name,
+                is_combo,
+                provider,
+                provider_service_id,
+                combo_components_count: combo_components.length
+            });
         } else if (package_id) {
             const { data: pkg, error: pErr } = await supabase
                 .from('promotion_packages')
@@ -156,6 +166,11 @@ export default async function handler(req, res) {
         const order_id = rpcResult.order_id;
 
         // 5. Call Provider API(s) (Server-Side)
+        console.log('[ORDER DEBUG] About to submit to providers:', {
+            combo_components_length: combo_components.length,
+            components: combo_components
+        });
+
         if (combo_components.length > 0) {
             const componentResults = [];
             let someSuccess = false;
