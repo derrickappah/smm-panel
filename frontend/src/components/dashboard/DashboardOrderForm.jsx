@@ -98,12 +98,12 @@ const DashboardOrderForm = React.memo(({
   const handleServiceSearchChange = useCallback((e) => {
     const value = e.target.value;
     setServiceSearch(value);
-    if (value.length > 0 && services.length > 0) {
+    if (value.trim() !== '') {
       setSelectOpen(true);
-    } else if (value.length === 0 && services.length > 0) {
-      setSelectOpen(true);
+    } else {
+      setSelectOpen(false);
     }
-  }, [services.length]);
+  }, []);
 
   const handleServiceSelect = useCallback((serviceId) => {
     setOrderForm(prev => ({ ...prev, service_id: serviceId, package_id: '' }));
@@ -124,19 +124,22 @@ const DashboardOrderForm = React.memo(({
   }, [setOrderForm, packages]);
 
   const handleSearchFocus = useCallback(() => {
-    if (services.length > 0) {
+    if (serviceSearch.trim() !== '' || services.length > 0) {
       setSelectOpen(true);
     }
-  }, [services.length]);
+  }, [serviceSearch, services.length]);
 
   const handleSearchBlur = useCallback(() => {
-    setTimeout(() => {
-      const activeElement = document.activeElement;
-      if (!activeElement || !activeElement.closest('.service-dropdown-container')) {
-        setSelectOpen(false);
-      }
-    }, 150);
-  }, []);
+    // Only close if search is empty
+    if (serviceSearch.trim() === '') {
+      setTimeout(() => {
+        const activeElement = document.activeElement;
+        if (!activeElement || !activeElement.closest('.service-dropdown-container')) {
+          setSelectOpen(false);
+        }
+      }, 150);
+    }
+  }, [serviceSearch]);
 
   const handleLinkChange = useCallback((e) => {
     setOrderForm(prev => ({ ...prev, link: e.target.value }));
@@ -282,7 +285,7 @@ const DashboardOrderForm = React.memo(({
 
             {selectOpen && (filteredServices.length > 0 || filteredPackages.length > 0) && (
               <div
-                className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-[300px] overflow-y-auto"
+                className="mt-2 bg-gray-50 border border-gray-200 rounded-lg shadow-inner z-10 max-h-[300px] overflow-y-auto"
                 onMouseDown={(e) => e.preventDefault()}
               >
                 <div className="p-1">

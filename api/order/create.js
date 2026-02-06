@@ -46,10 +46,11 @@ export default async function handler(req, res) {
             return res.status(429).json({ error: 'Too many orders. Please wait a minute.' });
         }
 
-        // 2. Fetch Service/Package Details for Validation
         let provider = null;
         let provider_service_id = null;
         let db_service_id = service_id;
+        let is_combo = false;
+        let combo_components = []; // Array of { provider, service_id }
 
         if (service_id) {
             const { data: service, error: sErr } = await supabase
@@ -62,19 +63,32 @@ export default async function handler(req, res) {
                 return res.status(400).json({ error: 'Service not found or disabled' });
             }
 
-            // Determine provider
-            if (service.smmcost_service_id) {
-                provider = 'smmcost';
-                provider_service_id = service.smmcost_service_id;
-            } else if (service.jbsmmpanel_service_id) {
-                provider = 'jbsmmpanel';
-                provider_service_id = service.jbsmmpanel_service_id;
-            } else if (service.smmgen_service_id) {
-                provider = 'smmgen';
-                provider_service_id = service.smmgen_service_id;
-            } else if (service.worldofsmm_service_id) {
-                provider = 'worldofsmm';
-                provider_service_id = service.worldofsmm_service_id;
+            is_combo = service.is_combo || false;
+
+            if (is_combo && service.combo_smmgen_service_ids && Array.isArray(service.combo_smmgen_service_ids)) {
+                combo_components = service.combo_smmgen_service_ids.map(sid => ({
+                    provider: 'smmgen',
+                    service_id: sid
+                }));
+            } else {
+                // Determine provider for single service
+                if (service.smmcost_service_id) {
+                    provider = 'smmcost';
+                    provider_service_id = service.smmcost_service_id;
+                } else if (service.jbsmmpanel_service_id) {
+                    provider = 'jbsmmpanel';
+                    provider_service_id = service.jbsmmpanel_service_id;
+                } else if (service.smmgen_service_id) {
+                    provider = 'smmgen';
+                    provider_service_id = service.smmgen_service_id;
+                } else if (service.worldofsmm_service_id) {
+                    provider = 'worldofsmm';
+                    provider_service_id = service.worldofsmm_service_id;
+                }
+
+                if (provider && provider_service_id) {
+                    combo_components = [{ provider, service_id: provider_service_id }];
+                }
             }
 
             // Quantity validation
@@ -90,10 +104,18 @@ export default async function handler(req, res) {
 
             if (pErr || !pkg) return res.status(400).json({ error: 'Package not found' });
 
-            // For simplicity in this endpoint, we'll focus on regular services first.
-            // Packages can be added later or handled as individual service calls if combo.
-            provider = 'smmgen'; // Default provider for packages if set
-            provider_service_id = pkg.smmgen_service_id;
+            is_combo = pkg.is_combo || false;
+
+            if (is_combo && pkg.combo_smmgen_service_ids && Array.isArray(pkg.combo_smmgen_service_ids)) {
+                combo_components = pkg.combo_smmgen_service_ids.map(sid => ({
+                    provider: 'smmgen',
+                    service_id: sid
+                }));
+            } else if (pkg.smmgen_service_id) {
+                provider = 'smmgen';
+                provider_service_id = pkg.smmgen_service_id;
+                combo_components = [{ provider: 'smmgen', service_id: pkg.smmgen_service_id }];
+            }
         }
 
         // 3. Idempotency Check
@@ -133,78 +155,92 @@ export default async function handler(req, res) {
 
         const order_id = rpcResult.order_id;
 
-        // 5. Call Provider API (Server-Side)
-        if (provider && provider_service_id) {
-            try {
-                const providerResponse = await placeProviderOrder(provider, {
-                    service: provider_service_id,
-                    link: link.trim(),
-                    quantity: quantity,
-                    comments: comments ? String(comments).trim() : undefined
-                });
+        // 5. Call Provider API(s) (Server-Side)
+        if (combo_components.length > 0) {
+            const componentResults = [];
+            let someSuccess = false;
+            let lastError = null;
 
-                const providerOrderId = extractOrderId(providerResponse);
-
-                if (providerOrderId) {
-                    // Update order with provider ID
-                    const updateData = {};
-                    if (provider === 'smmgen') updateData.smmgen_order_id = String(providerOrderId);
-                    if (provider === 'smmcost') updateData.smmcost_order_id = String(providerOrderId);
-                    if (provider === 'jbsmmpanel') updateData.jbsmmpanel_order_id = parseInt(providerOrderId);
-                    if (provider === 'worldofsmm') updateData.worldofsmm_order_id = String(providerOrderId);
-
-                    await supabase.from('orders').update({
-                        ...updateData,
-                        submitted_at: new Date().toISOString(),
-                        status: 'processing'
-                    }).eq('id', order_id);
-
-                    return res.status(200).json({
-                        success: true,
-                        order_id,
-                        provider_order_id: providerOrderId,
-                        new_balance: rpcResult.new_balance
+            // Place orders one after another as requested
+            for (const component of combo_components) {
+                try {
+                    const providerResponse = await placeProviderOrder(component.provider, {
+                        service: component.service_id,
+                        link: link.trim(),
+                        quantity: quantity,
+                        comments: comments ? String(comments).trim() : undefined
                     });
-                } else {
-                    console.error('[PROVIDER RESPONSE ERROR] Provider returned success but no order ID:', providerResponse);
-                    const error = new Error('Provider failed to return order ID');
-                    error.providerDetails = providerResponse; // Capture the unexpected success response
-                    throw error;
-                }
-            } catch (pError) {
-                console.error('Provider Error:', pError);
 
-                // Update status to submission_failed instead of refunding
-                // This allows for a safe retry (manual or automatic) later
+                    const providerOrderId = extractOrderId(providerResponse);
+
+                    if (providerOrderId) {
+                        someSuccess = true;
+                        componentResults.push({
+                            provider: component.provider,
+                            service_id: component.service_id,
+                            provider_order_id: String(providerOrderId),
+                            status: 'submitted',
+                            submitted_at: new Date().toISOString()
+                        });
+                    } else {
+                        componentResults.push({
+                            provider: component.provider,
+                            service_id: component.service_id,
+                            error: 'No order ID returned',
+                            status: 'failed'
+                        });
+                    }
+                } catch (pError) {
+                    console.error(`[COMBO COMPONENT ERROR] ${component.provider}:`, pError.message);
+                    lastError = pError.message;
+                    componentResults.push({
+                        provider: component.provider,
+                        service_id: component.service_id,
+                        error: pError.message,
+                        status: 'failed'
+                    });
+                }
+            }
+
+            // Update order with results
+            if (someSuccess) {
+                const updateData = {
+                    component_provider_order_ids: componentResults,
+                    submitted_at: new Date().toISOString(),
+                    status: 'processing'
+                };
+
+                // Legacy column support for single orders or the first component
+                const firstSuccess = componentResults.find(r => r.provider_order_id);
+                if (firstSuccess) {
+                    const p = firstSuccess.provider;
+                    const pid = firstSuccess.provider_order_id;
+                    if (p === 'smmgen') updateData.smmgen_order_id = pid;
+                    if (p === 'smmcost') updateData.smmcost_order_id = pid;
+                    if (p === 'jbsmmpanel') updateData.jbsmmpanel_order_id = parseInt(pid);
+                    if (p === 'worldofsmm') updateData.worldofsmm_order_id = pid;
+                }
+
+                await supabase.from('orders').update(updateData).eq('id', order_id);
+
+                return res.status(200).json({
+                    success: true,
+                    order_id,
+                    components: componentResults,
+                    new_balance: rpcResult.new_balance
+                });
+            } else {
+                // Total failure
                 await supabase.from('orders').update({
                     status: 'submission_failed',
-                    provider_error_count: 1,
-                    last_provider_error: pError.message,
-                    provider_error_details: pError.providerDetails || null
+                    last_provider_error: lastError || 'All components failed to submit',
+                    component_provider_order_ids: componentResults
                 }).eq('id', order_id);
 
-                // Log to system_events
-                await supabase.rpc('log_system_event', {
-                    p_type: 'provider_submission_failure',
-                    p_severity: 'error',
-                    p_source: 'order-create',
-                    p_description: `Failed to submit order ${order_id} to ${provider}: ${pError.message}`,
-                    p_metadata: {
-                        order_id,
-                        provider,
-                        error: pError.message,
-                        service: provider_service_id,
-                        user_id: user.id
-                    },
-                    p_entity_type: 'order',
-                    p_entity_id: order_id
-                });
-
                 return res.status(502).json({
-                    error: pError.message || 'Provider Error',
-                    message: 'The provider failed to process your order. It has been saved for retry. If it cannot be fulfilled, it will be refunded later.',
-                    details: pError.message,
-                    provider: provider
+                    error: lastError || 'Provider Error',
+                    message: 'All components of this combo failed to process. It has been saved for retry.',
+                    details: componentResults
                 });
             }
         }

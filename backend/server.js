@@ -547,52 +547,123 @@ app.post('/api/check-orders-status', async (req, res) => {
 
     // Process orders one by one (simplified for robustness)
     for (const order of orders) {
-      let newStatus = null;
-      let rawStatusResponse = null;
+      let finalStatus = order.status;
+      let someChanged = false;
       let provider = null;
 
       try {
-        // 1. SMMGen
-        if (order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen" && order.smmgen_order_id !== order.id) {
-          provider = 'smmgen';
-          const response = await axios.post(SMMGEN_API_URL, new URLSearchParams({
-            key: SMMGEN_API_KEY,
-            action: 'status',
-            order: order.smmgen_order_id
-          }), { timeout: 10000 });
-          rawStatusResponse = response.data?.status || response.data?.Status;
-          newStatus = mapSMMGenStatus(rawStatusResponse);
-        }
-        // 2. SMMCost
-        else if (order.smmcost_order_id && String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost") {
-          provider = 'smmcost';
-          if (smmCostUrl && smmCostKey && smmCostKey !== 'PLACEHOLDER_ENTER_KEY_HERE') {
-            const response = await axios.post(smmCostUrl, {
-              key: smmCostKey,
-              action: 'status',
-              order: parseInt(order.smmcost_order_id, 10)
-            }, { timeout: 10000 });
-            rawStatusResponse = response.data?.status || response.data?.Status;
-            newStatus = mapSMMCostStatus(rawStatusResponse);
+        // Handle Combo Orders
+        if (order.component_provider_order_ids && Array.isArray(order.component_provider_order_ids) && order.component_provider_order_ids.length > 0) {
+          const updatedComponents = [];
+          let allCompleted = true;
+          let anyInProgress = false;
+          let anyCanceled = false;
+
+          for (const component of order.component_provider_order_ids) {
+            if (!component.provider_order_id) {
+              updatedComponents.push(component);
+              allCompleted = false;
+              continue;
+            }
+
+            let compStatus = component.status;
+            try {
+              let rawStatus = null;
+              if (component.provider === 'smmgen') {
+                const response = await axios.post(SMMGEN_API_URL, new URLSearchParams({
+                  key: SMMGEN_API_KEY,
+                  action: 'status',
+                  order: component.provider_order_id
+                }), { timeout: 10000 });
+                rawStatus = response.data?.status || response.data?.Status;
+                compStatus = mapSMMGenStatus(rawStatus);
+              } else if (component.provider === 'smmcost' && smmCostUrl && smmCostKey) {
+                const response = await axios.post(smmCostUrl, {
+                  key: smmCostKey,
+                  action: 'status',
+                  order: parseInt(component.provider_order_id, 10)
+                }, { timeout: 10000 });
+                rawStatus = response.data?.status || response.data?.Status;
+                compStatus = mapSMMCostStatus(rawStatus);
+              } else if (component.provider === 'jbsmmpanel' && jbSmmUrl && jbSmmKey) {
+                const response = await axios.post(jbSmmUrl, new URLSearchParams({
+                  key: jbSmmKey,
+                  action: 'status',
+                  order: component.provider_order_id
+                }), { timeout: 10000 });
+                rawStatus = response.data?.status || response.data?.Status;
+                compStatus = mapJBSMMPanelStatus(rawStatus);
+              }
+
+              if (compStatus !== component.status) {
+                someChanged = true;
+              }
+            } catch (err) {
+              console.error(`Failed to check component ${component.provider_order_id}:`, err.message);
+            }
+
+            const updatedComp = { ...component, status: compStatus };
+            updatedComponents.push(updatedComp);
+
+            if (compStatus !== 'completed') allCompleted = false;
+            if (['in progress', 'processing', 'pending'].includes(compStatus)) anyInProgress = true;
+            if (['canceled', 'cancelled', 'refunded'].includes(compStatus)) anyCanceled = true;
+          }
+
+          if (someChanged) {
+            // Aggregated status logic
+            if (allCompleted) finalStatus = 'completed';
+            else if (anyCanceled && !anyInProgress) finalStatus = 'partial'; // Or canceled if all canceled
+            else if (anyInProgress || someChanged) finalStatus = 'processing';
+
+            updates.push({ id: order.id, status: finalStatus, component_provider_order_ids: updatedComponents });
+            results.push({ id: order.id, old: order.status, new: finalStatus, provider: 'combo' });
           }
         }
-        // 3. JBSMMPanel
-        else if (order.jbsmmpanel_order_id && Number(order.jbsmmpanel_order_id) > 0) {
-          provider = 'jbsmmpanel';
-          if (jbSmmUrl && jbSmmKey) {
-            const response = await axios.post(jbSmmUrl, new URLSearchParams({
-              key: jbSmmKey,
+        // Handle Single Orders (Existing Logic)
+        else {
+          let newStatus = null;
+          let rawStatusResponse = null;
+
+          if (order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen" && order.smmgen_order_id !== order.id) {
+            provider = 'smmgen';
+            const response = await axios.post(SMMGEN_API_URL, new URLSearchParams({
+              key: SMMGEN_API_KEY,
               action: 'status',
-              order: order.jbsmmpanel_order_id.toString()
+              order: order.smmgen_order_id
             }), { timeout: 10000 });
             rawStatusResponse = response.data?.status || response.data?.Status;
-            newStatus = mapJBSMMPanelStatus(rawStatusResponse);
+            newStatus = mapSMMGenStatus(rawStatusResponse);
           }
-        }
+          else if (order.smmcost_order_id && String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost") {
+            provider = 'smmcost';
+            if (smmCostUrl && smmCostKey && smmCostKey !== 'PLACEHOLDER_ENTER_KEY_HERE') {
+              const response = await axios.post(smmCostUrl, {
+                key: smmCostKey,
+                action: 'status',
+                order: parseInt(order.smmcost_order_id, 10)
+              }, { timeout: 10000 });
+              rawStatusResponse = response.data?.status || response.data?.Status;
+              newStatus = mapSMMCostStatus(rawStatusResponse);
+            }
+          }
+          else if (order.jbsmmpanel_order_id && Number(order.jbsmmpanel_order_id) > 0) {
+            provider = 'jbsmmpanel';
+            if (jbSmmUrl && jbSmmKey) {
+              const response = await axios.post(jbSmmUrl, new URLSearchParams({
+                key: jbSmmKey,
+                action: 'status',
+                order: order.jbsmmpanel_order_id.toString()
+              }), { timeout: 10000 });
+              rawStatusResponse = response.data?.status || response.data?.Status;
+              newStatus = mapJBSMMPanelStatus(rawStatusResponse);
+            }
+          }
 
-        if (newStatus && newStatus !== order.status) {
-          updates.push({ id: order.id, status: newStatus, provider });
-          results.push({ id: order.id, old: order.status, new: newStatus, provider });
+          if (newStatus && newStatus !== order.status) {
+            updates.push({ id: order.id, status: newStatus, provider });
+            results.push({ id: order.id, old: order.status, new: newStatus, provider });
+          }
         }
       } catch (e) {
         console.error(`Failed to check ${provider || 'unknown'} order ${order.id}:`, e.message);
@@ -603,12 +674,18 @@ app.post('/api/check-orders-status', async (req, res) => {
     let updatedCount = 0;
     if (updates.length > 0) {
       for (const update of updates) {
+        const updatePayload = {
+          status: update.status,
+          last_status_check: new Date().toISOString()
+        };
+
+        if (update.component_provider_order_ids) {
+          updatePayload.component_provider_order_ids = update.component_provider_order_ids;
+        }
+
         const { error: updateError } = await dbClient
           .from('orders')
-          .update({
-            status: update.status,
-            last_status_check: new Date().toISOString()
-          })
+          .update(updatePayload)
           .eq('id', update.id);
 
         if (!updateError) {

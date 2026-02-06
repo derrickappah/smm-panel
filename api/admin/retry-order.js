@@ -122,36 +122,87 @@ export default async function handler(req, res) {
             });
         }
 
-        // 5. No matching order found: Safe to submit to provider
+        // 5. Handle Combo vs Single Retry
         try {
-            const providerResponse = await placeProviderOrder(provider, {
-                service: provider_service_id,
-                link: order.link,
-                quantity: order.quantity
-            });
+            if (order.component_provider_order_ids && Array.isArray(order.component_provider_order_ids) && order.component_provider_order_ids.length > 0) {
+                // Retry specifically failed components
+                const updatedComponents = [...order.component_provider_order_ids];
+                let anyNewSuccess = false;
 
-            const providerOrderId = extractOrderId(providerResponse);
+                for (let i = 0; i < updatedComponents.length; i++) {
+                    const comp = updatedComponents[i];
+                    if (comp.status === 'failed' || !comp.provider_order_id) {
+                        try {
+                            const providerResponse = await placeProviderOrder(comp.provider, {
+                                service: comp.service_id,
+                                link: order.link,
+                                quantity: order.quantity
+                            });
 
-            if (providerOrderId) {
-                const updateData = {
-                    status: 'processing',
-                    submitted_at: new Date().toISOString(),
-                    reconciliation_log: [...reconciliation_log, { ...logEntry, action: 'submission_success' }]
-                };
+                            const providerOrderId = extractOrderId(providerResponse);
+                            if (providerOrderId) {
+                                updatedComponents[i] = {
+                                    ...comp,
+                                    provider_order_id: String(providerOrderId),
+                                    status: 'submitted',
+                                    submitted_at: new Date().toISOString(),
+                                    error: null
+                                };
+                                anyNewSuccess = true;
+                            }
+                        } catch (err) {
+                            console.error(`[RETRY COMPONENT FAIL] ${comp.provider}:`, err.message);
+                            updatedComponents[i].error = err.message;
+                        }
+                    }
+                }
 
-                if (provider === 'smmgen') updateData.smmgen_order_id = String(providerOrderId);
-                if (provider === 'smmcost') updateData.smmcost_order_id = String(providerOrderId);
-                if (provider === 'jbsmmpanel') updateData.jbsmmpanel_order_id = parseInt(providerOrderId);
+                if (anyNewSuccess) {
+                    await supabase.from('orders').update({
+                        status: 'processing',
+                        component_provider_order_ids: updatedComponents,
+                        reconciliation_log: [...reconciliation_log, { ...logEntry, action: 'combo_retry_success' }]
+                    }).eq('id', order_id);
 
-                await supabase.from('orders').update(updateData).eq('id', order_id);
-
-                return res.status(200).json({
-                    success: true,
-                    message: 'Order successfully submitted to provider.',
-                    provider_order_id: providerOrderId
-                });
+                    return res.status(200).json({
+                        success: true,
+                        message: 'Successfully retried failed combo components.',
+                        components: updatedComponents
+                    });
+                } else {
+                    throw new Error('All retry attempts for combo components failed.');
+                }
             } else {
-                throw new Error('Provider failed to return order ID');
+                // Single order retry flow
+                const providerResponse = await placeProviderOrder(provider, {
+                    service: provider_service_id,
+                    link: order.link,
+                    quantity: order.quantity
+                });
+
+                const providerOrderId = extractOrderId(providerResponse);
+
+                if (providerOrderId) {
+                    const updateData = {
+                        status: 'processing',
+                        submitted_at: new Date().toISOString(),
+                        reconciliation_log: [...reconciliation_log, { ...logEntry, action: 'submission_success' }]
+                    };
+
+                    if (provider === 'smmgen') updateData.smmgen_order_id = String(providerOrderId);
+                    if (provider === 'smmcost') updateData.smmcost_order_id = String(providerOrderId);
+                    if (provider === 'jbsmmpanel') updateData.jbsmmpanel_order_id = parseInt(providerOrderId);
+
+                    await supabase.from('orders').update(updateData).eq('id', order_id);
+
+                    return res.status(200).json({
+                        success: true,
+                        message: 'Order successfully submitted to provider.',
+                        provider_order_id: providerOrderId
+                    });
+                } else {
+                    throw new Error('Provider failed to return order ID');
+                }
             }
         } catch (pError) {
             console.error('[ADMIN RETRY FAILURE]:', pError.message);

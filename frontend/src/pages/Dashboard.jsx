@@ -14,7 +14,7 @@ import DashboardStats from '@/components/dashboard/DashboardStats';
 import DashboardDeposit from '@/components/dashboard/DashboardDeposit';
 import DashboardOrderForm from '@/components/dashboard/DashboardOrderForm';
 import DashboardOrders from '@/components/dashboard/DashboardOrders';
-import DashboardPromotionPackages from '@/components/dashboard/DashboardPromotionPackages';
+import PromotionBanner from '@/components/dashboard/PromotionBanner';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { usePaymentMethods } from '@/hooks/usePaymentMethods';
 import { usePromotionPackages } from '@/hooks/useAdminPromotionPackages';
@@ -3231,13 +3231,10 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           <p className="text-sm sm:text-base text-gray-600">Manage your orders and grow your social presence</p>
         </div>
 
-        {/* Stats Cards */}
-        <DashboardStats user={displayUser} orderCount={recentOrders.length} />
-
         {/* Promotion Packages Section */}
         {promotionPackages.length > 0 && (
           <div className="mb-6 sm:mb-8">
-            <DashboardPromotionPackages
+            <PromotionBanner
               packages={promotionPackages}
               onPackageSelect={(pkg) => {
                 setOrderForm({
@@ -3259,6 +3256,9 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             />
           </div>
         )}
+
+        {/* Stats Cards */}
+        <DashboardStats user={displayUser} orderCount={recentOrders.length} />
 
         <div className="grid lg:grid-cols-2 gap-6 lg:gap-8">
           {/* Add Funds */}
