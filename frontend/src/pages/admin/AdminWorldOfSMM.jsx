@@ -65,7 +65,8 @@ const AdminWorldOfSMM = () => {
         try {
             const response = await fetch('/api/worldofsmm/balance', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include'
             });
 
             if (response.ok) {
@@ -86,7 +87,7 @@ const AdminWorldOfSMM = () => {
         } finally {
             setTestingConnection(false);
         }
-    }, []);
+    }, [apiUrl, apiKey]);
 
     // Fetch available services
     const syncServices = useCallback(async () => {

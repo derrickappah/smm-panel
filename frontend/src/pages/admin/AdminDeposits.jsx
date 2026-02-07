@@ -67,16 +67,16 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
     gcTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  const { 
-    data, 
-    isLoading, 
+  const {
+    data,
+    isLoading,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
     refetch
-  } = useAdminDeposits({ 
-    enabled: true, 
-    useInfinite: true 
+  } = useAdminDeposits({
+    enabled: true,
+    useInfinite: true
   });
 
   const approveDepositMutation = useApproveDeposit();
@@ -118,20 +118,20 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
         },
         (payload) => {
           console.log('[AdminDeposits] Realtime event received:', payload.eventType, payload.new || payload.old);
-          
+
           // Update cache optimistically based on the event
           if (payload.eventType === 'UPDATE' && payload.new) {
             console.log('[AdminDeposits] Updating deposit in cache:', payload.new.id, payload.new);
-            
+
             let transactionFound = false;
-            
+
             // Update existing deposit in cache immediately for instant UI update
             queryClient.setQueryData(['admin', 'deposits'], (oldData) => {
               if (!oldData?.pages) {
                 console.log('[AdminDeposits] No old data found, will invalidate and refetch');
                 return oldData;
               }
-              
+
               const updatedData = {
                 ...oldData,
                 pages: oldData.pages.map(page => ({
@@ -152,10 +152,10 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
                   }) || []
                 }))
               };
-              
+
               return updatedData;
             });
-            
+
             // If transaction wasn't in cache, invalidate and force refetch
             if (!transactionFound) {
               console.log('[AdminDeposits] Transaction not found in cache, invalidating and refetching');
@@ -167,7 +167,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
               console.log('[AdminDeposits] Transaction updated in cache, triggering background refetch');
               refetch();
             }
-            
+
             // Always invalidate stats
             queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
           } else if (payload.eventType === 'INSERT' && payload.new) {
@@ -182,7 +182,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
             // Remove deleted deposit from cache
             queryClient.setQueryData(['admin', 'deposits'], (oldData) => {
               if (!oldData?.pages) return oldData;
-              
+
               return {
                 ...oldData,
                 pages: oldData.pages.map(page => ({
@@ -192,7 +192,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
                 }))
               };
             });
-            
+
             queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
           }
         }
@@ -221,10 +221,10 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
         const userEmail = (deposit.profiles?.email || '').toLowerCase();
         const userPhone = (deposit.profiles?.phone_number || '').toLowerCase();
         const transactionId = (deposit.id || '').toLowerCase();
-        return userName.includes(searchLower) || 
-               userEmail.includes(searchLower) ||
-               userPhone.includes(searchLower) ||
-               transactionId.includes(searchLower);
+        return userName.includes(searchLower) ||
+          userEmail.includes(searchLower) ||
+          userPhone.includes(searchLower) ||
+          transactionId.includes(searchLower);
       });
     }
 
@@ -237,7 +237,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
       filterDate.setHours(0, 0, 0, 0);
       const filterDateEnd = new Date(filterDate);
       filterDateEnd.setHours(23, 59, 59, 999);
-      
+
       filtered = filtered.filter(deposit => {
         const depositDate = new Date(deposit.created_at);
         return depositDate >= filterDate && depositDate <= filterDateEnd;
@@ -258,24 +258,24 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
 
   const handleApproveDeposit = useCallback(async (deposit) => {
     setApprovingDeposit(deposit.id);
-    
+
     // Optimistically update the UI immediately
     queryClient.setQueryData(['admin', 'deposits'], (oldData) => {
       if (!oldData?.pages) return oldData;
-      
+
       return {
         ...oldData,
         pages: oldData.pages.map(page => ({
           ...page,
-          data: page.data?.map(tx => 
-            tx.id === deposit.id 
+          data: page.data?.map(tx =>
+            tx.id === deposit.id
               ? { ...tx, status: 'approved' }
               : tx
           ) || []
         }))
       };
     });
-    
+
     try {
       await approveDepositMutation.mutateAsync({
         transactionId: deposit.id,
@@ -295,24 +295,24 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
 
   const handleRejectDeposit = useCallback(async (depositId) => {
     if (!confirm('Are you sure you want to reject this deposit?')) return;
-    
+
     // Optimistically update the UI immediately
     queryClient.setQueryData(['admin', 'deposits'], (oldData) => {
       if (!oldData?.pages) return oldData;
-      
+
       return {
         ...oldData,
         pages: oldData.pages.map(page => ({
           ...page,
-          data: page.data?.map(tx => 
-            tx.id === depositId 
+          data: page.data?.map(tx =>
+            tx.id === depositId
               ? { ...tx, status: 'rejected' }
               : tx
           ) || []
         }))
       };
     });
-    
+
     try {
       await rejectDepositMutation.mutateAsync(depositId);
       // Mutation's onSuccess will handle refetch and invalidation
@@ -352,7 +352,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
 
       // Get current admin user ID
       const { data: { user: authUser } } = await supabase.auth.getUser();
-      
+
       // Create transaction record for manual adjustment (if deposit was already a transaction, this is just for tracking)
       // Note: The deposit itself is already a transaction, so we don't need to create another one
       // But we could update the existing transaction with admin_id if needed
@@ -380,7 +380,8 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ 
+        credentials: 'include',
+        body: JSON.stringify({
           transactionId: deposit.id,
           ...(manualRef && { reference: manualRef })
         })
@@ -391,9 +392,9 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
       if (!response.ok) {
         // If error suggests manual reference and we don't have one, show dialog
         if (data.error && data.error.includes('No Paystack reference') && !manualRef) {
-          setManualRefDialog({ 
-            open: true, 
-            deposit, 
+          setManualRefDialog({
+            open: true,
+            deposit,
             error: data.error,
             suggestions: data.suggestions || [],
             help: data.help,
@@ -422,19 +423,19 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
       // Optimistically update the transaction in cache for immediate UI update
       queryClient.setQueryData(['admin', 'deposits'], (oldData) => {
         if (!oldData?.pages) return oldData;
-        
+
         return {
           ...oldData,
           pages: oldData.pages.map(page => ({
             ...page,
-            data: page.data?.map(tx => 
-              tx.id === deposit.id 
-                ? { 
-                    ...tx, 
-                    status: data.updateResult?.newStatus || tx.status,
-                    paystack_reference: data.reference || tx.paystack_reference,
-                    paystack_status: data.paystackStatus || tx.paystack_status
-                  }
+            data: page.data?.map(tx =>
+              tx.id === deposit.id
+                ? {
+                  ...tx,
+                  status: data.updateResult?.newStatus || tx.status,
+                  paystack_reference: data.reference || tx.paystack_reference,
+                  paystack_status: data.paystackStatus || tx.paystack_status
+                }
                 : tx
             ) || []
           }))
@@ -444,7 +445,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
       // Invalidate and refetch to ensure data is in sync with server
       queryClient.invalidateQueries({ queryKey: ['admin', 'deposits'] });
       queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
-      
+
       // Refetch in background to sync with server
       refetch();
 
@@ -472,7 +473,8 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`
         },
-        body: JSON.stringify({ 
+        credentials: 'include',
+        body: JSON.stringify({
           transactionId: deposit.id,
           ...(manualRef && { reference: manualRef })
         })
@@ -483,9 +485,9 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
       if (!response.ok) {
         // If error suggests manual Moolre ID and we don't have one, show dialog
         if (data.error && data.error.includes('No Moolre ID') && !manualRef) {
-          setManualRefDialog({ 
-            open: true, 
-            deposit, 
+          setManualRefDialog({
+            open: true,
+            deposit,
             error: data.error,
             paymentMethod: 'moolre'
           });
@@ -506,19 +508,19 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
       // Optimistically update the transaction in cache for immediate UI update
       queryClient.setQueryData(['admin', 'deposits'], (oldData) => {
         if (!oldData?.pages) return oldData;
-        
+
         return {
           ...oldData,
           pages: oldData.pages.map(page => ({
             ...page,
-            data: page.data?.map(tx => 
-              tx.id === deposit.id 
-                ? { 
-                    ...tx, 
-                    status: data.updateResult?.newStatus || tx.status,
-                    moolre_reference: data.reference || tx.moolre_reference,
-                    moolre_status: data.moolreStatus || tx.moolre_status
-                  }
+            data: page.data?.map(tx =>
+              tx.id === deposit.id
+                ? {
+                  ...tx,
+                  status: data.updateResult?.newStatus || tx.status,
+                  moolre_reference: data.reference || tx.moolre_reference,
+                  moolre_status: data.moolreStatus || tx.moolre_status
+                }
                 : tx
             ) || []
           }))
@@ -528,7 +530,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
       // Invalidate and refetch to ensure data is in sync with server
       queryClient.invalidateQueries({ queryKey: ['admin', 'deposits'] });
       queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
-      
+
       // Refetch in background to sync with server
       refetch();
 
@@ -556,7 +558,8 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`
         },
-        body: JSON.stringify({ 
+        credentials: 'include',
+        body: JSON.stringify({
           transactionId: deposit.id,
           ...(manualRef && { reference: manualRef })
         })
@@ -567,9 +570,9 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
       if (!response.ok) {
         // If error suggests manual Moolre ID and we don't have one, show dialog
         if (data.error && data.error.includes('No Moolre ID') && !manualRef) {
-          setManualRefDialog({ 
-            open: true, 
-            deposit, 
+          setManualRefDialog({
+            open: true,
+            deposit,
             error: data.error,
             paymentMethod: 'moolre_web'
           });
@@ -590,19 +593,19 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
       // Optimistically update the transaction in cache for immediate UI update
       queryClient.setQueryData(['admin', 'deposits'], (oldData) => {
         if (!oldData?.pages) return oldData;
-        
+
         return {
           ...oldData,
           pages: oldData.pages.map(page => ({
             ...page,
-            data: page.data?.map(tx => 
-              tx.id === deposit.id 
-                ? { 
-                    ...tx, 
-                    status: data.updateResult?.newStatus || tx.status,
-                    moolre_reference: data.reference || tx.moolre_reference,
-                    moolre_status: data.moolreStatus || tx.moolre_status
-                  }
+            data: page.data?.map(tx =>
+              tx.id === deposit.id
+                ? {
+                  ...tx,
+                  status: data.updateResult?.newStatus || tx.status,
+                  moolre_reference: data.reference || tx.moolre_reference,
+                  moolre_status: data.moolreStatus || tx.moolre_status
+                }
                 : tx
             ) || []
           }))
@@ -618,7 +621,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
       // Invalidate and refetch to ensure data is in sync with server
       queryClient.invalidateQueries({ queryKey: ['admin', 'deposits'] });
       queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
-      
+
       // Refetch in background to sync with server
       refetch();
 
@@ -633,10 +636,10 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
 
   const handleManualReferenceSubmit = useCallback(async () => {
     if (!manualRefDialog.deposit || !manualReference.trim()) {
-      const methodName = manualRefDialog.paymentMethod === 'moolre' ? 'Moolre' : 
-                        manualRefDialog.paymentMethod === 'moolre_web' ? 'Moolre Web' : 'Paystack';
-      const fieldName = (manualRefDialog.paymentMethod === 'moolre' || manualRefDialog.paymentMethod === 'moolre_web') 
-                        ? 'Moolre ID' : 'reference';
+      const methodName = manualRefDialog.paymentMethod === 'moolre' ? 'Moolre' :
+        manualRefDialog.paymentMethod === 'moolre_web' ? 'Moolre Web' : 'Paystack';
+      const fieldName = (manualRefDialog.paymentMethod === 'moolre' || manualRefDialog.paymentMethod === 'moolre_web')
+        ? 'Moolre ID' : 'reference';
       toast.error(`Please enter a ${methodName} ${fieldName}`);
       return;
     }
@@ -717,11 +720,10 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
           <p className="font-semibold text-gray-900">₵{deposit.amount?.toFixed(2) || '0.00'}</p>
         </div>
         <div className="col-span-1.5">
-          <span className={`px-3 py-1.5 rounded-full text-xs font-medium ${
-            deposit.status === 'approved' ? 'bg-green-100 text-green-700' :
-            deposit.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-            'bg-red-100 text-red-700'
-          }`}>
+          <span className={`px-3 py-1.5 rounded-full text-xs font-medium ${deposit.status === 'approved' ? 'bg-green-100 text-green-700' :
+              deposit.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                'bg-red-100 text-red-700'
+            }`}>
             {deposit.status}
           </span>
         </div>
@@ -758,7 +760,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
                   View Proof
                 </Button>
               )}
-              
+
               {/* Verify buttons for specific payment methods */}
               {isPaystack && (
                 <Button
@@ -793,7 +795,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
                   {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with Moolre Web'}
                 </Button>
               )}
-              
+
               {/* Manual approve/reject buttons for all pending deposits */}
               <div className="flex gap-2">
                 <Button
@@ -863,11 +865,10 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
           </div>
           <div className="text-right">
             <p className="font-semibold text-gray-900 text-lg">₵{deposit.amount?.toFixed(2) || '0.00'}</p>
-            <span className={`inline-block mt-1 px-2.5 py-1 rounded-full text-xs font-medium ${
-              deposit.status === 'approved' ? 'bg-green-100 text-green-700' :
-              deposit.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-              'bg-red-100 text-red-700'
-            }`}>
+            <span className={`inline-block mt-1 px-2.5 py-1 rounded-full text-xs font-medium ${deposit.status === 'approved' ? 'bg-green-100 text-green-700' :
+                deposit.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                  'bg-red-100 text-red-700'
+              }`}>
               {deposit.status}
             </span>
           </div>
@@ -907,7 +908,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
                 View Payment Proof
               </Button>
             )}
-            
+
             {/* Verify buttons for specific payment methods */}
             {isPaystack && (
               <Button
@@ -942,7 +943,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
                 {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with Moolre Web'}
               </Button>
             )}
-            
+
             {/* Manual approve/reject buttons for all pending deposits */}
             <div className="flex gap-2">
               <Button
@@ -1163,7 +1164,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
               })()} reference manually to verify the deposit.
             </DialogDescription>
           </DialogHeader>
-          
+
           {manualRefDialog.deposit && (
             <div className="space-y-4 py-4">
               <div className="bg-gray-50 p-3 rounded-md space-y-1 text-sm">

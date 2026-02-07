@@ -217,6 +217,7 @@ const OrderHistory = ({ user, onLogout }) => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`
         },
+        credentials: 'include',
         body: JSON.stringify({ order_id: order.id })
       });
 

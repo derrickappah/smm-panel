@@ -27,7 +27,8 @@ export const fetchWorldOfSMMServices = async () => {
         const apiUrl = buildApiUrl('services');
         const response = await fetch(apiUrl, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include'
         });
 
         if (!response.ok) {
@@ -67,6 +68,7 @@ export const placeWorldOfSMMOrder = async (serviceId, link, quantity) => {
         const response = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({
                 service: serviceId,
                 link: link,
@@ -95,6 +97,7 @@ export const getWorldOfSMMOrderStatus = async (orderId) => {
         const response = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({ order: orderId })
         });
 
@@ -118,7 +121,8 @@ export const getWorldOfSMMBalance = async () => {
         const apiUrl = buildApiUrl('balance');
         const response = await fetch(apiUrl, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include'
         });
 
         if (!response.ok) {

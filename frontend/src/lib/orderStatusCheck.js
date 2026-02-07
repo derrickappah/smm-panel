@@ -761,6 +761,7 @@ export const checkOrdersStatusBatch = async (orders, options = {}) => {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${session.access_token}`
             },
+            credentials: 'include',
             body: JSON.stringify({ orderIds: currentBatchIds })
           });
 

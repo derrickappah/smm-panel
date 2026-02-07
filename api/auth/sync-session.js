@@ -43,10 +43,11 @@ export default async function handler(req, res) {
         }
 
         // Set the cookie
-        // We set it for the root domain (.boostupgh.com) so it works across www and root
-        const maxAge = expires_in || 3600;
-        const isProd = process.env.NODE_ENV === 'production';
+        // Use host header to detect production more accurately
+        const host = req.headers.host || '';
+        const isProd = host.includes('boostupgh.com') && !host.includes('localhost');
         const domain = isProd ? '; Domain=.boostupgh.com' : '';
+        const maxAge = expires_in || 3600;
 
         res.setHeader('Set-Cookie', `sb-access-token=${access_token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}${domain}`);
 

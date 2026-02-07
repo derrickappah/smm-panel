@@ -163,7 +163,8 @@ export const fetchSMMCostServices = async () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
-      }
+      },
+      credentials: 'include'
     });
 
     if (!response.ok) {
@@ -335,6 +336,7 @@ export const placeSMMCostOrder = async (serviceId, link, quantity, retryCount = 
         headers: {
           'Content-Type': 'application/json'
         },
+        credentials: 'include',
         body: JSON.stringify({
           service: serviceIdNum,
           link: link.trim(),
@@ -592,6 +594,7 @@ export const getSMMCostOrderStatus = async (orderId, retryCount = 0) => {
         headers: {
           'Content-Type': 'application/json'
         },
+        credentials: 'include',
         body: JSON.stringify({
           order: orderIdNum
         }),
