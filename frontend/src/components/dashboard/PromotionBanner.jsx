@@ -87,73 +87,51 @@ const PromotionBanner = ({ packages, onPackageSelect, user }) => {
                     {packages.map((pkg) => (
                         <CarouselItem key={pkg.id} className="pl-2 md:pl-4 basis-full md:basis-1/2 lg:basis-1/3">
                             <div
-                                className={cn(
-                                    "relative h-36 sm:h-44 md:h-48 rounded-2xl overflow-hidden group cursor-pointer transition-all duration-500 hover:scale-[1.02] hover:shadow-2xl shadow-xl",
-                                    "bg-gradient-to-br",
-                                    getPlatformStyles(pkg.platform)
-                                )}
+                                className="relative bg-white border-2 border-purple-200 rounded-2xl p-5 sm:p-6 shadow-xl transition-all duration-300 hover:shadow-2xl hover:border-purple-300 cursor-pointer h-full min-h-[220px] flex flex-col"
                                 onClick={() => handlePackageClick(pkg)}
                             >
-                                {/* Decorative background elements */}
-                                <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-white/10 rounded-full blur-3xl group-hover:bg-white/20 transition-colors duration-700"></div>
-                                <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-48 h-48 bg-black/10 rounded-full blur-2xl group-hover:bg-black/20 transition-colors duration-700"></div>
-
-                                <div className="relative h-full p-4 sm:p-5 flex flex-col justify-between text-white">
-                                    <div>
-                                        <div className="flex items-center justify-between mb-2">
-                                            <div className="flex items-center gap-2">
-                                                <div className="p-1.5 bg-white/20 backdrop-blur-md rounded-lg">
-                                                    <Tag className="w-3.5 h-3.5" />
-                                                </div>
-                                                <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider bg-white/20 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/30">
-                                                    {pkg.platform}
-                                                </span>
-                                            </div>
-                                            <div className="bg-white/20 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/30 flex items-center gap-1">
-                                                <Zap className="w-2.5 h-2.5 text-yellow-300" />
-                                                <span className="text-[10px] sm:text-xs font-bold">Offer</span>
-                                            </div>
-                                        </div>
-
-                                        <h3 className="text-lg sm:text-xl font-black mb-1 line-clamp-1 group-hover:translate-x-1 transition-transform duration-300">
-                                            {pkg.name}
-                                        </h3>
-
-                                        {pkg.is_combo && (
-                                            <div className="flex items-center gap-1">
-                                                <Clock className="w-3.5 h-3.5 text-white/70" />
-                                                <span className="text-xs font-medium">Combo Deal</span>
-                                            </div>
-                                        )}
+                                {/* Header: Platform Badge and Price */}
+                                <div className="flex items-start justify-between mb-4">
+                                    <div className="flex items-center gap-2 px-2.5 py-1 bg-purple-50 rounded-lg border border-purple-100">
+                                        <Tag className="w-3.5 h-3.5 text-purple-600" />
+                                        <span className="text-[10px] sm:text-xs font-bold text-purple-600 lowercase tracking-tight">
+                                            {pkg.platform || 'promotion'}
+                                        </span>
                                     </div>
-
-                                    <div className="flex items-end justify-between mt-auto">
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex items-baseline gap-1">
-                                                <span className="text-2xl font-black leading-none">{pkg.price}</span>
-                                                <span className="text-2xl font-black opacity-80 leading-none">₵</span>
-                                            </div>
-                                            <div className="flex items-center gap-2 opacity-90 border-l border-white/30 pl-3">
-                                                <span className="text-2xl font-black leading-none tracking-tight">
-                                                    {formatQuantity(pkg.quantity)}
-                                                </span>
-                                            </div>
+                                    <div className="text-right">
+                                        <div className="text-xl sm:text-2xl font-black text-purple-600 leading-none">
+                                            {pkg.price} GHS
                                         </div>
-                                        <Button
-                                            className="bg-white text-gray-900 hover:bg-gray-100 font-bold h-8 sm:h-9 px-4 sm:px-6 rounded-xl group/btn text-xs sm:text-sm"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handlePackageClick(pkg);
-                                            }}
-                                        >
-                                            Buy Now
-                                            <ArrowRight className="ml-1 sm:ml-2 w-3.5 h-3.5 group-hover/btn:translate-x-1 transition-transform" />
-                                        </Button>
+                                        <span className="text-[10px] text-gray-400 font-medium">Fixed Price</span>
                                     </div>
                                 </div>
 
-                                {/* Hover overlay hint */}
-                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-300 pointer-events-none"></div>
+                                {/* Body: Title and Details */}
+                                <div className="flex-1 space-y-2 mb-4">
+                                    <h3 className="text-base sm:text-lg font-bold text-gray-900 leading-snug line-clamp-2">
+                                        {pkg.name}
+                                    </h3>
+                                    <div className="flex flex-col gap-1">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm font-semibold text-gray-700">Quantity:</span>
+                                            <span className="text-sm font-bold text-gray-600">{formatQuantity(pkg.quantity)}</span>
+                                        </div>
+                                        <p className="text-[11px] sm:text-xs text-gray-400 font-medium italic">
+                                            Use your {pkg.platform || 'Social Media'} Video Link
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Footer: Buy Now Button */}
+                                <Button
+                                    className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold h-10 sm:h-11 rounded-xl shadow-md hover:shadow-lg transition-all active:scale-[0.98]"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handlePackageClick(pkg);
+                                    }}
+                                >
+                                    Buy Now
+                                </Button>
                             </div>
                         </CarouselItem>
                     ))}
