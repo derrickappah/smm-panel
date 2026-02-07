@@ -87,19 +87,19 @@ const PromotionBanner = ({ packages, onPackageSelect, user }) => {
                     {packages.map((pkg) => (
                         <CarouselItem key={pkg.id} className="pl-2 md:pl-4 basis-full md:basis-1/2 lg:basis-1/3">
                             <div
-                                className="relative bg-white border-2 border-purple-200 rounded-2xl p-5 sm:p-6 shadow-xl transition-all duration-300 hover:shadow-2xl hover:border-purple-300 cursor-pointer h-full min-h-[220px] flex flex-col"
+                                className="relative bg-white border-2 border-purple-200 rounded-2xl p-4 sm:p-5 shadow-xl transition-all duration-300 hover:shadow-2xl hover:border-purple-300 cursor-pointer h-full min-h-[190px] flex flex-col"
                                 onClick={() => handlePackageClick(pkg)}
                             >
                                 {/* Header: Platform Badge and Price */}
-                                <div className="flex items-start justify-between mb-4">
-                                    <div className="flex items-center gap-2 px-2.5 py-1 bg-purple-50 rounded-lg border border-purple-100">
+                                <div className="flex items-start justify-between mb-2">
+                                    <div className="flex items-center gap-2 px-2 py-1 bg-purple-50 rounded-lg border border-purple-100">
                                         <Tag className="w-3.5 h-3.5 text-purple-600" />
                                         <span className="text-[10px] sm:text-xs font-bold text-purple-600 lowercase tracking-tight">
                                             {pkg.platform || 'promotion'}
                                         </span>
                                     </div>
                                     <div className="text-right">
-                                        <div className="text-xl sm:text-2xl font-black text-purple-600 leading-none">
+                                        <div className="text-lg sm:text-xl font-black text-purple-600 leading-none">
                                             {pkg.price} GHS
                                         </div>
                                         <span className="text-[10px] text-gray-400 font-medium">Fixed Price</span>
@@ -107,24 +107,21 @@ const PromotionBanner = ({ packages, onPackageSelect, user }) => {
                                 </div>
 
                                 {/* Body: Title and Details */}
-                                <div className="flex-1 space-y-2 mb-4">
-                                    <h3 className="text-base sm:text-lg font-bold text-gray-900 leading-snug line-clamp-2">
+                                <div className="flex-1 space-y-1.5 mb-3">
+                                    <h3 className="text-sm sm:text-base font-bold text-gray-900 leading-snug line-clamp-2">
                                         {pkg.name}
                                     </h3>
-                                    <div className="flex flex-col gap-1">
+                                    <div className="flex flex-col gap-0.5">
                                         <div className="flex items-center gap-2">
-                                            <span className="text-sm font-semibold text-gray-700">Quantity:</span>
-                                            <span className="text-sm font-bold text-gray-600">{formatQuantity(pkg.quantity)}</span>
+                                            <span className="text-xs font-semibold text-gray-700">Quantity:</span>
+                                            <span className="text-xs font-bold text-gray-600">{formatQuantity(pkg.quantity)}</span>
                                         </div>
-                                        <p className="text-[11px] sm:text-xs text-gray-400 font-medium italic">
-                                            Use your {pkg.platform || 'Social Media'} Video Link
-                                        </p>
                                     </div>
                                 </div>
 
                                 {/* Footer: Buy Now Button */}
                                 <Button
-                                    className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold h-10 sm:h-11 rounded-xl shadow-md hover:shadow-lg transition-all active:scale-[0.98]"
+                                    className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold h-9 sm:h-10 rounded-xl shadow-md hover:shadow-lg transition-all active:scale-[0.98]"
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         handlePackageClick(pkg);
