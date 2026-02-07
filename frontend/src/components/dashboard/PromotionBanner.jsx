@@ -78,14 +78,14 @@ const PromotionBanner = ({ packages, onPackageSelect, user }) => {
             <Carousel
                 setApi={setApi}
                 opts={{
-                    align: "start",
+                    align: "center",
                     loop: true,
                 }}
                 className="w-full"
             >
                 <CarouselContent className="-ml-2 md:-ml-4">
                     {packages.map((pkg) => (
-                        <CarouselItem key={pkg.id} className="pl-2 md:pl-4 basis-full md:basis-1/2 lg:basis-1/3">
+                        <CarouselItem key={pkg.id} className="pl-2 md:pl-4 basis-[85%] sm:basis-[70%] md:basis-1/2 lg:basis-1/3">
                             <div
                                 className="relative bg-white border-2 border-purple-200 rounded-2xl p-4 sm:p-5 shadow-xl transition-all duration-300 hover:shadow-2xl hover:border-purple-300 cursor-pointer h-full min-h-[190px] flex flex-col"
                                 onClick={() => handlePackageClick(pkg)}
