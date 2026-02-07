@@ -213,6 +213,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${session.access_token}`
               },
+              credentials: 'include',
               body: JSON.stringify({
                 reference: transaction.paystack_reference
               })
@@ -240,6 +241,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                       'Content-Type': 'application/json',
                       'Authorization': `Bearer ${session.access_token}`
                     },
+                    credentials: 'include',
                     body: JSON.stringify({
                       transaction_id: transaction.id,
                       reference: verifyData.reference || transaction.paystack_reference,
@@ -408,6 +410,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${session.access_token}`
                   },
+                  credentials: 'include',
                   body: JSON.stringify({
                     hours: 2 // Check last 2 hours for matching transactions
                   })

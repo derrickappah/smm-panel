@@ -33,9 +33,23 @@ const RATE_LIMIT_DEPOSITS_PER_HOUR = 5;
 
 export default async function handler(req, res) {
   // Enable CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  // Enable CORS
+  const origin = req.headers.origin;
+  const allowedOrigins = [
+    'https://boostupgh.com',
+    'https://www.boostupgh.com',
+    'http://localhost:3000'
+  ];
+
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', 'https://boostupgh.com');
+  }
+
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
 
   // Handle preflight requests
   if (req.method === 'OPTIONS') {

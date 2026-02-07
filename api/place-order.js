@@ -29,9 +29,24 @@ import { rateLimit } from './middleware/rateLimit.js';
 
 export default async function handler(req, res) {
   // Enable CORS - restricted to app domain only
-  res.setHeader('Access-Control-Allow-Origin', process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://yourdomain.com');
+  // Enable CORS
+  const origin = req.headers.origin;
+  const allowedOrigins = [
+    'https://boostupgh.com',
+    'https://www.boostupgh.com',
+    'http://localhost:3000'
+  ];
+
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else {
+    // Default fallback
+    res.setHeader('Access-Control-Allow-Origin', 'https://boostupgh.com');
+  }
+
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
 
   // Handle preflight requests
   if (req.method === 'OPTIONS') {

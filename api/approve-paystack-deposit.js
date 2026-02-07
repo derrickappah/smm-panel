@@ -27,9 +27,23 @@ import { verifyTransactionOwner, getServiceRoleClient } from './utils/auth.js';
 
 export default async function handler(req, res) {
   // Enable CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  // Enable CORS
+  const origin = req.headers.origin;
+  const allowedOrigins = [
+    'https://boostupgh.com',
+    'https://www.boostupgh.com',
+    'http://localhost:3000'
+  ];
+
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', 'https://boostupgh.com');
+  }
+
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
 
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
@@ -73,8 +87,8 @@ export default async function handler(req, res) {
     } catch (authError) {
       // Handle authentication errors
       if (authError.message === 'Missing or invalid authorization header' ||
-          authError.message === 'Missing authentication token' ||
-          authError.message === 'Invalid or expired token') {
+        authError.message === 'Missing authentication token' ||
+        authError.message === 'Invalid or expired token') {
         return res.status(401).json({
           error: 'Authentication required',
           message: authError.message,
@@ -82,17 +96,17 @@ export default async function handler(req, res) {
           reference: reference || null
         });
       }
-      
+
       // Handle authorization errors
-      if (authError.message.includes('Access denied') || 
-          authError.message === 'Transaction not found') {
+      if (authError.message.includes('Access denied') ||
+        authError.message === 'Transaction not found') {
         return res.status(403).json({
           error: authError.message,
           transaction_id: transaction_id,
           reference: reference || null
         });
       }
-      
+
       throw authError;
     }
 
@@ -195,8 +209,8 @@ export default async function handler(req, res) {
   } catch (error) {
     // Handle authentication/authorization errors that weren't caught earlier
     if (error.message === 'Missing or invalid authorization header' ||
-        error.message === 'Missing authentication token' ||
-        error.message === 'Invalid or expired token') {
+      error.message === 'Missing authentication token' ||
+      error.message === 'Invalid or expired token') {
       return res.status(401).json({
         error: 'Authentication required',
         message: error.message,
@@ -205,8 +219,8 @@ export default async function handler(req, res) {
       });
     }
 
-    if (error.message.includes('Access denied') || 
-        error.message === 'Transaction not found') {
+    if (error.message.includes('Access denied') ||
+      error.message === 'Transaction not found') {
       return res.status(403).json({
         error: error.message,
         transaction_id: req.body?.transaction_id || null,

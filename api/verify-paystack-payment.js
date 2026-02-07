@@ -25,9 +25,23 @@ import { verifyAuth, getServiceRoleClient } from './utils/auth.js';
 
 export default async function handler(req, res) {
   // Enable CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  // Enable CORS
+  const origin = req.headers.origin;
+  const allowedOrigins = [
+    'https://boostupgh.com',
+    'https://www.boostupgh.com',
+    'http://localhost:3000'
+  ];
+
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', 'https://boostupgh.com');
+  }
+
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
 
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
@@ -46,16 +60,16 @@ export default async function handler(req, res) {
     const { reference } = req.body;
 
     if (!reference) {
-      return res.status(400).json({ 
-        error: 'Missing required field: reference' 
+      return res.status(400).json({
+        error: 'Missing required field: reference'
       });
     }
 
     const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
 
     if (!PAYSTACK_SECRET_KEY) {
-      return res.status(500).json({ 
-        error: 'Paystack secret key not configured. Set PAYSTACK_SECRET_KEY in Vercel environment variables.' 
+      return res.status(500).json({
+        error: 'Paystack secret key not configured. Set PAYSTACK_SECRET_KEY in Vercel environment variables.'
       });
     }
 
@@ -70,13 +84,13 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-      return res.status(response.status).json({ 
-        error: errorData.message || errorData.error || 'Failed to verify payment' 
+      return res.status(response.status).json({
+        error: errorData.message || errorData.error || 'Failed to verify payment'
       });
     }
 
     const data = await response.json();
-    
+
     // Check if payment was successful
     const isSuccessful = data.status && data.data && data.data.status === 'success';
     const amount = data.data?.amount ? data.data.amount / 100 : null; // Convert from pesewas to cedis
@@ -86,7 +100,7 @@ export default async function handler(req, res) {
     // Verify transaction ownership if transaction_id is in metadata
     if (transactionId) {
       const supabase = getServiceRoleClient();
-      
+
       // Get transaction to check ownership
       const { data: transaction, error: txError } = await supabase
         .from('transactions')
@@ -138,7 +152,7 @@ export default async function handler(req, res) {
         }
       }
     }
-    
+
     return res.status(200).json({
       success: isSuccessful,
       status: data.data?.status || 'unknown',
@@ -152,8 +166,8 @@ export default async function handler(req, res) {
   } catch (error) {
     // Handle authentication errors
     if (error.message === 'Missing or invalid authorization header' ||
-        error.message === 'Missing authentication token' ||
-        error.message === 'Invalid or expired token') {
+      error.message === 'Missing authentication token' ||
+      error.message === 'Invalid or expired token') {
       return res.status(401).json({
         error: 'Authentication required',
         message: error.message
@@ -161,8 +175,8 @@ export default async function handler(req, res) {
     }
 
     console.error('Paystack verification error:', error);
-    return res.status(500).json({ 
-      error: error.message || 'Failed to verify payment' 
+    return res.status(500).json({
+      error: error.message || 'Failed to verify payment'
     });
   }
 }

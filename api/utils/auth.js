@@ -21,16 +21,25 @@ import jwt from 'jsonwebtoken';
  * @returns {Object} - { user, supabase } or throws error
  */
 export async function verifyAuth(req) {
+  let token = null;
   const authHeader = req.headers.authorization;
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    throw new Error('Missing or invalid authorization header');
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.replace('Bearer ', '');
   }
 
-  const token = authHeader.replace('Bearer ', '');
+  // Fallback to cookie if header is missing (crucial for refresh persistence)
+  if (!token && req.headers.cookie) {
+    const cookies = req.headers.cookie.split(';').reduce((acc, cookie) => {
+      const [key, value] = cookie.trim().split('=');
+      acc[key] = value;
+      return acc;
+    }, {});
+    token = cookies['sb-access-token'];
+  }
 
   if (!token) {
-    throw new Error('Missing authentication token');
+    throw new Error('Missing or invalid authentication (no token found in header or cookie)');
   }
 
   const supabaseUrl = process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL;
