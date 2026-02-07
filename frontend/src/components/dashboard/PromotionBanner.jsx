@@ -135,21 +135,29 @@ const PromotionBanner = ({ packages, onPackageSelect, user }) => {
                 </CarouselContent>
             </Carousel>
 
-            {/* Pagination Indicators */}
-            <div className="flex justify-center gap-1.5 mt-4">
-                {packages.map((_, index) => (
-                    <button
-                        key={index}
-                        className={cn(
-                            "h-1.5 rounded-full transition-all duration-300",
-                            currentIndex === index
-                                ? "w-6 bg-purple-600 shadow-sm"
-                                : "w-1.5 bg-gray-300 hover:bg-gray-400"
-                        )}
-                        onClick={() => api?.scrollTo(index)}
-                        aria-label={`Go to slide ${index + 1}`}
-                    />
-                ))}
+            {/* Pagination Indicators and Swipe Hint */}
+            <div className="flex flex-col items-center gap-3 mt-4">
+                <div className="flex justify-center gap-1.5">
+                    {packages.map((_, index) => (
+                        <button
+                            key={index}
+                            className={cn(
+                                "h-1.5 rounded-full transition-all duration-300",
+                                currentIndex === index
+                                    ? "w-6 bg-purple-600 shadow-sm"
+                                    : "w-1.5 bg-gray-300 hover:bg-gray-400"
+                            )}
+                            onClick={() => api?.scrollTo(index)}
+                            aria-label={`Go to slide ${index + 1}`}
+                        />
+                    ))}
+                </div>
+
+                <div className="flex items-center gap-2 text-purple-600/60 transition-opacity duration-300 animate-pulse">
+                    <span className="text-[10px] sm:text-xs font-bold tracking-widest uppercase">
+                        &lt; swipe for more &gt;
+                    </span>
+                </div>
             </div>
         </div>
     );
