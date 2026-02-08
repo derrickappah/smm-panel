@@ -49,17 +49,35 @@ export default async function handler(req, res) {
 
         // Set the cookies
         // Use host header to detect production more accurately
+        // For Safari compatibility, we MUST use SameSite=None; Secure
         const host = req.headers.host || '';
         const isProd = host.includes('boostupgh.com') && !host.includes('localhost');
         const domainAttribute = isProd ? '; Domain=.boostupgh.com' : '';
         const maxAge = expires_in || 60 * 60 * 24 * 7; // Default to 7 days if not provided
 
-        const commonOptions = `Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}${domainAttribute}`;
+        // Safari requires SameSite=None; Secure for cross-site/domain tracking prevention
+        const commonOptions = `Path=/; HttpOnly; Secure; SameSite=None; Max-Age=${maxAge}${domainAttribute}`;
 
-        res.setHeader('Set-Cookie', [
-            `sb-access-token=${access_token}; ${commonOptions}`,
-            `sb-refresh-token=${refresh_token || ''}; ${commonOptions}`
-        ]);
+        // CLEAR CONFLICTING COOKIES FIRST
+        // This is critical: If a cookie exists on 'www.boostupgh.com', it might shadow the '.boostupgh.com' cookie
+        // We explicitly clear the host-only cookie to ensure the domain-wide cookie takes precedence
+        if (isProd) {
+            const clearHostOptions = 'Path=/; HttpOnly; Secure; SameSite=None; Max-Age=0';
+            res.setHeader('Set-Cookie', [
+                // Clear potential host-only cookies (no Domain attribute)
+                `sb-access-token=; ${clearHostOptions}`,
+                `sb-refresh-token=; ${clearHostOptions}`,
+                // Set the correct domain-wide cookies
+                `sb-access-token=${access_token}; ${commonOptions}`,
+                `sb-refresh-token=${refresh_token || ''}; ${commonOptions}`
+            ]);
+        } else {
+            // For localhost or other variations, just set normally
+            res.setHeader('Set-Cookie', [
+                `sb-access-token=${access_token}; ${commonOptions}`,
+                `sb-refresh-token=${refresh_token || ''}; ${commonOptions}`
+            ]);
+        }
 
         return res.status(200).json({ success: true });
     } catch (error) {

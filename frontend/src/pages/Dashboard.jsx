@@ -1175,6 +1175,11 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       });
 
       if (!approveResponse.ok) {
+        if (approveResponse.status === 401) {
+          toast.error('Session expired. Please log in again.');
+          if (onLogout) onLogout();
+          return;
+        }
         const errorData = await approveResponse.json().catch(() => ({ error: 'Unknown error' }));
         console.error('Error approving transaction via API:', errorData);
         throw new Error(`Failed to approve transaction: ${errorData.error || errorData.message || 'Unknown error'}. Transaction ID: ${transactionToUpdate.id}, Reference: ${reference || 'N/A'}`);
@@ -1936,6 +1941,11 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       const data = await response.json();
 
       if (!response.ok) {
+        if (response.status === 401) {
+          toast.error('Session expired. Please log in again.');
+          if (onLogout) onLogout();
+          return;
+        }
         if (response.status === 429) {
           toast.error(data.error || 'Too many deposit attempts. Please try again later.');
         } else {
@@ -2038,6 +2048,11 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       const data = await response.json();
 
       if (!response.ok) {
+        if (response.status === 401) {
+          toast.error('Session expired. Please log in again.');
+          if (onLogout) onLogout();
+          return;
+        }
         if (response.status === 429) {
           toast.error(data.error || 'Too many deposit attempts. Please try again later.');
         } else {
@@ -2094,6 +2109,11 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         });
 
         if (!initResponse.ok) {
+          if (initResponse.status === 401) {
+            toast.error('Session expired. Please log in again.');
+            if (onLogout) onLogout();
+            return;
+          }
           const errorData = await initResponse.json().catch(() => ({ error: 'Unknown error' }));
           throw new Error(errorData.error || 'Failed to initialize Korapay payment');
         }
@@ -2327,6 +2347,11 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       const data = await response.json();
 
       if (!response.ok) {
+        if (response.status === 401) {
+          toast.error('Session expired. Please log in again.');
+          if (onLogout) onLogout();
+          return;
+        }
         if (response.status === 429) {
           toast.error(data.error || 'Too many deposit attempts. Please try again later.');
         } else {
@@ -2380,6 +2405,11 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       });
 
       if (!initResponse.ok) {
+        if (initResponse.status === 401) {
+          toast.error('Session expired. Please log in again.');
+          if (onLogout) onLogout();
+          return;
+        }
         let errorData;
         try {
           errorData = await initResponse.json();
@@ -2496,6 +2526,11 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         });
 
         if (!otpResponse.ok) {
+          if (otpResponse.status === 401) {
+            toast.error('Session expired. Please log in again.');
+            if (onLogout) onLogout();
+            return;
+          }
           const errorData = await otpResponse.json().catch(() => ({ error: 'Unknown error' }));
           throw new Error(errorData.error || 'Failed to verify OTP');
         }
@@ -2548,6 +2583,11 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             console.log('Payment initiation response after OTP:', paymentData);
 
             if (!paymentResponse.ok) {
+              if (paymentResponse.status === 401) {
+                toast.error('Session expired. Please log in again.');
+                if (onLogout) onLogout();
+                return;
+              }
               const errorMsg = paymentData.error || paymentData.message || 'Failed to initiate payment after OTP verification';
               console.error('Payment initiation failed - Response not OK:', {
                 status: paymentResponse.status,
@@ -2657,6 +2697,11 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               console.log('Payment initiation response after OTP (fallback):', paymentData);
 
               if (!paymentResponse.ok) {
+                if (paymentResponse.status === 401) {
+                  toast.error('Session expired. Please log in again.');
+                  if (onLogout) onLogout();
+                  return;
+                }
                 const errorMsg = paymentData.error || paymentData.message || 'Failed to initiate payment after OTP verification';
                 console.error('Payment initiation failed - Response not OK (fallback):', {
                   status: paymentResponse.status,
@@ -2804,6 +2849,11 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       const data = await response.json();
 
       if (!response.ok) {
+        if (response.status === 401) {
+          toast.error('Session expired. Please log in again.');
+          if (onLogout) onLogout();
+          return;
+        }
         if (response.status === 429) {
           toast.error(data.error || 'Too many deposit attempts. Please try again later.');
         } else {
@@ -2841,6 +2891,11 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         });
 
         if (!initResponse.ok) {
+          if (initResponse.status === 401) {
+            toast.error('Session expired. Please log in again.');
+            if (onLogout) onLogout();
+            return;
+          }
           const errorData = await initResponse.json().catch(() => ({ error: 'Unknown error' }));
           throw new Error(errorData.error || 'Failed to initialize Moolre payment');
         }
@@ -3189,6 +3244,11 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       const result = await response.json();
 
       if (!response.ok) {
+        if (response.status === 401) {
+          toast.error('Session expired. Please log in again.');
+          if (onLogout) onLogout();
+          return;
+        }
         throw new Error(result.error || result.message || 'Failed to place order');
       }
 

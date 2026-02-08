@@ -64,51 +64,75 @@ export async function verifyAuth(req) {
     }
   });
 
+  // Helper to verify a specific token
+  const verifyToken = async (tokenToVerify) => {
+    let verifiedUser = null;
+
+    // 1. Try local JWT verification first (faster)
+    if (jwtSecret) {
+      try {
+        const decoded = jwt.verify(tokenToVerify, jwtSecret);
+        if (decoded && decoded.sub) {
+          verifiedUser = {
+            id: decoded.sub,
+            email: decoded.email,
+            role: decoded.role,
+            app_metadata: decoded.app_metadata,
+            user_metadata: decoded.user_metadata,
+            aud: decoded.aud,
+            created_at: decoded.created_at
+          };
+        }
+      } catch (jwtError) {
+        // Token expired or invalid locally
+      }
+    }
+
+    // 2. Fallback to Supabase auth.getUser() (slower but definitive)
+    if (!verifiedUser) {
+      const { data: { user: remoteUser }, error } = await supabase.auth.getUser(tokenToVerify);
+      if (!error && remoteUser) {
+        verifiedUser = remoteUser;
+      }
+    }
+
+    return verifiedUser;
+  };
+
+  // STRATEGY: Try Header Token -> Fail? -> Try Cookie Token
   let user = null;
 
-  // OPTIMIZATION: Try local JWT verification first
-  if (jwtSecret) {
-    try {
-      // Verify token signature and expiration locally
-      // This saves 1 network request per API call
-      const decoded = jwt.verify(token, jwtSecret);
+  // 1. Try Header Token
+  if (token) {
+    user = await verifyToken(token);
+    if (!user) {
+      console.warn('Header token verification failed (expired/invalid). Checking cookie fallback...');
+    }
+  }
 
-      // Construct user object from token payload
-      // Supabase JWTs contain 'sub' which is the user ID and other claims
-      if (decoded && decoded.sub) {
-        user = {
-          id: decoded.sub,
-          email: decoded.email,
-          role: decoded.role,
-          app_metadata: decoded.app_metadata,
-          user_metadata: decoded.user_metadata,
-          aud: decoded.aud,
-          created_at: decoded.created_at
-        };
+  // 2. Fallback: Try Cookie Token if header failed or was missing
+  if (!user && req.headers.cookie) {
+    const cookies = req.headers.cookie.split(';').reduce((acc, cookie) => {
+      const [key, value] = cookie.trim().split('=');
+      acc[key] = value;
+      return acc;
+    }, {});
+
+    const cookieToken = cookies['sb-access-token'];
+
+    // Only try if we have a cookie token AND it's different from the header token we already tried
+    if (cookieToken && cookieToken !== token) {
+      console.log('Attempting authentication via fallback secure cookie...');
+      user = await verifyToken(cookieToken);
+      if (user) {
+        console.log('✅ Auth rescued by secure cookie fallback!');
       }
-    } catch (jwtError) {
-      console.warn('Local JWT verification failed, falling back to auth.getUser:', jwtError.message);
-      // Fall through to standard getUser check
-    }
-  } else {
-    // Only warn once per cold start to avoid log spam
-    if (!global.jwtSecretWarningShown) {
-      console.warn('Performance Warning: SUPABASE_JWT_SECRET not set. Using slower auth.getUser() method.');
-      global.jwtSecretWarningShown = true;
     }
   }
 
-  // Fallback: If local verification failed or secret not set, use standard remote check
   if (!user) {
-    const { data: { user: remoteUser }, error } = await supabase.auth.getUser(token);
-
-    if (error || !remoteUser) {
-      throw new Error('Invalid or expired token');
-    }
-    user = remoteUser;
+    throw new Error('Invalid or expired token (and cookie fallback failed)');
   }
-
-  return { user, supabase };
 }
 
 /**
