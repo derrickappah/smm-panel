@@ -3174,6 +3174,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`
         },
+        credentials: 'include',
         body: JSON.stringify({
           service_id: orderForm.service_id || null,
           package_id: orderForm.package_id || null,

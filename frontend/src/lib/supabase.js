@@ -30,8 +30,10 @@ if (isConfigured) {
       await fetch('/api/auth/sync-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           access_token: session?.access_token || null,
+          refresh_token: session?.refresh_token || null,
           expires_in: session?.expires_in || null
         })
       });
