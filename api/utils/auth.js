@@ -133,6 +133,8 @@ export async function verifyAuth(req) {
   if (!user) {
     throw new Error('Invalid or expired token (and cookie fallback failed)');
   }
+
+  return { user, supabase };
 }
 
 /**
