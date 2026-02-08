@@ -166,7 +166,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
   // Verify pending payments that might have succeeded (complex version with balance updates)
   const verifyPendingPayments = useCallback(async () => {
     try {
-      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const authResult = await supabase.auth.getUser();
+      const authUser = authResult?.data?.user;
       if (!authUser) return;
 
       // Find recent pending deposit transactions (within last 48 hours to catch old ones too)
@@ -201,7 +202,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         if (transaction.paystack_reference && transaction.deposit_method === 'paystack') {
           try {
             // Get JWT token for API authentication
-            const { data: { session } } = await supabase.auth.getSession();
+            const authResult = await supabase.auth.getSession();
+            const session = authResult?.data?.session;
             if (!session?.access_token) {
               console.warn('No session token available for payment verification');
               continue;
@@ -227,7 +229,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                 console.log('Found successful payment for pending transaction:', transaction.id);
 
                 // Get JWT token for API authentication
-                const { data: { session } } = await supabase.auth.getSession();
+                const authResult = await supabase.auth.getSession();
+                const session = authResult?.data?.session;
                 if (!session?.access_token) {
                   console.warn('No session token available for transaction approval');
                   continue;
@@ -401,7 +404,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               console.log('Attempting server-side verification for transaction without reference:', transaction.id);
 
               // Get JWT token for API authentication
-              const { data: { session } } = await supabase.auth.getSession();
+              const authResult = await supabase.auth.getSession();
+              const session = authResult?.data?.session;
               if (session?.access_token) {
                 // Call server-side verification endpoint which can match by amount and time
                 const verifyResponse = await fetch('/api/verify-pending-payments', {
@@ -476,7 +480,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       }
 
       try {
-        const { data: { user: authUser } } = await supabase.auth.getUser();
+        const authResult = await supabase.auth.getUser();
+        const authUser = authResult?.data?.user;
         if (!authUser) return;
 
         // Find the most recent pending deposit transaction (within last 2 hours)
@@ -632,7 +637,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     console.log('Payment success callback received:', { reference, pendingTransactionId: pendingTransaction?.id });
 
     try {
-      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const authResult = await supabase.auth.getUser();
+      const authUser = authResult?.data?.user;
       if (!authUser) {
         throw new Error('Not authenticated');
       }

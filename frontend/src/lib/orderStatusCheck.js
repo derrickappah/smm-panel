@@ -727,7 +727,8 @@ export const checkOrdersStatusBatch = async (orders, options = {}) => {
       console.log(`[orderStatusCheck] Using server-side bulk check to /api/check-orders-status for ${ordersToCheck.length} orders`);
 
       // Get current session for authentication
-      const { data: { session } } = await supabase.auth.getSession();
+      const authResult = await supabase.auth.getSession();
+      const session = authResult?.data?.session;
 
       if (!session) {
         throw new Error('No active session found. Authentication required.');
@@ -766,8 +767,14 @@ export const checkOrdersStatusBatch = async (orders, options = {}) => {
           });
 
           if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error || `Server error during batch ${batchNum}: ${response.status}`);
+            let errorMsg = `Server error during batch ${batchNum}: ${response.status}`;
+            try {
+              const errorData = await response.json();
+              errorMsg = errorData.error || errorMsg;
+            } catch (pErr) {
+              // Ignore JSON parse error for non-JSON responses
+            }
+            throw new Error(errorMsg);
           }
 
           const serverResult = await response.json();

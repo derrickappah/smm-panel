@@ -22,10 +22,12 @@ import jwt from 'jsonwebtoken';
  */
 export async function verifyAuth(req) {
   let token = null;
+  let tokenSource = null;
   const authHeader = req.headers.authorization;
 
   if (authHeader && authHeader.startsWith('Bearer ')) {
     token = authHeader.replace('Bearer ', '');
+    tokenSource = 'header';
   }
 
   // Fallback to cookie if header is missing (crucial for refresh persistence)
@@ -36,6 +38,7 @@ export async function verifyAuth(req) {
       return acc;
     }, {});
     token = cookies['sb-access-token'];
+    tokenSource = 'cookie';
   }
 
   if (!token) {
@@ -125,8 +128,39 @@ export async function verifyAuth(req) {
       console.log('Attempting authentication via fallback secure cookie...');
       user = await verifyToken(cookieToken);
       if (user) {
+        tokenSource = 'cookie';
         console.log('✅ Auth rescued by secure cookie fallback!');
       }
+    }
+  }
+
+  // 3. CSRF Protection: If using cookie authentication for state-changing requests, verify origin
+  if (tokenSource === 'cookie' && !['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+    const origin = req.headers.origin;
+    const referer = req.headers.referer;
+    const allowedOrigins = [
+      'https://boostupgh.com',
+      'https://www.boostupgh.com',
+      'http://localhost:3000',
+      'http://localhost:5173'
+    ];
+
+    let sourceOk = false;
+    if (origin) {
+      sourceOk = allowedOrigins.some(o => origin.startsWith(o));
+    } else if (referer) {
+      sourceOk = allowedOrigins.some(o => referer.startsWith(o));
+    }
+
+    if (!sourceOk) {
+      console.error('CSRF Protection Blocked Request:', {
+        method: req.method,
+        origin,
+        referer,
+        tokenSource,
+        path: req.url
+      });
+      throw new Error('Access denied: Invalid request origin. This event has been logged for security audit.');
     }
   }
 
