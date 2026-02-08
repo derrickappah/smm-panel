@@ -65,8 +65,7 @@ const AdminWorldOfSMM = () => {
         try {
             const response = await fetch('/api/worldofsmm/balance', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include'
+                headers: { 'Content-Type': 'application/json' }
             });
 
             if (response.ok) {

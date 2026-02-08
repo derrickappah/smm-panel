@@ -164,8 +164,7 @@ export const fetchJBSMMPanelServices = async () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
-      },
-      credentials: 'include'
+      }
     });
 
     if (!response.ok) {
@@ -349,7 +348,6 @@ export const placeJBSMMPanelOrder = async (serviceId, link, quantity, retryCount
         headers: {
           'Content-Type': 'application/json'
         },
-        credentials: 'include',
         body: JSON.stringify({
           service: serviceIdNum,
           link: link.trim(),
@@ -632,7 +630,6 @@ export const getJBSMMPanelOrderStatus = async (orderId, retryCount = 0) => {
         headers: {
           'Content-Type': 'application/json'
         },
-        credentials: 'include',
         body: JSON.stringify({
           order: orderIdNum
         }),
@@ -757,8 +754,7 @@ export const getJBSMMPanelBalance = async () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
-      },
-      credentials: 'include'
+      }
     });
 
     if (!response.ok) {

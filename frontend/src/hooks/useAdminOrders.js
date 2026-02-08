@@ -739,7 +739,6 @@ export const useSafeRetryOrder = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`
         },
-        credentials: 'include',
         body: JSON.stringify({ order_id: orderId })
       });
 

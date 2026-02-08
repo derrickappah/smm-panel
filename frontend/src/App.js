@@ -74,45 +74,10 @@ function App() {
       return;
     }
 
-    // Get initial session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         loadUserProfile(session.user.id);
       } else {
-        // Try to restore session from cookie
-        console.log('No local session found, attempting to restore from cookie...');
-        try {
-          const restoreResponse = await fetch('/api/auth/restore-session', {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            credentials: 'include'
-          });
-
-          if (restoreResponse.ok) {
-            const data = await restoreResponse.json();
-            if (data.refresh_token) {
-              console.log('Restoring session from cookie...');
-              const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-                access_token: data.access_token,
-                refresh_token: data.refresh_token
-              });
-
-              if (!sessionError && sessionData.session) {
-                console.log('Session restored successfully!');
-                // onAuthStateChange will handle the rest
-                return;
-              } else {
-                console.warn('Failed to restore Supabase session:', sessionError);
-              }
-            }
-          }
-        } catch (restoreError) {
-          console.error('Error restoring session:', restoreError);
-        }
-
-        // If restoration failed or no cookie, verify we are truly logged out
         setLoading(false);
       }
     });

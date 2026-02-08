@@ -156,8 +156,7 @@ export const fetchSMMGenServices = async () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
-      },
-      credentials: 'include'
+      }
     });
 
     if (!response.ok) {
@@ -377,7 +376,6 @@ export const placeSMMGenOrder = async (serviceId, link, quantity, retryCount = 0
         headers: {
           'Content-Type': 'application/json'
         },
-        credentials: 'include',
         body: JSON.stringify({
           service: serviceId.trim(),
           link: link.trim(),
@@ -648,7 +646,6 @@ export const getSMMGenOrderStatus = async (orderId, retryCount = 0) => {
         headers: {
           'Content-Type': 'application/json'
         },
-        credentials: 'include',
         body: JSON.stringify({
           order: orderId.trim()
         }),
@@ -801,8 +798,7 @@ export const getSMMGenBalance = async () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
-      },
-      credentials: 'include'
+      }
     });
 
     if (!response.ok) {

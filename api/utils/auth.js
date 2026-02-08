@@ -22,146 +22,56 @@ import jwt from 'jsonwebtoken';
  */
 export async function verifyAuth(req) {
   let token = null;
-  let tokenSource = null;
   const authHeader = req.headers.authorization;
 
   if (authHeader && authHeader.startsWith('Bearer ')) {
     token = authHeader.replace('Bearer ', '');
-    tokenSource = 'header';
-  }
-
-  // Fallback to cookie if header is missing (crucial for refresh persistence)
-  if (!token && req.headers.cookie) {
-    const cookies = req.headers.cookie.split(';').reduce((acc, cookie) => {
-      const [key, value] = cookie.trim().split('=');
-      acc[key] = value;
-      return acc;
-    }, {});
-    token = cookies['sb-access-token'];
-    tokenSource = 'cookie';
   }
 
   if (!token) {
-    throw new Error('Missing or invalid authentication (no token found in header or cookie)');
+    throw new Error('Missing or invalid authentication (no Bearer token provided in Authorization header)');
   }
 
   const supabaseUrl = process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL;
   const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY;
-  const jwtSecret = process.env.SUPABASE_JWT_SECRET; // Must be set in env vars
+  const jwtSecret = process.env.SUPABASE_JWT_SECRET;
 
   if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error('Supabase credentials not configured');
   }
 
-  // Create Supabase client with user's JWT token
-  // We still create the client for RLS policies if needed later
   const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    global: {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    },
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
+    global: { headers: { Authorization: `Bearer ${token}` } },
+    auth: { autoRefreshToken: false, persistSession: false }
   });
 
-  // Helper to verify a specific token
-  const verifyToken = async (tokenToVerify) => {
-    let verifiedUser = null;
-
-    // 1. Try local JWT verification first (faster)
-    if (jwtSecret) {
-      try {
-        const decoded = jwt.verify(tokenToVerify, jwtSecret);
-        if (decoded && decoded.sub) {
-          verifiedUser = {
-            id: decoded.sub,
-            email: decoded.email,
-            role: decoded.role,
-            app_metadata: decoded.app_metadata,
-            user_metadata: decoded.user_metadata,
-            aud: decoded.aud,
-            created_at: decoded.created_at
-          };
-        }
-      } catch (jwtError) {
-        // Token expired or invalid locally
-      }
-    }
-
-    // 2. Fallback to Supabase auth.getUser() (slower but definitive)
-    if (!verifiedUser) {
-      const { data: { user: remoteUser }, error } = await supabase.auth.getUser(tokenToVerify);
-      if (!error && remoteUser) {
-        verifiedUser = remoteUser;
-      }
-    }
-
-    return verifiedUser;
-  };
-
-  // STRATEGY: Try Header Token -> Fail? -> Try Cookie Token
+  // Verify token
   let user = null;
-
-  // 1. Try Header Token
-  if (token) {
-    user = await verifyToken(token);
-    if (!user) {
-      console.warn('Header token verification failed (expired/invalid). Checking cookie fallback...');
-    }
-  }
-
-  // 2. Fallback: Try Cookie Token if header failed or was missing
-  if (!user && req.headers.cookie) {
-    const cookies = req.headers.cookie.split(';').reduce((acc, cookie) => {
-      const [key, value] = cookie.trim().split('=');
-      acc[key] = value;
-      return acc;
-    }, {});
-
-    const cookieToken = cookies['sb-access-token'];
-
-    // Only try if we have a cookie token AND it's different from the header token we already tried
-    if (cookieToken && cookieToken !== token) {
-      console.log('Attempting authentication via fallback secure cookie...');
-      user = await verifyToken(cookieToken);
-      if (user) {
-        tokenSource = 'cookie';
-        console.log('✅ Auth rescued by secure cookie fallback!');
+  if (jwtSecret) {
+    try {
+      const decoded = jwt.verify(token, jwtSecret);
+      if (decoded && decoded.sub) {
+        user = {
+          id: decoded.sub,
+          email: decoded.email,
+          role: decoded.role,
+          app_metadata: decoded.app_metadata,
+          user_metadata: decoded.user_metadata,
+          aud: decoded.aud,
+          created_at: decoded.created_at
+        };
       }
+    } catch (jwtError) {
+      // Token invalid/expired locally
     }
   }
 
-  // 3. CSRF Protection: If using cookie authentication for state-changing requests, verify origin
-  if (tokenSource === 'cookie' && !['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
-    const origin = req.headers.origin;
-    const referer = req.headers.referer;
-    const allowedOrigins = [
-      'https://boostupgh.com',
-      'https://www.boostupgh.com',
-      'http://localhost:3000',
-      'http://localhost:5173'
-    ];
-
-    let sourceOk = false;
-    if (origin) {
-      sourceOk = allowedOrigins.some(o => origin.startsWith(o));
-    } else if (referer) {
-      sourceOk = allowedOrigins.some(o => referer.startsWith(o));
+  if (!user) {
+    const { data: { user: remoteUser }, error } = await supabase.auth.getUser(token);
+    if (error || !remoteUser) {
+      throw new Error('Invalid or expired authentication token');
     }
-
-    if (!sourceOk) {
-      console.error('CSRF Protection Blocked Request:', {
-        method: req.method,
-        origin,
-        referer,
-        tokenSource,
-        path: req.url
-      });
-      throw new Error('Access denied: Invalid request origin. This event has been logged for security audit.');
-    }
+    user = remoteUser;
   }
 
   if (!user) {

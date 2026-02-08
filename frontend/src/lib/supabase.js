@@ -24,34 +24,7 @@ if (isConfigured) {
     }
   });
 
-  // Helper to sync session to server-side cookies for persistence
-  const syncSessionToCookie = async (session) => {
-    try {
-      await fetch('/api/auth/sync-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          access_token: session?.access_token || null,
-          refresh_token: session?.refresh_token || null,
-          expires_in: session?.expires_in || null
-        })
-      });
-    } catch (err) {
-      console.error('Failed to sync session to cookie:', err);
-    }
-  };
-
-  // Listen for auth state changes to keep cookie in sync
-  supabase.auth.onAuthStateChange((event, session) => {
-    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-      syncSessionToCookie(session);
-    } else if (event === 'SIGNED_OUT') {
-      syncSessionToCookie(null);
-    }
-  });
-
-  console.log('✅ Supabase client initialized and session sync active');
+  console.log('✅ Supabase client initialized (Bearer Token Auth)');
 } else {
   console.warn('⚠️ Supabase not configured - using placeholder client');
   console.warn('Please update frontend/.env with your Supabase credentials');
