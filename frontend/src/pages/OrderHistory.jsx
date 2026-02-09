@@ -35,7 +35,7 @@ const OrderHistory = ({ user, onLogout }) => {
       const [ordersRes, servicesRes] = await Promise.all([
         supabase
           .from('orders')
-          .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, created_at, completed_at, refund_status, total_cost, last_status_check, promotion_packages(name, platform, service_type), services(id, name, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id)')
+          .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, created_at, completed_at, refund_status, total_cost, last_status_check, promotion_packages(name, platform, service_type), services(id, name, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id)')
           .eq('user_id', authUser.id)
           .order('created_at', { ascending: false }),
         supabase
@@ -148,8 +148,9 @@ const OrderHistory = ({ user, onLogout }) => {
       !isInternalUuid;
     const hasSmmcostId = order.smmcost_order_id && String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost";
     const hasJbsmmpanelId = order.jbsmmpanel_order_id && order.jbsmmpanel_order_id > 0;
+    const hasWorldofsmmId = order.worldofsmm_order_id && order.worldofsmm_order_id !== "order not placed at worldofsmm";
 
-    if (!hasSmmgenId && !hasSmmcostId && !hasJbsmmpanelId) {
+    if (!hasSmmgenId && !hasSmmcostId && !hasJbsmmpanelId && !hasWorldofsmmId) {
       console.log(`Skipping status check for order ${order.id} - no valid panel order ID`);
       return;
     }
@@ -159,7 +160,7 @@ const OrderHistory = ({ user, onLogout }) => {
       return;
     }
 
-    const orderId = hasSmmcostId ? order.smmcost_order_id : (hasJbsmmpanelId ? order.jbsmmpanel_order_id : order.smmgen_order_id);
+    const orderId = hasWorldofsmmId ? order.worldofsmm_order_id : (hasSmmcostId ? order.smmcost_order_id : (hasJbsmmpanelId ? order.jbsmmpanel_order_id : order.smmgen_order_id));
     console.log(`Manually checking status for order ${order.id} with panel order ID: ${orderId}`);
     setCheckingStatus(prev => ({ ...prev, [order.id]: true }));
 
@@ -452,8 +453,9 @@ const OrderHistory = ({ user, onLogout }) => {
                                   const serviceHasSmmcost = orderService?.smmcost_service_id && orderService.smmcost_service_id > 0;
                                   const serviceHasSmmgen = orderService?.smmgen_service_id;
                                   const serviceHasJbsmmpanel = orderService?.jbsmmpanel_service_id && orderService.jbsmmpanel_service_id > 0;
+                                  const serviceHasWorldofsmm = orderService?.worldofsmm_service_id;
 
-                                  // Prioritize: SMMCost > JB SMM Panel > SMMGen
+                                  // Prioritize: World of SMM > SMMCost > JB SMM Panel > SMMGen
                                   // Check if smmgen_order_id is the internal UUID (set by trigger) - if so, ignore it
                                   const isInternalUuid = order.smmgen_order_id === order.id;
                                   const hasSmmcost = order.smmcost_order_id && String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost";
@@ -461,8 +463,13 @@ const OrderHistory = ({ user, onLogout }) => {
                                   const hasSmmgen = order.smmgen_order_id &&
                                     order.smmgen_order_id !== "order not placed at smm gen" &&
                                     !isInternalUuid; // Ignore if it's just the internal UUID
+                                  const hasWorldofsmm = order.worldofsmm_order_id && order.worldofsmm_order_id !== "order not placed at worldofsmm";
 
-                                  if (hasSmmcost) {
+                                  if (hasWorldofsmm) {
+                                    // World of SMM order ID exists and is valid
+                                    return <p className="font-medium text-gray-900 text-sm">{order.worldofsmm_order_id}</p>;
+                                  } else if (hasSmmcost) {
+
                                     // SMMCost order ID exists and is valid
                                     return <p className="font-medium text-gray-900 text-sm">{order.smmcost_order_id}</p>;
                                   } else if (hasJbsmmpanel) {
@@ -475,7 +482,12 @@ const OrderHistory = ({ user, onLogout }) => {
                                     // Order failed at SMMCost
                                     return <p className="text-xs text-red-600 italic font-medium">Order not placed</p>;
                                   } else if (order.smmgen_order_id === "order not placed at smm gen") {
-                                    // Order failed at SMMGen
+                                    return <p className="text-xs text-red-600 italic font-medium">Order not placed</p>;
+                                  } else if (order.worldofsmm_order_id === "order not placed at worldofsmm") {
+                                    // Order failed at World of SMM
+                                    return <p className="text-xs text-red-600 italic font-medium">Order not placed</p>;
+                                  } else if (serviceHasWorldofsmm && !hasWorldofsmm) {
+                                    // Service has World of SMM ID but order doesn't - order failed at World of SMM
                                     return <p className="text-xs text-red-600 italic font-medium">Order not placed</p>;
                                   } else if (serviceHasJbsmmpanel && !hasJbsmmpanel) {
                                     // Service has JB SMM Panel ID but order doesn't - order failed at JB SMM Panel
@@ -483,7 +495,7 @@ const OrderHistory = ({ user, onLogout }) => {
                                   } else if (serviceHasSmmcost && !hasSmmcost) {
                                     // Service has SMMCost ID but order doesn't - order failed at SMMCost
                                     return <p className="text-xs text-red-600 italic font-medium">Order not placed</p>;
-                                  } else if (order.smmcost_order_id === null && order.smmgen_order_id === null && order.jbsmmpanel_order_id === null) {
+                                  } else if (order.smmcost_order_id === null && order.smmgen_order_id === null && order.jbsmmpanel_order_id === null && order.worldofsmm_order_id === null) {
                                     // No order IDs at all (shouldn't happen, but handle gracefully)
                                     return <p className="text-xs text-gray-400 italic">N/A</p>;
                                   } else {
