@@ -295,12 +295,12 @@ const DashboardDeposit = React.memo(({
               <br />
               <span className="mt-1 block">Text us on WhatsApp: </span>
               <a
-                href="https://wa.me/233256650926"
+                href="https://wa.me/233500865092"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:blue-500 rounded"
               >
-                0256650926
+                0500865092
               </a>
             </p>
           </div>
@@ -433,12 +433,12 @@ const DashboardDeposit = React.memo(({
               <br />
               <span className="mt-1 block">Text us on WhatsApp: </span>
               <a
-                href="https://wa.me/233256650926"
+                href="https://wa.me/233500865092"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:blue-500 rounded"
               >
-                0256650926
+                0500865092
               </a>
             </p>
           </div>
@@ -475,12 +475,12 @@ const DashboardDeposit = React.memo(({
               <br />
               <span className="mt-1 block">Text us on WhatsApp: </span>
               <a
-                href="https://wa.me/233256650926"
+                href="https://wa.me/233500865092"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:blue-500 rounded"
               >
-                0256650926
+                0500865092
               </a>
             </p>
           </div>
@@ -714,12 +714,12 @@ const DashboardDeposit = React.memo(({
               <br />
               <span className="mt-1 block">Text us on WhatsApp: </span>
               <a
-                href="https://wa.me/233256650926"
+                href="https://wa.me/233500865092"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:blue-500 rounded"
               >
-                0256650926
+                0500865092
               </a>
             </p>
           </div>
@@ -781,12 +781,12 @@ const DashboardDeposit = React.memo(({
               <br />
               <span className="mt-1 block">Text us on WhatsApp: </span>
               <a
-                href="https://wa.me/233256650926"
+                href="https://wa.me/233500865092"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:blue-500 rounded"
               >
-                0256650926
+                0500865092
               </a>
             </p>
           </div>
