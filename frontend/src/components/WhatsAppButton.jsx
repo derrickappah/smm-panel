@@ -116,7 +116,7 @@ const WhatsAppButton = ({ message, className = "" }) => {
   const handleWhatsAppClick = (e) => {
     // Only open WhatsApp if we haven't dragged (i.e., it was just a click)
     if (!hasDragged) {
-      const whatsappUrl = `https://wa.me/233256650926`;
+      const whatsappUrl = `https://wa.me/233500865092`;
 
       // Open WhatsApp in new tab/window
       window.open(whatsappUrl, '_blank');
