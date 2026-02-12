@@ -1,121 +1,44 @@
 import React, { memo, useState, useEffect, useCallback } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { RefreshCw, Power, PowerOff, CheckCircle, Wallet, Save } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Separator } from '@/components/ui/separator';
+import { RefreshCw, Save, CreditCard, Banknote, Smartphone, Globe, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { logUserActivity } from '@/lib/activityLogger';
+import { usePaymentMethods } from '@/hooks/usePaymentMethods';
 
 const AdminSettings = memo(() => {
   const queryClient = useQueryClient();
-  const [paymentMethodSettings, setPaymentMethodSettings] = useState({
-    paystack_enabled: true,
-    manual_enabled: true,
-    hubtel_enabled: true,
-    korapay_enabled: true,
-    moolre_enabled: true,
-    moolre_web_enabled: true
-  });
-  const [minDepositSettings, setMinDepositSettings] = useState({
-    paystack_min: 10,
-    manual_min: 10,
-    hubtel_min: 1,
-    korapay_min: 1,
-    moolre_min: 1,
-    moolre_web_min: 1
-  });
-  const [manualDepositDetails, setManualDepositDetails] = useState({
-    phone_number: '0559272762',
-    account_name: 'MTN - APPIAH MANASSEH ATTAH',
-    account_name: 'MTN - APPIAH MANASSEH ATTAH',
-    instructions: 'Make PAYMENT to 0559272762\nMTN - APPIAH MANASSEH ATTAH\nuse your USERNAME as reference\nsend SCREENSHOT of PAYMENT when done'
-  });
-  const [whatsappNumber, setWhatsappNumber] = useState('0500865092');
+  const {
+    paymentMethodSettings: remotePaymentSettings,
+    minDepositSettings: remoteMinDepositSettings,
+    manualDepositDetails: remoteManualDepositDetails,
+    whatsappNumber: remoteWhatsappNumber,
+    isLoading,
+    refetch
+  } = usePaymentMethods();
 
-  // Fetch payment method settings
-  const { data: settingsData, isLoading, refetch } = useQuery({
-    queryKey: ['admin', 'payment-settings'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('app_settings')
-        .select('key, value')
-        .in('key', [
-          'payment_method_paystack_enabled',
-          'payment_method_manual_enabled',
-          'payment_method_hubtel_enabled',
-          'payment_method_korapay_enabled',
-          'payment_method_moolre_enabled',
-          'payment_method_moolre_web_enabled',
-          'payment_method_paystack_min_deposit',
-          'payment_method_manual_min_deposit',
-          'payment_method_hubtel_min_deposit',
-          'payment_method_korapay_min_deposit',
-          'payment_method_moolre_min_deposit',
-          'payment_method_moolre_web_min_deposit',
-          'manual_deposit_phone_number',
-          'manual_deposit_account_name',
-          'manual_deposit_instructions',
-          'whatsapp_number'
-        ]);
-
-      if (error) throw error;
-
-      const settings = {};
-      data?.forEach(item => {
-        if (item.key.includes('_enabled')) {
-          const method = item.key.replace('payment_method_', '').replace('_enabled', '');
-          settings[`${method}_enabled`] = item.value === 'true';
-        } else if (item.key.includes('_min_deposit')) {
-          const method = item.key.replace('payment_method_', '').replace('_min_deposit', '');
-          settings[`${method}_min`] = parseFloat(item.value) || 0;
-        } else if (item.key === 'manual_deposit_phone_number') {
-          settings.manual_deposit_phone_number = item.value;
-        } else if (item.key === 'manual_deposit_account_name') {
-          settings.manual_deposit_account_name = item.value;
-        } else if (item.key === 'manual_deposit_instructions') {
-          settings.manual_deposit_instructions = item.value;
-        } else if (item.key === 'whatsapp_number') {
-          settings.whatsapp_number = item.value;
-        }
-      });
-
-      return settings;
-    },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-  });
+  const [paymentMethodSettings, setPaymentMethodSettings] = useState(remotePaymentSettings);
+  const [minDepositSettings, setMinDepositSettings] = useState(remoteMinDepositSettings);
+  const [manualDepositDetails, setManualDepositDetails] = useState(remoteManualDepositDetails);
+  const [whatsappNumber, setWhatsappNumber] = useState(remoteWhatsappNumber);
 
   useEffect(() => {
-    if (settingsData) {
-      setPaymentMethodSettings(prev => ({
-        ...prev,
-        paystack_enabled: settingsData.paystack_enabled ?? prev.paystack_enabled,
-        manual_enabled: settingsData.manual_enabled ?? prev.manual_enabled,
-        hubtel_enabled: settingsData.hubtel_enabled ?? prev.hubtel_enabled,
-        korapay_enabled: settingsData.korapay_enabled ?? prev.korapay_enabled,
-        moolre_enabled: settingsData.moolre_enabled ?? prev.moolre_enabled,
-        moolre_web_enabled: settingsData.moolre_web_enabled ?? prev.moolre_web_enabled,
-      }));
-      setMinDepositSettings(prev => ({
-        ...prev,
-        paystack_min: settingsData.paystack_min ?? prev.paystack_min,
-        manual_min: settingsData.manual_min ?? prev.manual_min,
-        hubtel_min: settingsData.hubtel_min ?? prev.hubtel_min,
-        korapay_min: settingsData.korapay_min ?? prev.korapay_min,
-        moolre_min: settingsData.moolre_min ?? prev.moolre_min,
-        moolre_web_min: settingsData.moolre_web_min ?? prev.moolre_web_min,
-      }));
-      setManualDepositDetails(prev => ({
-        phone_number: settingsData.manual_deposit_phone_number ?? prev.phone_number,
-        account_name: settingsData.manual_deposit_account_name ?? prev.account_name,
-        instructions: settingsData.manual_deposit_instructions ?? prev.instructions,
-      }));
-      setWhatsappNumber(settingsData.whatsapp_number ?? whatsappNumber);
+    if (!isLoading) {
+      setPaymentMethodSettings(remotePaymentSettings);
+      setMinDepositSettings(remoteMinDepositSettings);
+      setManualDepositDetails(remoteManualDepositDetails);
+      setWhatsappNumber(remoteWhatsappNumber);
     }
-  }, [settingsData]);
+  }, [remotePaymentSettings, remoteMinDepositSettings, remoteManualDepositDetails, remoteWhatsappNumber, isLoading]);
 
   const togglePaymentMethod = useMutation({
     mutationFn: async ({ method, enabled }) => {
@@ -174,6 +97,7 @@ const AdminSettings = memo(() => {
         [stateKey]: enabled
       }));
       queryClient.invalidateQueries({ queryKey: ['admin', 'payment-settings'] });
+      queryClient.invalidateQueries({ queryKey: ['payment-settings'] });
       queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
 
       // Log settings change
@@ -193,7 +117,6 @@ const AdminSettings = memo(() => {
           });
         }
       } catch (error) {
-        // Silently fail - don't block settings update
         console.warn('Failed to log settings change:', error);
       }
 
@@ -266,6 +189,7 @@ const AdminSettings = memo(() => {
         [stateKey]: amount
       }));
       queryClient.invalidateQueries({ queryKey: ['admin', 'payment-settings'] });
+      queryClient.invalidateQueries({ queryKey: ['payment-settings'] });
 
       // Log settings change
       try {
@@ -283,7 +207,6 @@ const AdminSettings = memo(() => {
           });
         }
       } catch (error) {
-        // Silently fail - don't block settings update
         console.warn('Failed to log settings change:', error);
       }
 
@@ -350,6 +273,7 @@ const AdminSettings = memo(() => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'payment-settings'] });
       queryClient.invalidateQueries({ queryKey: ['admin', 'manual-deposit-details'] });
       queryClient.invalidateQueries({ queryKey: ['payment-methods'] });
+      queryClient.invalidateQueries({ queryKey: ['payment-settings'] });
       toast.success('Manual deposit details updated successfully');
     },
     onError: (error) => {
@@ -388,6 +312,7 @@ const AdminSettings = memo(() => {
       setWhatsappNumber(number);
       queryClient.invalidateQueries({ queryKey: ['admin', 'payment-settings'] });
       queryClient.invalidateQueries({ queryKey: ['payment-methods'] });
+      queryClient.invalidateQueries({ queryKey: ['payment-settings'] });
       toast.success('WhatsApp number updated successfully');
     },
     onError: (error) => {
@@ -401,481 +326,281 @@ const AdminSettings = memo(() => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-indigo-600"></div>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between mb-6">
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-9 w-24" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <Skeleton key={i} className="h-48 w-full rounded-xl" />
+          ))}
+        </div>
       </div>
     );
   }
 
+  const paymentMethods = [
+    {
+      id: 'paystack',
+      name: 'Paystack',
+      description: 'Online payment gateway',
+      icon: CreditCard,
+      color: 'bg-blue-100 text-blue-600',
+      enabled: paymentMethodSettings.paystack_enabled,
+      min: minDepositSettings.paystack_min
+    },
+    {
+      id: 'manual',
+      name: 'Manual (Mobile Money)',
+      description: 'Direct mobile money transfer',
+      icon: Smartphone,
+      color: 'bg-yellow-100 text-yellow-600',
+      enabled: paymentMethodSettings.manual_enabled,
+      min: minDepositSettings.manual_min
+    },
+    {
+      id: 'hubtel',
+      name: 'Hubtel',
+      description: 'Hubtel payment gateway',
+      icon: CreditCard,
+      color: 'bg-red-100 text-red-600',
+      enabled: paymentMethodSettings.hubtel_enabled,
+      min: minDepositSettings.hubtel_min
+    },
+    {
+      id: 'korapay',
+      name: 'Korapay',
+      description: 'Korapay payment gateway',
+      icon: Globe,
+      color: 'bg-green-100 text-green-600',
+      enabled: paymentMethodSettings.korapay_enabled,
+      min: minDepositSettings.korapay_min
+    },
+    {
+      id: 'moolre',
+      name: 'Moolre',
+      description: 'Moolre Direct Mobile Money',
+      icon: Banknote,
+      color: 'bg-purple-100 text-purple-600',
+      enabled: paymentMethodSettings.moolre_enabled,
+      min: minDepositSettings.moolre_min
+    },
+    {
+      id: 'moolre_web',
+      name: 'Moolre Web',
+      description: 'Moolre Web Portal payment',
+      icon: Globe,
+      color: 'bg-indigo-100 text-indigo-600',
+      enabled: paymentMethodSettings.moolre_web_enabled,
+      min: minDepositSettings.moolre_web_min
+    }
+  ];
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="space-y-8 animate-in fade-in duration-500">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">Payment Methods</h2>
-          <p className="text-gray-600 mt-1">Enable or disable payment methods for users</p>
+          <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">Payment Methods</h2>
+          <p className="text-muted-foreground mt-1">Configure available payment options and deposit limits.</p>
         </div>
         <Button
           onClick={() => refetch()}
           disabled={isLoading}
           variant="outline"
           size="sm"
-          className="flex items-center gap-2"
+          className="gap-2 transition-all hover:bg-gray-100"
         >
           <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-          Refresh
+          Refresh Status
         </Button>
       </div>
 
-      {/* Payment Methods Settings */}
-      <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-8 shadow-sm">
-        <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">Available Payment Methods</h2>
-        <div className="space-y-4">
-          {/* Paystack */}
-          <div className="flex items-center justify-between p-4 bg-white/50 rounded-xl border-2 border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg flex items-center justify-center">
-                <CheckCircle className="w-5 h-5 text-white" />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {paymentMethods.map((method) => (
+          <Card key={method.id} className={`group transition-all duration-300 hover:shadow-lg border-2 ${method.enabled ? 'border-primary/10' : 'border-gray-100 bg-gray-50/50'}`}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <div className={`p-2 rounded-lg ${method.color} transition-colors group-hover:scale-110 duration-300`}>
+                <method.icon className="w-5 h-5" />
               </div>
-              <div>
-                <p className="font-semibold text-gray-900">Paystack</p>
-                <p className="text-sm text-gray-600">Online payment gateway</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <Label htmlFor="paystack-min" className="text-sm text-gray-700 whitespace-nowrap">Min: ₵</Label>
-                <Input
-                  id="paystack-min"
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  value={minDepositSettings.paystack_min}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (value === '' || parseFloat(value) >= 0) {
-                      setMinDepositSettings(prev => ({ ...prev, paystack_min: value }));
-                    }
-                  }}
-                  onBlur={(e) => {
-                    const value = parseFloat(e.target.value);
-                    if (!isNaN(value) && value > 0) {
-                      handleUpdateMinDeposit('paystack', value);
-                    }
-                  }}
-                  className="w-20 h-9 text-sm"
-                />
-              </div>
-              <Button
-                onClick={() => handleTogglePaymentMethod('paystack', !paymentMethodSettings.paystack_enabled)}
-                variant={paymentMethodSettings.paystack_enabled ? "default" : "outline"}
-                size="sm"
+              <Switch
+                checked={method.enabled}
+                onCheckedChange={(checked) => handleTogglePaymentMethod(method.id, checked)}
                 disabled={togglePaymentMethod.isPending}
-                className={paymentMethodSettings.paystack_enabled ? "bg-green-600 hover:bg-green-700" : ""}
-              >
-                {paymentMethodSettings.paystack_enabled ? (
-                  <>
-                    <Power className="w-4 h-4 mr-2" />
-                    Enabled
-                  </>
-                ) : (
-                  <>
-                    <PowerOff className="w-4 h-4 mr-2" />
-                    Disabled
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-
-          {/* Manual */}
-          <div className="p-4 bg-white/50 rounded-xl border-2 border-gray-200 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-lg flex items-center justify-center">
-                  <Wallet className="w-5 h-5 text-white" />
-                </div>
+                aria-label={`Toggle ${method.name}`}
+              />
+            </CardHeader>
+            <CardContent>
+              <div className="flex justify-between items-start mb-4">
                 <div>
-                  <p className="font-semibold text-gray-900">Manual (Mobile Money)</p>
-                  <p className="text-sm text-gray-600">MTN Mobile Money payment</p>
+                  <CardTitle className="text-lg font-semibold">{method.name}</CardTitle>
+                  <CardDescription className="text-xs mt-1">
+                    {method.description}
+                  </CardDescription>
                 </div>
+                <Badge variant={method.enabled ? "default" : "secondary"} className={method.enabled ? "bg-green-500 hover:bg-green-600" : "bg-gray-200 text-gray-500"}>
+                  {method.enabled ? 'Active' : 'Inactive'}
+                </Badge>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <Label htmlFor="manual-min" className="text-sm text-gray-700 whitespace-nowrap">Min: ₵</Label>
+
+              <div className="space-y-2 pt-2 border-t">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor={`${method.id}-min`} className="text-sm font-medium text-gray-600">
+                    Min Deposit (₵)
+                  </Label>
                   <Input
-                    id="manual-min"
+                    id={`${method.id}-min`}
                     type="number"
                     step="0.01"
                     min="0.01"
-                    value={minDepositSettings.manual_min}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value === '' || parseFloat(value) >= 0) {
-                        setMinDepositSettings(prev => ({ ...prev, manual_min: value }));
-                      }
-                    }}
+                    defaultValue={method.min}
                     onBlur={(e) => {
-                      const value = parseFloat(e.target.value);
-                      if (!isNaN(value) && value > 0) {
-                        handleUpdateMinDeposit('manual', value);
+                      const val = parseFloat(e.target.value);
+                      if (!isNaN(val) && val > 0 && val !== method.min) {
+                        handleUpdateMinDeposit(method.id, val);
                       }
                     }}
-                    className="w-20 h-9 text-sm"
+                    className="w-24 h-8 text-right font-mono text-sm"
                   />
                 </div>
-                <Button
-                  onClick={() => handleTogglePaymentMethod('manual', !paymentMethodSettings.manual_enabled)}
-                  variant={paymentMethodSettings.manual_enabled ? "default" : "outline"}
-                  size="sm"
-                  disabled={togglePaymentMethod.isPending}
-                  className={paymentMethodSettings.manual_enabled ? "bg-green-600 hover:bg-green-700" : ""}
-                >
-                  {paymentMethodSettings.manual_enabled ? (
-                    <>
-                      <Power className="w-4 h-4 mr-2" />
-                      Enabled
-                    </>
-                  ) : (
-                    <>
-                      <PowerOff className="w-4 h-4 mr-2" />
-                      Disabled
-                    </>
-                  )}
-                </Button>
               </div>
-            </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
-            {/* Manual Deposit Details Editor */}
-            <div className="mt-4 pt-4 border-t border-gray-200 space-y-4">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-semibold text-gray-900">Deposit Details</h3>
-                <Button
-                  onClick={handleSaveManualDepositDetails}
-                  size="sm"
-                  disabled={updateManualDepositDetails.isPending}
-                  className="bg-indigo-600 hover:bg-indigo-700"
-                >
-                  <Save className="w-4 h-4 mr-2" />
-                  {updateManualDepositDetails.isPending ? 'Saving...' : 'Save Details'}
-                </Button>
+      <Separator className="my-8" />
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2">
+          <Card className="border-2 border-primary/5 shadow-md">
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-yellow-100 text-yellow-700 rounded-lg">
+                  <SettingsIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <CardTitle>Manual Deposit Settings</CardTitle>
+                  <CardDescription>Configure the details shown to users for manual transfers.</CardDescription>
+                </div>
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="manual-phone" className="text-sm font-medium text-gray-700">
-                    Phone Number
-                  </Label>
+                  <Label htmlFor="manual-phone">Momo Number</Label>
                   <Input
                     id="manual-phone"
-                    type="text"
                     value={manualDepositDetails.phone_number}
                     onChange={(e) => setManualDepositDetails(prev => ({ ...prev, phone_number: e.target.value }))}
                     placeholder="0559272762"
-                    className="w-full"
                   />
                 </div>
-
                 <div className="space-y-2">
-                  <Label htmlFor="manual-account-name" className="text-sm font-medium text-gray-700">
-                    Account Name
-                  </Label>
+                  <Label htmlFor="manual-account">Account Name</Label>
                   <Input
-                    id="manual-account-name"
-                    type="text"
+                    id="manual-account"
                     value={manualDepositDetails.account_name}
                     onChange={(e) => setManualDepositDetails(prev => ({ ...prev, account_name: e.target.value }))}
-                    placeholder="MTN - APPIAH MANASSEH ATTAH"
-                    className="w-full"
+                    placeholder="MTN - NAME"
                   />
                 </div>
               </div>
-
               <div className="space-y-2">
-                <Label htmlFor="manual-instructions" className="text-sm font-medium text-gray-700">
-                  Instructions
-                </Label>
+                <Label htmlFor="manual-instructions">Instructions</Label>
                 <Textarea
                   id="manual-instructions"
                   value={manualDepositDetails.instructions}
                   onChange={(e) => setManualDepositDetails(prev => ({ ...prev, instructions: e.target.value }))}
-                  placeholder="Enter instructions for manual deposit..."
-                  rows={4}
-                  className="w-full resize-none"
+                  placeholder="Enter step-by-step instructions..."
+                  className="min-h-[120px] resize-y font-mono text-sm"
                 />
-                <p className="text-xs text-gray-500">
-                  Use newlines to separate instruction steps. Use \n for line breaks.
+                <p className="text-xs text-muted-foreground">
+                  Use newlines to separate steps.
                 </p>
               </div>
+            </CardContent>
+            <CardFooter className="bg-gray-50/50 justify-end rounded-b-xl border-t p-4">
+              <Button
+                onClick={handleSaveManualDepositDetails}
+                disabled={updateManualDepositDetails.isPending}
+                className="bg-primary hover:bg-primary/90 transition-all shadow-sm"
+              >
+                <Save className="w-4 h-4 mr-2" />
+                {updateManualDepositDetails.isPending ? 'Saving...' : 'Save Configuration'}
+              </Button>
+            </CardFooter>
+          </Card>
+        </div>
 
-              {/* WhatsApp Number Settings */}
-              <div className="pt-4 border-t border-gray-200 space-y-4">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-semibold text-gray-900">WhatsApp Support</h3>
-                  <Button
-                    onClick={handleSaveWhatsappNumber}
-                    size="sm"
-                    disabled={updateWhatsappNumber.isPending}
-                    className="bg-green-600 hover:bg-green-700"
-                  >
-                    <Save className="w-4 h-4 mr-2" />
-                    {updateWhatsappNumber.isPending ? 'Saving...' : 'Save Number'}
-                  </Button>
+        <div className="lg:col-span-1">
+          <Card className="border-2 border-green-100 shadow-md h-full">
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-green-100 text-green-700 rounded-lg">
+                  <MessageCircle className="w-5 h-5" />
                 </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="whatsapp-number" className="text-sm font-medium text-gray-700">
-                    WhatsApp Number
-                  </Label>
+                <div>
+                  <CardTitle>Support Contact</CardTitle>
+                  <CardDescription>WhatsApp number for user support.</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="whatsapp-number">WhatsApp Number</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-gray-400 text-sm">Now</span>
                   <Input
                     id="whatsapp-number"
-                    type="text"
                     value={whatsappNumber}
                     onChange={(e) => setWhatsappNumber(e.target.value)}
                     placeholder="233xxxxxxxxx"
-                    className="w-full"
+                    className="pl-12"
                   />
-                  <p className="text-xs text-gray-500">
-                    Enter the number in international format without the plus sign (e.g., 233500865092).
-                  </p>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Format: 233... (No +)
+                </p>
               </div>
-            </div>
-          </div>
-
-          {/* Hubtel */}
-          <div className="flex items-center justify-between p-4 bg-white/50 rounded-xl border-2 border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-red-600 rounded-lg flex items-center justify-center">
-                <CheckCircle className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <p className="font-semibold text-gray-900">Hubtel</p>
-                <p className="text-sm text-gray-600">Hubtel payment gateway</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <Label htmlFor="hubtel-min" className="text-sm text-gray-700 whitespace-nowrap">Min: ₵</Label>
-                <Input
-                  id="hubtel-min"
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  value={minDepositSettings.hubtel_min}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (value === '' || parseFloat(value) >= 0) {
-                      setMinDepositSettings(prev => ({ ...prev, hubtel_min: value }));
-                    }
-                  }}
-                  onBlur={(e) => {
-                    const value = parseFloat(e.target.value);
-                    if (!isNaN(value) && value > 0) {
-                      handleUpdateMinDeposit('hubtel', value);
-                    }
-                  }}
-                  className="w-20 h-9 text-sm"
-                />
-              </div>
+            </CardContent>
+            <CardFooter className="bg-green-50/50 justify-end rounded-b-xl border-t p-4 mt-auto">
               <Button
-                onClick={() => handleTogglePaymentMethod('hubtel', !paymentMethodSettings.hubtel_enabled)}
-                variant={paymentMethodSettings.hubtel_enabled ? "default" : "outline"}
-                size="sm"
-                disabled={togglePaymentMethod.isPending}
-                className={paymentMethodSettings.hubtel_enabled ? "bg-green-600 hover:bg-green-700" : ""}
+                onClick={handleSaveWhatsappNumber}
+                disabled={updateWhatsappNumber.isPending}
+                variant="outline"
+                className="w-full hover:bg-green-50 hover:text-green-700 border-green-200"
               >
-                {paymentMethodSettings.hubtel_enabled ? (
-                  <>
-                    <Power className="w-4 h-4 mr-2" />
-                    Enabled
-                  </>
-                ) : (
-                  <>
-                    <PowerOff className="w-4 h-4 mr-2" />
-                    Disabled
-                  </>
-                )}
+                <Save className="w-4 h-4 mr-2" />
+                Update Number
               </Button>
-            </div>
-          </div>
-
-          {/* Korapay */}
-          <div className="flex items-center justify-between p-4 bg-white/50 rounded-xl border-2 border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-teal-600 rounded-lg flex items-center justify-center">
-                <CheckCircle className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <p className="font-semibold text-gray-900">Korapay</p>
-                <p className="text-sm text-gray-600">Korapay payment gateway</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <Label htmlFor="korapay-min" className="text-sm text-gray-700 whitespace-nowrap">Min: ₵</Label>
-                <Input
-                  id="korapay-min"
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  value={minDepositSettings.korapay_min}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (value === '' || parseFloat(value) >= 0) {
-                      setMinDepositSettings(prev => ({ ...prev, korapay_min: value }));
-                    }
-                  }}
-                  onBlur={(e) => {
-                    const value = parseFloat(e.target.value);
-                    if (!isNaN(value) && value > 0) {
-                      handleUpdateMinDeposit('korapay', value);
-                    }
-                  }}
-                  className="w-20 h-9 text-sm"
-                />
-              </div>
-              <Button
-                onClick={() => handleTogglePaymentMethod('korapay', !paymentMethodSettings.korapay_enabled)}
-                variant={paymentMethodSettings.korapay_enabled ? "default" : "outline"}
-                size="sm"
-                disabled={togglePaymentMethod.isPending}
-                className={paymentMethodSettings.korapay_enabled ? "bg-green-600 hover:bg-green-700" : ""}
-              >
-                {paymentMethodSettings.korapay_enabled ? (
-                  <>
-                    <Power className="w-4 h-4 mr-2" />
-                    Enabled
-                  </>
-                ) : (
-                  <>
-                    <PowerOff className="w-4 h-4 mr-2" />
-                    Disabled
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-
-          {/* Moolre */}
-          <div className="flex items-center justify-between p-4 bg-white/50 rounded-xl border-2 border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center">
-                <CheckCircle className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <p className="font-semibold text-gray-900">Moolre</p>
-                <p className="text-sm text-gray-600">Moolre Mobile Money payment</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <Label htmlFor="moolre-min" className="text-sm text-gray-700 whitespace-nowrap">Min: ₵</Label>
-                <Input
-                  id="moolre-min"
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  value={minDepositSettings.moolre_min}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (value === '' || parseFloat(value) >= 0) {
-                      setMinDepositSettings(prev => ({ ...prev, moolre_min: value }));
-                    }
-                  }}
-                  onBlur={(e) => {
-                    const value = parseFloat(e.target.value);
-                    if (!isNaN(value) && value > 0) {
-                      handleUpdateMinDeposit('moolre', value);
-                    }
-                  }}
-                  className="w-20 h-9 text-sm"
-                />
-              </div>
-              <Button
-                onClick={() => handleTogglePaymentMethod('moolre', !paymentMethodSettings.moolre_enabled)}
-                variant={paymentMethodSettings.moolre_enabled ? "default" : "outline"}
-                size="sm"
-                disabled={togglePaymentMethod.isPending}
-                className={paymentMethodSettings.moolre_enabled ? "bg-green-600 hover:bg-green-700" : ""}
-              >
-                {paymentMethodSettings.moolre_enabled ? (
-                  <>
-                    <Power className="w-4 h-4 mr-2" />
-                    Enabled
-                  </>
-                ) : (
-                  <>
-                    <PowerOff className="w-4 h-4 mr-2" />
-                    Disabled
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-
-          {/* Moolre Web */}
-          <div className="flex items-center justify-between p-4 bg-white/50 rounded-xl border-2 border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center">
-                <CheckCircle className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <p className="font-semibold text-gray-900">Moolre Web</p>
-                <p className="text-sm text-gray-600">Moolre Web Portal payment</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <Label htmlFor="moolre-web-min" className="text-sm text-gray-700 whitespace-nowrap">Min: ₵</Label>
-                <Input
-                  id="moolre-web-min"
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  value={minDepositSettings.moolre_web_min}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (value === '' || parseFloat(value) >= 0) {
-                      setMinDepositSettings(prev => ({ ...prev, moolre_web_min: value }));
-                    }
-                  }}
-                  onBlur={(e) => {
-                    const value = parseFloat(e.target.value);
-                    if (!isNaN(value) && value > 0) {
-                      handleUpdateMinDeposit('moolre_web', value);
-                    }
-                  }}
-                  className="w-20 h-9 text-sm"
-                />
-              </div>
-              <Button
-                onClick={() => handleTogglePaymentMethod('moolre_web', !paymentMethodSettings.moolre_web_enabled)}
-                variant={paymentMethodSettings.moolre_web_enabled ? "default" : "outline"}
-                size="sm"
-                disabled={togglePaymentMethod.isPending}
-                className={paymentMethodSettings.moolre_web_enabled ? "bg-green-600 hover:bg-green-700" : ""}
-              >
-                {paymentMethodSettings.moolre_web_enabled ? (
-                  <>
-                    <Power className="w-4 h-4 mr-2" />
-                    Enabled
-                  </>
-                ) : (
-                  <>
-                    <PowerOff className="w-4 h-4 mr-2" />
-                    Disabled
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
+            </CardFooter>
+          </Card>
         </div>
       </div>
     </div>
   );
 });
 
+// Helper icon component
+const SettingsIcon = (props) => (
+  <svg
+    {...props}
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+)
+
 AdminSettings.displayName = 'AdminSettings';
 
 export default AdminSettings;
-
