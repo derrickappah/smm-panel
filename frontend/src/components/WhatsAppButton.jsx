@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { usePaymentMethods } from '@/hooks/usePaymentMethods';
 
 const WhatsAppButton = ({ message, className = "" }) => {
   const buttonRef = useRef(null);
@@ -113,10 +114,13 @@ const WhatsAppButton = ({ message, className = "" }) => {
     setIsDragging(false);
   };
 
+  const { whatsappNumber } = usePaymentMethods();
+
   const handleWhatsAppClick = (e) => {
     // Only open WhatsApp if we haven't dragged (i.e., it was just a click)
     if (!hasDragged) {
-      const whatsappUrl = `https://wa.me/233500865092`;
+      const number = whatsappNumber || '0500865092';
+      const whatsappUrl = `https://wa.me/233${number.startsWith('0') ? number.substring(1) : number}`;
 
       // Open WhatsApp in new tab/window
       window.open(whatsappUrl, '_blank');

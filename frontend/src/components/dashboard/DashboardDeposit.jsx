@@ -1,4 +1,5 @@
 import React, { useMemo, useCallback, useState, useEffect } from 'react';
+import { usePaymentMethods } from '@/hooks/usePaymentMethods';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -41,6 +42,10 @@ const DashboardDeposit = React.memo(({
     instructions: 'Make PAYMENT to 0559272762\nMTN - APPIAH MANASSEH ATTAH\nuse your USERNAME as reference\nsend SCREENSHOT of PAYMENT when done'
   }
 }) => {
+  const { whatsappNumber } = usePaymentMethods();
+  const displayWhatsappNumber = whatsappNumber || '0500865092';
+  const whatsappLink = `https://wa.me/233${displayWhatsappNumber.startsWith('0') ? displayWhatsappNumber.substring(1) : displayWhatsappNumber}`;
+
   const enabledMethods = useMemo(() => [
     paymentMethodSettings.paystack_enabled && 'paystack',
     paymentMethodSettings.manual_enabled && 'manual',
@@ -295,12 +300,12 @@ const DashboardDeposit = React.memo(({
               <br />
               <span className="mt-1 block">Text us on WhatsApp: </span>
               <a
-                href="https://wa.me/233500865092"
+                href={whatsappLink}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:blue-500 rounded"
               >
-                0500865092
+                {displayWhatsappNumber}
               </a>
             </p>
           </div>

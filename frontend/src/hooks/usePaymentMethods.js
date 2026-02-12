@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 let cachedPaymentSettings = null;
 let cachedMinDepositSettings = null;
 let cachedManualDepositDetails = null;
+let cachedWhatsAppNumber = null;
 let cachedDepositMethod = null;
 let prefetchPromise = null;
 
@@ -14,7 +15,9 @@ export const prefetchPaymentSettings = async () => {
     return {
       paymentMethodSettings: cachedPaymentSettings,
       minDepositSettings: cachedMinDepositSettings,
+      minDepositSettings: cachedMinDepositSettings,
       manualDepositDetails: cachedManualDepositDetails,
+      whatsappNumber: cachedWhatsAppNumber,
       depositMethod: cachedDepositMethod
     };
   }
@@ -45,7 +48,8 @@ export const prefetchPaymentSettings = async () => {
           'payment_method_moolre_web_min_deposit',
           'manual_deposit_phone_number',
           'manual_deposit_account_name',
-          'manual_deposit_instructions'
+          'manual_deposit_instructions',
+          'whatsapp_number'
         ]);
 
       if (error) {
@@ -84,6 +88,8 @@ export const prefetchPaymentSettings = async () => {
           instructions: settings.manual_deposit_instructions || 'Make PAYMENT to 0559272762\nMTN - APPIAH MANASSEH ATTAH\nuse your USERNAME as reference\nsend SCREENSHOT of PAYMENT when done'
         };
 
+        cachedWhatsAppNumber = settings.whatsapp_number || '0500865092';
+
         // Auto-select method based on what's enabled
         if (!cachedPaymentSettings.paystack_enabled && cachedPaymentSettings.manual_enabled && !cachedPaymentSettings.hubtel_enabled && !cachedPaymentSettings.korapay_enabled && !cachedPaymentSettings.moolre_enabled && !cachedPaymentSettings.moolre_web_enabled) {
           cachedDepositMethod = 'manual';
@@ -105,7 +111,9 @@ export const prefetchPaymentSettings = async () => {
         return {
           paymentMethodSettings: cachedPaymentSettings,
           minDepositSettings: cachedMinDepositSettings,
+          minDepositSettings: cachedMinDepositSettings,
           manualDepositDetails: cachedManualDepositDetails,
+          whatsappNumber: cachedWhatsAppNumber,
           depositMethod: cachedDepositMethod
         };
       }
@@ -146,12 +154,14 @@ export const usePaymentMethods = () => {
     account_name: 'MTN - APPIAH MANASSEH ATTAH',
     instructions: 'Make PAYMENT to 0559272762\nMTN - APPIAH MANASSEH ATTAH\nuse your USERNAME as reference\nsend SCREENSHOT of PAYMENT when done'
   });
+  const [whatsappNumber, setWhatsappNumber] = useState(cachedWhatsAppNumber || '0500865092');
 
   const fetchPaymentSettings = useCallback(async (force = false) => {
     if (!force && cachedPaymentSettings && !hasLoadedSettings.current) {
       setPaymentMethodSettings(cachedPaymentSettings);
       setMinDepositSettings(cachedMinDepositSettings);
       setManualDepositDetails(cachedManualDepositDetails);
+      setWhatsappNumber(cachedWhatsAppNumber);
       setDepositMethod(cachedDepositMethod);
       hasLoadedSettings.current = true;
       return;
@@ -162,6 +172,7 @@ export const usePaymentMethods = () => {
       setPaymentMethodSettings(data.paymentMethodSettings);
       setMinDepositSettings(data.minDepositSettings);
       setManualDepositDetails(data.manualDepositDetails);
+      setWhatsappNumber(data.whatsappNumber);
       setDepositMethod(data.depositMethod);
       hasLoadedSettings.current = true;
     }
@@ -173,6 +184,7 @@ export const usePaymentMethods = () => {
       setPaymentMethodSettings(cachedPaymentSettings);
       setMinDepositSettings(cachedMinDepositSettings);
       setManualDepositDetails(cachedManualDepositDetails);
+      setWhatsappNumber(cachedWhatsAppNumber);
       setDepositMethod(cachedDepositMethod);
       hasLoadedSettings.current = true;
     } else if (!hasLoadedSettings.current) {
@@ -195,6 +207,7 @@ export const usePaymentMethods = () => {
     paymentMethodSettings,
     minDepositSettings,
     manualDepositDetails,
+    whatsappNumber,
     fetchPaymentSettings,
   };
 };

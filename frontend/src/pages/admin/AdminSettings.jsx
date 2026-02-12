@@ -30,8 +30,10 @@ const AdminSettings = memo(() => {
   const [manualDepositDetails, setManualDepositDetails] = useState({
     phone_number: '0559272762',
     account_name: 'MTN - APPIAH MANASSEH ATTAH',
+    account_name: 'MTN - APPIAH MANASSEH ATTAH',
     instructions: 'Make PAYMENT to 0559272762\nMTN - APPIAH MANASSEH ATTAH\nuse your USERNAME as reference\nsend SCREENSHOT of PAYMENT when done'
   });
+  const [whatsappNumber, setWhatsappNumber] = useState('0500865092');
 
   // Fetch payment method settings
   const { data: settingsData, isLoading, refetch } = useQuery({
@@ -55,7 +57,8 @@ const AdminSettings = memo(() => {
           'payment_method_moolre_web_min_deposit',
           'manual_deposit_phone_number',
           'manual_deposit_account_name',
-          'manual_deposit_instructions'
+          'manual_deposit_instructions',
+          'whatsapp_number'
         ]);
 
       if (error) throw error;
@@ -74,6 +77,8 @@ const AdminSettings = memo(() => {
           settings.manual_deposit_account_name = item.value;
         } else if (item.key === 'manual_deposit_instructions') {
           settings.manual_deposit_instructions = item.value;
+        } else if (item.key === 'whatsapp_number') {
+          settings.whatsapp_number = item.value;
         }
       });
 
@@ -108,13 +113,14 @@ const AdminSettings = memo(() => {
         account_name: settingsData.manual_deposit_account_name ?? prev.account_name,
         instructions: settingsData.manual_deposit_instructions ?? prev.instructions,
       }));
+      setWhatsappNumber(settingsData.whatsapp_number ?? whatsappNumber);
     }
   }, [settingsData]);
 
   const togglePaymentMethod = useMutation({
     mutationFn: async ({ method, enabled }) => {
       let settingKey, description, stateKey, displayName;
-      
+
       if (method === 'paystack') {
         settingKey = 'payment_method_paystack_enabled';
         description = 'Enable/disable Paystack payment method';
@@ -148,7 +154,7 @@ const AdminSettings = memo(() => {
       } else {
         throw new Error('Unknown payment method');
       }
-      
+
       const { error } = await supabase
         .from('app_settings')
         .upsert({
@@ -169,7 +175,7 @@ const AdminSettings = memo(() => {
       }));
       queryClient.invalidateQueries({ queryKey: ['admin', 'payment-settings'] });
       queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
-      
+
       // Log settings change
       try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -190,7 +196,7 @@ const AdminSettings = memo(() => {
         // Silently fail - don't block settings update
         console.warn('Failed to log settings change:', error);
       }
-      
+
       toast.success(`${displayName} payment method ${enabled ? 'enabled' : 'disabled'}`);
     },
     onError: (error) => {
@@ -206,7 +212,7 @@ const AdminSettings = memo(() => {
       }
 
       let settingKey, description, stateKey, displayName;
-      
+
       if (method === 'paystack') {
         settingKey = 'payment_method_paystack_min_deposit';
         description = 'Minimum deposit amount for Paystack payment method';
@@ -240,7 +246,7 @@ const AdminSettings = memo(() => {
       } else {
         throw new Error('Unknown payment method');
       }
-      
+
       const { error } = await supabase
         .from('app_settings')
         .upsert({
@@ -260,7 +266,7 @@ const AdminSettings = memo(() => {
         [stateKey]: amount
       }));
       queryClient.invalidateQueries({ queryKey: ['admin', 'payment-settings'] });
-      
+
       // Log settings change
       try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -280,7 +286,7 @@ const AdminSettings = memo(() => {
         // Silently fail - don't block settings update
         console.warn('Failed to log settings change:', error);
       }
-      
+
       toast.success(`${displayName} minimum deposit updated to ₵${amount}`);
     },
     onError: (error) => {
@@ -358,6 +364,40 @@ const AdminSettings = memo(() => {
       instructions: manualDepositDetails.instructions
     });
   }, [updateManualDepositDetails, manualDepositDetails]);
+
+  const updateWhatsappNumber = useMutation({
+    mutationFn: async (number) => {
+      if (!number || !number.trim()) {
+        throw new Error('WhatsApp number is required');
+      }
+
+      const { error } = await supabase
+        .from('app_settings')
+        .upsert({
+          key: 'whatsapp_number',
+          value: number.trim(),
+          description: 'WhatsApp number for support and deposits'
+        }, {
+          onConflict: 'key'
+        });
+
+      if (error) throw error;
+      return number.trim();
+    },
+    onSuccess: (number) => {
+      setWhatsappNumber(number);
+      queryClient.invalidateQueries({ queryKey: ['admin', 'payment-settings'] });
+      queryClient.invalidateQueries({ queryKey: ['payment-methods'] });
+      toast.success('WhatsApp number updated successfully');
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to update WhatsApp number');
+    },
+  });
+
+  const handleSaveWhatsappNumber = useCallback(() => {
+    updateWhatsappNumber.mutate(whatsappNumber);
+  }, [updateWhatsappNumber, whatsappNumber]);
 
   if (isLoading) {
     return (
@@ -446,7 +486,7 @@ const AdminSettings = memo(() => {
               </Button>
             </div>
           </div>
-          
+
           {/* Manual */}
           <div className="p-4 bg-white/50 rounded-xl border-2 border-gray-200 space-y-4">
             <div className="flex items-center justify-between">
@@ -504,7 +544,7 @@ const AdminSettings = memo(() => {
                 </Button>
               </div>
             </div>
-            
+
             {/* Manual Deposit Details Editor */}
             <div className="mt-4 pt-4 border-t border-gray-200 space-y-4">
               <div className="flex items-center justify-between mb-2">
@@ -519,7 +559,7 @@ const AdminSettings = memo(() => {
                   {updateManualDepositDetails.isPending ? 'Saving...' : 'Save Details'}
                 </Button>
               </div>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="manual-phone" className="text-sm font-medium text-gray-700">
@@ -534,7 +574,7 @@ const AdminSettings = memo(() => {
                     className="w-full"
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="manual-account-name" className="text-sm font-medium text-gray-700">
                     Account Name
@@ -549,7 +589,7 @@ const AdminSettings = memo(() => {
                   />
                 </div>
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="manual-instructions" className="text-sm font-medium text-gray-700">
                   Instructions
@@ -566,9 +606,42 @@ const AdminSettings = memo(() => {
                   Use newlines to separate instruction steps. Use \n for line breaks.
                 </p>
               </div>
+
+              {/* WhatsApp Number Settings */}
+              <div className="pt-4 border-t border-gray-200 space-y-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-semibold text-gray-900">WhatsApp Support</h3>
+                  <Button
+                    onClick={handleSaveWhatsappNumber}
+                    size="sm"
+                    disabled={updateWhatsappNumber.isPending}
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    {updateWhatsappNumber.isPending ? 'Saving...' : 'Save Number'}
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="whatsapp-number" className="text-sm font-medium text-gray-700">
+                    WhatsApp Number
+                  </Label>
+                  <Input
+                    id="whatsapp-number"
+                    type="text"
+                    value={whatsappNumber}
+                    onChange={(e) => setWhatsappNumber(e.target.value)}
+                    placeholder="233xxxxxxxxx"
+                    className="w-full"
+                  />
+                  <p className="text-xs text-gray-500">
+                    Enter the number in international format without the plus sign (e.g., 233500865092).
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
-          
+
           {/* Hubtel */}
           <div className="flex items-center justify-between p-4 bg-white/50 rounded-xl border-2 border-gray-200">
             <div className="flex items-center gap-3">
@@ -625,7 +698,7 @@ const AdminSettings = memo(() => {
               </Button>
             </div>
           </div>
-          
+
           {/* Korapay */}
           <div className="flex items-center justify-between p-4 bg-white/50 rounded-xl border-2 border-gray-200">
             <div className="flex items-center gap-3">
@@ -682,7 +755,7 @@ const AdminSettings = memo(() => {
               </Button>
             </div>
           </div>
-          
+
           {/* Moolre */}
           <div className="flex items-center justify-between p-4 bg-white/50 rounded-xl border-2 border-gray-200">
             <div className="flex items-center gap-3">
@@ -739,7 +812,7 @@ const AdminSettings = memo(() => {
               </Button>
             </div>
           </div>
-          
+
           {/* Moolre Web */}
           <div className="flex items-center justify-between p-4 bg-white/50 rounded-xl border-2 border-gray-200">
             <div className="flex items-center gap-3">
