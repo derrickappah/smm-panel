@@ -46,9 +46,9 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
       if (error) throw error;
 
       const details = {
-        phone_number: '0559272762',
-        account_name: 'MTN - APPIAH MANASSEH ATTAH',
-        instructions: 'Make PAYMENT to 0559272762\nMTN - APPIAH MANASSEH ATTAH\nuse your USERNAME as reference\nsend SCREENSHOT of PAYMENT when done'
+        phone_number: '',
+        account_name: '',
+        instructions: ''
       };
 
       data?.forEach(item => {

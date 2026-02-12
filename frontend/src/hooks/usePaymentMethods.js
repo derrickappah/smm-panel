@@ -23,9 +23,9 @@ export const DEFAULT_PAYMENT_SETTINGS = {
     moolre_web_min: 1
   },
   manualDepositDetails: {
-    phone_number: '0559272762',
-    account_name: 'MTN - APPIAH MANASSEH ATTAH',
-    instructions: 'Make PAYMENT to 0559272762\nMTN - APPIAH MANASSEH ATTAH\nuse your USERNAME as reference\nsend SCREENSHOT of PAYMENT when done'
+    phone_number: '',
+    account_name: '',
+    instructions: ''
   },
   whatsappNumber: '0500865092'
 };
