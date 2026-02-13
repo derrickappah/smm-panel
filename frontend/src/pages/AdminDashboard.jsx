@@ -34,6 +34,7 @@ const AdminSMMCost = lazy(() => import('@/pages/admin/AdminSMMCost'));
 const AdminSMMGen = lazy(() => import('@/pages/admin/AdminSMMGen'));
 const AdminJBSMMPanel = lazy(() => import('@/pages/admin/AdminJBSMMPanel'));
 const AdminWorldOfSMM = lazy(() => import('@/pages/admin/AdminWorldOfSMM'));
+const AdminG1618 = lazy(() => import('@/pages/admin/AdminG1618'));
 const AdminMoolre = lazy(() => import('@/pages/admin/AdminMoolre'));
 const AdminFAQ = lazy(() => import('@/pages/admin/AdminFAQ'));
 const AdminTerms = lazy(() => import('@/pages/admin/AdminTerms'));
@@ -81,7 +82,9 @@ const AdminDashboard = memo(({ user, onLogout }) => {
         'smmcost': 'smmcost',
         'smmgen': 'smmgen',
         'jbsmmpanel': 'jbsmmpanel',
+        'jbsmmpanel': 'jbsmmpanel',
         'worldofsmm': 'worldofsmm',
+        'g1618': 'g1618',
         'moolre': 'moolre',
         'faq': 'faq',
         'terms': 'terms',
@@ -327,7 +330,9 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     smmcost: 'SMMCost Integration',
     smmgen: 'SMMGen Integration',
     jbsmmpanel: 'JB SMM Panel Integration',
+    jbsmmpanel: 'JB SMM Panel Integration',
     worldofsmm: 'World of SMM Integration',
+    g1618: 'G1618 Integration',
     moolre: 'Moolre Transactions'
   };
 
@@ -353,6 +358,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     { id: 'smmgen', label: 'SMMGen', icon: Server },
     { id: 'jbsmmpanel', label: 'JB SMM Panel', icon: Server },
     { id: 'worldofsmm', label: 'World of SMM', icon: Server },
+    { id: 'g1618', label: 'G1618', icon: Server },
     { id: 'moolre', label: 'Moolre', icon: CreditCard },
   ];
 
@@ -463,8 +469,8 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                             <button
                               onClick={() => handleSectionChange(item.id)}
                               className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left transition-colors duration-200 ${activeSection === item.id
-                                  ? 'bg-indigo-600 text-white'
-                                  : 'text-gray-700 hover:bg-gray-100'
+                                ? 'bg-indigo-600 text-white'
+                                : 'text-gray-700 hover:bg-gray-100'
                                 }`}
                             >
                               <Icon className="w-5 h-5" />
@@ -578,8 +584,8 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                             key={item.id}
                             onClick={() => handleSectionChange(item.id)}
                             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 relative ${activeSection === item.id
-                                ? 'bg-indigo-600 text-white hover:bg-indigo-700'
-                                : 'text-gray-700 hover:bg-gray-100'
+                              ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                              : 'text-gray-700 hover:bg-gray-100'
                               } ${sidebarCollapsed ? 'justify-center' : ''}`}
                             title={sidebarCollapsed ? item.label : ''}
                           >
@@ -774,6 +780,13 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                 <TabsContent value="worldofsmm" className="lg:mt-0">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminWorldOfSMM />
+                  </Suspense>
+                </TabsContent>
+
+                {/* G1618 Section */}
+                <TabsContent value="g1618" className="lg:mt-0">
+                  <Suspense fallback={<ComponentLoader />}>
+                    <AdminG1618 />
                   </Suspense>
                 </TabsContent>
 

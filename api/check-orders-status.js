@@ -11,7 +11,9 @@ import {
     mapSMMGenStatus,
     mapSMMCostStatus,
     mapJBSMMPanelStatus,
-    mapWorldOfSMMStatus
+    mapJBSMMPanelStatus,
+    mapWorldOfSMMStatus,
+    mapG1618Status
 } from './utils/statusMapping.js';
 
 const REQUEST_TIMEOUT = 15000; // 15 seconds per provider call
@@ -64,7 +66,9 @@ export default async function handler(req, res) {
             smmgen: orders.filter(o => o.smmgen_order_id && o.smmgen_order_id !== "order not placed at smm gen" && o.smmgen_order_id !== o.id),
             smmcost: orders.filter(o => o.smmcost_order_id && String(o.smmcost_order_id).toLowerCase() !== "order not placed at smmcost"),
             jbsmmpanel: orders.filter(o => o.jbsmmpanel_order_id && Number(o.jbsmmpanel_order_id) > 0),
-            worldofsmm: orders.filter(o => o.worldofsmm_order_id && o.worldofsmm_order_id !== "order not placed at worldofsmm")
+            jbsmmpanel: orders.filter(o => o.jbsmmpanel_order_id && Number(o.jbsmmpanel_order_id) > 0),
+            worldofsmm: orders.filter(o => o.worldofsmm_order_id && o.worldofsmm_order_id !== "order not placed at worldofsmm"),
+            g1618: orders.filter(o => o.g1618_order_id && o.g1618_order_id !== "order not placed at g1618")
         };
 
         const results = {

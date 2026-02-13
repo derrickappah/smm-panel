@@ -8,7 +8,7 @@ const fetchServices = async () => {
   // Try with rate_unit first, fallback to without it if column doesn't exist
   let { data, error } = await supabase
     .from('services')
-    .select('id, name, description, rate, rate_unit, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only')
+    .select('id, name, description, rate, rate_unit, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only')
     .order('display_order', { ascending: true })
     .order('created_at', { ascending: false });
 
@@ -17,7 +17,7 @@ const fetchServices = async () => {
     console.warn('rate_unit column not found, fetching without it:', error.message);
     const fallbackResult = await supabase
       .from('services')
-      .select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only')
+      .select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only')
       .order('display_order', { ascending: true })
       .order('created_at', { ascending: false });
 

@@ -19,7 +19,9 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
     smmcost_service_id: service.smmcost_service_id || '',
     jbsmmpanel_service_id: service.jbsmmpanel_service_id || '',
     worldofsmm_service_id: service.worldofsmm_service_id || '',
+    g1618_service_id: service.g1618_service_id || '',
     is_combo: service.is_combo || false,
+    combo_service_ids: service.combo_service_ids || [],
     combo_service_ids: service.combo_service_ids || [],
     combo_smmgen_service_ids: service.combo_smmgen_service_ids || [],
     seller_only: service.seller_only || false,
@@ -59,7 +61,9 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
       smmcost_service_id: formData.smmcost_service_id ? parseInt(formData.smmcost_service_id, 10) : null,
       jbsmmpanel_service_id: formData.jbsmmpanel_service_id ? parseInt(formData.jbsmmpanel_service_id, 10) : null,
       worldofsmm_service_id: formData.worldofsmm_service_id || null,
+      g1618_service_id: formData.g1618_service_id || null,
       is_combo: Boolean(formData.is_combo),
+      combo_service_ids: formData.is_combo && formData.combo_service_ids.length > 0
       combo_service_ids: formData.is_combo && formData.combo_service_ids.length > 0
         ? formData.combo_service_ids
         : null,
@@ -199,6 +203,15 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
             onChange={(e) => setFormData({ ...formData, worldofsmm_service_id: e.target.value })}
           />
           <p className="text-xs text-gray-500 mt-1">Enter the World of SMM API service ID for integration</p>
+        </div>
+        <div>
+          <Label>G1618 Service ID</Label>
+          <Input
+            placeholder="G1618 API service ID (optional)"
+            value={formData.g1618_service_id}
+            onChange={(e) => setFormData({ ...formData, g1618_service_id: e.target.value })}
+          />
+          <p className="text-xs text-gray-500 mt-1">Enter the G1618 API service ID for integration</p>
         </div>
       </div>
       <div className="flex items-center space-x-2 p-3 border border-gray-200 rounded-lg bg-yellow-50">

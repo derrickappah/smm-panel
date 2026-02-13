@@ -120,3 +120,25 @@ export const mapWorldOfSMMStatus = (worldofsmmStatus) => {
 
     return null;
 };
+
+/**
+ * Map G1618 status to our status format
+ * @param {string} g1618Status - Status from G1618 API
+ * @returns {string|null} Mapped status or null if unknown
+ */
+export const mapG1618Status = (g1618Status) => {
+    if (!g1618Status) return null;
+
+    const statusString = String(g1618Status).trim();
+    const statusLower = statusString.toLowerCase();
+
+    if (statusLower === 'pending' || statusLower.includes('pending')) return 'pending';
+    if (statusLower === 'in progress' || statusLower.includes('in progress')) return 'in progress';
+    if (statusLower === 'completed' || statusLower.includes('completed')) return 'completed';
+    if (statusLower === 'partial' || statusLower.includes('partial')) return 'partial';
+    if (statusLower === 'processing' || statusLower.includes('processing')) return 'processing';
+    if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower.includes('cancel')) return 'canceled';
+    if (statusLower === 'refunds' || statusLower.includes('refund')) return 'refunds';
+
+    return null;
+};

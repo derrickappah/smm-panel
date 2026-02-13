@@ -84,6 +84,9 @@ export default async function handler(req, res) {
                 } else if (service.worldofsmm_service_id) {
                     provider = 'worldofsmm';
                     provider_service_id = service.worldofsmm_service_id;
+                } else if (service.g1618_service_id) {
+                    provider = 'g1618';
+                    provider_service_id = service.g1618_service_id;
                 }
 
                 if (provider && provider_service_id) {
@@ -233,7 +236,9 @@ export default async function handler(req, res) {
                     if (p === 'smmgen') updateData.smmgen_order_id = pid;
                     if (p === 'smmcost') updateData.smmcost_order_id = pid;
                     if (p === 'jbsmmpanel') updateData.jbsmmpanel_order_id = parseInt(pid);
+                    if (p === 'jbsmmpanel') updateData.jbsmmpanel_order_id = parseInt(pid);
                     if (p === 'worldofsmm') updateData.worldofsmm_order_id = pid;
+                    if (p === 'g1618') updateData.g1618_order_id = pid;
                 }
 
                 await supabase.from('orders').update(updateData).eq('id', order_id);

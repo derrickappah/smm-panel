@@ -24,6 +24,8 @@ export async function placeProviderOrder(provider, params) {
             return await placeSMMCostOrder(service, link, quantity, comments);
         case 'worldofsmm':
             return await placeWorldOfSMMOrder(service, link, quantity, comments);
+        case 'g1618':
+            return await placeG1618Order(service, link, quantity, comments);
         default:
             throw new Error(`Unsupported provider: ${provider}`);
     }
@@ -94,6 +96,8 @@ export async function fetchProviderOrderStatus(provider, providerOrderId) {
             return await fetchSMMCostStatus(providerOrderId);
         case 'worldofsmm':
             return await fetchWorldOfSMMStatus(providerOrderId);
+        case 'g1618':
+            return await fetchG1618Status(providerOrderId);
         default:
             throw new Error(`Unsupported status check provider: ${provider}`);
     }
@@ -117,6 +121,8 @@ export async function fetchProviderOrders(provider, limit = 100) {
             return await fetchSMMCostRecentOrders(limit);
         case 'worldofsmm':
             return await fetchWorldOfSMMRecentOrders(limit);
+        case 'g1618':
+            return await fetchG1618RecentOrders(limit);
         default:
             console.warn(`Provider ${provider} does not support order listing.`);
             return [];
