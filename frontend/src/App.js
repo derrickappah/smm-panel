@@ -639,6 +639,18 @@ function App() {
                     }
                   />
                   <Route
+                    path="/admin/g1618"
+                    element={
+                      user?.role === 'admin' ? (
+                        <AdminDashboard user={user} onLogout={logout} />
+                      ) : user ? (
+                        <Navigate to="/dashboard" />
+                      ) : (
+                        <Navigate to="/auth" />
+                      )
+                    }
+                  />
+                  <Route
                     path="/admin/moolre"
                     element={
                       user?.role === 'admin' ? (
