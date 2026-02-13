@@ -548,6 +548,8 @@ const OrderHistory = ({ user, onLogout }) => {
                               <div className="flex justify-center">
                                 {(() => {
                                   // Show check button if order has valid SMMCost, JB SMM Panel, or SMMGen ID
+                                  const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id !== "order not placed at smmcost";
+                                  const hasJbsmmpanel = order.jbsmmpanel_order_id && order.jbsmmpanel_order_id > 0;
                                   const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
                                   const hasWorldofsmm = order.worldofsmm_order_id && order.worldofsmm_order_id !== "order not placed at worldofsmm";
                                   const hasG1618 = order.g1618_order_id && order.g1618_order_id !== "order not placed at g1618";
