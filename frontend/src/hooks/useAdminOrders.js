@@ -42,7 +42,7 @@ const fetchOrders = async ({
   // Build the base query
   let query = supabase
     .from('orders')
-    .select('id, user_id, service_id, promotion_package_id, link, quantity, total_cost, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, created_at, completed_at, refund_status, last_status_check, services(name, platform, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id), promotion_packages(name, platform, service_type, smmgen_service_id), profiles(name, email, phone_number)', { count: 'exact' })
+    .select('id, user_id, service_id, promotion_package_id, link, quantity, total_cost, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, created_at, completed_at, refund_status, last_status_check, services(name, platform, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id), promotion_packages(name, platform, service_type, smmgen_service_id), profiles(name, email, phone_number)', { count: 'exact' })
     .order('created_at', { ascending: false });
 
   // Apply status filter
@@ -59,6 +59,7 @@ const fetchOrders = async ({
         .is('smmcost_order_id', null)
         .is('jbsmmpanel_order_id', null)
         .is('worldofsmm_order_id', null)
+        .is('g1618_order_id', null)
         .neq('status', 'completed')
         .neq('status', 'cancelled')
         .neq('status', 'canceled')
@@ -146,7 +147,7 @@ const fetchOrders = async ({
       const trimmedSearch = searchTerm.trim();
 
       // Build conditions for text fields (UUID and TEXT columns)
-      const textFieldsSearch = `id.ilike.${searchPattern},smmgen_order_id.ilike.${searchPattern},smmcost_order_id.ilike.${searchPattern},worldofsmm_order_id.ilike.${searchPattern}`;
+      const textFieldsSearch = `id.ilike.${searchPattern},smmgen_order_id.ilike.${searchPattern},smmcost_order_id.ilike.${searchPattern},worldofsmm_order_id.ilike.${searchPattern},g1618_order_id.ilike.${searchPattern}`;
 
       // For numeric jbsmmpanel_order_id, check if search term is numeric
       const numericSearch = /^\d+$/.test(trimmedSearch);
@@ -225,7 +226,7 @@ const fetchOrders = async ({
       const numericSearch = /^\d+$/.test(trimmedSearch);
 
       // Build conditions for text fields (UUID and TEXT columns)
-      let orderFieldsSearch = `id.ilike.${searchPattern},smmgen_order_id.ilike.${searchPattern},smmcost_order_id.ilike.${searchPattern},worldofsmm_order_id.ilike.${searchPattern},link.ilike.${searchPattern}`;
+      let orderFieldsSearch = `id.ilike.${searchPattern},smmgen_order_id.ilike.${searchPattern},smmcost_order_id.ilike.${searchPattern},worldofsmm_order_id.ilike.${searchPattern},g1618_order_id.ilike.${searchPattern},link.ilike.${searchPattern}`;
 
       // For numeric jbsmmpanel_order_id, add numeric condition if search term is numeric
       if (numericSearch) {
@@ -388,7 +389,7 @@ const fetchAllOrders = async (checkSMMGenStatus = false) => {
 
     const { data, error } = await supabase
       .from('orders')
-      .select('id, user_id, service_id, promotion_package_id, link, quantity, total_cost, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, created_at, completed_at, refund_status, last_status_check, services(name, platform, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id), promotion_packages(name, platform, service_type, smmgen_service_id), profiles(name, email, phone_number)')
+      .select('id, user_id, service_id, promotion_package_id, link, quantity, total_cost, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, created_at, completed_at, refund_status, last_status_check, services(name, platform, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id), promotion_packages(name, platform, service_type, smmgen_service_id), profiles(name, email, phone_number)')
       .order('created_at', { ascending: false })
       .range(from, to);
 

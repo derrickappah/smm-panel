@@ -38,23 +38,19 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
 
   // Helper function to get Order ID based on priority
   const getOrderId = (order) => {
-    // Check if smmcost_order_id exists and is valid (not "order not placed at smmcost")
-    const hasSmmcost = order.smmcost_order_id &&
-      String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost" &&
-      order.smmcost_order_id > 0;
+    // Check if g1618_order_id exists and is valid
+    const hasG1618 = order.g1618_order_id &&
+      String(order.g1618_order_id).toLowerCase() !== "order not placed at g1618";
 
-    // Check if jbsmmpanel_order_id exists and is valid
-    const hasJbsmmpanel = order.jbsmmpanel_order_id &&
-      String(order.jbsmmpanel_order_id).toLowerCase() !== "order not placed at jbsmmpanel";
+    // Priority: G1618 > WorldOfSMM > SMMCost > JB SMM Panel > SMMGen
+    const hasWorldofsmm = order.worldofsmm_order_id &&
+      String(order.worldofsmm_order_id).toLowerCase() !== "order not placed at worldofsmm";
 
-    // Check if smmgen_order_id exists and is valid (not internal UUID or "order not placed")
-    const isInternalUuid = order.smmgen_order_id === order.id;
-    const hasSmmgen = order.smmgen_order_id &&
-      order.smmgen_order_id !== "order not placed at smm gen" &&
-      !isInternalUuid;
-
-    // Priority: SMMCost > JB SMM Panel > SMMGen
-    if (hasSmmcost) {
+    if (hasG1618) {
+      return { id: order.g1618_order_id, type: 'g1618' };
+    } else if (hasWorldofsmm) {
+      return { id: order.worldofsmm_order_id, type: 'worldofsmm' };
+    } else if (hasSmmcost) {
       return { id: order.smmcost_order_id, type: 'smmcost' };
     } else if (hasJbsmmpanel) {
       return { id: order.jbsmmpanel_order_id, type: 'jbsmmpanel' };
@@ -62,14 +58,14 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
       return { id: order.smmgen_order_id, type: 'smmgen' };
     } else {
       // Fallback to truncated UUID
-      return { id: order.id.slice(0, 8), type: 'uuid' };
+      return { id: String(order.id).slice(0, 8), type: 'uuid' };
     }
   };
 
   // Get Order ID display value
   const getOrderIdDisplay = (order) => {
     const orderIdInfo = getOrderId(order);
-    if (orderIdInfo.type === 'uuid' && !order.smmcost_order_id && !order.jbsmmpanel_order_id && !order.smmgen_order_id) {
+    if (orderIdInfo.type === 'uuid' && !order.smmcost_order_id && !order.jbsmmpanel_order_id && !order.smmgen_order_id && !order.worldofsmm_order_id && !order.g1618_order_id) {
       return 'order not placed';
     }
     return orderIdInfo.id;
@@ -91,6 +87,10 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
   const hasSmmgen = order.smmgen_order_id &&
     order.smmgen_order_id !== "order not placed at smm gen" &&
     !isInternalUuid;
+  const hasWorldofsmm = order.worldofsmm_order_id &&
+    String(order.worldofsmm_order_id).toLowerCase() !== "order not placed at worldofsmm";
+  const hasG1618 = order.g1618_order_id &&
+    String(order.g1618_order_id).toLowerCase() !== "order not placed at g1618";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -112,6 +112,12 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
                   <p className="text-2xl sm:text-3xl font-bold text-indigo-600 font-mono">
                     {orderIdDisplay}
                   </p>
+                  {orderIdInfo.type === 'g1618' && (
+                    <p className="text-xs text-gray-500 mt-1">G1618 Order ID</p>
+                  )}
+                  {orderIdInfo.type === 'worldofsmm' && (
+                    <p className="text-xs text-gray-500 mt-1">WorldOfSMM Order ID</p>
+                  )}
                   {orderIdInfo.type === 'smmcost' && (
                     <p className="text-xs text-gray-500 mt-1">SMMCost Order ID</p>
                   )}
@@ -227,13 +233,26 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
                     <span className="text-sm font-mono font-bold text-gray-900">{order.smmgen_order_id}</span>
                   </div>
                 )}
-                {(hasSmmcost || hasJbsmmpanel || hasSmmgen) && (hasSmmcost && hasJbsmmpanel || hasSmmcost && hasSmmgen || hasJbsmmpanel && hasSmmgen) && (
-                  <div className="flex items-center justify-between p-2 bg-purple-50 rounded-lg">
-                    <span className="text-sm font-medium text-gray-700">Multiple panels active</span>
-                    <span className="text-xs text-gray-500">SMMCost > JBSMMPanel > SMMGen priority</span>
+                {hasWorldofsmm && (
+                  <div className="flex items-center justify-between p-2 bg-indigo-50 rounded-lg">
+                    <span className="text-sm font-medium text-gray-700">WorldOfSMM:</span>
+                    <span className="text-sm font-mono font-bold text-gray-900">{order.worldofsmm_order_id}</span>
                   </div>
                 )}
-                {!hasSmmcost && !hasJbsmmpanel && !hasSmmgen && (
+                {hasG1618 && (
+                  <div className="flex items-center justify-between p-2 bg-purple-50 rounded-lg">
+                    <span className="text-sm font-medium text-gray-700">G1618:</span>
+                    <span className="text-sm font-mono font-bold text-gray-900">{order.g1618_order_id}</span>
+                  </div>
+                )}
+                {(hasSmmcost || hasJbsmmpanel || hasSmmgen || hasWorldofsmm || hasG1618) &&
+                  ([hasSmmcost, hasJbsmmpanel, hasSmmgen, hasWorldofsmm, hasG1618].filter(Boolean).length > 1) && (
+                    <div className="flex items-center justify-between p-2 bg-purple-50 rounded-lg">
+                      <span className="text-sm font-medium text-gray-700">Multiple panels active</span>
+                      <span className="text-xs text-gray-500">G1618 &gt; WorldOfSMM &gt; SMMCost priority</span>
+                    </div>
+                  )}
+                {!hasSmmcost && !hasJbsmmpanel && !hasSmmgen && !hasWorldofsmm && !hasG1618 && (
                   <div className="flex items-center gap-2 p-2 bg-red-50 rounded-lg">
                     <AlertCircle className="w-4 h-4 text-red-500" />
                     <span className="text-sm text-red-600 italic font-medium">order not placed</span>

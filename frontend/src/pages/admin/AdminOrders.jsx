@@ -80,7 +80,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
       console.log('[AdminOrders] Fetching pending orders for status check...');
       const { data, error } = await supabase
         .from('orders')
-        .select('id, user_id, service_id, promotion_package_id, link, quantity, total_cost, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, created_at, completed_at, refund_status, last_status_check, services(name, platform, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id), promotion_packages(name, platform, service_type, smmgen_service_id), profiles(name, email, phone_number)')
+        .select('id, user_id, service_id, promotion_package_id, link, quantity, total_cost, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, created_at, completed_at, refund_status, last_status_check, services(name, platform, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id), promotion_packages(name, platform, service_type, smmgen_service_id, g1618_service_id), profiles(name, email, phone_number)')
         .in('status', ['pending', 'processing', 'in progress'])
         .not('status', 'eq', 'completed')
         .not('status', 'eq', 'refunded')
@@ -469,14 +469,19 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
             const serviceHasSmmgen = order.services?.smmgen_service_id;
             const serviceHasJbsmmpanel = order.services?.jbsmmpanel_service_id && order.services.jbsmmpanel_service_id > 0;
             const serviceHasWorldofsmm = order.services?.worldofsmm_service_id;
+            const serviceHasG1618 = order.services?.g1618_service_id;
 
-            // Prioritize: WorldOfSMM > SMMCost > JB SMM Panel > SMMGen
+            // Prioritize: G1618 > WorldOfSMM > SMMCost > JB SMM Panel > SMMGen
+            const hasG1618 = order.g1618_order_id && order.g1618_order_id !== "order not placed at g1618";
             const hasWorldofsmm = order.worldofsmm_order_id && order.worldofsmm_order_id !== "order not placed at worldofsmm";
             const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id > 0;
             const hasJbsmmpanel = order.jbsmmpanel_order_id && String(order.jbsmmpanel_order_id).toLowerCase() !== "order not placed at jbsmmpanel";
             const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
 
-            if (hasWorldofsmm) {
+            if (hasG1618) {
+              // G1618 order ID exists and is valid
+              return <p className="font-medium text-gray-900 text-sm">{order.g1618_order_id}</p>;
+            } else if (hasWorldofsmm) {
               // World of SMM order ID exists and is valid
               return <p className="font-medium text-gray-900 text-sm">{order.worldofsmm_order_id}</p>;
             } else if (hasSmmcost) {
@@ -588,6 +593,18 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                   <span className="text-xs text-red-500 font-medium whitespace-normal">Not Placed</span>
                 ) : (
                   <span className="text-xs font-mono bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">{order.worldofsmm_order_id}</span>
+                )
+              ) : (
+                <span className="text-xs text-gray-400 italic">None</span>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5 min-w-[120px]">
+              <span className="text-xs text-gray-500 w-12">G1618:</span>
+              {order.g1618_order_id ? (
+                order.g1618_order_id === "order not placed at g1618" ? (
+                  <span className="text-xs text-red-500 font-medium whitespace-normal">Not Placed</span>
+                ) : (
+                  <span className="text-xs font-mono bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">{order.g1618_order_id}</span>
                 )
               ) : (
                 <span className="text-xs text-gray-400 italic">None</span>
@@ -756,14 +773,18 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               const serviceHasSmmgen = order.services?.smmgen_service_id;
               const serviceHasJbsmmpanel = order.services?.jbsmmpanel_service_id && order.services.jbsmmpanel_service_id > 0;
               const serviceHasWorldofsmm = order.services?.worldofsmm_service_id;
+              const serviceHasG1618 = order.services?.g1618_service_id;
 
-              // Prioritize: WorldOfSMM > SMMCost > JB SMM Panel > SMMGen
+              // Prioritize: G1618 > WorldOfSMM > SMMCost > JB SMM Panel > SMMGen
+              const hasG1618 = order.g1618_order_id && order.g1618_order_id !== "order not placed at g1618";
               const hasWorldofsmm = order.worldofsmm_order_id && order.worldofsmm_order_id !== "order not placed at worldofsmm";
               const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id > 0;
               const hasJbsmmpanel = order.jbsmmpanel_order_id && String(order.jbsmmpanel_order_id).toLowerCase() !== "order not placed at jbsmmpanel";
               const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
 
-              if (hasWorldofsmm) {
+              if (hasG1618) {
+                return <p className="font-semibold text-gray-900 text-base">Order No: {order.g1618_order_id}</p>;
+              } else if (hasWorldofsmm) {
                 return <p className="font-semibold text-gray-900 text-base">Order No: {order.worldofsmm_order_id}</p>;
               } else if (hasSmmcost) {
                 return <p className="font-semibold text-gray-900 text-base">Order No: {order.smmcost_order_id}</p>;
@@ -809,7 +830,22 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                     <p className="text-xs text-red-600 italic font-medium">Order not placed at WorldOfSMM</p>
                   </div>
                 );
-              } else if (order.smmcost_order_id === null && order.jbsmmpanel_order_id === null && order.smmgen_order_id === null && order.worldofsmm_order_id === null) {
+              } else if (order.g1618_order_id === "order not placed at g1618") {
+                return (
+                  <div className="flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-4 h-4 text-red-500" />
+                    <p className="text-xs text-red-600 italic font-medium">Order not placed at G1618</p>
+                  </div>
+                );
+              } else if (serviceHasG1618 && !hasG1618) {
+                // Service has G1618 ID but order doesn't - order failed at G1618
+                return (
+                  <div className="flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-4 h-4 text-red-500" />
+                    <p className="text-xs text-red-600 italic font-medium">Order not placed at G1618</p>
+                  </div>
+                );
+              } else if (order.smmcost_order_id === null && order.jbsmmpanel_order_id === null && order.smmgen_order_id === null && order.worldofsmm_order_id === null && order.g1618_order_id === null) {
                 return (
                   <div className="flex items-center gap-1 mt-1">
                     <AlertCircle className="w-4 h-4 text-orange-500" />
@@ -826,12 +862,14 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               }
             })()}
             {(() => {
+              const hasG1618 = order.g1618_order_id && order.g1618_order_id !== "order not placed at g1618";
               const hasWorldofsmm = order.worldofsmm_order_id && order.worldofsmm_order_id !== "order not placed at worldofsmm";
               const hasSmmcost = order.smmcost_order_id && order.smmcost_order_id > 0;
               const hasJbsmmpanel = order.jbsmmpanel_order_id && String(order.jbsmmpanel_order_id).toLowerCase() !== "order not placed at jbsmmpanel";
               const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
 
               const panelIds = [];
+              if (hasG1618) panelIds.push(`G1618: ${order.g1618_order_id}`);
               if (hasWorldofsmm) panelIds.push(`WorldOfSMM: ${order.worldofsmm_order_id}`);
               if (hasSmmcost) panelIds.push(`SMMCost: ${order.smmcost_order_id}`);
               if (hasJbsmmpanel) panelIds.push(`JBSMMPanel: ${order.jbsmmpanel_order_id}`);
@@ -891,6 +929,18 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                     <span className="text-xs text-red-500 font-medium whitespace-normal">Not Placed</span>
                   ) : (
                     <span className="text-xs font-mono bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">{order.worldofsmm_order_id}</span>
+                  )
+                ) : (
+                  <span className="text-xs text-gray-400 italic">None</span>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 min-w-[120px]">
+                <span className="text-xs text-gray-500 w-12">G1618:</span>
+                {order.g1618_order_id ? (
+                  order.g1618_order_id === "order not placed at g1618" ? (
+                    <span className="text-xs text-red-500 font-medium whitespace-normal">Not Placed</span>
+                  ) : (
+                    <span className="text-xs font-mono bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">{order.g1618_order_id}</span>
                   )
                 ) : (
                   <span className="text-xs text-gray-400 italic">None</span>
