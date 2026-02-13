@@ -64,7 +64,6 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
       g1618_service_id: formData.g1618_service_id || null,
       is_combo: Boolean(formData.is_combo),
       combo_service_ids: formData.is_combo && formData.combo_service_ids.length > 0
-      combo_service_ids: formData.is_combo && formData.combo_service_ids.length > 0
         ? formData.combo_service_ids
         : null,
       combo_smmgen_service_ids: formData.is_combo && formData.combo_smmgen_service_ids.length > 0
