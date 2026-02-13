@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Loader2, RefreshCw, CheckCircle2, AlertCircle, Copy, Search, ExternalLink, ArrowRight } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { supabase } from '../../lib/supabase';
 import { getG1618Services, getG1618Balance } from '../../lib/g1618';
 
@@ -17,12 +17,11 @@ export default function AdminG1618() {
     const [refreshing, setRefreshing] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [error, setError] = useState(null);
-    const { toast } = useToast();
 
     // Helper to copy text
     const copyToClipboard = (text) => {
         navigator.clipboard.writeText(text);
-        toast({ description: "Copied to clipboard", duration: 2000 });
+        toast.success("Copied to clipboard");
     };
 
     const fetchBalance = async () => {
@@ -50,11 +49,7 @@ export default function AdminG1618() {
             }
         } catch (err) {
             console.error('Services fetch error:', err);
-            toast({
-                variant: "destructive",
-                title: "Failed to fetch services",
-                description: err.message
-            });
+            toast.error(`Failed to fetch services: ${err.message}`);
         } finally {
             setLoading(false);
         }
@@ -64,7 +59,7 @@ export default function AdminG1618() {
         setRefreshing(true);
         await Promise.all([fetchBalance(), fetchServices()]);
         setRefreshing(false);
-        toast({ description: "Data refreshed" });
+        toast.success("Data refreshed");
     };
 
     // Initial load
