@@ -11,7 +11,6 @@ import {
     mapSMMGenStatus,
     mapSMMCostStatus,
     mapJBSMMPanelStatus,
-    mapJBSMMPanelStatus,
     mapWorldOfSMMStatus,
     mapG1618Status
 } from './utils/statusMapping.js';
@@ -210,6 +209,34 @@ export default async function handler(req, res) {
                     }
                 } catch (err) {
                     results.errors.push({ id: order.id, provider: 'worldofsmm', error: err.message });
+                }
+            }
+        }
+
+        // 8. Process G1618 orders
+        if (groups.g1618.length > 0) {
+            const API_URL = process.env.G1618_API_URL || 'https://g1618.com/api/v2';
+            const API_KEY = process.env.G1618_API_KEY;
+
+            for (const order of groups.g1618) {
+                results.checked++;
+                try {
+                    const response = await fetch(API_URL, {
+                        method: 'POST',
+                        body: new URLSearchParams({ key: G1618_API_KEY, action: 'status', order: order.g1618_order_id })
+                    });
+                    const data = await response.json();
+                    const rawStatus = data.status || data.Status;
+                    const mappedStatus = mapG1618Status(rawStatus);
+
+                    if (mappedStatus && mappedStatus !== order.status) {
+                        if (await updateOrder(order.id, mappedStatus)) {
+                            results.updated++;
+                            results.details.push({ id: order.id, old: order.status, new: mappedStatus, provider: 'g1618' });
+                        }
+                    }
+                } catch (err) {
+                    results.errors.push({ id: order.id, provider: 'g1618', error: err.message });
                 }
             }
         }
