@@ -546,3 +546,107 @@ export function extractOrderId(response) {
     if (!response) return null;
     return response.order || response.order_id || response.orderId || (response.data && response.data.order) || null;
 }
+
+async function fetchG1618RecentOrders(limit) {
+    const G1618_API_URL = process.env.G1618_API_URL || 'https://g1618.com/api/v2';
+    const G1618_API_KEY = process.env.G1618_API_KEY;
+
+    if (!G1618_API_KEY) return [];
+
+    try {
+        const params = new URLSearchParams({
+            key: G1618_API_KEY,
+            action: 'orders',
+            limit: String(limit)
+        });
+
+        const response = await fetch(G1618_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params
+        });
+
+        if (!response.ok) return [];
+        const data = await response.json();
+        return Array.isArray(data) ? data.map(o => ({
+            id: String(o.order),
+            service: String(o.service),
+            link: o.link,
+            quantity: parseInt(o.quantity),
+            status: o.status,
+            charge: parseFloat(o.charge),
+            date: o.date
+        })) : [];
+    } catch (e) {
+        console.error('G1618 fetch orders failed:', e);
+        return [];
+    }
+}
+
+async function fetchG1618Status(providerOrderId) {
+    const G1618_API_URL = process.env.G1618_API_URL || 'https://g1618.com/api/v2';
+    const G1618_API_KEY = process.env.G1618_API_KEY;
+
+    if (!G1618_API_KEY) throw new Error('G1618 API key not configured');
+
+    const requestBody = new URLSearchParams({
+        key: G1618_API_KEY,
+        action: 'status',
+        order: String(providerOrderId)
+    }).toString();
+
+    const response = await fetch(G1618_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: requestBody
+    });
+
+    if (!response.ok) throw new Error(`G1618 API error: ${response.status}`);
+    return await response.json();
+}
+
+async function placeG1618Order(service, link, quantity, comments) {
+    const G1618_API_URL = process.env.G1618_API_URL || 'https://g1618.com/api/v2';
+    const G1618_API_KEY = process.env.G1618_API_KEY;
+
+    if (!G1618_API_KEY) throw new Error('G1618 API key not configured');
+
+    const params = {
+        key: G1618_API_KEY,
+        action: 'add',
+        service: String(service).trim(),
+        link: link.trim(),
+        quantity: String(quantity)
+    };
+
+    if (comments) {
+        params.comments = String(comments).trim();
+    }
+
+    const requestBody = new URLSearchParams(params).toString();
+
+    const response = await fetch(G1618_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: requestBody
+    });
+
+    if (!response.ok) {
+        let errorData;
+        try {
+            errorData = await response.json();
+        } catch (e) {
+            errorData = { rawResponse: await response.text().catch(() => 'No response body') };
+        }
+
+        const errorMessage = errorData.error || errorData.message || `G1618 API error: ${response.status}`;
+        console.error(`[PROVIDER FAILURE] g1618: ${errorMessage}`, { status: response.status, details: errorData });
+
+        const error = new Error(errorMessage);
+        error.providerDetails = errorData;
+        error.providerStatus = response.status;
+        throw error;
+    }
+
+    return await response.json();
+}
