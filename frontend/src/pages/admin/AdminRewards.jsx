@@ -149,10 +149,10 @@ const AdminRewards = () => {
                                 <thead>
                                     <tr className="border-b">
                                         <th className="text-left py-3 px-4 font-semibold text-sm">User</th>
-                                        <th className="text-left py-3 px-4 font-semibold text-sm">Deposit Total</th>
+                                        <th className="text-left py-3 px-4 font-semibold text-sm">Reward</th>
+                                        <th className="text-left py-3 px-4 font-semibold text-sm">Deposit</th>
                                         <th className="text-left py-3 px-4 font-semibold text-sm">Link</th>
-                                        <th className="text-left py-3 px-4 font-semibold text-sm">Claim Date</th>
-                                        <th className="text-left py-3 px-4 font-semibold text-sm">Time</th>
+                                        <th className="text-left py-3 px-4 font-semibold text-sm">Date</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -162,6 +162,14 @@ const AdminRewards = () => {
                                                 <div>
                                                     <div className="font-medium">{claim.profiles?.name || 'Unknown'}</div>
                                                     <div className="text-sm text-muted-foreground">{claim.profiles?.email || 'N/A'}</div>
+                                                </div>
+                                            </td>
+                                            <td className="py-3 px-4">
+                                                <div className="flex flex-col gap-1">
+                                                    <Badge variant="outline" className={`w-fit capitalize ${claim.reward_type === 'likes' ? 'border-primary text-primary bg-primary/5' : 'border-purple-500 text-purple-600 bg-purple-50'}`}>
+                                                        {claim.reward_type || 'Likes'}
+                                                    </Badge>
+                                                    <span className="font-bold">{(claim.reward_amount || 1000).toLocaleString()}</span>
                                                 </div>
                                             </td>
                                             <td className="py-3 px-4">
@@ -181,10 +189,10 @@ const AdminRewards = () => {
                                                 </a>
                                             </td>
                                             <td className="py-3 px-4">
-                                                {format(new Date(claim.claim_date), 'MMM dd, yyyy')}
-                                            </td>
-                                            <td className="py-3 px-4 text-sm text-muted-foreground">
-                                                {format(new Date(claim.created_at), 'HH:mm:ss')}
+                                                <div className="text-sm">
+                                                    <div className="font-medium">{format(new Date(claim.claim_date), 'MMM dd, yyyy')}</div>
+                                                    <div className="text-muted-foreground">{format(new Date(claim.created_at), 'HH:mm')}</div>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}

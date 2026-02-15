@@ -70,10 +70,14 @@ export default async function handler(req, res) {
         }
 
         // Get and validate request body
-        const { link } = req.body;
+        const { link, reward_type = 'likes' } = req.body;
 
         if (!link || typeof link !== 'string' || !link.trim()) {
             return res.status(400).json({ error: 'Link is required' });
+        }
+
+        if (!['likes', 'views'].includes(reward_type)) {
+            return res.status(400).json({ error: 'Invalid reward type. Must be either "likes" or "views".' });
         }
 
         // Basic URL validation
@@ -88,10 +92,10 @@ export default async function handler(req, res) {
         const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
 
         // RE-CHECK ELIGIBILITY (never trust frontend)
-        // 1. Fetch current deposit limit
+        // 1. Fetch current reward settings
         const { data: settings, error: settingsError } = await supabase
             .from('reward_settings')
-            .select('daily_deposit_limit')
+            .select('daily_deposit_limit, likes_amount, views_amount')
             .single();
 
         if (settingsError || !settings) {
@@ -103,6 +107,7 @@ export default async function handler(req, res) {
         }
 
         const requiredDeposit = parseFloat(settings.daily_deposit_limit);
+        const rewardAmount = reward_type === 'likes' ? settings.likes_amount : settings.views_amount;
 
         // 2. Calculate today's total approved deposits
         const { data: deposits, error: depositsError } = await supabase
@@ -166,7 +171,9 @@ export default async function handler(req, res) {
                 user_id: user.id,
                 deposit_total: totalDeposits,
                 link: trimmedLink,
-                claim_date: today
+                claim_date: today,
+                reward_type: reward_type,
+                reward_amount: rewardAmount
             })
             .select()
             .single();
@@ -190,11 +197,13 @@ export default async function handler(req, res) {
         // Success!
         return res.status(200).json({
             success: true,
-            message: 'Reward claimed successfully! 🎉',
+            message: `Reward claimed successfully! 🎉 You received ${rewardAmount} ${reward_type}.`,
             data: {
                 claim_id: claimData.id,
                 deposit_total: totalDeposits,
-                claim_date: today
+                claim_date: today,
+                reward_type: reward_type,
+                reward_amount: rewardAmount
             }
         });
 

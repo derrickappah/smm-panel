@@ -13,24 +13,40 @@ import { format } from 'date-fns';
 
 const AdminRewardSettings = () => {
     const [newLimit, setNewLimit] = useState('');
+    const [newLikesAmount, setNewLikesAmount] = useState('');
+    const [newViewsAmount, setNewViewsAmount] = useState('');
     const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
     const { data: settings, isLoading: settingsLoading } = useRewardSettings();
     const { data: logs, isLoading: logsLoading } = useRewardSettingLogs(20);
-    const updateLimitMutation = useUpdateRewardLimit();
+    const updateMutation = useUpdateRewardLimit();
 
     const currentLimit = settings?.daily_deposit_limit || 15.00;
+    const currentLikes = settings?.likes_amount || 1000;
+    const currentViews = settings?.views_amount || 1000;
 
     const handleSaveClick = () => {
-        const limit = parseFloat(newLimit);
+        const limit = newLimit ? parseFloat(newLimit) : currentLimit;
+        const likes = newLikesAmount ? parseInt(newLikesAmount) : currentLikes;
+        const views = newViewsAmount ? parseInt(newViewsAmount) : currentViews;
 
         if (isNaN(limit) || limit < 1 || limit > 10000) {
-            toast.error('Please enter a valid amount between GHS 1 and GHS 10,000');
+            toast.error('Please enter a valid deposit limit between GHS 1 and GHS 10,000');
             return;
         }
 
-        if (limit === currentLimit) {
-            toast.info('No change needed - value is already set to this amount');
+        if (isNaN(likes) || likes < 1 || likes > 50000) {
+            toast.error('Please enter a valid likes amount between 1 and 50,000');
+            return;
+        }
+
+        if (isNaN(views) || views < 1 || views > 50000) {
+            toast.error('Please enter a valid views amount between 1 and 50,000');
+            return;
+        }
+
+        if (limit === currentLimit && likes === currentLikes && views === currentViews) {
+            toast.info('No changes detected');
             return;
         }
 
@@ -38,15 +54,21 @@ const AdminRewardSettings = () => {
     };
 
     const handleConfirm = () => {
-        const limit = parseFloat(newLimit);
-        updateLimitMutation.mutate(limit, {
+        const settingsPayload = {};
+        if (newLimit) settingsPayload.daily_deposit_limit = parseFloat(newLimit);
+        if (newLikesAmount) settingsPayload.likes_amount = parseInt(newLikesAmount);
+        if (newViewsAmount) settingsPayload.views_amount = parseInt(newViewsAmount);
+
+        updateMutation.mutate(settingsPayload, {
             onSuccess: (data) => {
-                toast.success(data.message || 'Deposit limit updated successfully');
+                toast.success(data.message || 'Settings updated successfully');
                 setNewLimit('');
+                setNewLikesAmount('');
+                setNewViewsAmount('');
                 setShowConfirmDialog(false);
             },
             onError: (error) => {
-                toast.error(error.message || 'Failed to update deposit limit');
+                toast.error(error.message || 'Failed to update settings');
             }
         });
     };
@@ -59,11 +81,11 @@ const AdminRewardSettings = () => {
                     Reward Settings
                 </h2>
                 <p className="text-muted-foreground mt-1">
-                    Configure the daily deposit requirement for reward claims
+                    Configure the daily deposit requirement and reward amounts
                 </p>
             </div>
 
-            {/* Deposit Limit Card */}
+            {/* Config Card */}
             <Card className="border-2 border-primary/10">
                 <CardHeader>
                     <div className="flex items-center gap-3">
@@ -71,62 +93,90 @@ const AdminRewardSettings = () => {
                             <Settings className="w-5 h-5" />
                         </div>
                         <div>
-                            <CardTitle>Daily Deposit Requirement</CardTitle>
+                            <CardTitle>Reward Configuration</CardTitle>
                             <CardDescription>
-                                Minimum deposit amount users must make to claim the daily reward
+                                Set the minimum deposit requirement and the values for available rewards
                             </CardDescription>
                         </div>
                     </div>
                 </CardHeader>
-                <CardContent className="space-y-6">
+                <CardContent className="space-y-8">
                     {settingsLoading ? (
-                        <Skeleton className="h-24 w-full" />
+                        <Skeleton className="h-64 w-full" />
                     ) : (
                         <>
-                            {/* Current Limit Display */}
-                            <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-6">
-                                <div className="text-sm text-muted-foreground mb-2">Current Limit</div>
-                                <div className="text-4xl font-bold text-blue-600">
-                                    GHS {currentLimit.toFixed(2)}
+                            {/* Summary row */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                    <div className="text-xs text-blue-600 font-semibold mb-1 uppercase tracking-wider">Required Deposit</div>
+                                    <div className="text-2xl font-bold text-blue-700">GHS {currentLimit.toFixed(2)}</div>
                                 </div>
-                                {settings?.updated_at && (
-                                    <div className="text-xs text-muted-foreground mt-2">
-                                        Last updated: {format(new Date(settings.updated_at), 'MMM dd, yyyy HH:mm')}
-                                    </div>
-                                )}
+                                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                                    <div className="text-xs text-purple-600 font-semibold mb-1 uppercase tracking-wider">Likes Reward</div>
+                                    <div className="text-2xl font-bold text-purple-700">{currentLikes.toLocaleString()}</div>
+                                </div>
+                                <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+                                    <div className="text-xs text-indigo-600 font-semibold mb-1 uppercase tracking-wider">Views Reward</div>
+                                    <div className="text-2xl font-bold text-indigo-700">{currentViews.toLocaleString()}</div>
+                                </div>
                             </div>
 
                             {/* Update Form */}
-                            <div className="space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div className="space-y-2">
                                     <Label htmlFor="new-limit">New Deposit Limit (GHS)</Label>
                                     <Input
                                         id="new-limit"
                                         type="number"
                                         step="0.01"
-                                        min="1"
-                                        max="10000"
                                         placeholder={currentLimit.toFixed(2)}
                                         value={newLimit}
                                         onChange={(e) => setNewLimit(e.target.value)}
-                                        className="text-lg font-mono"
+                                        className="font-mono"
                                     />
-                                    <p className="text-xs text-muted-foreground">
-                                        Enter a value between GHS 1.00 and GHS 10,000.00
-                                    </p>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="likes-amount">New Likes Amount</Label>
+                                    <Input
+                                        id="likes-amount"
+                                        type="number"
+                                        placeholder={currentLikes.toString()}
+                                        value={newLikesAmount}
+                                        onChange={(e) => setNewLikesAmount(e.target.value)}
+                                        className="font-mono"
+                                    />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="views-amount">New Views Amount</Label>
+                                    <Input
+                                        id="views-amount"
+                                        type="number"
+                                        placeholder={currentViews.toString()}
+                                        value={newViewsAmount}
+                                        onChange={(e) => setNewViewsAmount(e.target.value)}
+                                        className="font-mono"
+                                    />
                                 </div>
                             </div>
+
+                            {settings?.updated_at && (
+                                <p className="text-xs text-muted-foreground text-right italic">
+                                    Last updated: {format(new Date(settings.updated_at), 'MMM dd, yyyy HH:mm')}
+                                </p>
+                            )}
                         </>
                     )}
                 </CardContent>
                 <CardFooter className="bg-gray-50/50 justify-end rounded-b-xl border-t p-4">
                     <Button
                         onClick={handleSaveClick}
-                        disabled={!newLimit || updateLimitMutation.isPending || settingsLoading}
-                        className="bg-primary hover:bg-primary/90 transition-all shadow-sm"
+                        disabled={(!newLimit && !newLikesAmount && !newViewsAmount) || updateMutation.isPending || settingsLoading}
+                        className="bg-primary hover:bg-primary/90 transition-all shadow-sm px-8"
                     >
                         <Save className="w-4 h-4 mr-2" />
-                        {updateLimitMutation.isPending ? 'Updating...' : 'Update Limit'}
+                        {updateMutation.isPending ? 'Saving...' : 'Save Settings'}
                     </Button>
                 </CardFooter>
             </Card>

@@ -11,12 +11,13 @@ import { Gift, Loader2, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 
 const ClaimRewardModal = ({ isOpen, onClose }) => {
     const [link, setLink] = useState('');
+    const [rewardType, setRewardType] = useState('likes'); // Default to likes
     const queryClient = useQueryClient();
 
     const { data: eligibilityData, isLoading: checkingEligibility, error: eligibilityError } = useRewardEligibility();
 
     const claimMutation = useMutation({
-        mutationFn: async (personalLink) => {
+        mutationFn: async ({ personalLink, type }) => {
             const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
             if (sessionError || !session) {
@@ -30,7 +31,10 @@ const ClaimRewardModal = ({ isOpen, onClose }) => {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${session.access_token}`
                 },
-                body: JSON.stringify({ link: personalLink })
+                body: JSON.stringify({
+                    link: personalLink,
+                    reward_type: type
+                })
             });
 
             const data = await response.json();
@@ -64,12 +68,16 @@ const ClaimRewardModal = ({ isOpen, onClose }) => {
             return;
         }
 
-        claimMutation.mutate(link.trim());
+        claimMutation.mutate({
+            personalLink: link.trim(),
+            type: rewardType
+        });
     };
 
     const handleClose = () => {
         if (!claimMutation.isPending) {
             setLink('');
+            setRewardType('likes');
             onClose();
         }
     };
@@ -83,6 +91,10 @@ const ClaimRewardModal = ({ isOpen, onClose }) => {
             return () => clearTimeout(timer);
         }
     }, [eligibilityData?.status, isOpen, onClose]);
+
+    // Get claimable amounts from eligibility data (settings are included there)
+    const likesAmount = eligibilityData?.data?.settings?.likes_amount || 1000;
+    const viewsAmount = eligibilityData?.data?.settings?.views_amount || 1000;
 
     return (
         <Dialog open={isOpen} onOpenChange={handleClose}>
@@ -132,7 +144,44 @@ const ClaimRewardModal = ({ isOpen, onClose }) => {
                                 </p>
                             </div>
 
-                            <form onSubmit={handleSubmit} className="space-y-4">
+                            <form onSubmit={handleSubmit} className="space-y-6">
+                                {/* Reward Type Selection */}
+                                <div className="space-y-3">
+                                    <Label className="text-base font-semibold">Choose Your Reward</Label>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <button
+                                            type="button"
+                                            onClick={() => setRewardType('likes')}
+                                            className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${rewardType === 'likes'
+                                                    ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
+                                                    : 'border-gray-200 bg-white hover:border-gray-300'
+                                                }`}
+                                        >
+                                            <span className={`text-2xl font-bold ${rewardType === 'likes' ? 'text-primary' : 'text-gray-900'}`}>
+                                                {likesAmount.toLocaleString()}
+                                            </span>
+                                            <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                                                Daily Likes
+                                            </span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setRewardType('views')}
+                                            className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${rewardType === 'views'
+                                                    ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
+                                                    : 'border-gray-200 bg-white hover:border-gray-300'
+                                                }`}
+                                        >
+                                            <span className={`text-2xl font-bold ${rewardType === 'views' ? 'text-primary' : 'text-gray-900'}`}>
+                                                {viewsAmount.toLocaleString()}
+                                            </span>
+                                            <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                                                Daily Views
+                                            </span>
+                                        </button>
+                                    </div>
+                                </div>
+
                                 <div className="space-y-2">
                                     <Label htmlFor="personal-link">Your Personal Link</Label>
                                     <Input
@@ -142,16 +191,16 @@ const ClaimRewardModal = ({ isOpen, onClose }) => {
                                         value={link}
                                         onChange={(e) => setLink(e.target.value)}
                                         disabled={claimMutation.isPending}
-                                        className="w-full"
+                                        className="w-full text-base py-6"
                                     />
                                     <p className="text-xs text-muted-foreground">
-                                        Enter your social media profile or website link
+                                        Enter your social media profile or post link
                                     </p>
                                 </div>
 
                                 <Button
                                     type="submit"
-                                    className="w-full"
+                                    className="w-full py-6 text-base font-semibold"
                                     disabled={claimMutation.isPending || !link.trim()}
                                 >
                                     {claimMutation.isPending ? (

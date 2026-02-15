@@ -85,12 +85,12 @@ export function useRewardSettingLogs(limit = 20) {
     });
 }
 
-// Update reward deposit limit
+// Update reward settings (limit and amounts)
 export function useUpdateRewardLimit() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: async (newLimit) => {
+        mutationFn: async (settings) => {
             const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
             if (sessionError || !session) {
@@ -104,7 +104,7 @@ export function useUpdateRewardLimit() {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${session.access_token}`
                 },
-                body: JSON.stringify({ daily_deposit_limit: newLimit })
+                body: JSON.stringify(settings)
             });
 
             const data = await response.json();

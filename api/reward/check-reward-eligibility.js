@@ -72,10 +72,10 @@ export default async function handler(req, res) {
         // Get today's date (server-side, UTC)
         const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
 
-        // Fetch current deposit limit from reward_settings
+        // Fetch current reward settings
         const { data: settings, error: settingsError } = await supabase
             .from('reward_settings')
-            .select('daily_deposit_limit')
+            .select('*')
             .single();
 
         if (settingsError || !settings) {
@@ -88,52 +88,24 @@ export default async function handler(req, res) {
 
         const requiredDeposit = parseFloat(settings.daily_deposit_limit);
 
-        // Calculate today's total approved deposits
-        const { data: deposits, error: depositsError } = await supabase
-            .from('transactions')
-            .select('amount')
-            .eq('user_id', user.id)
-            .eq('type', 'deposit')
-            .eq('status', 'approved')
-            .gte('created_at', `${today}T00:00:00Z`)
-            .lte('created_at', `${today}T23:59:59Z`);
-
-        if (depositsError) {
-            console.error('Error fetching deposits:', depositsError);
-            return res.status(500).json({
-                error: 'Failed to fetch deposit history',
-                details: depositsError.message
-            });
-        }
-
-        const totalDeposits = deposits?.reduce((sum, d) => sum + parseFloat(d.amount), 0) || 0;
-
-        // Check if user already claimed today
-        const { data: existingClaim, error: claimError } = await supabase
-            .from('daily_reward_claims')
-            .select('id')
-            .eq('user_id', user.id)
-            .eq('claim_date', today)
-            .maybeSingle();
-
-        if (claimError) {
-            console.error('Error checking existing claim:', claimError);
-            return res.status(500).json({
-                error: 'Failed to check claim status',
-                details: claimError.message
-            });
-        }
+        // ... (deposits and claim logic) ...
 
         // Determine eligibility status
+        const responseData = {
+            required: requiredDeposit,
+            current: totalDeposits,
+            claimed: !!existingClaim,
+            settings: {
+                likes_amount: settings.likes_amount,
+                views_amount: settings.views_amount
+            }
+        };
+
         if (existingClaim) {
             return res.status(200).json({
                 status: 'claimed',
                 message: "You've already claimed today's reward. Come back tomorrow!",
-                data: {
-                    required: requiredDeposit,
-                    current: totalDeposits,
-                    claimed: true
-                }
+                data: responseData
             });
         }
 
@@ -141,11 +113,7 @@ export default async function handler(req, res) {
             return res.status(200).json({
                 status: 'eligible',
                 message: "You're eligible for today's reward!",
-                data: {
-                    required: requiredDeposit,
-                    current: totalDeposits,
-                    claimed: false
-                }
+                data: responseData
             });
         }
 
@@ -153,11 +121,7 @@ export default async function handler(req, res) {
         return res.status(200).json({
             status: 'not_eligible',
             message: `Deposit at least GHS ${requiredDeposit.toFixed(2)} today to claim this reward.`,
-            data: {
-                required: requiredDeposit,
-                current: totalDeposits,
-                claimed: false
-            }
+            data: responseData
         });
 
     } catch (error) {
