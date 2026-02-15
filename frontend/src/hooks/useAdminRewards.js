@@ -92,16 +92,13 @@ export function useRewardTiers() {
     return useQuery({
         queryKey: ['admin', 'reward-tiers'],
         queryFn: async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) throw new Error('Not authenticated');
+            const { data, error } = await supabase
+                .from('reward_tiers')
+                .select('*')
+                .order('position', { ascending: true });
 
-            const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
-            const response = await fetch(`${BACKEND_URL}/api/admin/reward-tiers`, {
-                headers: { 'Authorization': `Bearer ${session.access_token}` }
-            });
-
-            if (!response.ok) throw new Error('Failed to fetch tiers');
-            return response.json();
+            if (error) throw error;
+            return data;
         },
         staleTime: 5 * 60 * 1000,
     });
@@ -113,24 +110,17 @@ export function useUpsertRewardTier() {
 
     return useMutation({
         mutationFn: async (tier) => {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) throw new Error('Not authenticated');
-
-            const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
-            const response = await fetch(`${BACKEND_URL}/api/admin/reward-tiers`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session.access_token}`
-                },
-                body: JSON.stringify(tier)
+            const { data, error } = await supabase.rpc('admin_upsert_reward_tier', {
+                id_param: tier.id || null,
+                name_param: tier.name,
+                required_amount_param: tier.required_amount,
+                reward_likes_param: tier.reward_likes,
+                reward_views_param: tier.reward_views,
+                position_param: tier.position
             });
 
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || 'Failed to save tier');
-            }
-            return response.json();
+            if (error) throw error;
+            return data;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['admin', 'reward-tiers'] });
@@ -144,20 +134,12 @@ export function useDeleteRewardTier() {
 
     return useMutation({
         mutationFn: async (id) => {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) throw new Error('Not authenticated');
-
-            const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
-            const response = await fetch(`${BACKEND_URL}/api/admin/reward-tiers/${id}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${session.access_token}` }
+            const { data, error } = await supabase.rpc('admin_delete_reward_tier', {
+                tier_id_param: id
             });
 
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || 'Failed to delete tier');
-            }
-            return response.json();
+            if (error) throw error;
+            return data;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['admin', 'reward-tiers'] });
