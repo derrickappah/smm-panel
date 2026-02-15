@@ -88,7 +88,41 @@ export default async function handler(req, res) {
 
         const requiredDeposit = parseFloat(settings.daily_deposit_limit);
 
-        // ... (deposits and claim logic) ...
+        // Calculate today's total approved deposits
+        const { data: deposits, error: depositsError } = await supabase
+            .from('transactions')
+            .select('amount')
+            .eq('user_id', user.id)
+            .eq('type', 'deposit')
+            .eq('status', 'approved')
+            .gte('created_at', `${today}T00:00:00Z`)
+            .lte('created_at', `${today}T23:59:59Z`);
+
+        if (depositsError) {
+            console.error('Error fetching deposits:', depositsError);
+            return res.status(500).json({
+                error: 'Failed to fetch deposit history',
+                details: depositsError.message
+            });
+        }
+
+        const totalDeposits = deposits?.reduce((sum, d) => sum + parseFloat(d.amount), 0) || 0;
+
+        // Check if user already claimed today
+        const { data: existingClaim, error: claimError } = await supabase
+            .from('daily_reward_claims')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('claim_date', today)
+            .maybeSingle();
+
+        if (claimError) {
+            console.error('Error checking existing claim:', claimError);
+            return res.status(500).json({
+                error: 'Failed to check claim status',
+                details: claimError.message
+            });
+        }
 
         // Determine eligibility status
         const responseData = {
