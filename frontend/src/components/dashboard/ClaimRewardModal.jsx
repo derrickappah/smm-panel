@@ -223,42 +223,59 @@ const ClaimRewardModal = ({ isOpen, onClose }) => {
                         </div>
                     )}
 
-                    {!checkingEligibility && !eligibilityError && eligibilityData?.status === 'not_eligible' && (
+                    {!checkingEligibility && eligibilityData?.status === 'not_eligible' && (
                         <div className="space-y-8 py-4">
                             <div className="text-center space-y-4">
-                                <div className="w-20 h-20 rounded-full bg-[#f2f3f8] flex items-center justify-center mx-auto border border-[#e2e2e6]">
-                                    <Gift className="w-8 h-8 text-[#44474e]" />
+                                <div className="w-20 h-20 rounded-full bg-[#f2f3f8] flex items-center justify-center mx-auto border border-[#e2e2e6] relative">
+                                    <Gift className="w-8 h-8 text-[#44474e] opacity-40" />
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        <ShieldCheck className="w-5 h-5 text-primary opacity-20 translate-x-4 -translate-y-4" />
+                                    </div>
                                 </div>
                                 <div className="space-y-2">
-                                    <h3 className="text-2xl font-bold text-[#1a1c1e]">Almost There</h3>
-                                    <p className="text-[#44474e] text-sm px-8">Complete your daily deposit goal to unlock this reward.</p>
+                                    <h3 className="text-2xl font-bold text-[#1a1c1e] tracking-tight">Reward Locked</h3>
+                                    <p className="text-[#44474e] text-sm px-8 leading-relaxed">
+                                        You need to deposit <span className="font-bold text-[#1a1c1e]">GHS {(requiredDeposit - currentDeposit).toFixed(2)}</span> more today to unlock your free social boost.
+                                    </p>
                                 </div>
                             </div>
 
-                            <div className="bg-[#f2f3f8] rounded-[24px] p-6 space-y-4 shadow-sm border border-[#e2e2e6]">
+                            <div className="bg-[#f2f3f8] rounded-[24px] p-6 space-y-5 shadow-sm border border-[#e2e2e6]">
                                 <div className="flex justify-between items-end">
-                                    <span className="text-sm font-bold text-[#44474e]">Daily Progress</span>
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-[#74777f] uppercase tracking-widest block">Instruction</span>
+                                        <span className="text-sm font-bold text-[#1a1c1e]">Reach the Daily Target</span>
+                                    </div>
                                     <span className="text-lg font-black text-primary">{Math.round(progressValue)}%</span>
                                 </div>
-                                <Progress value={progressValue} className="h-3 bg-[#e2e2e6] rounded-full" />
-                                <div className="flex justify-between text-xs font-medium text-[#74777f]">
-                                    <p>Current: GHS {currentDeposit.toFixed(2)}</p>
-                                    <p>Goal: GHS {requiredDeposit.toFixed(2)}</p>
+
+                                <div className="space-y-2">
+                                    <Progress value={progressValue} className="h-3 bg-[#e2e2e6] rounded-full" />
+                                    <div className="flex justify-between text-[11px] font-bold text-[#74777f]">
+                                        <div className="flex items-center gap-1.5">
+                                            <div className="w-2 h-2 rounded-full bg-primary/40" />
+                                            <span>Current: GHS {currentDeposit.toFixed(2)}</span>
+                                        </div>
+                                        <span>Target: GHS {requiredDeposit.toFixed(2)}</span>
+                                    </div>
                                 </div>
                             </div>
 
-                            <Button
-                                onClick={() => {
-                                    handleClose(); setTimeout(() => {
-                                        const el = document.getElementById('deposit-section');
-                                        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                                    }, 100);
-                                }}
-                                className="w-full h-14 bg-[#1a1c1e] hover:bg-black text-white font-bold rounded-full flex items-center justify-center gap-2 transition-all shadow-md group"
-                            >
-                                <span>Go to Deposits</span>
-                                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                            </Button>
+                            <div className="grid grid-cols-1 gap-3">
+                                <Button
+                                    onClick={() => {
+                                        handleClose(); setTimeout(() => {
+                                            const el = document.getElementById('deposit-section');
+                                            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                        }, 100);
+                                    }}
+                                    className="w-full h-14 bg-primary hover:bg-primary/90 text-white font-bold rounded-full flex items-center justify-center gap-2 transition-all shadow-lg active:scale-[0.98] group"
+                                >
+                                    <span>Deposit Now</span>
+                                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                                </Button>
+                                <p className="text-[10px] text-center text-[#74777f] font-medium">Rewards reset daily at 00:00 UTC</p>
+                            </div>
                         </div>
                     )}
 
