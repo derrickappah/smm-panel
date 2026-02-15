@@ -116,19 +116,21 @@ const ClaimRewardModal = ({ isOpen, onClose }) => {
                     </div>
 
                     {/* Digital Countdown Strip */}
-                    <div className="bg-[#e2e2e6] rounded-2xl p-4 flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-[#44474e]">
-                            <Clock className="w-4 h-4" />
-                            <span className="text-xs font-medium uppercase tracking-wider">Next reset in</span>
+                    {!checkingEligibility && eligibilityData?.status !== 'claimed' && (
+                        <div className="bg-[#e2e2e6] rounded-2xl p-4 flex items-center justify-between animate-in fade-in duration-500">
+                            <div className="flex items-center gap-2 text-[#44474e]">
+                                <Clock className="w-4 h-4" />
+                                <span className="text-xs font-medium uppercase tracking-wider">Next reset in</span>
+                            </div>
+                            <div className="flex gap-1 font-mono text-lg font-bold text-[#1a1c1e]">
+                                <span className="bg-[#fdfcff] px-2 py-0.5 rounded-lg shadow-sm">{formatTime(timeLeft.hours)}h</span>
+                                <span className="text-[#c6c6d0] animate-pulse">:</span>
+                                <span className="bg-[#fdfcff] px-2 py-0.5 rounded-lg shadow-sm">{formatTime(timeLeft.minutes)}m</span>
+                                <span className="text-[#c6c6d0] animate-pulse">:</span>
+                                <span className="bg-[#fdfcff] px-2 py-0.5 rounded-lg shadow-sm">{formatTime(timeLeft.seconds)}s</span>
+                            </div>
                         </div>
-                        <div className="flex gap-1 font-mono text-lg font-bold text-[#1a1c1e]">
-                            <span className="bg-[#fdfcff] px-2 py-0.5 rounded-lg shadow-sm">{formatTime(timeLeft.hours)}h</span>
-                            <span className="text-[#c6c6d0] animate-pulse">:</span>
-                            <span className="bg-[#fdfcff] px-2 py-0.5 rounded-lg shadow-sm">{formatTime(timeLeft.minutes)}m</span>
-                            <span className="text-[#c6c6d0] animate-pulse">:</span>
-                            <span className="bg-[#fdfcff] px-2 py-0.5 rounded-lg shadow-sm">{formatTime(timeLeft.seconds)}s</span>
-                        </div>
-                    </div>
+                    )}
                 </div>
 
                 <div className="p-6 pt-2">
