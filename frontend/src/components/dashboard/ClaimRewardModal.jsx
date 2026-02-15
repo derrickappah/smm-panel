@@ -68,20 +68,20 @@ const ClaimRewardModal = ({ isOpen, onClose }) => {
             return data;
         },
         onSuccess: (data) => {
-            toast.success(data.message || 'Reward claimed! 🚀');
+            toast.success(data.message || 'Claim successful! 🚀');
             queryClient.invalidateQueries({ queryKey: ['reward-eligibility'] });
             setLink('');
             setTimeout(onClose, 2000);
         },
         onError: (error) => {
-            toast.error(error.message || 'Failed to claim reward');
+            toast.error(error.message || 'Claim failed');
         }
     });
 
     const handleSubmit = (e) => {
         e.preventDefault();
         if (!link.trim()) {
-            toast.error('Please enter your personal link');
+            toast.error('Required link is missing');
             return;
         }
         claimMutation.mutate({ personalLink: link.trim(), type: rewardType });
@@ -103,34 +103,37 @@ const ClaimRewardModal = ({ isOpen, onClose }) => {
 
     return (
         <Dialog open={isOpen} onOpenChange={handleClose}>
-            <DialogContent className="sm:max-w-[480px] p-0 overflow-hidden border-none bg-white shadow-[0_25px_50px_-12px_rgba(0,0,0,0.15)] rounded-3xl">
-                {/* Premium Light Header */}
-                <div className="bg-slate-50/80 backdrop-blur-sm border-b border-slate-100 p-6 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-primary/5 flex items-center justify-center border border-primary/10">
-                            <Zap className="w-5 h-5 text-primary" />
-                        </div>
-                        <div>
-                            <DialogTitle className="text-lg font-bold text-slate-900 tracking-tight">Reward Hub</DialogTitle>
-                            <DialogDescription className="text-slate-500 text-xs">Premium daily growth boosters</DialogDescription>
+            <DialogContent className="sm:max-w-[480px] p-0 overflow-hidden border-none bg-[#fdfcff] shadow-xl rounded-[28px]">
+                {/* Material 3 Header Style */}
+                <div className="bg-[#f2f3f8] p-6 pb-4">
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                                <Zap className="w-6 h-6 fill-current" />
+                            </div>
+                            <DialogTitle className="text-xl font-medium text-[#1a1c1e] tracking-tight">Daily Reward Hub</DialogTitle>
                         </div>
                     </div>
-                    {/* Compact Countdown - Light Style */}
-                    <div className="flex flex-col items-end">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 pb-0.5 border-b border-slate-100">Resetting In</span>
-                        <div className="flex gap-1 font-mono text-sm font-black text-slate-700">
-                            <span>{formatTime(timeLeft.hours)}h</span>
-                            <span className="text-slate-300 animate-pulse">:</span>
-                            <span>{formatTime(timeLeft.minutes)}m</span>
+
+                    {/* Digital Countdown Strip */}
+                    <div className="bg-[#e2e2e6] rounded-2xl p-4 flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-[#44474e]">
+                            <Clock className="w-4 h-4" />
+                            <span className="text-xs font-medium uppercase tracking-wider">Next reset in</span>
+                        </div>
+                        <div className="flex gap-1 font-mono text-lg font-bold text-[#1a1c1e]">
+                            <span className="bg-[#fdfcff] px-2 py-0.5 rounded-lg shadow-sm">{formatTime(timeLeft.hours)}h</span>
+                            <span className="text-[#c6c6d0] animate-pulse">:</span>
+                            <span className="bg-[#fdfcff] px-2 py-0.5 rounded-lg shadow-sm">{formatTime(timeLeft.minutes)}m</span>
                         </div>
                     </div>
                 </div>
 
-                <div className="p-6">
+                <div className="p-6 pt-2">
                     {checkingEligibility && (
-                        <div className="flex flex-col items-center justify-center py-16 space-y-4">
-                            <Loader2 className="w-8 h-8 animate-spin text-primary/40" />
-                            <p className="text-slate-400 text-sm font-medium">Authenticating claim...</p>
+                        <div className="flex flex-col items-center justify-center py-20 space-y-4">
+                            <Loader2 className="w-10 h-10 animate-spin text-primary" />
+                            <p className="text-[#44474e] text-sm font-medium">Updating status...</p>
                         </div>
                     )}
 
@@ -146,103 +149,97 @@ const ClaimRewardModal = ({ isOpen, onClose }) => {
                     )}
 
                     {!checkingEligibility && !eligibilityError && eligibilityData?.status === 'eligible' && (
-                        <div className="space-y-6 animate-in fade-in duration-500">
-                            <div className="flex items-center gap-3 p-4 bg-blue-50/50 border border-blue-100/50 rounded-2xl">
-                                <ShieldCheck className="w-5 h-5 text-blue-600" />
-                                <span className="text-xs font-bold text-blue-700 uppercase tracking-wider">Claim Eligibility Verified</span>
-                            </div>
+                        <div className="space-y-6">
+                            <DialogDescription className="text-[#44474e] text-sm mt-2 px-1">
+                                You are eligible for a daily reward. Please select your preferred boost and provide a link.
+                            </DialogDescription>
 
                             <form onSubmit={handleSubmit} className="space-y-6">
                                 <div className="space-y-3">
-                                    <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Selection</Label>
+                                    <Label className="text-xs font-bold text-[#74777f] uppercase ml-1">Selection</Label>
                                     <div className="grid grid-cols-2 gap-4">
                                         <button
                                             type="button"
                                             onClick={() => setRewardType('likes')}
                                             className={cn(
-                                                "relative flex flex-col items-center p-6 rounded-2xl border-2 transition-all duration-300",
+                                                "relative flex flex-col items-start p-5 rounded-2xl border transition-all duration-200",
                                                 rewardType === 'likes'
-                                                    ? "border-primary bg-primary/[0.02] shadow-[0_10px_30px_-10px_rgba(59,130,246,0.15)] ring-1 ring-primary/10"
-                                                    : "border-slate-50 bg-slate-50/30 hover:border-slate-100 hover:bg-slate-50/50"
+                                                    ? "bg-[#d3e3fd] border-transparent shadow-md"
+                                                    : "bg-white border-[#c4c6cf] hover:bg-[#f2f3f8]"
                                             )}
                                         >
-                                            <Heart className={cn("w-6 h-6 mb-3", rewardType === 'likes' ? "text-primary fill-primary" : "text-slate-300")} />
-                                            <span className={cn("text-2xl font-black", rewardType === 'likes' ? "text-slate-900" : "text-slate-400")}>{likesAmount.toLocaleString()}</span>
-                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Daily Likes</span>
+                                            <div className={cn("p-2 rounded-xl mb-3", rewardType === 'likes' ? "bg-white text-primary" : "bg-[#f2f3f8] text-[#74777f]")}>
+                                                <Heart className={cn("w-5 h-5", rewardType === 'likes' && "fill-current")} />
+                                            </div>
+                                            <span className="text-2xl font-black text-[#1a1c1e]">{likesAmount.toLocaleString()}</span>
+                                            <span className="text-[11px] font-bold text-[#44474e] uppercase">Daily Likes</span>
+                                            {rewardType === 'likes' && <CheckCircle className="absolute top-4 right-4 w-5 h-5 text-primary" />}
                                         </button>
 
                                         <button
                                             type="button"
                                             onClick={() => setRewardType('views')}
                                             className={cn(
-                                                "relative flex flex-col items-center p-6 rounded-2xl border-2 transition-all duration-300",
+                                                "relative flex flex-col items-start p-5 rounded-2xl border transition-all duration-200",
                                                 rewardType === 'views'
-                                                    ? "border-primary bg-primary/[0.02] shadow-[0_10px_30px_-10px_rgba(59,130,246,0.15)] ring-1 ring-primary/10"
-                                                    : "border-slate-50 bg-slate-50/30 hover:border-slate-100 hover:bg-slate-50/50"
+                                                    ? "bg-[#d3e3fd] border-transparent shadow-md"
+                                                    : "bg-white border-[#c4c6cf] hover:bg-[#f2f3f8]"
                                             )}
                                         >
-                                            <Eye className={cn("w-6 h-6 mb-3", rewardType === 'views' ? "text-primary" : "text-slate-300")} />
-                                            <span className={cn("text-2xl font-black", rewardType === 'views' ? "text-slate-900" : "text-slate-400")}>{viewsAmount.toLocaleString()}</span>
-                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Daily Views</span>
+                                            <div className={cn("p-2 rounded-xl mb-3", rewardType === 'views' ? "bg-white text-primary" : "bg-[#f2f3f8] text-[#74777f]")}>
+                                                <Eye className="w-5 h-5" />
+                                            </div>
+                                            <span className="text-2xl font-black text-[#1a1c1e]">{viewsAmount.toLocaleString()}</span>
+                                            <span className="text-[11px] font-bold text-[#44474e] uppercase">Daily Views</span>
+                                            {rewardType === 'views' && <CheckCircle className="absolute top-4 right-4 w-5 h-5 text-primary" />}
                                         </button>
                                     </div>
                                 </div>
 
-                                <div className="space-y-2.5">
-                                    <Label htmlFor="personal-link" className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Target Link</Label>
+                                <div className="space-y-3">
+                                    <Label htmlFor="personal-link" className="text-xs font-bold text-[#74777f] uppercase ml-1">Target Link</Label>
                                     <Input
                                         id="personal-link"
-                                        placeholder="Paste Post URL here"
+                                        placeholder="https://example.com/post"
                                         value={link}
                                         onChange={(e) => setLink(e.target.value)}
                                         disabled={claimMutation.isPending}
-                                        className="h-12 bg-white border-slate-100 rounded-xl focus:ring-primary/20 text-slate-900 placeholder:text-slate-300 shadow-sm"
+                                        className="h-14 bg-white border-[#c4c6cf] rounded-xl focus:ring-primary/20 text-[#1a1c1e] px-4"
                                     />
                                 </div>
 
                                 <Button
                                     type="submit"
                                     disabled={claimMutation.isPending || !link.trim()}
-                                    className="w-full h-14 bg-primary hover:bg-primary/90 text-white font-bold rounded-2xl shadow-[0_15px_30px_-10px_rgba(59,130,246,0.4)] transition-all active:scale-[0.98] mt-2 group"
+                                    className="w-full h-14 bg-primary hover:shadow-lg text-white font-bold rounded-full transition-all active:scale-[0.98] mt-4"
                                 >
-                                    {claimMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : (
-                                        <div className="flex items-center gap-2">
-                                            <span>Claim Booster</span>
-                                            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                                        </div>
-                                    )}
+                                    {claimMutation.isPending ? <Loader2 className="w-6 h-6 animate-spin" /> : "Claim Reward"}
                                 </Button>
                             </form>
                         </div>
                     )}
 
                     {!checkingEligibility && !eligibilityError && eligibilityData?.status === 'not_eligible' && (
-                        <div className="space-y-8 animate-in fade-in duration-500 py-4">
+                        <div className="space-y-8 py-4">
                             <div className="text-center space-y-4">
-                                <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center mx-auto border border-slate-100 shadow-inner">
-                                    <Gift className="w-7 h-7 text-slate-300" />
+                                <div className="w-20 h-20 rounded-full bg-[#f2f3f8] flex items-center justify-center mx-auto border border-[#e2e2e6]">
+                                    <Gift className="w-8 h-8 text-[#44474e]" />
                                 </div>
-                                <div className="space-y-1">
-                                    <h3 className="text-xl font-black text-slate-900 tracking-tight">Requirement Pending</h3>
-                                    <p className="text-slate-500 text-xs px-10 leading-relaxed font-medium">Complete your daily deposit target to unlock today's social boosters.</p>
+                                <div className="space-y-2">
+                                    <h3 className="text-2xl font-bold text-[#1a1c1e]">Almost There</h3>
+                                    <p className="text-[#44474e] text-sm px-8">Complete your daily deposit goal to unlock this reward.</p>
                                 </div>
                             </div>
 
-                            <div className="bg-slate-50 rounded-3xl p-6 space-y-5 border border-slate-100 shadow-sm">
-                                <div className="flex justify-between items-end mb-1">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Progress to Unlock</span>
-                                    <span className="text-sm font-black text-primary">{Math.round(progressValue)}%</span>
+                            <div className="bg-[#f2f3f8] rounded-[24px] p-6 space-y-4 shadow-sm border border-[#e2e2e6]">
+                                <div className="flex justify-between items-end">
+                                    <span className="text-sm font-bold text-[#44474e]">Daily Progress</span>
+                                    <span className="text-lg font-black text-primary">{Math.round(progressValue)}%</span>
                                 </div>
-                                <Progress value={progressValue} className="h-2.5 bg-slate-200 rounded-full" />
-                                <div className="flex justify-between text-[11px] font-bold">
-                                    <div className="space-y-0.5">
-                                        <p className="text-slate-300 uppercase text-[8px]">Current</p>
-                                        <p className="text-slate-700">GHS {currentDeposit.toFixed(2)}</p>
-                                    </div>
-                                    <div className="text-right space-y-0.5">
-                                        <p className="text-slate-300 uppercase text-[8px]">Daily Goal</p>
-                                        <p className="text-primary">GHS {requiredDeposit.toFixed(2)}</p>
-                                    </div>
+                                <Progress value={progressValue} className="h-3 bg-[#e2e2e6] rounded-full" />
+                                <div className="flex justify-between text-xs font-medium text-[#74777f]">
+                                    <p>Current: GHS {currentDeposit.toFixed(2)}</p>
+                                    <p>Goal: GHS {requiredDeposit.toFixed(2)}</p>
                                 </div>
                             </div>
 
@@ -253,7 +250,7 @@ const ClaimRewardModal = ({ isOpen, onClose }) => {
                                         if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
                                     }, 100);
                                 }}
-                                className="w-full h-14 bg-slate-900 border-b-4 border-slate-950 hover:bg-slate-800 text-white font-bold rounded-2xl flex items-center justify-center gap-2 transition-all active:border-b-0 active:translate-y-1 group"
+                                className="w-full h-14 bg-[#1a1c1e] hover:bg-black text-white font-bold rounded-full flex items-center justify-center gap-2 transition-all shadow-md group"
                             >
                                 <span>Go to Deposits</span>
                                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -262,33 +259,33 @@ const ClaimRewardModal = ({ isOpen, onClose }) => {
                     )}
 
                     {!checkingEligibility && !eligibilityError && eligibilityData?.status === 'claimed' && (
-                        <div className="py-12 flex flex-col items-center text-center space-y-8 animate-in zoom-in duration-500">
-                            <div className="w-20 h-20 rounded-full bg-green-50 flex items-center justify-center shadow-sm relative">
-                                <CheckCircle className="w-10 h-10 text-green-500" />
-                                <div className="absolute -inset-2 bg-green-500/5 rounded-full animate-ping -z-10" />
+                        <div className="py-14 flex flex-col items-center text-center space-y-8 animate-in zoom-in duration-500">
+                            <div className="w-24 h-24 rounded-full bg-green-50 flex items-center justify-center shadow-inner">
+                                <CheckCircle className="w-12 h-12 text-green-500" />
                             </div>
-                            <div className="space-y-2">
-                                <h3 className="text-2xl font-black text-slate-900 tracking-tight">Today's Booster Secured</h3>
-                                <p className="text-slate-500 text-sm max-w-[280px] mx-auto font-medium">Your daily reward has been processed. Return tomorrow for another boost!</p>
+                            <div className="space-y-3">
+                                <h3 className="text-2xl font-black text-[#1a1c1e]">Daily Reward Received</h3>
+                                <p className="text-[#44474e] text-sm max-w-[280px] mx-auto font-medium">You've successfully secured your boost for today. See you tomorrow!</p>
                             </div>
 
-                            <div className="bg-slate-50 border border-slate-100 rounded-3xl p-8 w-full max-w-[320px] shadow-sm">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 block">Reset Duration</span>
-                                <div className="flex justify-center gap-8 items-center">
+                            <div className="bg-[#f2f3f8] border border-[#e2e2e6] rounded-[28px] p-8 w-full max-w-[340px] shadow-sm">
+                                <Clock className="w-6 h-6 text-primary mx-auto mb-4" />
+                                <span className="text-xs font-bold text-[#74777f] uppercase tracking-widest mb-4 block">Reset Duration</span>
+                                <div className="flex justify-center gap-10 items-center">
                                     <div className="flex flex-col items-center">
-                                        <span className="text-3xl font-black text-slate-800">{formatTime(timeLeft.hours)}</span>
-                                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Hours</span>
+                                        <span className="text-4xl font-black text-[#1a1c1e]">{formatTime(timeLeft.hours)}</span>
+                                        <span className="text-[10px] font-bold text-[#74777f] uppercase mt-1">Hours</span>
                                     </div>
-                                    <span className="text-2xl font-bold text-slate-200 mb-4">:</span>
+                                    <span className="text-2xl font-bold text-[#c6c6d0] mb-6">:</span>
                                     <div className="flex flex-col items-center">
-                                        <span className="text-3xl font-black text-slate-800">{formatTime(timeLeft.minutes)}</span>
-                                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Minutes</span>
+                                        <span className="text-4xl font-black text-[#1a1c1e]">{formatTime(timeLeft.minutes)}</span>
+                                        <span className="text-[10px] font-bold text-[#74777f] uppercase mt-1">Minutes</span>
                                     </div>
                                 </div>
                             </div>
 
-                            <Button variant="ghost" onClick={handleClose} className="text-slate-400 hover:text-slate-900 font-bold px-8 rounded-xl">
-                                Back to Dashboard
+                            <Button variant="ghost" onClick={handleClose} className="text-[#74777f] hover:text-[#1a1c1e] font-bold rounded-full h-12 px-10">
+                                Dismiss
                             </Button>
                         </div>
                     )}
