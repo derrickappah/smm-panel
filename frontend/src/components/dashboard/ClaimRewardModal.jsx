@@ -125,6 +125,8 @@ const ClaimRewardModal = ({ isOpen, onClose }) => {
                             <span className="bg-[#fdfcff] px-2 py-0.5 rounded-lg shadow-sm">{formatTime(timeLeft.hours)}h</span>
                             <span className="text-[#c6c6d0] animate-pulse">:</span>
                             <span className="bg-[#fdfcff] px-2 py-0.5 rounded-lg shadow-sm">{formatTime(timeLeft.minutes)}m</span>
+                            <span className="text-[#c6c6d0] animate-pulse">:</span>
+                            <span className="bg-[#fdfcff] px-2 py-0.5 rounded-lg shadow-sm">{formatTime(timeLeft.seconds)}s</span>
                         </div>
                     </div>
                 </div>
@@ -271,15 +273,20 @@ const ClaimRewardModal = ({ isOpen, onClose }) => {
                             <div className="bg-[#f2f3f8] border border-[#e2e2e6] rounded-[28px] p-8 w-full max-w-[340px] shadow-sm">
                                 <Clock className="w-6 h-6 text-primary mx-auto mb-4" />
                                 <span className="text-xs font-bold text-[#74777f] uppercase tracking-widest mb-4 block">Reset Duration</span>
-                                <div className="flex justify-center gap-10 items-center">
+                                <div className="flex justify-center gap-6 items-center">
                                     <div className="flex flex-col items-center">
-                                        <span className="text-4xl font-black text-[#1a1c1e]">{formatTime(timeLeft.hours)}</span>
+                                        <span className="text-3xl font-black text-[#1a1c1e]">{formatTime(timeLeft.hours)}</span>
                                         <span className="text-[10px] font-bold text-[#74777f] uppercase mt-1">Hours</span>
                                     </div>
                                     <span className="text-2xl font-bold text-[#c6c6d0] mb-6">:</span>
                                     <div className="flex flex-col items-center">
-                                        <span className="text-4xl font-black text-[#1a1c1e]">{formatTime(timeLeft.minutes)}</span>
-                                        <span className="text-[10px] font-bold text-[#74777f] uppercase mt-1">Minutes</span>
+                                        <span className="text-3xl font-black text-[#1a1c1e]">{formatTime(timeLeft.minutes)}</span>
+                                        <span className="text-[10px] font-bold text-[#74777f] uppercase mt-1">Mins</span>
+                                    </div>
+                                    <span className="text-2xl font-bold text-[#c6c6d0] mb-6">:</span>
+                                    <div className="flex flex-col items-center">
+                                        <span className="text-3xl font-black text-[#1a1c1e]">{formatTime(timeLeft.seconds)}</span>
+                                        <span className="text-[10px] font-bold text-[#74777f] uppercase mt-1">Secs</span>
                                     </div>
                                 </div>
                             </div>
