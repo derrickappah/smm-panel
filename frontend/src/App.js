@@ -37,6 +37,7 @@ const PricingPage = lazy(() => import("@/pages/PricingPage"));
 const TermsPage = lazy(() => import("@/pages/TermsPage"));
 const FAQPage = lazy(() => import("@/pages/FAQPage"));
 const DevDashboard = lazy(() => import("@/pages/admin/DevDashboard"));
+const RewardPage = lazy(() => import("@/pages/RewardPage"));
 
 // Loading fallback component - Skeleton loader
 const PageLoader = () => (
@@ -205,6 +206,16 @@ function App() {
                     element={
                       user ? (
                         <SupportPage user={user} onLogout={logout} />
+                      ) : (
+                        <Navigate to="/auth" replace />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/reward"
+                    element={
+                      user ? (
+                        <RewardPage user={user} onLogout={logout} />
                       ) : (
                         <Navigate to="/auth" replace />
                       )

@@ -3299,6 +3299,17 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           <p className="text-sm sm:text-base text-gray-600">Manage your orders and grow your social presence</p>
         </div>
 
+        {/* Claim Reward Button */}
+        <div className="mb-6 sm:mb-8 animate-slideUp">
+          <button
+            onClick={() => setShowRewardModal(true)}
+            className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-2 group border-none"
+          >
+            <Gift className="w-5 h-5 group-hover:scale-110 transition-transform" />
+            Claim Daily Reward
+          </button>
+        </div>
+
         {/* Promotion Packages Section */}
         {promotionPackages.length > 0 && (
           <div className="mb-6 sm:mb-8">
@@ -3327,19 +3338,6 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
         {/* Stats Cards */}
         <DashboardStats user={displayUser} orderCount={recentOrders.length} />
-
-        {/* Claim Reward Button */}
-        <div className="mb-6">
-          <button
-            onClick={() => setShowRewardModal(true)}
-            className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-2 group"
-          >
-            <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
-            </svg>
-            Claim Daily Reward
-          </button>
-        </div>
 
         <div className="grid lg:grid-cols-2 gap-6 lg:gap-8">
           {/* Add Funds */}

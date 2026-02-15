@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Home, Package, History, Shield, LogOut, Menu, X, User, HelpCircle, Receipt, FileText, MessageCircleQuestion } from 'lucide-react';
+import { Home, Package, History, Shield, LogOut, Menu, X, User, HelpCircle, Receipt, FileText, MessageCircleQuestion, Gift } from 'lucide-react';
 
 const Navbar = ({ user, onLogout }) => {
   const navigate = useNavigate();
@@ -13,6 +13,7 @@ const Navbar = ({ user, onLogout }) => {
     { path: '/services', label: 'Services', icon: Package },
     { path: '/orders', label: 'Orders', icon: History },
     { path: '/transactions', label: 'Transactions', icon: Receipt },
+    { path: '/reward', label: 'Claim Reward', icon: Gift },
     { path: '/support', label: 'Support', icon: HelpCircle },
     { path: '/faq', label: 'FAQ and Update', icon: MessageCircleQuestion },
     { path: '/terms', label: 'Terms', icon: FileText },
@@ -32,8 +33,8 @@ const Navbar = ({ user, onLogout }) => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
         <div className="flex items-center justify-between">
           {/* Logo */}
-          <div 
-            className="flex items-center cursor-pointer flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 rounded-lg" 
+          <div
+            className="flex items-center cursor-pointer flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 rounded-lg"
             onClick={() => {
               navigate('/dashboard');
               setMobileMenuOpen(false);
@@ -49,9 +50,9 @@ const Navbar = ({ user, onLogout }) => {
             role="button"
             aria-label="Go to dashboard"
           >
-            <img 
-              src="/download.png" 
-              alt="BoostUp GH Logo" 
+            <img
+              src="/download.png"
+              alt="BoostUp GH Logo"
               className="h-8 sm:h-10 max-w-full"
             />
           </div>
@@ -66,11 +67,10 @@ const Navbar = ({ user, onLogout }) => {
                   key={item.path}
                   data-testid={`nav-${item.label.toLowerCase()}-btn`}
                   onClick={() => navigate(item.path)}
-                  className={`flex items-center space-x-2 rounded-lg px-3 sm:px-4 py-2 text-sm font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                    isActive
-                      ? 'bg-indigo-600 text-white hover:bg-indigo-700'
-                      : 'bg-transparent text-gray-700 hover:bg-gray-100'
-                  }`}
+                  className={`flex items-center space-x-2 rounded-lg px-3 sm:px-4 py-2 text-sm font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${isActive
+                    ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                    : 'bg-transparent text-gray-700 hover:bg-gray-100'
+                    }`}
                 >
                   <Icon className="w-4 h-4" />
                   <span>{item.label}</span>
@@ -105,7 +105,7 @@ const Navbar = ({ user, onLogout }) => {
               </div>
               <span className="text-xs sm:text-sm font-semibold text-gray-900">₵{user?.balance?.toFixed(2) || '0.00'}</span>
             </div>
-            
+
             {/* Hamburger Menu Button */}
             <Button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -135,11 +135,10 @@ const Navbar = ({ user, onLogout }) => {
                   <Button
                     key={item.path}
                     onClick={() => handleNavClick(item.path)}
-                    className={`w-full justify-start items-center space-x-3 rounded-lg px-4 py-3 text-sm font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                      isActive
-                        ? 'bg-indigo-600 text-white hover:bg-indigo-700'
-                        : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
-                    }`}
+                    className={`w-full justify-start items-center space-x-3 rounded-lg px-4 py-3 text-sm font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${isActive
+                      ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                      : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
+                      }`}
                   >
                     <Icon className="w-5 h-5" />
                     <span>{item.label}</span>
