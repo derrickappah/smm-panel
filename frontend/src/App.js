@@ -37,7 +37,7 @@ const PricingPage = lazy(() => import("@/pages/PricingPage"));
 const TermsPage = lazy(() => import("@/pages/TermsPage"));
 const FAQPage = lazy(() => import("@/pages/FAQPage"));
 const DevDashboard = lazy(() => import("@/pages/admin/DevDashboard"));
-const RewardPage = lazy(() => import("@/pages/RewardPage"));
+import RewardPage from "@/pages/RewardPage";
 
 // Loading fallback component - Skeleton loader
 const PageLoader = () => (

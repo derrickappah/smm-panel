@@ -41,8 +41,8 @@ const AdminFAQ = lazy(() => import('@/pages/admin/AdminFAQ'));
 const AdminTerms = lazy(() => import('@/pages/admin/AdminTerms'));
 const AdminUpdates = lazy(() => import('@/pages/admin/AdminUpdates'));
 const AdminVideoTutorials = lazy(() => import('@/pages/admin/AdminVideoTutorials'));
-const AdminRewards = lazy(() => import('@/pages/admin/AdminRewards'));
-const AdminRewardSettings = lazy(() => import('@/pages/admin/AdminRewardSettings'));
+import AdminRewards from '@/pages/admin/AdminRewards';
+import AdminRewardSettings from '@/pages/admin/AdminRewardSettings';
 
 // Loading fallback component
 const ComponentLoader = () => (
