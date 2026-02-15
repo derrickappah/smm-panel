@@ -23,7 +23,7 @@ const ClaimRewardModal = ({ isOpen, onClose }) => {
                 throw new Error('Not authenticated');
             }
 
-            const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
+            const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
             const response = await fetch(`${BACKEND_URL}/api/reward/claim-reward`, {
                 method: 'POST',
                 headers: {

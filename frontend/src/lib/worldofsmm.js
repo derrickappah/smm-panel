@@ -1,7 +1,7 @@
 // World of SMM API Integration
 // This service handles all interactions with World of SMM API via backend proxy
 
-const BACKEND_PROXY_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
+const BACKEND_PROXY_URL = process.env.REACT_APP_BACKEND_URL || '';
 
 const isProduction = process.env.NODE_ENV === 'production' ||
     (typeof window !== 'undefined' &&

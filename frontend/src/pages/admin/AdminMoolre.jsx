@@ -8,8 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
-import { 
-  RefreshCw, 
+import {
+  RefreshCw,
   Search,
   Loader2,
   CheckCircle,
@@ -25,14 +25,14 @@ import { supabase } from '@/lib/supabase';
 const POLLING_INTERVAL = 45000; // 45 seconds
 
 // Backend proxy URL for local development
-const BACKEND_PROXY_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
+const BACKEND_PROXY_URL = process.env.REACT_APP_BACKEND_URL || '';
 
 // Check if we're in production (Vercel)
-const isProduction = process.env.NODE_ENV === 'production' || 
-  (typeof window !== 'undefined' && 
-   window.location.hostname !== 'localhost' && 
-   window.location.hostname !== '127.0.0.1' &&
-   !window.location.hostname.includes('localhost'));
+const isProduction = process.env.NODE_ENV === 'production' ||
+  (typeof window !== 'undefined' &&
+    window.location.hostname !== 'localhost' &&
+    window.location.hostname !== '127.0.0.1' &&
+    !window.location.hostname.includes('localhost'));
 
 // Fetch Moolre transactions from API
 const fetchMoolreTransactions = async (filters = {}) => {
@@ -42,12 +42,12 @@ const fetchMoolreTransactions = async (filters = {}) => {
   }
 
   // Use serverless functions in production, backend server in development
-  const apiUrls = isProduction 
+  const apiUrls = isProduction
     ? ['/api/moolre-list-transactions']  // Only use serverless function in production
     : [`${BACKEND_PROXY_URL}/api/moolre-list-transactions`, '/api/moolre-list-transactions'];
 
   let lastError = null;
-  
+
   for (const apiUrl of apiUrls) {
     try {
       const response = await fetch(apiUrl, {
@@ -137,12 +137,12 @@ const AdminMoolre = () => {
 
   // Fetch transactions with React Query
   // Note: We fetch all transactions and filter client-side for better UX
-  const { 
-    data, 
-    isLoading, 
-    error, 
+  const {
+    data,
+    isLoading,
+    error,
     refetch,
-    dataUpdatedAt 
+    dataUpdatedAt
   } = useQuery({
     queryKey: ['moolre', 'transactions'],
     queryFn: () => fetchMoolreTransactions(filters),
@@ -196,11 +196,11 @@ const AdminMoolre = () => {
         const payer = (tx.payer || '').toLowerCase();
         const username = (tx.username || '').toLowerCase();
         const email = (tx.email || '').toLowerCase();
-        return ref.includes(searchLower) || 
-               id.includes(searchLower) || 
-               payer.includes(searchLower) ||
-               username.includes(searchLower) ||
-               email.includes(searchLower);
+        return ref.includes(searchLower) ||
+          id.includes(searchLower) ||
+          payer.includes(searchLower) ||
+          username.includes(searchLower) ||
+          email.includes(searchLower);
       });
     }
 
@@ -301,23 +301,23 @@ const AdminMoolre = () => {
     // Check txtype field from Moolre API
     // txtype: 1 = Payment/Deposit (money coming in), 2 = Payout/Withdrawal (money going out)
     const txtype = tx.txtype || tx.type;
-    
+
     // If txtype is explicitly 2, it's a payout
     if (txtype === 2 || txtype === '2' || txtype === 'payout' || txtype === 'withdrawal') {
       return 'payout';
     }
-    
+
     // If txtype is 1 or 'payment' or 'deposit', it's a deposit
     if (txtype === 1 || txtype === '1' || txtype === 'payment' || txtype === 'deposit') {
       return 'deposit';
     }
-    
+
     // Fallback: If there's a payee (money going out), it's likely a payout
     // If there's a payer (money coming in), it's likely a deposit
     if (tx.payee && !tx.payer) {
       return 'payout';
     }
-    
+
     // Default to deposit (most common case for our use case)
     return 'deposit';
   };
@@ -747,7 +747,7 @@ const AdminMoolre = () => {
               )}
             </CardTitle>
             <CardDescription>
-              {transactions.length > 0 
+              {transactions.length > 0
                 ? `Showing ${filteredTransactions.length} of ${transactions.length} transactions`
                 : 'No transactions found'}
             </CardDescription>
@@ -785,8 +785,8 @@ const AdminMoolre = () => {
                   </thead>
                   <tbody>
                     {filteredTransactions.map((tx, index) => (
-                      <tr 
-                        key={tx.id || tx.externalref || index} 
+                      <tr
+                        key={tx.id || tx.externalref || index}
                         className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
                       >
                         <td className="p-3">

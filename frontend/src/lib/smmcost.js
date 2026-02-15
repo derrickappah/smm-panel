@@ -3,7 +3,7 @@
 
 // Backend proxy URL (to avoid CORS issues)
 // Priority: 1. Vercel serverless functions (same domain), 2. Custom backend URL, 3. Localhost
-const BACKEND_PROXY_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
+const BACKEND_PROXY_URL = process.env.REACT_APP_BACKEND_URL || '';
 
 // Check if we're in production (Vercel)
 // In production, hostname will be something like 'smm-panel-ten.vercel.app'
