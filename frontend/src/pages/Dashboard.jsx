@@ -632,6 +632,20 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     }
   }, [location.state?.selectedPackageId, promotionPackages]);
 
+  // Auto-scroll to deposit section if requested
+  useEffect(() => {
+    if (location.state?.scrollToDeposit) {
+      setTimeout(() => {
+        const depositSection = document.getElementById('deposit-section');
+        if (depositSection) {
+          depositSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 300);
+      // Clear the state to avoid re-scrolling on re-render
+      window.history.replaceState({ ...location.state, scrollToDeposit: false }, document.title);
+    }
+  }, [location.state]);
+
 
   const handlePaymentSuccess = async (reference) => {
     console.log('Payment success callback received:', { reference, pendingTransactionId: pendingTransaction?.id });
@@ -3342,43 +3356,45 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
         <div className="grid lg:grid-cols-2 gap-6 lg:gap-8">
           {/* Add Funds */}
-          <DashboardDeposit
-            depositMethod={depositMethod}
-            setDepositMethod={setDepositMethod}
-            depositAmount={depositAmount}
-            setDepositAmount={setDepositAmount}
-            paymentMethodSettings={paymentMethodSettings}
-            manualDepositForm={manualDepositForm}
-            setManualDepositForm={setManualDepositForm}
-            uploadingProof={uploadingProof}
-            handleDeposit={handleDeposit}
-            handleManualDeposit={handleManualDeposit}
-            handleHubtelDeposit={handleHubtelDeposit}
-            handleKorapayDeposit={handleKorapayDeposit}
-            handleMoolreDeposit={handleMoolreDeposit}
-            handleMoolreWebDeposit={handleMoolreWebDeposit}
-            moolrePhoneNumber={moolrePhoneNumber}
-            setMoolrePhoneNumber={setMoolrePhoneNumber}
-            moolreChannel={moolreChannel}
-            setMoolreChannel={setMoolreChannel}
-            moolreOtpCode={moolreOtpCode}
-            setMoolreOtpCode={(value) => {
-              setMoolreOtpCode(value);
-              // Clear error when user starts typing
-              if (moolreOtpError) {
-                setMoolreOtpError(null);
-              }
-            }}
-            moolreRequiresOtp={moolreRequiresOtp}
-            moolreOtpVerifying={moolreOtpVerifying}
-            moolreOtpVerified={moolreOtpVerified}
-            moolreOtpError={moolreOtpError}
-            moolrePaymentStatus={moolrePaymentStatus}
-            loading={loading}
-            isPollingDeposit={isPollingDeposit}
-            pendingTransaction={pendingTransaction}
-            manualDepositDetails={manualDepositDetails}
-          />
+          <div id="deposit-section">
+            <DashboardDeposit
+              depositMethod={depositMethod}
+              setDepositMethod={setDepositMethod}
+              depositAmount={depositAmount}
+              setDepositAmount={setDepositAmount}
+              paymentMethodSettings={paymentMethodSettings}
+              manualDepositForm={manualDepositForm}
+              setManualDepositForm={setManualDepositForm}
+              uploadingProof={uploadingProof}
+              handleDeposit={handleDeposit}
+              handleManualDeposit={handleManualDeposit}
+              handleHubtelDeposit={handleHubtelDeposit}
+              handleKorapayDeposit={handleKorapayDeposit}
+              handleMoolreDeposit={handleMoolreDeposit}
+              handleMoolreWebDeposit={handleMoolreWebDeposit}
+              moolrePhoneNumber={moolrePhoneNumber}
+              setMoolrePhoneNumber={setMoolrePhoneNumber}
+              moolreChannel={moolreChannel}
+              setMoolreChannel={setMoolreChannel}
+              moolreOtpCode={moolreOtpCode}
+              setMoolreOtpCode={(value) => {
+                setMoolreOtpCode(value);
+                // Clear error when user starts typing
+                if (moolreOtpError) {
+                  setMoolreOtpError(null);
+                }
+              }}
+              moolreRequiresOtp={moolreRequiresOtp}
+              moolreOtpVerifying={moolreOtpVerifying}
+              moolreOtpVerified={moolreOtpVerified}
+              moolreOtpError={moolreOtpError}
+              moolrePaymentStatus={moolrePaymentStatus}
+              loading={loading}
+              isPollingDeposit={isPollingDeposit}
+              pendingTransaction={pendingTransaction}
+              manualDepositDetails={manualDepositDetails}
+            />
+          </div>
 
           {/* Quick Order */}
           <DashboardOrderForm

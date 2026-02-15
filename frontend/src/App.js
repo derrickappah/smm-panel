@@ -225,56 +225,7 @@ function App() {
 
                   {/* Admin Routes */}
                   <Route
-                    path="/admin"
-                    element={
-                      user?.role === 'admin' ? (
-                        <AdminDashboard user={user} onLogout={logout} />
-                      ) : user ? (
-                        <Navigate to="/dashboard" replace />
-                      ) : (
-                        <Navigate to="/auth" replace />
-                      )
-                    }
-                  />
-                  <Route
-                    path="/admin/support"
-                    element={
-                      user?.role === 'admin' ? (
-                        <AdminSupport user={user} onLogout={logout} />
-                      ) : user ? (
-                        <Navigate to="/dashboard" replace />
-                      ) : (
-                        <Navigate to="/auth" replace />
-                      )
-                    }
-                  />
-                  <Route
-                    path="/admin/support/analytics"
-                    element={
-                      user?.role === 'admin' ? (
-                        <AdminSupportAnalytics user={user} onLogout={logout} />
-                      ) : user ? (
-                        <Navigate to="/dashboard" replace />
-                      ) : (
-                        <Navigate to="/auth" replace />
-                      )
-                    }
-                  />
-                  {/* Reward management routes */}
-                  <Route
-                    path="/admin/rewards"
-                    element={
-                      user?.role === 'admin' ? (
-                        <AdminDashboard user={user} onLogout={logout} />
-                      ) : user ? (
-                        <Navigate to="/dashboard" replace />
-                      ) : (
-                        <Navigate to="/auth" replace />
-                      )
-                    }
-                  />
-                  <Route
-                    path="/admin/rewards-settings"
+                    path="/admin/*"
                     element={
                       user?.role === 'admin' ? (
                         <AdminDashboard user={user} onLogout={logout} />

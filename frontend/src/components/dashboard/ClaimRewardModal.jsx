@@ -264,10 +264,19 @@ const ClaimRewardModal = ({ isOpen, onClose }) => {
                             <div className="grid grid-cols-1 gap-3">
                                 <Button
                                     onClick={() => {
-                                        handleClose(); setTimeout(() => {
-                                            const el = document.getElementById('deposit-section');
-                                            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                                        }, 100);
+                                        handleClose();
+                                        const isDashboard = window.location.pathname === '/dashboard';
+
+                                        if (isDashboard) {
+                                            // On dashboard: smooth scroll to section
+                                            setTimeout(() => {
+                                                const el = document.getElementById('deposit-section');
+                                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                            }, 100);
+                                        } else {
+                                            // Not on dashboard: navigate with state
+                                            navigate('/dashboard', { state: { scrollToDeposit: true } });
+                                        }
                                     }}
                                     className="w-full h-14 bg-primary hover:bg-primary/90 text-white font-bold rounded-full flex items-center justify-center gap-2 transition-all shadow-lg active:scale-[0.98] group"
                                 >
