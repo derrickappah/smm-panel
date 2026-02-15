@@ -242,41 +242,48 @@ const AdminRewardSettings = () => {
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <AlertTriangle className="w-5 h-5 text-yellow-600" />
-                            Confirm Deposit Limit Change
+                            Confirm Changes
                         </DialogTitle>
                         <DialogDescription>
-                            This change will affect all users immediately. Please confirm the new limit.
+                            These changes will affect all users immediately. Please confirm the new settings.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="py-4">
+                    <div className="py-4 space-y-4">
                         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 space-y-2">
-                            <div className="flex items-center justify-between">
-                                <span className="text-sm font-medium">Current Limit:</span>
-                                <span className="text-lg font-bold">GHS {currentLimit.toFixed(2)}</span>
-                            </div>
-                            <div className="flex items-center justify-center text-2xl text-muted-foreground">
-                                ↓
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <span className="text-sm font-medium">New Limit:</span>
-                                <span className="text-lg font-bold text-blue-600">GHS {parseFloat(newLimit).toFixed(2)}</span>
-                            </div>
+                            {newLimit && (
+                                <div className="flex items-center justify-between">
+                                    <span className="text-sm font-medium">New Deposit Limit:</span>
+                                    <span className="text-lg font-bold text-blue-600">GHS {parseFloat(newLimit).toFixed(2)}</span>
+                                </div>
+                            )}
+                            {newLikesAmount && (
+                                <div className="flex items-center justify-between">
+                                    <span className="text-sm font-medium">New Likes Amount:</span>
+                                    <span className="text-lg font-bold text-purple-600">{parseInt(newLikesAmount).toLocaleString()}</span>
+                                </div>
+                            )}
+                            {newViewsAmount && (
+                                <div className="flex items-center justify-between">
+                                    <span className="text-sm font-medium">New Views Amount:</span>
+                                    <span className="text-lg font-bold text-indigo-600">{parseInt(newViewsAmount).toLocaleString()}</span>
+                                </div>
+                            )}
                         </div>
                     </div>
                     <DialogFooter>
                         <Button
                             variant="outline"
                             onClick={() => setShowConfirmDialog(false)}
-                            disabled={updateLimitMutation.isPending}
+                            disabled={updateMutation.isPending}
                         >
                             Cancel
                         </Button>
                         <Button
                             onClick={handleConfirm}
-                            disabled={updateLimitMutation.isPending}
-                            className="bg-blue-600 hover:bg-blue-700"
+                            disabled={updateMutation.isPending}
+                            className="bg-primary hover:bg-primary/90"
                         >
-                            {updateLimitMutation.isPending ? 'Updating...' : 'Confirm Change'}
+                            {updateMutation.isPending ? 'Updating...' : 'Confirm Changes'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
