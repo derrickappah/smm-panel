@@ -1,76 +1,84 @@
 import React, { useState } from 'react';
-import { useRewardSettings, useRewardSettingLogs, useUpdateRewardLimit } from '@/hooks/useAdminRewards';
+import { useRewardTiers, useUpsertRewardTier, useDeleteRewardTier } from '@/hooks/useAdminRewards';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Settings, Save, AlertTriangle, History } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Settings, Plus, Trash2, Edit2, Trophy, Coins, Eye, ThumbsUp } from 'lucide-react';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
 
 const AdminRewardSettings = () => {
-    const [newLimit, setNewLimit] = useState('');
-    const [newLikesAmount, setNewLikesAmount] = useState('');
-    const [newViewsAmount, setNewViewsAmount] = useState('');
-    const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+    const { data: tiers, isLoading: tiersLoading } = useRewardTiers();
+    const upsertTierMutation = useUpsertRewardTier();
+    const deleteTierMutation = useDeleteRewardTier();
 
-    const { data: settings, isLoading: settingsLoading } = useRewardSettings();
-    const { data: logs, isLoading: logsLoading } = useRewardSettingLogs(20);
-    const updateMutation = useUpdateRewardLimit();
+    const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [editingTier, setEditingTier] = useState(null);
+    const [formData, setFormData] = useState({
+        name: '',
+        required_amount: '',
+        reward_likes: '',
+        reward_views: '',
+        position: 0
+    });
 
-    const currentLimit = settings?.daily_deposit_limit || 15.00;
-    const currentLikes = settings?.likes_amount || 1000;
-    const currentViews = settings?.views_amount || 1000;
-
-    const handleSaveClick = () => {
-        const limit = newLimit ? parseFloat(newLimit) : currentLimit;
-        const likes = newLikesAmount ? parseInt(newLikesAmount) : currentLikes;
-        const views = newViewsAmount ? parseInt(newViewsAmount) : currentViews;
-
-        if (isNaN(limit) || limit < 1 || limit > 10000) {
-            toast.error('Please enter a valid deposit limit between GHS 1 and GHS 10,000');
-            return;
+    const handleOpenDialog = (tier = null) => {
+        if (tier) {
+            setEditingTier(tier);
+            setFormData({
+                name: tier.name,
+                required_amount: tier.required_amount,
+                reward_likes: tier.reward_likes,
+                reward_views: tier.reward_views,
+                position: tier.position || 0
+            });
+        } else {
+            setEditingTier(null);
+            setFormData({
+                name: '',
+                required_amount: '',
+                reward_likes: '',
+                reward_views: '',
+                position: (tiers?.length || 0) + 1
+            });
         }
-
-        if (isNaN(likes) || likes < 1 || likes > 50000) {
-            toast.error('Please enter a valid likes amount between 1 and 50,000');
-            return;
-        }
-
-        if (isNaN(views) || views < 1 || views > 50000) {
-            toast.error('Please enter a valid views amount between 1 and 50,000');
-            return;
-        }
-
-        if (limit === currentLimit && likes === currentLikes && views === currentViews) {
-            toast.info('No changes detected');
-            return;
-        }
-
-        setShowConfirmDialog(true);
+        setIsDialogOpen(true);
     };
 
-    const handleConfirm = () => {
-        const settingsPayload = {};
-        if (newLimit) settingsPayload.daily_deposit_limit = parseFloat(newLimit);
-        if (newLikesAmount) settingsPayload.likes_amount = parseInt(newLikesAmount);
-        if (newViewsAmount) settingsPayload.views_amount = parseInt(newViewsAmount);
+    const handleSave = () => {
+        const payload = {
+            name: formData.name,
+            required_amount: parseFloat(formData.required_amount),
+            reward_likes: parseInt(formData.reward_likes),
+            reward_views: parseInt(formData.reward_views),
+            position: parseInt(formData.position)
+        };
 
-        updateMutation.mutate(settingsPayload, {
-            onSuccess: (data) => {
-                toast.success(data.message || 'Settings updated successfully');
-                setNewLimit('');
-                setNewLikesAmount('');
-                setNewViewsAmount('');
-                setShowConfirmDialog(false);
+        if (editingTier) {
+            payload.id = editingTier.id;
+        }
+
+        upsertTierMutation.mutate(payload, {
+            onSuccess: () => {
+                toast.success(editingTier ? 'Tier updated successfully' : 'New tier added successfully');
+                setIsDialogOpen(false);
             },
             onError: (error) => {
-                toast.error(error.message || 'Failed to update settings');
+                toast.error(error.message);
             }
         });
+    };
+
+    const handleDelete = (id) => {
+        if (window.confirm('Are you sure you want to delete this tier?')) {
+            deleteTierMutation.mutate(id, {
+                onSuccess: () => toast.success('Tier deleted successfully'),
+                onError: (error) => toast.error(error.message)
+            });
+        }
     };
 
     return (
@@ -78,212 +86,148 @@ const AdminRewardSettings = () => {
             {/* Header */}
             <div>
                 <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
-                    Reward Settings
+                    Reward Tiers
                 </h2>
                 <p className="text-muted-foreground mt-1">
-                    Configure the daily deposit requirement and reward amounts
+                    Manage the daily reward tiers and their requirements
                 </p>
             </div>
 
-            {/* Config Card */}
-            <Card className="border-2 border-primary/10">
-                <CardHeader>
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-blue-100 text-blue-700 rounded-lg">
-                            <Settings className="w-5 h-5" />
-                        </div>
-                        <div>
-                            <CardTitle>Reward Configuration</CardTitle>
-                            <CardDescription>
-                                Set the minimum deposit requirement and the values for available rewards
-                            </CardDescription>
-                        </div>
-                    </div>
-                </CardHeader>
-                <CardContent className="space-y-8">
-                    {settingsLoading ? (
-                        <Skeleton className="h-64 w-full" />
-                    ) : (
-                        <>
-                            {/* Summary row */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                                    <div className="text-xs text-blue-600 font-semibold mb-1 uppercase tracking-wider">Required Deposit</div>
-                                    <div className="text-2xl font-bold text-blue-700">GHS {currentLimit.toFixed(2)}</div>
-                                </div>
-                                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                                    <div className="text-xs text-purple-600 font-semibold mb-1 uppercase tracking-wider">Likes Reward</div>
-                                    <div className="text-2xl font-bold text-purple-700">{currentLikes.toLocaleString()}</div>
-                                </div>
-                                <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
-                                    <div className="text-xs text-indigo-600 font-semibold mb-1 uppercase tracking-wider">Views Reward</div>
-                                    <div className="text-2xl font-bold text-indigo-700">{currentViews.toLocaleString()}</div>
-                                </div>
-                            </div>
-
-                            {/* Update Form */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div className="space-y-2">
-                                    <Label htmlFor="new-limit">New Deposit Limit (GHS)</Label>
-                                    <Input
-                                        id="new-limit"
-                                        type="number"
-                                        step="0.01"
-                                        placeholder={currentLimit.toFixed(2)}
-                                        value={newLimit}
-                                        onChange={(e) => setNewLimit(e.target.value)}
-                                        className="font-mono"
-                                    />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label htmlFor="likes-amount">New Likes Amount</Label>
-                                    <Input
-                                        id="likes-amount"
-                                        type="number"
-                                        placeholder={currentLikes.toString()}
-                                        value={newLikesAmount}
-                                        onChange={(e) => setNewLikesAmount(e.target.value)}
-                                        className="font-mono"
-                                    />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label htmlFor="views-amount">New Views Amount</Label>
-                                    <Input
-                                        id="views-amount"
-                                        type="number"
-                                        placeholder={currentViews.toString()}
-                                        value={newViewsAmount}
-                                        onChange={(e) => setNewViewsAmount(e.target.value)}
-                                        className="font-mono"
-                                    />
-                                </div>
-                            </div>
-
-                            {settings?.updated_at && (
-                                <p className="text-xs text-muted-foreground text-right italic">
-                                    Last updated: {format(new Date(settings.updated_at), 'MMM dd, yyyy HH:mm')}
-                                </p>
-                            )}
-                        </>
-                    )}
-                </CardContent>
-                <CardFooter className="bg-gray-50/50 justify-end rounded-b-xl border-t p-4">
-                    <Button
-                        onClick={handleSaveClick}
-                        disabled={(!newLimit && !newLikesAmount && !newViewsAmount) || updateMutation.isPending || settingsLoading}
-                        className="bg-primary hover:bg-primary/90 transition-all shadow-sm px-8"
-                    >
-                        <Save className="w-4 h-4 mr-2" />
-                        {updateMutation.isPending ? 'Saving...' : 'Save Settings'}
-                    </Button>
-                </CardFooter>
-            </Card>
-
-            {/* Audit Log */}
-            <Card>
-                <CardHeader>
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-purple-100 text-purple-700 rounded-lg">
-                            <History className="w-5 h-5" />
-                        </div>
-                        <div>
-                            <CardTitle>Change History</CardTitle>
-                            <CardDescription>
-                                Recent changes to the deposit limit setting
-                            </CardDescription>
-                        </div>
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    {logsLoading ? (
-                        <div className="space-y-3">
-                            {Array.from({ length: 5 }).map((_, i) => (
-                                <Skeleton key={i} className="h-16 w-full" />
-                            ))}
-                        </div>
-                    ) : logs && logs.length > 0 ? (
-                        <div className="space-y-3">
-                            {logs.map((log) => (
-                                <div
-                                    key={log.id}
-                                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-                                >
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className="font-medium">{log.profiles?.name || 'Unknown Admin'}</span>
-                                            <Badge variant="outline" className="text-xs">
-                                                {log.profiles?.email || 'N/A'}
+            {/* Tiers List */}
+            <div className="grid grid-cols-1 gap-4">
+                {tiersLoading ? (
+                    Array.from({ length: 3 }).map((_, i) => (
+                        <Skeleton key={i} className="h-32 w-full rounded-xl" />
+                    ))
+                ) : tiers && tiers.length > 0 ? (
+                    tiers.map((tier) => (
+                        <Card key={tier.id} className="group border-2 border-transparent hover:border-primary/10 transition-all">
+                            <CardContent className="p-6 flex items-center justify-between">
+                                <div className="flex items-center gap-6">
+                                    <div className="flex flex-col items-center justify-center w-16 h-16 rounded-full bg-yellow-50 text-yellow-600 border border-yellow-100">
+                                        <Trophy className="w-8 h-8 mb-1" />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="text-xl font-bold text-gray-900">{tier.name}</h3>
+                                            <Badge variant="secondary" className="bg-green-100 text-green-700 hover:bg-green-100 border-none">
+                                                Deposit GHS {parseFloat(tier.required_amount).toFixed(2)}
                                             </Badge>
                                         </div>
-                                        <div className="text-sm text-muted-foreground">
-                                            Changed from GHS {parseFloat(log.old_value).toFixed(2)} → GHS {parseFloat(log.new_value).toFixed(2)}
+                                        <div className="flex items-center gap-4 text-sm text-gray-500">
+                                            <div className="flex items-center gap-1">
+                                                <ThumbsUp className="w-4 h-4 text-blue-500" />
+                                                <span className="font-medium text-gray-700">{parseInt(tier.reward_likes).toLocaleString()} Likes</span>
+                                            </div>
+                                            <div className="w-1 h-1 rounded-full bg-gray-300" />
+                                            <div className="flex items-center gap-1">
+                                                <Eye className="w-4 h-4 text-purple-500" />
+                                                <span className="font-medium text-gray-700">{parseInt(tier.reward_views).toLocaleString()} Views</span>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="text-sm text-muted-foreground">
-                                        {format(new Date(log.created_at), 'MMM dd, yyyy HH:mm')}
-                                    </div>
                                 </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="text-center py-8 text-muted-foreground">
-                            <History className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                            <p>No change history available</p>
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
+                                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(tier)}>
+                                        <Edit2 className="w-4 h-4 text-gray-500" />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" onClick={() => handleDelete(tier.id)}>
+                                        <Trash2 className="w-4 h-4 text-red-500" />
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    ))
+                ) : (
+                    <div className="text-center py-12 border-2 border-dashed rounded-xl">
+                        <Trophy className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                        <h3 className="text-lg font-medium text-gray-900">No Tiers Configured</h3>
+                        <p className="text-gray-500">Add your first reward tier to get started</p>
+                    </div>
+                )}
 
-            {/* Confirmation Dialog */}
-            <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+                <Button
+                    onClick={() => handleOpenDialog()}
+                    className="w-full h-12 border-2 border-dashed border-gray-200 bg-gray-50 text-gray-500 hover:border-primary hover:text-primary hover:bg-primary/5 transition-all"
+                >
+                    <Plus className="w-5 h-5 mr-2" />
+                    Add New Tier
+                </Button>
+            </div>
+
+            {/* Edit/Add Dialog */}
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                            <AlertTriangle className="w-5 h-5 text-yellow-600" />
-                            Confirm Changes
-                        </DialogTitle>
+                        <DialogTitle>{editingTier ? 'Edit Reward Tier' : 'Add Reward Tier'}</DialogTitle>
                         <DialogDescription>
-                            These changes will affect all users immediately. Please confirm the new settings.
+                            Configure the deposit requirement and rewards for this tier.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="py-4 space-y-4">
-                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 space-y-2">
-                            {newLimit && (
-                                <div className="flex items-center justify-between">
-                                    <span className="text-sm font-medium">New Deposit Limit:</span>
-                                    <span className="text-lg font-bold text-blue-600">GHS {parseFloat(newLimit).toFixed(2)}</span>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <Label>Tier Name</Label>
+                            <Input
+                                placeholder="e.g. Bronze Tier"
+                                value={formData.name}
+                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Required Deposit (GHS)</Label>
+                            <div className="relative">
+                                <Coins className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                                <Input
+                                    className="pl-9"
+                                    type="number"
+                                    placeholder="0.00"
+                                    value={formData.required_amount}
+                                    onChange={(e) => setFormData({ ...formData, required_amount: e.target.value })}
+                                />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Reward Likes</Label>
+                                <div className="relative">
+                                    <ThumbsUp className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                                    <Input
+                                        className="pl-9"
+                                        type="number"
+                                        placeholder="0"
+                                        value={formData.reward_likes}
+                                        onChange={(e) => setFormData({ ...formData, reward_likes: e.target.value })}
+                                    />
                                 </div>
-                            )}
-                            {newLikesAmount && (
-                                <div className="flex items-center justify-between">
-                                    <span className="text-sm font-medium">New Likes Amount:</span>
-                                    <span className="text-lg font-bold text-purple-600">{parseInt(newLikesAmount).toLocaleString()}</span>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Reward Views</Label>
+                                <div className="relative">
+                                    <Eye className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                                    <Input
+                                        className="pl-9"
+                                        type="number"
+                                        placeholder="0"
+                                        value={formData.reward_views}
+                                        onChange={(e) => setFormData({ ...formData, reward_views: e.target.value })}
+                                    />
                                 </div>
-                            )}
-                            {newViewsAmount && (
-                                <div className="flex items-center justify-between">
-                                    <span className="text-sm font-medium">New Views Amount:</span>
-                                    <span className="text-lg font-bold text-indigo-600">{parseInt(newViewsAmount).toLocaleString()}</span>
-                                </div>
-                            )}
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Position (Sort Order)</Label>
+                            <Input
+                                type="number"
+                                placeholder="0"
+                                value={formData.position}
+                                onChange={(e) => setFormData({ ...formData, position: e.target.value })}
+                            />
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button
-                            variant="outline"
-                            onClick={() => setShowConfirmDialog(false)}
-                            disabled={updateMutation.isPending}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={handleConfirm}
-                            disabled={updateMutation.isPending}
-                            className="bg-primary hover:bg-primary/90"
-                        >
-                            {updateMutation.isPending ? 'Updating...' : 'Confirm Changes'}
+                        <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+                        <Button onClick={handleSave} disabled={upsertTierMutation.isPending}>
+                            {upsertTierMutation.isPending ? 'Saving...' : 'Save Tier'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

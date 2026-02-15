@@ -87,39 +87,80 @@ export function useRewardSettingLogs(limit = 20) {
     });
 }
 
-// Update reward settings (limit and amounts)
-export function useUpdateRewardLimit() {
+// Fetch all reward tiers
+export function useRewardTiers() {
+    return useQuery({
+        queryKey: ['admin', 'reward-tiers'],
+        queryFn: async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) throw new Error('Not authenticated');
+
+            const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
+            const response = await fetch(`${BACKEND_URL}/api/admin/reward-tiers`, {
+                headers: { 'Authorization': `Bearer ${session.access_token}` }
+            });
+
+            if (!response.ok) throw new Error('Failed to fetch tiers');
+            return response.json();
+        },
+        staleTime: 5 * 60 * 1000,
+    });
+}
+
+// Upsert reward tier (Add or Update)
+export function useUpsertRewardTier() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: async (settings) => {
-            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-            if (sessionError || !session) {
-                throw new Error('Not authenticated');
-            }
+        mutationFn: async (tier) => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) throw new Error('Not authenticated');
 
             const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
-            const response = await fetch(`${BACKEND_URL}/api/admin/update-reward-limit`, {
+            const response = await fetch(`${BACKEND_URL}/api/admin/reward-tiers`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${session.access_token}`
                 },
-                body: JSON.stringify(settings)
+                body: JSON.stringify(tier)
             });
 
-            const data = await response.json();
-
             if (!response.ok) {
-                throw new Error(data.error || 'Failed to update reward limit');
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to save tier');
             }
-
-            return data;
+            return response.json();
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['admin', 'reward-settings'] });
-            queryClient.invalidateQueries({ queryKey: ['admin', 'reward-setting-logs'] });
+            queryClient.invalidateQueries({ queryKey: ['admin', 'reward-tiers'] });
+        }
+    });
+}
+
+// Delete reward tier
+export function useDeleteRewardTier() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async (id) => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) throw new Error('Not authenticated');
+
+            const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
+            const response = await fetch(`${BACKEND_URL}/api/admin/reward-tiers/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${session.access_token}` }
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to delete tier');
+            }
+            return response.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['admin', 'reward-tiers'] });
         }
     });
 }

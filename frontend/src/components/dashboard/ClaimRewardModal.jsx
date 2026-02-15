@@ -8,15 +8,21 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
-import { Gift, Loader2, CheckCircle, XCircle, AlertCircle, Heart, Eye, ArrowRight, Clock, ShieldCheck, Zap } from 'lucide-react';
+import { Gift, Loader2, CheckCircle, XCircle, AlertCircle, Heart, Eye, ArrowRight, Clock, ShieldCheck, Zap, Lock, Unlock } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useNavigate } from 'react-router-dom';
 
 const ClaimRewardModal = ({ isOpen, onClose }) => {
     const [link, setLink] = useState('');
+    const [selectedTier, setSelectedTier] = useState(null);
     const [rewardType, setRewardType] = useState('likes');
     const queryClient = useQueryClient();
+    const navigate = useNavigate();
 
-    const { data: eligibilityData, isLoading: checkingEligibility, error: eligibilityError } = useRewardEligibility();
+    const { data: eligibilityResponse, isLoading: checkingEligibility, error: eligibilityError } = useRewardEligibility();
+    const eligibilityData = eligibilityResponse?.data;
+    const tiers = eligibilityData?.tiers || [];
+    const currentDeposit = eligibilityData?.current || 0;
 
     // Countdown Logic
     const [timeLeft, setTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0 });
@@ -49,7 +55,7 @@ const ClaimRewardModal = ({ isOpen, onClose }) => {
     const formatTime = (val) => val.toString().padStart(2, '0');
 
     const claimMutation = useMutation({
-        mutationFn: async ({ personalLink, type }) => {
+        mutationFn: async ({ personalLink, type, tierId }) => {
             const { data: { session }, error: sessionError } = await supabase.auth.getSession();
             if (sessionError || !session) throw new Error('Not authenticated');
 
@@ -60,7 +66,7 @@ const ClaimRewardModal = ({ isOpen, onClose }) => {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${session.access_token}`
                 },
-                body: JSON.stringify({ link: personalLink, reward_type: type })
+                body: JSON.stringify({ link: personalLink, reward_type: type, tier_id: tierId })
             });
 
             const data = await response.json();
@@ -71,260 +77,257 @@ const ClaimRewardModal = ({ isOpen, onClose }) => {
             toast.success(data.message || 'Claim successful! 🚀');
             queryClient.invalidateQueries({ queryKey: ['reward-eligibility'] });
             setLink('');
-            setTimeout(onClose, 2000);
+            setSelectedTier(null);
+            // Don't close immediately to allow claiming other tiers if available
         },
         onError: (error) => {
             toast.error(error.message || 'Claim failed');
         }
     });
 
-    const handleSubmit = (e) => {
+    const handleClaimClick = (tier) => {
+        setSelectedTier(tier);
+        setRewardType('likes'); // Default
+    };
+
+    const handleSubmitClaim = (e) => {
         e.preventDefault();
         if (!link.trim()) {
             toast.error('Required link is missing');
             return;
         }
-        claimMutation.mutate({ personalLink: link.trim(), type: rewardType });
+        if (!selectedTier) return;
+
+        claimMutation.mutate({
+            personalLink: link.trim(),
+            type: rewardType,
+            tierId: selectedTier.id
+        });
     };
 
     const handleClose = () => {
         if (!claimMutation.isPending) {
             setLink('');
-            setRewardType('likes');
+            setSelectedTier(null);
             onClose();
         }
     };
 
-    const likesAmount = eligibilityData?.data?.settings?.likes_amount || 1000;
-    const viewsAmount = eligibilityData?.data?.settings?.views_amount || 1000;
-    const requiredDeposit = eligibilityData?.data?.required || 15.00;
-    const currentDeposit = eligibilityData?.data?.current || 0;
-    const progressValue = Math.min((currentDeposit / requiredDeposit) * 100, 100);
+    // Calculate overall progress to next unlocked tier
+    const nextLockedTier = tiers.find(t => !t.isUnlocked);
+    const progressToNext = nextLockedTier
+        ? Math.min((currentDeposit / parseFloat(nextLockedTier.required_amount)) * 100, 100)
+        : 100;
 
     return (
         <Dialog open={isOpen} onOpenChange={handleClose}>
-            <DialogContent className="sm:max-w-[480px] p-0 overflow-hidden border-none bg-[#fdfcff] shadow-xl rounded-[28px]">
+            <DialogContent className="sm:max-w-[550px] p-0 overflow-hidden border-none bg-[#fdfcff] shadow-xl rounded-[28px] max-h-[85vh] flex flex-col">
                 {/* Material 3 Header Style */}
-                <div className="bg-[#f2f3f8] p-6 pb-4">
+                <div className="bg-[#f2f3f8] p-6 pb-4 flex-shrink-0">
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-3">
                             <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                                 <Zap className="w-6 h-6 fill-current" />
                             </div>
-                            <DialogTitle className="text-xl font-medium text-[#1a1c1e] tracking-tight">Daily Reward Hub</DialogTitle>
+                            <div>
+                                <DialogTitle className="text-xl font-medium text-[#1a1c1e] tracking-tight">Daily Reward Tiers</DialogTitle>
+                                <DialogDescription className="text-xs text-muted-foreground">Unlock higher rewards with more deposits</DialogDescription>
+                            </div>
+                        </div>
+                        {/* Digital Countdown Strip */}
+                        <div className="flex items-center gap-2 bg-white/50 px-3 py-1.5 rounded-full border border-white/60 shadow-sm">
+                            <Clock className="w-3.5 h-3.5 text-primary" />
+                            <div className="flex gap-0.5 font-mono text-xs font-bold text-[#1a1c1e]">
+                                <span>{formatTime(timeLeft.hours)}</span>
+                                <span className="text-[#c6c6d0] animate-pulse">:</span>
+                                <span>{formatTime(timeLeft.minutes)}</span>
+                                <span className="text-[#c6c6d0] animate-pulse">:</span>
+                                <span>{formatTime(timeLeft.seconds)}</span>
+                            </div>
                         </div>
                     </div>
 
-                    {/* Digital Countdown Strip */}
-                    {!checkingEligibility && eligibilityData?.status !== 'claimed' && (
-                        <div className="bg-[#e2e2e6] rounded-2xl p-4 flex items-center justify-between animate-in fade-in duration-500">
-                            <div className="flex items-center gap-2 text-[#44474e]">
-                                <Clock className="w-4 h-4" />
-                                <span className="text-xs font-medium uppercase tracking-wider">Next reset in</span>
+                    {/* Overall Progress */}
+                    {!checkingEligibility && (
+                        <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm">
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="text-xs font-bold text-gray-500 uppercase">Today's Deposit</span>
+                                <span className="text-sm font-black text-primary">GHS {currentDeposit.toFixed(2)}</span>
                             </div>
-                            <div className="flex gap-1 font-mono text-lg font-bold text-[#1a1c1e]">
-                                <span className="bg-[#fdfcff] px-2 py-0.5 rounded-lg shadow-sm">{formatTime(timeLeft.hours)}h</span>
-                                <span className="text-[#c6c6d0] animate-pulse">:</span>
-                                <span className="bg-[#fdfcff] px-2 py-0.5 rounded-lg shadow-sm">{formatTime(timeLeft.minutes)}m</span>
-                                <span className="text-[#c6c6d0] animate-pulse">:</span>
-                                <span className="bg-[#fdfcff] px-2 py-0.5 rounded-lg shadow-sm">{formatTime(timeLeft.seconds)}s</span>
-                            </div>
+                            <Progress value={progressToNext} className="h-2 bg-gray-100" indicatorClassName="bg-gradient-to-r from-blue-500 to-indigo-600" />
+                            {nextLockedTier && (
+                                <p className="text-[10px] text-gray-400 mt-1.5 text-right">
+                                    GHS {(parseFloat(nextLockedTier.required_amount) - currentDeposit).toFixed(2)} more to unlock {nextLockedTier.name}
+                                </p>
+                            )}
                         </div>
                     )}
                 </div>
 
-                <div className="p-6 pt-2">
-                    {checkingEligibility && (
-                        <div className="flex flex-col items-center justify-center py-20 space-y-4">
+                <div className="overflow-y-auto p-6 space-y-4 flex-grow">
+                    {checkingEligibility ? (
+                        <div className="flex flex-col items-center justify-center py-12 space-y-4">
                             <Loader2 className="w-10 h-10 animate-spin text-primary" />
-                            <p className="text-[#44474e] text-sm font-medium">Updating status...</p>
+                            <p className="text-[#44474e] text-sm font-medium">Loading tiers...</p>
                         </div>
-                    )}
-
-                    {eligibilityError && !checkingEligibility && (
+                    ) : eligibilityError ? (
                         <div className="flex flex-col items-center text-center py-8 space-y-4">
-                            <XCircle className="w-10 h-10 text-destructive/50" />
-                            <div className="space-y-1">
-                                <h3 className="text-slate-900 font-bold">Connection Error</h3>
-                                <p className="text-slate-500 text-xs px-8">Unable to fetch reward status. Please try again.</p>
-                            </div>
-                            <Button onClick={() => queryClient.invalidateQueries({ queryKey: ['reward-eligibility'] })} variant="outline" className="h-8 border-slate-200 text-xs text-slate-700 hover:bg-slate-50">Re-sync</Button>
+                            <AlertCircle className="w-10 h-10 text-destructive/50" />
+                            <p className="text-sm text-muted-foreground">Unable to load rewards.</p>
+                            <Button onClick={() => queryClient.invalidateQueries({ queryKey: ['reward-eligibility'] })} variant="outline" size="sm">Retry</Button>
                         </div>
-                    )}
-
-                    {!checkingEligibility && !eligibilityError && eligibilityData?.status === 'eligible' && (
-                        <div className="space-y-6">
-                            <DialogDescription className="text-[#44474e] text-sm mt-2 px-1">
-                                You are eligible for a daily reward. Please select your preferred boost and provide a link.
-                            </DialogDescription>
-
-                            <form onSubmit={handleSubmit} className="space-y-6">
-                                <div className="space-y-3">
-                                    <Label className="text-xs font-bold text-[#74777f] uppercase ml-1">Selection</Label>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <button
-                                            type="button"
-                                            onClick={() => setRewardType('likes')}
-                                            className={cn(
-                                                "relative flex flex-col items-start p-5 rounded-2xl border transition-all duration-200",
-                                                rewardType === 'likes'
-                                                    ? "bg-[#d3e3fd] border-transparent shadow-md"
-                                                    : "bg-white border-[#c4c6cf] hover:bg-[#f2f3f8]"
-                                            )}
-                                        >
-                                            <div className={cn("p-2 rounded-xl mb-3", rewardType === 'likes' ? "bg-white text-primary" : "bg-[#f2f3f8] text-[#74777f]")}>
-                                                <Heart className={cn("w-5 h-5", rewardType === 'likes' && "fill-current")} />
-                                            </div>
-                                            <span className="text-2xl font-black text-[#1a1c1e]">{likesAmount.toLocaleString()}</span>
-                                            <span className="text-[11px] font-bold text-[#44474e] uppercase">Daily Likes</span>
-                                            {rewardType === 'likes' && <CheckCircle className="absolute top-4 right-4 w-5 h-5 text-primary" />}
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            onClick={() => setRewardType('views')}
-                                            className={cn(
-                                                "relative flex flex-col items-start p-5 rounded-2xl border transition-all duration-200",
-                                                rewardType === 'views'
-                                                    ? "bg-[#d3e3fd] border-transparent shadow-md"
-                                                    : "bg-white border-[#c4c6cf] hover:bg-[#f2f3f8]"
-                                            )}
-                                        >
-                                            <div className={cn("p-2 rounded-xl mb-3", rewardType === 'views' ? "bg-white text-primary" : "bg-[#f2f3f8] text-[#74777f]")}>
-                                                <Eye className="w-5 h-5" />
-                                            </div>
-                                            <span className="text-2xl font-black text-[#1a1c1e]">{viewsAmount.toLocaleString()}</span>
-                                            <span className="text-[11px] font-bold text-[#44474e] uppercase">Daily Views</span>
-                                            {rewardType === 'views' && <CheckCircle className="absolute top-4 right-4 w-5 h-5 text-primary" />}
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-3">
-                                    <Label htmlFor="personal-link" className="text-xs font-bold text-[#74777f] uppercase ml-1">Target Link</Label>
-                                    <Input
-                                        id="personal-link"
-                                        placeholder="https://example.com/post"
-                                        value={link}
-                                        onChange={(e) => setLink(e.target.value)}
-                                        disabled={claimMutation.isPending}
-                                        className="h-14 bg-white border-[#c4c6cf] rounded-xl focus:ring-primary/20 text-[#1a1c1e] px-4"
-                                    />
-                                </div>
-
-                                <Button
-                                    type="submit"
-                                    disabled={claimMutation.isPending || !link.trim()}
-                                    className="w-full h-14 bg-primary hover:shadow-lg text-white font-bold rounded-full transition-all active:scale-[0.98] mt-4"
-                                >
-                                    {claimMutation.isPending ? <Loader2 className="w-6 h-6 animate-spin" /> : "Claim Reward"}
-                                </Button>
-                            </form>
-                        </div>
-                    )}
-
-                    {!checkingEligibility && eligibilityData?.status === 'not_eligible' && (
-                        <div className="space-y-8 py-4">
-                            <div className="text-center space-y-4">
-                                <div className="w-20 h-20 rounded-full bg-[#f2f3f8] flex items-center justify-center mx-auto border border-[#e2e2e6] relative">
-                                    <Gift className="w-8 h-8 text-[#44474e] opacity-40" />
-                                    <div className="absolute inset-0 flex items-center justify-center">
-                                        <ShieldCheck className="w-5 h-5 text-primary opacity-20 translate-x-4 -translate-y-4" />
-                                    </div>
-                                </div>
-                                <div className="space-y-2">
-                                    <h3 className="text-2xl font-bold text-[#1a1c1e] tracking-tight">Reward Locked</h3>
-                                    <p className="text-[#44474e] text-sm px-8 leading-relaxed">
-                                        You need to deposit <span className="font-bold text-[#1a1c1e]">GHS {(requiredDeposit - currentDeposit).toFixed(2)}</span> more today to unlock your free social boost.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="bg-[#f2f3f8] rounded-[24px] p-6 space-y-5 shadow-sm border border-[#e2e2e6]">
-                                <div className="flex justify-between items-end">
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] font-bold text-[#74777f] uppercase tracking-widest block">Instruction</span>
-                                        <span className="text-sm font-bold text-[#1a1c1e]">Reach the Daily Target</span>
-                                    </div>
-                                    <span className="text-lg font-black text-primary">{Math.round(progressValue)}%</span>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Progress value={progressValue} className="h-3 bg-[#e2e2e6] rounded-full" />
-                                    <div className="flex justify-between text-[11px] font-bold text-[#74777f]">
-                                        <div className="flex items-center gap-1.5">
-                                            <div className="w-2 h-2 rounded-full bg-primary/40" />
-                                            <span>Current: GHS {currentDeposit.toFixed(2)}</span>
+                    ) : (
+                        tiers.map((tier) => (
+                            <div
+                                key={tier.id}
+                                className={cn(
+                                    "relative border rounded-2xl p-4 transition-all duration-200",
+                                    tier.isClaimed
+                                        ? "bg-green-50 border-green-200 opacity-80"
+                                        : tier.isUnlocked
+                                            ? "bg-white border-primary/20 shadow-md ring-1 ring-primary/5"
+                                            : "bg-gray-50 border-gray-200 opacity-70 grayscale-[0.5]"
+                                )}
+                            >
+                                <div className="flex justify-between items-start mb-3">
+                                    <div className="flex items-center gap-3">
+                                        <div className={cn(
+                                            "w-10 h-10 rounded-full flex items-center justify-center border",
+                                            tier.isClaimed ? "bg-green-100 border-green-200 text-green-600" :
+                                                tier.isUnlocked ? "bg-blue-100 border-blue-200 text-blue-600" :
+                                                    "bg-gray-200 border-gray-300 text-gray-500"
+                                        )}>
+                                            {tier.isClaimed ? <CheckCircle className="w-5 h-5" /> :
+                                                tier.isUnlocked ? <Unlock className="w-5 h-5" /> :
+                                                    <Lock className="w-5 h-5" />}
                                         </div>
-                                        <span>Target: GHS {requiredDeposit.toFixed(2)}</span>
+                                        <div>
+                                            <h4 className="font-bold text-gray-900">{tier.name}</h4>
+                                            <p className="text-xs text-gray-500 font-medium">Requires GHS {parseFloat(tier.required_amount).toFixed(2)}</p>
+                                        </div>
+                                    </div>
+
+                                    {tier.isClaimed ? (
+                                        <span className="text-xs font-bold text-green-600 bg-green-100 px-2 py-1 rounded-full">Claimed</span>
+                                    ) : tier.isUnlocked ? (
+                                        <Button
+                                            size="sm"
+                                            className="h-8 rounded-full px-4 font-bold bg-primary hover:bg-primary/90"
+                                            onClick={() => handleClaimClick(tier)}
+                                        >
+                                            Claim
+                                        </Button>
+                                    ) : (
+                                        <span className="text-xs font-bold text-gray-400 bg-gray-200 px-2 py-1 rounded-full">Locked</span>
+                                    )}
+                                </div>
+
+                                {/* Reward Info */}
+                                <div className="grid grid-cols-2 gap-2 mt-2">
+                                    <div className="bg-white/60 rounded-lg p-2 flex items-center gap-2 border border-black/5">
+                                        <Heart className="w-3.5 h-3.5 text-pink-500 fill-current" />
+                                        <span className="text-sm font-bold text-gray-700">{parseInt(tier.reward_likes).toLocaleString()} Likes</span>
+                                    </div>
+                                    <div className="bg-white/60 rounded-lg p-2 flex items-center gap-2 border border-black/5">
+                                        <Eye className="w-3.5 h-3.5 text-indigo-500" />
+                                        <span className="text-sm font-bold text-gray-700">{parseInt(tier.reward_views).toLocaleString()} Views</span>
                                     </div>
                                 </div>
                             </div>
-
-                            <div className="grid grid-cols-1 gap-3">
-                                <Button
-                                    onClick={() => {
-                                        handleClose();
-                                        const isDashboard = window.location.pathname === '/dashboard';
-
-                                        if (isDashboard) {
-                                            // On dashboard: smooth scroll to section
-                                            setTimeout(() => {
-                                                const el = document.getElementById('deposit-section');
-                                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                                            }, 100);
-                                        } else {
-                                            // Not on dashboard: navigate with state
-                                            navigate('/dashboard', { state: { scrollToDeposit: true } });
-                                        }
-                                    }}
-                                    className="w-full h-14 bg-primary hover:bg-primary/90 text-white font-bold rounded-full flex items-center justify-center gap-2 transition-all shadow-lg active:scale-[0.98] group"
-                                >
-                                    <span>Deposit Now</span>
-                                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                                </Button>
-                                <p className="text-[10px] text-center text-[#74777f] font-medium">Rewards reset daily at 00:00 UTC</p>
-                            </div>
-                        </div>
+                        ))
                     )}
+                </div>
 
-                    {!checkingEligibility && !eligibilityError && eligibilityData?.status === 'claimed' && (
-                        <div className="py-14 flex flex-col items-center text-center space-y-8 animate-in zoom-in duration-500">
-                            <div className="w-24 h-24 rounded-full bg-green-50 flex items-center justify-center shadow-inner">
-                                <CheckCircle className="w-12 h-12 text-green-500" />
-                            </div>
-                            <div className="space-y-3">
-                                <h3 className="text-2xl font-black text-[#1a1c1e]">Daily Reward Received</h3>
-                                <p className="text-[#44474e] text-sm max-w-[280px] mx-auto font-medium">You've successfully secured your boost for today. See you tomorrow!</p>
-                            </div>
-
-                            <div className="bg-[#f2f3f8] border border-[#e2e2e6] rounded-[28px] p-8 w-full max-w-[340px] shadow-sm">
-                                <Clock className="w-6 h-6 text-primary mx-auto mb-4" />
-                                <span className="text-xs font-bold text-[#74777f] uppercase tracking-widest mb-4 block">Reset Duration</span>
-                                <div className="flex justify-center gap-6 items-center">
-                                    <div className="flex flex-col items-center">
-                                        <span className="text-3xl font-black text-[#1a1c1e]">{formatTime(timeLeft.hours)}</span>
-                                        <span className="text-[10px] font-bold text-[#74777f] uppercase mt-1">Hours</span>
-                                    </div>
-                                    <span className="text-2xl font-bold text-[#c6c6d0] mb-6">:</span>
-                                    <div className="flex flex-col items-center">
-                                        <span className="text-3xl font-black text-[#1a1c1e]">{formatTime(timeLeft.minutes)}</span>
-                                        <span className="text-[10px] font-bold text-[#74777f] uppercase mt-1">Mins</span>
-                                    </div>
-                                    <span className="text-2xl font-bold text-[#c6c6d0] mb-6">:</span>
-                                    <div className="flex flex-col items-center">
-                                        <span className="text-3xl font-black text-[#1a1c1e]">{formatTime(timeLeft.seconds)}</span>
-                                        <span className="text-[10px] font-bold text-[#74777f] uppercase mt-1">Secs</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <Button variant="ghost" onClick={handleClose} className="text-[#74777f] hover:text-[#1a1c1e] font-bold rounded-full h-12 px-10">
-                                Dismiss
+                {/* Claim Form Overlay */}
+                {selectedTier && (
+                    <div className="absolute inset-0 z-50 bg-white/95 backdrop-blur-sm p-6 flex flex-col animate-in fade-in slide-in-from-bottom-5">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-lg font-bold text-gray-900">Claim {selectedTier.name}</h3>
+                            <Button variant="ghost" size="sm" onClick={() => setSelectedTier(null)} className="h-8 w-8 p-0 rounded-full">
+                                <XCircle className="w-6 h-6 text-gray-400 hover:text-gray-600" />
                             </Button>
                         </div>
-                    )}
-                </div>
+
+                        <form onSubmit={handleSubmitClaim} className="flex-grow flex flex-col space-y-6">
+                            <div className="space-y-3">
+                                <Label className="text-xs font-bold text-gray-500 uppercase">Select Reward</Label>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setRewardType('likes')}
+                                        className={cn(
+                                            "flex flex-col items-center p-4 rounded-xl border transition-all",
+                                            rewardType === 'likes' ? "bg-blue-50 border-blue-200 shadow-sm ring-1 ring-blue-200" : "bg-white border-gray-200 hover:bg-gray-50"
+                                        )}
+                                    >
+                                        <Heart className={cn("w-6 h-6 mb-2", rewardType === 'likes' ? "text-pink-500 fill-current" : "text-gray-400")} />
+                                        <span className="text-lg font-bold text-gray-900">{parseInt(selectedTier.reward_likes).toLocaleString()}</span>
+                                        <span className="text-[10px] font-bold text-gray-500 uppercase">Likes</span>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => setRewardType('views')}
+                                        className={cn(
+                                            "flex flex-col items-center p-4 rounded-xl border transition-all",
+                                            rewardType === 'views' ? "bg-indigo-50 border-indigo-200 shadow-sm ring-1 ring-indigo-200" : "bg-white border-gray-200 hover:bg-gray-50"
+                                        )}
+                                    >
+                                        <Eye className={cn("w-6 h-6 mb-2", rewardType === 'views' ? "text-indigo-500" : "text-gray-400")} />
+                                        <span className="text-lg font-bold text-gray-900">{parseInt(selectedTier.reward_views).toLocaleString()}</span>
+                                        <span className="text-[10px] font-bold text-gray-500 uppercase">Views</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="space-y-3">
+                                <Label htmlFor="link" className="text-xs font-bold text-gray-500 uppercase">Link to boost</Label>
+                                <Input
+                                    id="link"
+                                    placeholder="https://instagram.com/p/..."
+                                    className="h-12"
+                                    value={link}
+                                    onChange={(e) => setLink(e.target.value)}
+                                />
+                            </div>
+
+                            <div className="mt-auto pt-4">
+                                <Button
+                                    type="submit"
+                                    className="w-full h-12 text-base font-bold rounded-full shadow-lg shadow-primary/20"
+                                    disabled={claimMutation.isPending || !link}
+                                >
+                                    {claimMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Gift className="w-5 h-5 mr-2" />}
+                                    Confirm Claim
+                                </Button>
+                            </div>
+                        </form>
+                    </div>
+                )}
+
+                {/* Sticky Deposit Button if next tier exists and not checking */}
+                {!checkingEligibility && nextLockedTier && !selectedTier && (
+                    <div className="p-4 bg-white border-t">
+                        <Button
+                            onClick={() => {
+                                handleClose();
+                                const isDashboard = window.location.pathname === '/dashboard';
+                                if (isDashboard) {
+                                    setTimeout(() => {
+                                        const el = document.getElementById('deposit-section');
+                                        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                    }, 100);
+                                } else {
+                                    navigate('/dashboard', { state: { scrollToDeposit: true } });
+                                }
+                            }}
+                            className="w-full h-12 bg-gray-900 hover:bg-gray-800 text-white font-bold rounded-xl flex items-center justify-between px-6 transition-all"
+                        >
+                            <span>Deposit to Unlock Next Tier</span>
+                            <ArrowRight className="w-5 h-5" />
+                        </Button>
+                    </div>
+                )}
             </DialogContent>
         </Dialog>
     );

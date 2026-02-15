@@ -770,34 +770,58 @@ app.post('/api/reward/check-reward-eligibility', async (req, res) => {
     const totalDeposits = deposits?.reduce((sum, d) => sum + parseFloat(d.amount), 0) || 0;
 
     const { data: existingClaim, error: claimError } = await supabase
-      .from('daily_reward_claims')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('claim_date', today)
-      .maybeSingle();
+      .eq('claim_date', today); // Fetch ALL claims for today (to check against tiers)
+
+    // We don't use .maybeSingle() anymore because there can be multiple claims (one per tier)
+    const { data: claims, error: claimError } = await claimQuery;
 
     if (claimError) throw claimError;
 
-    if (existingClaim) {
+    // Fetch all active reward tiers
+    const { data: tiers, error: tiersError } = await supabase
+      .from('reward_tiers')
+      .select('*')
+      .order('position', { ascending: true })
+      .order('required_amount', { ascending: true }); // Fallback sort
+
+    if (tiersError) throw tiersError;
+
+    // If no tiers exist, fall back to legacy logic or return error
+    // For now, let's assume migration seeded tiers. 
+    // If empty, user can't claim anything.
+    if (!tiers || tiers.length === 0) {
       return res.json({
-        status: 'claimed',
-        message: "You've already claimed today's reward.",
-        data: { required: requiredDeposit, current: totalDeposits, claimed: true }
+        status: 'error',
+        message: "No reward tiers configured.",
+        data: { current: totalDeposits, tiers: [] }
       });
     }
 
-    if (totalDeposits >= requiredDeposit) {
-      return res.json({
-        status: 'eligible',
-        message: "You're eligible for today's reward!",
-        data: { required: requiredDeposit, current: totalDeposits, claimed: false }
-      });
-    }
+    // Process tiers to determine status for EACH tier
+    const tiersStatus = tiers.map(tier => {
+      const isClaimed = claims?.some(c => c.tier_id === tier.id);
+      const isUnlocked = totalDeposits >= parseFloat(tier.required_amount);
+
+      return {
+        ...tier,
+        isClaimed,
+        isUnlocked,
+        progress: Math.min(100, (totalDeposits / parseFloat(tier.required_amount)) * 100)
+      };
+    });
+
+    // Determine overall state for the UI (e.g. next unlocked tier)
+    const nextTier = tiersStatus.find(t => !t.isUnlocked) || null;
+    const claimableTier = tiersStatus.find(t => t.isUnlocked && !t.isClaimed);
 
     return res.json({
-      status: 'not_eligible',
-      message: `Deposit at least GHS ${requiredDeposit.toFixed(2)} today to claim.`,
-      data: { required: requiredDeposit, current: totalDeposits, claimed: false }
+      status: 'success',
+      data: {
+        current: totalDeposits,
+        tiers: tiersStatus,
+        nextTier,
+        claimableTier
+      }
     });
 
   } catch (error) {
@@ -813,8 +837,10 @@ app.post('/api/reward/claim-reward', async (req, res) => {
     }
 
     const token = authHeader.replace('Bearer ', '');
-    const { link } = req.body;
+    const { link, tier_id, reward_type = 'likes' } = req.body; // Expect tier_id now
+
     if (!link) return res.status(400).json({ error: 'Link is required' });
+    if (!tier_id) return res.status(400).json({ error: 'Tier selection is required' });
 
     const supabaseUrl = process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL;
     const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY;
@@ -829,9 +855,19 @@ app.post('/api/reward/claim-reward', async (req, res) => {
 
     const today = new Date().toISOString().split('T')[0];
 
-    const { data: settings } = await supabase.from('reward_settings').select('daily_deposit_limit').single();
-    const requiredDeposit = parseFloat(settings.daily_deposit_limit);
+    // 1. Fetch the specific Tier
+    const { data: tier, error: tierError } = await supabase
+      .from('reward_tiers')
+      .select('*')
+      .eq('id', tier_id)
+      .single();
 
+    if (tierError || !tier) return res.status(404).json({ error: 'Reward tier not found' });
+
+    const requiredAmount = parseFloat(tier.required_amount);
+    const rewardAmount = reward_type === 'views' ? tier.reward_views : tier.reward_likes;
+
+    // 2. Verify Deposits
     const { data: deposits } = await supabase.from('transactions')
       .select('amount')
       .eq('user_id', user.id).eq('type', 'deposit').eq('status', 'approved')
@@ -839,21 +875,129 @@ app.post('/api/reward/claim-reward', async (req, res) => {
 
     const totalDeposits = deposits?.reduce((sum, d) => sum + parseFloat(d.amount), 0) || 0;
 
-    if (totalDeposits < requiredDeposit) return res.status(400).json({ error: 'Insufficient deposits' });
+    if (totalDeposits < requiredAmount) {
+      return res.status(400).json({ error: `Insufficient deposits for this tier. Need GHS ${requiredAmount}` });
+    }
 
+    // 3. Check for EXISTING claim for THIS tier
+    const { data: existingClaim, error: claimCheckError } = await supabase
+      .from('daily_reward_claims')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('claim_date', today)
+      .eq('tier_id', tier_id) // Check specific tier
+      .maybeSingle();
+
+    if (existingClaim) return res.status(400).json({ error: 'You have already claimed this reward tier today' });
+
+    // 4. Insert Claim
     const { data: claim, error: insertError } = await supabase
       .from('daily_reward_claims')
-      .insert({ user_id: user.id, deposit_total: totalDeposits, link, claim_date: today })
+      .insert({
+        user_id: user.id,
+        deposit_total: totalDeposits,
+        link,
+        claim_date: today,
+        tier_id: tier.id,
+        reward_type: reward_type,
+        reward_amount: rewardAmount
+      })
       .select().single();
 
     if (insertError) {
-      if (insertError.code === '23505') return res.status(400).json({ error: 'Already claimed today' });
+      if (insertError.code === '23505') return res.status(400).json({ error: 'Already claimed this tier today' });
       throw insertError;
     }
 
-    res.json({ success: true, message: 'Reward claimed successfully!' });
+    res.json({ success: true, message: `Successfully claimed ${tier.name} reward!`, data: claim });
   } catch (error) {
     res.status(500).json({ error: 'Internal server error', details: error.message });
+  }
+});
+
+// Admin: Get all Reward Tiers
+app.get('/api/admin/reward-tiers', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    // ... (Standard Admin Auth Check - abstracted for brevity if possible, but repeating for safety)
+    if (!authHeader || !authHeader.startsWith('Bearer ')) return res.status(401).json({ error: 'No token' });
+    const token = authHeader.replace('Bearer ', '');
+
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL;
+    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY;
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
+
+    const { data: { user } } = await supabase.auth.getUser(token);
+    if (!user) return res.status(401).json({ error: 'Invalid token' });
+
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+    if (profile?.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+
+    const { data: tiers, error } = await supabase.from('reward_tiers').select('*').order('position');
+    if (error) throw error;
+
+    res.json(tiers);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Admin: Upsert Reward Tier (Add or Update)
+app.post('/api/admin/reward-tiers', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) return res.status(401).json({ error: 'No token' });
+    const token = authHeader.replace('Bearer ', '');
+    const { id, name, required_amount, reward_likes, reward_views, position } = req.body;
+
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL;
+    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY;
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
+
+    const { data: { user } } = await supabase.auth.getUser(token);
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+    if (profile?.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+
+    let query;
+    if (id) {
+      // Update
+      query = supabase.from('reward_tiers').update({ name, required_amount, reward_likes, reward_views, position, updated_at: new Date() }).eq('id', id);
+    } else {
+      // Insert
+      query = supabase.from('reward_tiers').insert({ name, required_amount, reward_likes, reward_views, position });
+    }
+
+    const { data, error } = await query.select();
+    if (error) throw error;
+
+    res.json({ success: true, tier: data });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Admin: Delete Reward Tier
+app.delete('/api/admin/reward-tiers/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) return res.status(401).json({ error: 'No token' });
+    const token = authHeader.replace('Bearer ', '');
+
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL;
+    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY;
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
+
+    const { data: { user } } = await supabase.auth.getUser(token);
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+    if (profile?.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+
+    const { error } = await supabase.from('reward_tiers').delete().eq('id', id);
+    if (error) throw error;
+
+    res.json({ success: true, message: 'Tier deleted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
