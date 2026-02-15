@@ -59,18 +59,13 @@ const ClaimRewardModal = ({ isOpen, onClose }) => {
             const { data: { session }, error: sessionError } = await supabase.auth.getSession();
             if (sessionError || !session) throw new Error('Not authenticated');
 
-            const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
-            const response = await fetch(`${BACKEND_URL}/api/reward/claim-reward`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session.access_token}`
-                },
-                body: JSON.stringify({ link: personalLink, reward_type: type, tier_id: tierId })
+            const { data, error } = await supabase.rpc('claim_reward_tier', {
+                tier_id_param: tierId,
+                link_param: personalLink,
+                reward_type_param: type
             });
 
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error || 'Failed to claim reward');
+            if (error) throw new Error(error.message || 'Failed to claim reward');
             return data;
         },
         onSuccess: (data) => {

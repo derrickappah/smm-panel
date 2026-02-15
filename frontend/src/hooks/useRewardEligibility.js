@@ -9,28 +9,17 @@ export function useRewardEligibility() {
     return useQuery({
         queryKey: ['reward-eligibility'],
         queryFn: async () => {
-            // Get current session token
             const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+            if (sessionError || !session) throw new Error('Not authenticated');
 
-            if (sessionError || !session) {
-                throw new Error('Not authenticated');
+            const { data, error } = await supabase.rpc('get_user_reward_status');
+
+            if (error) {
+                console.error('RPC Error:', error);
+                throw new Error(error.message || 'Failed to check eligibility');
             }
 
-            const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
-            const response = await fetch(`${BACKEND_URL}/api/reward/check-reward-eligibility`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session.access_token}`
-                }
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-                throw new Error(errorData.error || 'Failed to check eligibility');
-            }
-
-            return response.json();
+            return data;
         },
         staleTime: 5 * 60 * 1000, // 5 minutes
         retry: 1
