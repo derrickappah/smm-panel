@@ -769,11 +769,11 @@ app.post('/api/reward/check-reward-eligibility', async (req, res) => {
 
     const totalDeposits = deposits?.reduce((sum, d) => sum + parseFloat(d.amount), 0) || 0;
 
-    const { data: existingClaim, error: claimError } = await supabase
-      .eq('claim_date', today); // Fetch ALL claims for today (to check against tiers)
-
-    // We don't use .maybeSingle() anymore because there can be multiple claims (one per tier)
-    const { data: claims, error: claimError } = await claimQuery;
+    const { data: claims, error: claimError } = await supabase
+      .from('daily_reward_claims')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('claim_date', today);
 
     if (claimError) throw claimError;
 
