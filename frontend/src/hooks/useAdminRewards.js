@@ -18,6 +18,8 @@ export function useAdminRewardClaims(filters = {}) {
           deposit_total,
           link,
           claim_date,
+          reward_type,
+          reward_amount,
           created_at,
           profiles!inner(email, name)
         `)
