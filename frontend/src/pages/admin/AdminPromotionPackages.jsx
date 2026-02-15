@@ -27,6 +27,10 @@ const AdminPromotionPackages = memo(() => {
     price: '',
     description: '',
     smmgen_service_id: '',
+    smmcost_service_id: '',
+    jbsmmpanel_service_id: '',
+    worldofsmm_service_id: '',
+    g1618_service_id: '',
     enabled: true,
     display_order: '0',
     is_combo: false,
@@ -57,11 +61,15 @@ const AdminPromotionPackages = memo(() => {
         price: parseFloat(packageForm.price),
         description: packageForm.description || null,
         smmgen_service_id: packageForm.smmgen_service_id || null,
+        smmcost_service_id: packageForm.smmcost_service_id || null,
+        jbsmmpanel_service_id: packageForm.jbsmmpanel_service_id ? parseInt(packageForm.jbsmmpanel_service_id) : null,
+        worldofsmm_service_id: packageForm.worldofsmm_service_id || null,
+        g1618_service_id: packageForm.g1618_service_id || null,
         enabled: Boolean(packageForm.enabled !== false),
         display_order: parseInt(packageForm.display_order) || 0,
         is_combo: packageForm.is_combo || false,
-        combo_package_ids: packageForm.is_combo && packageForm.combo_package_ids.length > 0 
-          ? packageForm.combo_package_ids 
+        combo_package_ids: packageForm.is_combo && packageForm.combo_package_ids.length > 0
+          ? packageForm.combo_package_ids
           : null,
         combo_smmgen_service_ids: packageForm.is_combo && packageForm.combo_smmgen_service_ids.length > 0
           ? packageForm.combo_smmgen_service_ids
@@ -76,6 +84,10 @@ const AdminPromotionPackages = memo(() => {
         price: '',
         description: '',
         smmgen_service_id: '',
+        smmcost_service_id: '',
+        jbsmmpanel_service_id: '',
+        worldofsmm_service_id: '',
+        g1618_service_id: '',
         enabled: true,
         display_order: '0',
         is_combo: false,
@@ -98,9 +110,9 @@ const AdminPromotionPackages = memo(() => {
 
   const handleTogglePackage = useCallback(async (packageId, currentEnabled) => {
     try {
-      await updatePackage.mutateAsync({ 
-        packageId, 
-        updates: { enabled: !currentEnabled } 
+      await updatePackage.mutateAsync({
+        packageId,
+        updates: { enabled: !currentEnabled }
       });
     } catch (error) {
       // Error handled by mutation
@@ -158,10 +170,10 @@ const AdminPromotionPackages = memo(() => {
 
   // Handle error state (e.g., table doesn't exist)
   if (error) {
-    const isTableMissing = error?.message?.includes('relation') || 
-                          error?.message?.includes('does not exist') ||
-                          error?.code === '42P01';
-    
+    const isTableMissing = error?.message?.includes('relation') ||
+      error?.message?.includes('does not exist') ||
+      error?.code === '42P01';
+
     return (
       <div className="space-y-6">
         <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-6">
@@ -324,7 +336,43 @@ const AdminPromotionPackages = memo(() => {
             />
             <p className="text-xs text-gray-500 mt-1">Enter the SMMGen API service ID for integration</p>
           </div>
-          
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <Label>SMMCost ID</Label>
+              <Input
+                placeholder="SMMCost ID"
+                value={packageForm.smmcost_service_id}
+                onChange={(e) => setPackageForm({ ...packageForm, smmcost_service_id: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>JB SMM ID</Label>
+              <Input
+                type="number"
+                placeholder="JB SMM ID"
+                value={packageForm.jbsmmpanel_service_id}
+                onChange={(e) => setPackageForm({ ...packageForm, jbsmmpanel_service_id: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>WorldOfSMM ID</Label>
+              <Input
+                placeholder="WorldOfSMM ID"
+                value={packageForm.worldofsmm_service_id}
+                onChange={(e) => setPackageForm({ ...packageForm, worldofsmm_service_id: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>G1618 ID</Label>
+              <Input
+                placeholder="G1618 ID"
+                value={packageForm.g1618_service_id}
+                onChange={(e) => setPackageForm({ ...packageForm, g1618_service_id: e.target.value })}
+              />
+            </div>
+          </div>
+
           {/* Combo Package Options */}
           <div className="space-y-4 p-4 border border-gray-200 rounded-lg bg-gray-50">
             <div className="flex items-center space-x-2">
@@ -339,7 +387,7 @@ const AdminPromotionPackages = memo(() => {
                 This is a combo package (combines multiple packages)
               </Label>
             </div>
-            
+
             {packageForm.is_combo && (
               <div className="space-y-3 mt-3">
                 <div>
@@ -374,7 +422,7 @@ const AdminPromotionPackages = memo(() => {
                     ))}
                   </div>
                 </div>
-                
+
                 <div>
                   <Label className="text-sm font-medium">SMMGen Service IDs (comma-separated)</Label>
                   <Input
@@ -393,7 +441,7 @@ const AdminPromotionPackages = memo(() => {
               </div>
             )}
           </div>
-          
+
           {/* Enabled Package Option */}
           <div className="flex items-center space-x-2 p-4 border border-gray-200 rounded-lg bg-green-50">
             <input
@@ -410,7 +458,7 @@ const AdminPromotionPackages = memo(() => {
               Enabled (package is visible to users)
             </Label>
           </div>
-          
+
           <Button
             type="submit"
             disabled={createPackage.isPending}
@@ -452,17 +500,16 @@ const AdminPromotionPackages = memo(() => {
             <p className="text-gray-600 text-center py-8">No promotion packages found</p>
           ) : (
             filteredPackages.map((pkg) => (
-              <div 
-                key={pkg.id} 
-                className={`p-4 rounded-xl transition-all ${
-                  pkg.enabled === false 
-                    ? 'bg-gray-100/50 border-2 border-gray-300 opacity-75' 
+              <div
+                key={pkg.id}
+                className={`p-4 rounded-xl transition-all ${pkg.enabled === false
+                    ? 'bg-gray-100/50 border-2 border-gray-300 opacity-75'
                     : 'bg-white/50 border-2 border-purple-200'
-                }`}
+                  }`}
               >
                 {editingPackage?.id === pkg.id ? (
-                  <PackageEditForm 
-                    pkg={pkg} 
+                  <PackageEditForm
+                    pkg={pkg}
                     packages={packages}
                     onSave={(updates) => handleUpdatePackage(pkg.id, updates)}
                     onCancel={() => setEditingPackage(null)}
@@ -500,6 +547,10 @@ const AdminPromotionPackages = memo(() => {
                           </div>
                         )}
                         {pkg.smmgen_service_id && <p><span className="font-medium">SMMGen ID:</span> {pkg.smmgen_service_id}</p>}
+                        {pkg.smmcost_service_id && <p><span className="font-medium">SMMCost ID:</span> {pkg.smmcost_service_id}</p>}
+                        {pkg.jbsmmpanel_service_id && <p><span className="font-medium">JB SMM ID:</span> {pkg.jbsmmpanel_service_id}</p>}
+                        {pkg.worldofsmm_service_id && <p><span className="font-medium">WorldOfSMM ID:</span> {pkg.worldofsmm_service_id}</p>}
+                        {pkg.g1618_service_id && <p><span className="font-medium">G1618 ID:</span> {pkg.g1618_service_id}</p>}
                         <p><span className="font-medium">Display Order:</span> {pkg.display_order}</p>
                       </div>
                     </div>
@@ -555,6 +606,10 @@ const PackageEditForm = ({ pkg, onSave, onCancel, packages = [] }) => {
     price: pkg.price,
     description: pkg.description || '',
     smmgen_service_id: pkg.smmgen_service_id || '',
+    smmcost_service_id: pkg.smmcost_service_id || '',
+    jbsmmpanel_service_id: pkg.jbsmmpanel_service_id || '',
+    worldofsmm_service_id: pkg.worldofsmm_service_id || '',
+    g1618_service_id: pkg.g1618_service_id || '',
     enabled: pkg.enabled === true,
     display_order: pkg.display_order || 0,
     is_combo: pkg.is_combo || false,
@@ -572,11 +627,15 @@ const PackageEditForm = ({ pkg, onSave, onCancel, packages = [] }) => {
       price: parseFloat(formData.price),
       description: formData.description || null,
       smmgen_service_id: formData.smmgen_service_id || null,
+      smmcost_service_id: formData.smmcost_service_id || null,
+      jbsmmpanel_service_id: formData.jbsmmpanel_service_id ? parseInt(formData.jbsmmpanel_service_id) : null,
+      worldofsmm_service_id: formData.worldofsmm_service_id || null,
+      g1618_service_id: formData.g1618_service_id || null,
       enabled: Boolean(formData.enabled !== false),
       display_order: parseInt(formData.display_order) || 0,
       is_combo: formData.is_combo || false,
-      combo_package_ids: formData.is_combo && formData.combo_package_ids.length > 0 
-        ? formData.combo_package_ids 
+      combo_package_ids: formData.is_combo && formData.combo_package_ids.length > 0
+        ? formData.combo_package_ids
         : null,
       combo_smmgen_service_ids: formData.is_combo && formData.combo_smmgen_service_ids.length > 0
         ? formData.combo_smmgen_service_ids
@@ -664,7 +723,43 @@ const PackageEditForm = ({ pkg, onSave, onCancel, packages = [] }) => {
           onChange={(e) => setFormData({ ...formData, smmgen_service_id: e.target.value })}
         />
       </div>
-      
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 pb-2">
+        <div>
+          <Label className="text-xs">SMMCost ID</Label>
+          <Input
+            className="h-8 text-xs"
+            value={formData.smmcost_service_id}
+            onChange={(e) => setFormData({ ...formData, smmcost_service_id: e.target.value })}
+          />
+        </div>
+        <div>
+          <Label className="text-xs">JB SMM ID</Label>
+          <Input
+            type="number"
+            className="h-8 text-xs"
+            value={formData.jbsmmpanel_service_id}
+            onChange={(e) => setFormData({ ...formData, jbsmmpanel_service_id: e.target.value })}
+          />
+        </div>
+        <div>
+          <Label className="text-xs">WorldOfSMM ID</Label>
+          <Input
+            className="h-8 text-xs"
+            value={formData.worldofsmm_service_id}
+            onChange={(e) => setFormData({ ...formData, worldofsmm_service_id: e.target.value })}
+          />
+        </div>
+        <div>
+          <Label className="text-xs">G1618 ID</Label>
+          <Input
+            className="h-8 text-xs"
+            value={formData.g1618_service_id}
+            onChange={(e) => setFormData({ ...formData, g1618_service_id: e.target.value })}
+          />
+        </div>
+      </div>
+
       {/* Combo Package Options */}
       <div className="space-y-4 p-4 border border-gray-200 rounded-lg bg-gray-50">
         <div className="flex items-center space-x-2">
@@ -679,7 +774,7 @@ const PackageEditForm = ({ pkg, onSave, onCancel, packages = [] }) => {
             This is a combo package (combines multiple packages)
           </Label>
         </div>
-        
+
         {formData.is_combo && (
           <div className="space-y-3 mt-3">
             <div>
@@ -714,7 +809,7 @@ const PackageEditForm = ({ pkg, onSave, onCancel, packages = [] }) => {
                 ))}
               </div>
             </div>
-            
+
             <div>
               <Label className="text-sm font-medium">SMMGen Service IDs (comma-separated)</Label>
               <Input
@@ -733,7 +828,7 @@ const PackageEditForm = ({ pkg, onSave, onCancel, packages = [] }) => {
           </div>
         )}
       </div>
-      
+
       <div className="flex items-center space-x-2">
         <input
           type="checkbox"

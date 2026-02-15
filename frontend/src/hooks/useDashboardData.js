@@ -159,7 +159,12 @@ const fetchAllPendingOrders = async () => {
       String(jbsmmpanelId).toLowerCase() !== "order not placed at jbsmmpanel" &&
       Number(jbsmmpanelId) > 0;
 
-    const shouldInclude = hasSmmgenId || hasSmmcostId || hasJbsmmpanelId;
+    const hasWorldofsmmId = order.worldofsmm_order_id &&
+      String(order.worldofsmm_order_id).toLowerCase() !== "order not placed at worldofsmm";
+    const hasG1618Id = order.g1618_order_id &&
+      String(order.g1618_order_id).toLowerCase() !== "order not placed at g1618";
+
+    const shouldInclude = hasSmmgenId || hasSmmcostId || hasJbsmmpanelId || hasWorldofsmmId || hasG1618Id;
 
     if (jbsmmpanelId) {
       console.log('Filtering JB SMM Panel order:', {

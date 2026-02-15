@@ -15,6 +15,7 @@ import DashboardDeposit from '@/components/dashboard/DashboardDeposit';
 import DashboardOrderForm from '@/components/dashboard/DashboardOrderForm';
 import DashboardOrders from '@/components/dashboard/DashboardOrders';
 import PromotionBanner from '@/components/dashboard/PromotionBanner';
+import ClaimRewardModal from '@/components/dashboard/ClaimRewardModal';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { usePaymentMethods } from '@/hooks/usePaymentMethods';
 import { usePromotionPackages } from '@/hooks/useAdminPromotionPackages';
@@ -62,6 +63,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     payment_proof_file: null
   });
   const [uploadingProof, setUploadingProof] = useState(false);
+  const [showRewardModal, setShowRewardModal] = useState(false);
 
   // Optimistic balance state for instant UI updates
   const [optimisticBalance, setOptimisticBalance] = useState(null);
@@ -3326,6 +3328,19 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         {/* Stats Cards */}
         <DashboardStats user={displayUser} orderCount={recentOrders.length} />
 
+        {/* Claim Reward Button */}
+        <div className="mb-6">
+          <button
+            onClick={() => setShowRewardModal(true)}
+            className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-2 group"
+          >
+            <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
+            </svg>
+            Claim Daily Reward
+          </button>
+        </div>
+
         <div className="grid lg:grid-cols-2 gap-6 lg:gap-8">
           {/* Add Funds */}
           <DashboardDeposit
@@ -3385,6 +3400,12 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           <ReferralSection user={displayUser} />
         </div>
       </div>
+
+      {/* Claim Reward Modal */}
+      <ClaimRewardModal
+        isOpen={showRewardModal}
+        onClose={() => setShowRewardModal(false)}
+      />
 
     </div>
   );

@@ -53,7 +53,7 @@ export default async function handler(req, res) {
         const { data: orders, error: fetchError } = await dbClient
             .from('orders')
             .select('*')
-            .in('id', orderIds.slice(0, 50)); // Limit for safety
+            .in('id', orderIds.slice(0, 100)); // Increased limit to 100
 
         if (fetchError) throw fetchError;
         if (!orders || orders.length === 0) {
@@ -77,7 +77,7 @@ export default async function handler(req, res) {
         };
 
         // Helper to update order in database
-        const updateOrder = async (orderId, newStatus) => {
+        const updateOrder = async (orderId, newStatus, provider) => {
             const { error: updateError } = await dbClient
                 .from('orders')
                 .update({
@@ -93,152 +93,79 @@ export default async function handler(req, res) {
             return true;
         };
 
-        // 4. Process SMMGen orders
-        if (groups.smmgen.length > 0) {
-            const API_URL = process.env.SMMGEN_API_URL || 'https://smmgen.com/api/v2';
-            const API_KEY = process.env.SMMGEN_API_KEY;
+        // Generic Provider Processor for Batch Status
+        const processProviderBatch = async (providerName, providerOrders, apiUrl, apiKey, mapper, orderIdField, isJson = false) => {
+            if (providerOrders.length === 0) return;
 
-            for (const order of groups.smmgen) {
-                results.checked++;
-                try {
-                    const response = await fetch(API_URL, {
-                        method: 'POST',
-                        body: new URLSearchParams({ key: API_KEY, action: 'status', order: order.smmgen_order_id })
-                    });
-                    const data = await response.json();
-                    const rawStatus = data.status || data.Status;
-                    const mappedStatus = mapSMMGenStatus(rawStatus);
+            const ids = providerOrders.map(o => o[orderIdField]).join(',');
+            console.log(`[StatusCheck] Checking ${providerName} batch: ${ids}`);
 
-                    if (mappedStatus && mappedStatus !== order.status) {
-                        if (await updateOrder(order.id, mappedStatus)) {
-                            results.updated++;
-                            results.details.push({ id: order.id, old: order.status, new: mappedStatus, provider: 'smmgen' });
-                        }
-                    }
-                } catch (err) {
-                    results.errors.push({ id: order.id, provider: 'smmgen', error: err.message });
-                }
-            }
-        }
-
-        // 5. Process SMMCost orders
-        if (groups.smmcost.length > 0) {
-            const API_URL = process.env.SMMCOST_API_URL || 'https://api.smmcost.com';
-            const API_KEY = process.env.SMMCOST_API_KEY;
-
-            for (const order of groups.smmcost) {
-                results.checked++;
-                try {
-                    const response = await fetch(API_URL, {
+            try {
+                let response;
+                if (isJson) {
+                    response = await fetch(apiUrl, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ key: API_KEY, action: 'status', order: parseInt(order.smmcost_order_id, 10) })
+                        body: JSON.stringify({ key: apiKey, action: 'status', orders: ids })
                     });
-                    const data = await response.json();
-                    const rawStatus = data.status || data.Status;
-                    const mappedStatus = mapSMMCostStatus(rawStatus);
-
-                    if (mappedStatus && mappedStatus !== order.status) {
-                        if (await updateOrder(order.id, mappedStatus)) {
-                            results.updated++;
-                            results.details.push({ id: order.id, old: order.status, new: mappedStatus, provider: 'smmcost' });
-                        }
-                    }
-                } catch (err) {
-                    results.errors.push({ id: order.id, provider: 'smmcost', error: err.message });
-                }
-            }
-        }
-
-        // 6. Process JB SMM Panel orders
-        if (groups.jbsmmpanel.length > 0) {
-            const API_URL = process.env.JBSMMPANEL_API_URL || 'https://jbsmmpanel.com/api/v2';
-            const API_KEY = process.env.JBSMMPANEL_API_KEY;
-
-            for (const order of groups.jbsmmpanel) {
-                results.checked++;
-                try {
-                    const response = await fetch(API_URL, {
+                } else {
+                    response = await fetch(apiUrl, {
                         method: 'POST',
-                        body: new URLSearchParams({ key: API_KEY, action: 'status', order: order.jbsmmpanel_order_id.toString() })
+                        body: new URLSearchParams({ key: apiKey, action: 'status', orders: ids })
                     });
-                    const data = await response.json();
+                }
 
-                    // Robust parsing for JBSMMPanel
-                    let rawStatus = data.status || data.Status || data.order?.status;
-                    if (rawStatus === undefined && Array.isArray(data) && data.length > 0) {
-                        rawStatus = data[0]?.status || data[0]?.Status;
-                    }
+                const data = await response.json();
 
-                    const mappedStatus = mapJBSMMPanelStatus(rawStatus);
+                // SMM panels return an object keyed by order ID when 'orders' action is used
+                // Example: { "123": { "status": "Completed" }, "124": { "status": "Processing" } }
+                for (const order of providerOrders) {
+                    results.checked++;
+                    const panelId = order[orderIdField].toString();
+                    const statusInfo = data[panelId];
 
-                    if (mappedStatus && mappedStatus !== order.status) {
-                        if (await updateOrder(order.id, mappedStatus)) {
-                            results.updated++;
-                            results.details.push({ id: order.id, old: order.status, new: mappedStatus, provider: 'jbsmmpanel' });
+                    if (statusInfo) {
+                        const rawStatus = statusInfo.status || statusInfo.Status;
+                        const mappedStatus = mapper(rawStatus);
+
+                        if (mappedStatus && mappedStatus !== order.status) {
+                            if (await updateOrder(order.id, mappedStatus, providerName)) {
+                                results.updated++;
+                                results.details.push({ id: order.id, old: order.status, new: mappedStatus, provider: providerName });
+                            }
+                        }
+                    } else {
+                        // If not in batch response, fall back to individual check if only one order
+                        if (providerOrders.length === 1) {
+                            const rawStatus = data.status || data.Status;
+                            const mappedStatus = mapper(rawStatus);
+                            if (mappedStatus && mappedStatus !== order.status) {
+                                if (await updateOrder(order.id, mappedStatus, providerName)) {
+                                    results.updated++;
+                                    results.details.push({ id: order.id, old: order.status, new: mappedStatus, provider: providerName });
+                                }
+                            }
+                        } else {
+                            results.errors.push({ id: order.id, provider: providerName, error: 'Status not found in batch response' });
                         }
                     }
-                } catch (err) {
-                    results.errors.push({ id: order.id, provider: 'jbsmmpanel', error: err.message });
+                }
+            } catch (err) {
+                console.error(`[StatusCheck] Error in ${providerName} batch:`, err);
+                for (const order of providerOrders) {
+                    results.errors.push({ id: order.id, provider: providerName, error: err.message });
                 }
             }
-        }
+        };
 
-        // 7. Process World of SMM orders
-        if (groups.worldofsmm.length > 0) {
-            const API_URL = process.env.WORLDOFSMM_API_URL || 'https://worldofsmm.com/api/v2';
-            const API_KEY = process.env.WORLDOFSMM_API_KEY;
-
-            for (const order of groups.worldofsmm) {
-                results.checked++;
-                try {
-                    const response = await fetch(API_URL, {
-                        method: 'POST',
-                        body: new URLSearchParams({ key: API_KEY, action: 'status', order: order.worldofsmm_order_id })
-                    });
-                    const data = await response.json();
-                    const rawStatus = data.status || data.Status;
-                    const mappedStatus = mapWorldOfSMMStatus(rawStatus);
-
-                    if (mappedStatus && mappedStatus !== order.status) {
-                        if (await updateOrder(order.id, mappedStatus)) {
-                            results.updated++;
-                            results.details.push({ id: order.id, old: order.status, new: mappedStatus, provider: 'worldofsmm' });
-                        }
-                    }
-                } catch (err) {
-                    results.errors.push({ id: order.id, provider: 'worldofsmm', error: err.message });
-                }
-            }
-        }
-
-        // 8. Process G1618 orders
-        if (groups.g1618.length > 0) {
-            const API_URL = process.env.G1618_API_URL || 'https://g1618.com/api/v2';
-            const API_KEY = process.env.G1618_API_KEY;
-
-            for (const order of groups.g1618) {
-                results.checked++;
-                try {
-                    const response = await fetch(API_URL, {
-                        method: 'POST',
-                        body: new URLSearchParams({ key: API_KEY, action: 'status', order: order.g1618_order_id })
-                    });
-                    const data = await response.json();
-                    const rawStatus = data.status || data.Status;
-                    const mappedStatus = mapG1618Status(rawStatus);
-
-                    if (mappedStatus && mappedStatus !== order.status) {
-                        if (await updateOrder(order.id, mappedStatus)) {
-                            results.updated++;
-                            results.details.push({ id: order.id, old: order.status, new: mappedStatus, provider: 'g1618' });
-                        }
-                    }
-                } catch (err) {
-                    results.errors.push({ id: order.id, provider: 'g1618', error: err.message });
-                }
-            }
-        }
+        // 4-8. Process all providers in parallel batches
+        await Promise.all([
+            processProviderBatch('smmgen', groups.smmgen, process.env.SMMGEN_API_URL || 'https://smmgen.com/api/v2', process.env.SMMGEN_API_KEY, mapSMMGenStatus, 'smmgen_order_id'),
+            processProviderBatch('smmcost', groups.smmcost, process.env.SMMCOST_API_URL || 'https://api.smmcost.com', process.env.SMMCOST_API_KEY, mapSMMCostStatus, 'smmcost_order_id', true),
+            processProviderBatch('jbsmmpanel', groups.jbsmmpanel, process.env.JBSMMPANEL_API_URL || 'https://jbsmmpanel.com/api/v2', process.env.JBSMMPANEL_API_KEY, mapJBSMMPanelStatus, 'jbsmmpanel_order_id'),
+            processProviderBatch('worldofsmm', groups.worldofsmm, process.env.WORLDOFSMM_API_URL || 'https://worldofsmm.com/api/v2', process.env.WORLDOFSMM_API_KEY, mapWorldOfSMMStatus, 'worldofsmm_order_id'),
+            processProviderBatch('g1618', groups.g1618, process.env.G1618_API_URL || 'https://g1618.com/api/v2', process.env.G1618_API_KEY, mapG1618Status, 'g1618_order_id')
+        ]);
 
         return res.status(200).json({ success: true, ...results });
 

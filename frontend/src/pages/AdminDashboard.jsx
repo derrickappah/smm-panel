@@ -8,7 +8,8 @@ import SEO from '@/components/SEO';
 import {
   Users, ShoppingCart, DollarSign, Package, Wallet, Receipt,
   MessageSquare, UserPlus, RefreshCw, BarChart3, Menu, X, LayoutDashboard, Tag,
-  ChevronLeft, ChevronRight, FileText, Server, HelpCircle, CreditCard, Scale, Bell, Video
+  ChevronLeft, ChevronRight, FileText, Server, HelpCircle, CreditCard, Scale, Bell, Video,
+  Gift, Settings
 } from 'lucide-react';
 import { useAdminOrders } from '@/hooks/useAdminOrders';
 import { useAdminDeposits } from '@/hooks/useAdminDeposits';
@@ -40,6 +41,8 @@ const AdminFAQ = lazy(() => import('@/pages/admin/AdminFAQ'));
 const AdminTerms = lazy(() => import('@/pages/admin/AdminTerms'));
 const AdminUpdates = lazy(() => import('@/pages/admin/AdminUpdates'));
 const AdminVideoTutorials = lazy(() => import('@/pages/admin/AdminVideoTutorials'));
+const AdminRewards = lazy(() => import('@/pages/admin/AdminRewards'));
+const AdminRewardSettings = lazy(() => import('@/pages/admin/AdminRewardSettings'));
 
 // Loading fallback component
 const ComponentLoader = () => (
@@ -89,7 +92,9 @@ const AdminDashboard = memo(({ user, onLogout }) => {
         'faq': 'faq',
         'terms': 'terms',
         'updates': 'updates',
-        'video-tutorials': 'video-tutorials'
+        'video-tutorials': 'video-tutorials',
+        'rewards': 'rewards',
+        'rewards-settings': 'rewards-settings'
       };
       return sectionMap[section] || 'dashboard';
     }
@@ -333,7 +338,9 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     jbsmmpanel: 'JB SMM Panel Integration',
     worldofsmm: 'World of SMM Integration',
     g1618: 'G1618 Integration',
-    moolre: 'Moolre Transactions'
+    moolre: 'Moolre Transactions',
+    rewards: 'Reward Claims',
+    'rewards-settings': 'Reward Settings'
   };
 
   // Navigation items configuration
@@ -360,6 +367,8 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     { id: 'worldofsmm', label: 'World of SMM', icon: Server },
     { id: 'g1618', label: 'G1618', icon: Server },
     { id: 'moolre', label: 'Moolre', icon: CreditCard },
+    { id: 'rewards', label: 'Rewards', icon: Gift },
+    { id: 'rewards-settings', label: 'Reward Settings', icon: Settings },
   ];
 
   // Show skeleton loader while initial data is loading
@@ -829,6 +838,20 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                 <TabsContent value="video-tutorials" className="lg:mt-0 w-full max-w-full">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminVideoTutorials />
+                  </Suspense>
+                </TabsContent>
+
+                {/* Rewards Section */}
+                <TabsContent value="rewards" className="lg:mt-0 w-full max-w-full">
+                  <Suspense fallback={<ComponentLoader />}>
+                    <AdminRewards />
+                  </Suspense>
+                </TabsContent>
+
+                {/* Reward Settings Section */}
+                <TabsContent value="rewards-settings" className="lg:mt-0 w-full max-w-full">
+                  <Suspense fallback={<ComponentLoader />}>
+                    <AdminRewardSettings />
                   </Suspense>
                 </TabsContent>
               </div>

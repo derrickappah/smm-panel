@@ -99,278 +99,68 @@ function App() {
         return;
       }
 
-      // Only clear user on explicit sign out events
-      if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
+      if (session?.user) {
+        if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION') {
+          loadUserProfile(session.user.id);
+        }
+      } else if (event === 'SIGNED_OUT') {
         setUser(null);
         setLoading(false);
-        return;
+        queryClient.clear();
       }
-
-      // For SIGNED_IN, TOKEN_REFRESHED, USER_UPDATED, and other events
-      // Only update if we have a valid session
-      if (session?.user) {
-        // Reload user profile to get latest data
-        // This handles SIGNED_IN, TOKEN_REFRESHED, USER_UPDATED, etc.
-        loadUserProfile(session.user.id);
-      }
-      // For TOKEN_REFRESHED or other events without session, don't clear user
-      // This prevents redirects during normal session refresh
-      // The user state will remain until we explicitly sign out
-      // This is important because token refresh might temporarily have no session
     });
 
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  // Register service worker
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'production') {
-      serviceWorkerRegistration.register({
-        onSuccess: () => {
-          console.log('Service Worker registered successfully');
-        },
-        onUpdate: (registration) => {
-          console.log('Service Worker update available');
-          // Optionally show a notification to user about update
-        },
-      });
-    }
+    return () => subscription.unsubscribe();
   }, []);
 
   const loadUserProfile = async (userId) => {
     try {
-      // First, get auth user
-      const { data: { user: authUser }, error: getUserError } = await supabase.auth.getUser();
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
 
-      if (!authUser) {
-        // Check if it's a token expiration error (which might be temporary during refresh)
-        if (getUserError?.message?.includes('expired') || getUserError?.message?.includes('refresh')) {
-          // Token is being refreshed - don't clear user, let the refresh complete
-          console.log('Token refresh in progress, keeping user state');
-          return;
+      if (error) {
+        if (error.code === 'PGRST116') {
+          // Profile doesn't exist yet, wait or handle gracefully
+          console.log('Profile not found, might be creating one...');
+        } else {
+          console.error('Error loading profile:', error);
         }
-        // For other errors or no user, clear the user state
-        setUser(null);
-        setLoading(false);
-        return;
+      } else {
+        setUser(data);
       }
-
-      // Try to load profile from database FIRST to get correct role
-      try {
-        const { data: profile, error } = await supabase
-          .from('profiles')
-          .select('id, email, name, balance, role, phone_number')
-          .eq('id', userId)
-          .single();
-
-        if (error) {
-          // Handle 500 errors and table not found errors
-          if (error.code === 'PGRST301' || error.message?.includes('500') || error.message?.includes('Internal Server Error')) {
-            console.warn('Profiles table may not exist or RLS policy issue. Using fallback user data.');
-            // Use fallback user
-            const fallbackUser = {
-              id: authUser.id,
-              email: authUser.email || '',
-              name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
-              balance: 0.0,
-              role: 'user',
-            };
-            setUser(fallbackUser);
-            setLoading(false);
-            return;
-          }
-
-          // Profile doesn't exist - try to create it
-          if (error.code === 'PGRST116' || error.message?.includes('No rows')) {
-            try {
-              console.log('Profile not found, attempting to create...', { userId, email: authUser.email });
-              const { data: newProfile, error: insertError } = await supabase
-                .from('profiles')
-                .insert({
-                  id: authUser.id,
-                  email: authUser.email,
-                  name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
-                  balance: 0.0,
-                  role: 'user',
-                })
-                .select()
-                .single();
-
-              if (insertError) {
-                console.error('Profile creation error:', insertError);
-                // If insert fails, use fallback
-                const fallbackUser = {
-                  id: authUser.id,
-                  email: authUser.email || '',
-                  name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
-                  balance: 0.0,
-                  role: 'user',
-                };
-                setUser(fallbackUser);
-                setLoading(false);
-              } else if (newProfile) {
-                console.log('Profile created successfully:', newProfile);
-                setUser({
-                  id: newProfile.id,
-                  email: newProfile.email,
-                  name: newProfile.name,
-                  balance: newProfile.balance || 0.0,
-                  role: newProfile.role || 'user',
-                });
-                setLoading(false);
-              }
-            } catch (insertErr) {
-              // Insert failed - use fallback
-              console.warn('Profile creation failed (non-critical):', insertErr);
-              const fallbackUser = {
-                id: authUser.id,
-                email: authUser.email || '',
-                name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
-                balance: 0.0,
-                role: 'user',
-              };
-              setUser(fallbackUser);
-              setLoading(false);
-            }
-          } else {
-            // Other error - use fallback
-            const fallbackUser = {
-              id: authUser.id,
-              email: authUser.email || '',
-              name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
-              balance: 0.0,
-              role: 'user',
-            };
-            setUser(fallbackUser);
-            setLoading(false);
-          }
-        } else if (profile) {
-          // Profile loaded successfully - set user with correct role immediately
-          setUser({
-            id: profile.id,
-            email: profile.email,
-            name: profile.name,
-            balance: profile.balance || 0.0,
-            role: profile.role || 'user',
-          });
-          setLoading(false);
-        }
-      } catch (err) {
-        // Profile fetch failed - use fallback
-        console.warn('Profile fetch error (non-critical):', err);
-        const fallbackUser = {
-          id: authUser.id,
-          email: authUser.email || '',
-          name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
-          balance: 0.0,
-          role: 'user',
-        };
-        setUser(fallbackUser);
-        setLoading(false);
-      }
-    } catch (error) {
-      console.error('Error loading user:', error);
-      setUser(null);
+    } catch (err) {
+      console.error('Unexpected error loading profile:', err);
+    } finally {
       setLoading(false);
     }
   };
 
   const logout = async () => {
-    // Log logout before signing out
-    if (user) {
-      try {
-        const { logLogout } = await import('@/lib/activityLogger');
-        await logLogout();
-      } catch (error) {
-        // Silently fail - don't block logout
-        console.warn('Failed to log logout:', error);
-      }
-    }
-
     await supabase.auth.signOut();
-    setUser(null);
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50">
-        {/* Mobile Header Skeleton */}
-        <div className="sticky top-0 z-40 lg:hidden bg-white border-b border-gray-200 shadow-sm">
-          <div className="flex items-center justify-between px-4 py-3">
-            <div className="flex items-center gap-3">
-              <div className="h-11 w-11 bg-gray-200 rounded animate-pulse"></div>
-              <div className="h-6 w-32 bg-gray-200 rounded animate-pulse"></div>
-            </div>
-            <div className="h-11 w-11 bg-gray-200 rounded animate-pulse"></div>
-          </div>
-        </div>
-
-        <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-          <div className="flex flex-col lg:flex-row gap-6">
-            {/* Desktop Sidebar Skeleton */}
-            <div className="hidden lg:flex lg:flex-col lg:w-64 lg:flex-shrink-0">
-              <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-4">
-                <div className="h-6 w-32 bg-gray-200 rounded animate-pulse mb-4"></div>
-                <div className="space-y-2">
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => (
-                    <div key={i} className="h-10 bg-gray-200 rounded animate-pulse"></div>
-                  ))}
-                </div>
-                <div className="mt-auto pt-4 border-t border-gray-200 space-y-2">
-                  <div className="h-4 w-24 bg-gray-200 rounded animate-pulse"></div>
-                  <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
-                  <div className="h-9 w-full bg-gray-200 rounded animate-pulse"></div>
-                </div>
-              </div>
-            </div>
-
-            {/* Content Area Skeleton */}
-            <div className="flex-1 min-w-0">
-              <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
-                <div className="space-y-4">
-                  <div className="h-8 bg-gray-200 rounded animate-pulse w-1/3"></div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                    {[1, 2, 3, 4, 5, 6].map((i) => (
-                      <div key={i} className="h-24 bg-gray-200 rounded animate-pulse"></div>
-                    ))}
-                  </div>
-                  <div className="h-12 bg-gray-200 rounded animate-pulse"></div>
-                  <div className="space-y-2">
-                    {[1, 2, 3, 4, 5].map((i) => (
-                      <div key={i} className="h-20 bg-gray-200 rounded animate-pulse"></div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isConfigured) {
-    return (
-      <div className="App">
-        <Toaster position="top-right" />
-        <SupabaseSetup />
-      </div>
-    );
+    return <PageLoader />;
   }
 
   return (
     <QueryClientProvider client={queryClient}>
       <HelmetProvider>
         <TooltipProvider>
-          <div className="App">
-            <Toaster position="top-right" />
+          <div className="min-h-screen bg-background font-sans antialiased">
             <BrowserRouter>
+              <SupabaseSetup />
+              <Toaster position="top-right" expand={false} richColors />
               <Suspense fallback={<PageLoader />}>
                 <Routes>
-                  <Route path="/" element={user ? <Navigate to={user?.role === 'admin' ? '/admin/dashboard' : '/dashboard'} /> : <LandingPage />} />
-                  <Route path="/auth" element={user ? <Navigate to={user?.role === 'admin' ? '/admin/dashboard' : '/dashboard'} /> : <AuthPage />} />
+                  <Route path="/" element={<LandingPage user={user} onLogout={logout} />} />
+                  <Route
+                    path="/auth"
+                    element={user ? <Navigate to="/dashboard" /> : <AuthPage />}
+                  />
                   <Route path="/reset-password" element={<ResetPasswordPage />} />
                   <Route
                     path="/dashboard"
@@ -384,49 +174,34 @@ function App() {
                   />
                   <Route
                     path="/services"
-                    element={user ? <ServicesPage user={user} onLogout={logout} /> : <Navigate to="/auth" />}
+                    element={<ServicesPage user={user} onLogout={logout} />}
                   />
+                  {/* Service Landing Pages */}
                   <Route
-                    path="/services/:platform/:serviceType"
+                    path="/service/:serviceSlug"
                     element={<ServiceLandingPage user={user} onLogout={logout} />}
                   />
                   <Route
-                    path="/instagram-services"
-                    element={<PlatformLandingPage user={user} onLogout={logout} />}
-                  />
-                  <Route
-                    path="/tiktok-services"
-                    element={<PlatformLandingPage user={user} onLogout={logout} />}
-                  />
-                  <Route
-                    path="/youtube-services"
-                    element={<PlatformLandingPage user={user} onLogout={logout} />}
-                  />
-                  <Route
-                    path="/facebook-services"
-                    element={<PlatformLandingPage user={user} onLogout={logout} />}
-                  />
-                  <Route
-                    path="/twitter-services"
-                    element={<PlatformLandingPage user={user} onLogout={logout} />}
-                  />
-                  <Route
-                    path="/whatsapp-services"
-                    element={<PlatformLandingPage user={user} onLogout={logout} />}
-                  />
-                  <Route
-                    path="/telegram-services"
+                    path="/platform/:platformSlug"
                     element={<PlatformLandingPage user={user} onLogout={logout} />}
                   />
                   <Route
                     path="/orders"
-                    element={user ? <OrderHistory user={user} onLogout={logout} /> : <Navigate to="/auth" />}
+                    element={
+                      user ? (
+                        <OrderHistory user={user} onLogout={logout} />
+                      ) : (
+                        <Navigate to="/auth" />
+                      )
+                    }
                   />
+
+                  {/* Admin Routes */}
                   <Route
                     path="/admin"
                     element={
                       user?.role === 'admin' ? (
-                        <Navigate to="/admin/dashboard" replace />
+                        <AdminDashboard user={user} onLogout={logout} />
                       ) : user ? (
                         <Navigate to="/dashboard" />
                       ) : (
@@ -435,7 +210,7 @@ function App() {
                     }
                   />
                   <Route
-                    path="/admin/dashboard"
+                    path="/admin/users"
                     element={
                       user?.role === 'admin' ? (
                         <AdminDashboard user={user} onLogout={logout} />
@@ -483,7 +258,7 @@ function App() {
                     }
                   />
                   <Route
-                    path="/admin/promotion-packages"
+                    path="/admin/settings"
                     element={
                       user?.role === 'admin' ? (
                         <AdminDashboard user={user} onLogout={logout} />
@@ -507,19 +282,7 @@ function App() {
                     }
                   />
                   <Route
-                    path="/admin/users"
-                    element={
-                      user?.role === 'admin' ? (
-                        <AdminDashboard user={user} onLogout={logout} />
-                      ) : user ? (
-                        <Navigate to="/dashboard" />
-                      ) : (
-                        <Navigate to="/auth" />
-                      )
-                    }
-                  />
-                  <Route
-                    path="/admin/transactions"
+                    path="/admin/stats"
                     element={
                       user?.role === 'admin' ? (
                         <AdminDashboard user={user} onLogout={logout} />
@@ -546,18 +309,6 @@ function App() {
                     path="/admin/support/analytics"
                     element={
                       user?.role === 'admin' ? (
-                        <AdminSupportAnalytics />
-                      ) : user ? (
-                        <Navigate to="/dashboard" />
-                      ) : (
-                        <Navigate to="/auth" />
-                      )
-                    }
-                  />
-                  <Route
-                    path="/admin/balance"
-                    element={
-                      user?.role === 'admin' ? (
                         <AdminDashboard user={user} onLogout={logout} />
                       ) : user ? (
                         <Navigate to="/dashboard" />
@@ -568,114 +319,6 @@ function App() {
                   />
                   <Route
                     path="/admin/referrals"
-                    element={
-                      user?.role === 'admin' ? (
-                        <AdminDashboard user={user} onLogout={logout} />
-                      ) : user ? (
-                        <Navigate to="/dashboard" />
-                      ) : (
-                        <Navigate to="/auth" />
-                      )
-                    }
-                  />
-                  <Route
-                    path="/admin/activity-logs"
-                    element={
-                      user?.role === 'admin' ? (
-                        <AdminDashboard user={user} onLogout={logout} />
-                      ) : user ? (
-                        <Navigate to="/dashboard" />
-                      ) : (
-                        <Navigate to="/auth" />
-                      )
-                    }
-                  />
-                  <Route
-                    path="/admin/smmcost"
-                    element={
-                      user?.role === 'admin' ? (
-                        <AdminDashboard user={user} onLogout={logout} />
-                      ) : user ? (
-                        <Navigate to="/dashboard" />
-                      ) : (
-                        <Navigate to="/auth" />
-                      )
-                    }
-                  />
-                  <Route
-                    path="/admin/smmgen"
-                    element={
-                      user?.role === 'admin' ? (
-                        <AdminDashboard user={user} onLogout={logout} />
-                      ) : user ? (
-                        <Navigate to="/dashboard" />
-                      ) : (
-                        <Navigate to="/auth" />
-                      )
-                    }
-                  />
-                  <Route
-                    path="/admin/jbsmmpanel"
-                    element={
-                      user?.role === 'admin' ? (
-                        <AdminDashboard user={user} onLogout={logout} />
-                      ) : user ? (
-                        <Navigate to="/dashboard" />
-                      ) : (
-                        <Navigate to="/auth" />
-                      )
-                    }
-                  />
-                  <Route
-                    path="/admin/worldofsmm"
-                    element={
-                      user?.role === 'admin' ? (
-                        <AdminDashboard user={user} onLogout={logout} />
-                      ) : user ? (
-                        <Navigate to="/dashboard" />
-                      ) : (
-                        <Navigate to="/auth" />
-                      )
-                    }
-                  />
-                  <Route
-                    path="/admin/g1618"
-                    element={
-                      user?.role === 'admin' ? (
-                        <AdminDashboard user={user} onLogout={logout} />
-                      ) : user ? (
-                        <Navigate to="/dashboard" />
-                      ) : (
-                        <Navigate to="/auth" />
-                      )
-                    }
-                  />
-                  <Route
-                    path="/admin/moolre"
-                    element={
-                      user?.role === 'admin' ? (
-                        <AdminDashboard user={user} onLogout={logout} />
-                      ) : user ? (
-                        <Navigate to="/dashboard" />
-                      ) : (
-                        <Navigate to="/auth" />
-                      )
-                    }
-                  />
-                  <Route
-                    path="/admin/faq"
-                    element={
-                      user?.role === 'admin' ? (
-                        <AdminDashboard user={user} onLogout={logout} />
-                      ) : user ? (
-                        <Navigate to="/dashboard" />
-                      ) : (
-                        <Navigate to="/auth" />
-                      )
-                    }
-                  />
-                  <Route
-                    path="/admin/terms"
                     element={
                       user?.role === 'admin' ? (
                         <AdminDashboard user={user} onLogout={logout} />
@@ -700,6 +343,30 @@ function App() {
                   />
                   <Route
                     path="/admin/video-tutorials"
+                    element={
+                      user?.role === 'admin' ? (
+                        <AdminDashboard user={user} onLogout={logout} />
+                      ) : user ? (
+                        <Navigate to="/dashboard" />
+                      ) : (
+                        <Navigate to="/auth" />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/admin/rewards"
+                    element={
+                      user?.role === 'admin' ? (
+                        <AdminDashboard user={user} onLogout={logout} />
+                      ) : user ? (
+                        <Navigate to="/dashboard" />
+                      ) : (
+                        <Navigate to="/auth" />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/admin/rewards-settings"
                     element={
                       user?.role === 'admin' ? (
                         <AdminDashboard user={user} onLogout={logout} />
@@ -792,4 +459,3 @@ function App() {
 }
 
 export default App;
-

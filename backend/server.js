@@ -717,7 +717,186 @@ app.post('/api/check-orders-status', async (req, res) => {
   }
 });
 
+// Reward endpoints
+app.post('/api/reward/check-reward-eligibility', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL;
+    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return res.status(500).json({ error: 'Supabase credentials not configured' });
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+      auth: { autoRefreshToken: false, persistSession: false }
+    });
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+
+    const { data: settings, error: settingsError } = await supabase
+      .from('reward_settings')
+      .select('daily_deposit_limit')
+      .single();
+
+    if (settingsError || !settings) {
+      return res.status(500).json({ error: 'Failed to fetch reward settings' });
+    }
+
+    const requiredDeposit = parseFloat(settings.daily_deposit_limit);
+
+    const { data: deposits, error: depositsError } = await supabase
+      .from('transactions')
+      .select('amount')
+      .eq('user_id', user.id)
+      .eq('type', 'deposit')
+      .eq('status', 'approved')
+      .gte('created_at', `${today}T00:00:00Z`)
+      .lte('created_at', `${today}T23:59:59Z`);
+
+    if (depositsError) throw depositsError;
+
+    const totalDeposits = deposits?.reduce((sum, d) => sum + parseFloat(d.amount), 0) || 0;
+
+    const { data: existingClaim, error: claimError } = await supabase
+      .from('daily_reward_claims')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('claim_date', today)
+      .maybeSingle();
+
+    if (claimError) throw claimError;
+
+    if (existingClaim) {
+      return res.json({
+        status: 'claimed',
+        message: "You've already claimed today's reward.",
+        data: { required: requiredDeposit, current: totalDeposits, claimed: true }
+      });
+    }
+
+    if (totalDeposits >= requiredDeposit) {
+      return res.json({
+        status: 'eligible',
+        message: "You're eligible for today's reward!",
+        data: { required: requiredDeposit, current: totalDeposits, claimed: false }
+      });
+    }
+
+    return res.json({
+      status: 'not_eligible',
+      message: `Deposit at least GHS ${requiredDeposit.toFixed(2)} today to claim.`,
+      data: { required: requiredDeposit, current: totalDeposits, claimed: false }
+    });
+
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error', details: error.message });
+  }
+});
+
+app.post('/api/reward/claim-reward', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const { link } = req.body;
+    if (!link) return res.status(400).json({ error: 'Link is required' });
+
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL;
+    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY;
+
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+      auth: { autoRefreshToken: false, persistSession: false }
+    });
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) return res.status(401).json({ error: 'Invalid or expired token' });
+
+    const today = new Date().toISOString().split('T')[0];
+
+    const { data: settings } = await supabase.from('reward_settings').select('daily_deposit_limit').single();
+    const requiredDeposit = parseFloat(settings.daily_deposit_limit);
+
+    const { data: deposits } = await supabase.from('transactions')
+      .select('amount')
+      .eq('user_id', user.id).eq('type', 'deposit').eq('status', 'approved')
+      .gte('created_at', `${today}T00:00:00Z`).lte('created_at', `${today}T23:59:59Z`);
+
+    const totalDeposits = deposits?.reduce((sum, d) => sum + parseFloat(d.amount), 0) || 0;
+
+    if (totalDeposits < requiredDeposit) return res.status(400).json({ error: 'Insufficient deposits' });
+
+    const { data: claim, error: insertError } = await supabase
+      .from('daily_reward_claims')
+      .insert({ user_id: user.id, deposit_total: totalDeposits, link, claim_date: today })
+      .select().single();
+
+    if (insertError) {
+      if (insertError.code === '23505') return res.status(400).json({ error: 'Already claimed today' });
+      throw insertError;
+    }
+
+    res.json({ success: true, message: 'Reward claimed successfully!' });
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error', details: error.message });
+  }
+});
+
+app.post('/api/admin/update-reward-limit', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const { daily_deposit_limit } = req.body;
+
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL;
+    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY;
+
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+      auth: { autoRefreshToken: false, persistSession: false }
+    });
+
+    const { data: { user } } = await supabase.auth.getUser(token);
+
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+    if (profile?.role !== 'admin') return res.status(403).json({ error: 'Admin access required' });
+
+    const newLimit = parseFloat(daily_deposit_limit);
+
+    const { data: current } = await supabase.from('reward_settings').select('*').single();
+    const oldLimit = parseFloat(current.daily_deposit_limit);
+
+    await supabase.from('reward_settings').update({
+      daily_deposit_limit: newLimit, updated_by: user.id, updated_at: new Date().toISOString()
+    }).eq('id', current.id);
+
+    await supabase.from('reward_setting_logs').insert({ admin_id: user.id, old_value: oldLimit, new_value: newLimit });
+
+    res.json({ success: true, message: 'Limit updated' });
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error', details: error.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 SMM Proxy Server running on port ${PORT}`);
 });
-
