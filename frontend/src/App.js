@@ -147,7 +147,7 @@ function App() {
         <TooltipProvider>
           <BrowserRouter>
             <div className="min-h-screen bg-background">
-              <SupabaseSetup />
+              {!isConfigured && <SupabaseSetup />}
               <Suspense fallback={<PageLoader />}>
                 <Routes>
                   {/* Public Routes */}
