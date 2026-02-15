@@ -177,64 +177,78 @@ const ClaimRewardModal = ({ isOpen, onClose }) => {
                             <Button onClick={() => queryClient.invalidateQueries({ queryKey: ['reward-eligibility'] })} variant="outline" size="sm">Retry</Button>
                         </div>
                     ) : (
-                        tiers.map((tier) => (
-                            <div
-                                key={tier.id}
-                                className={cn(
-                                    "relative border rounded-2xl p-4 transition-all duration-200",
-                                    tier.isClaimed
-                                        ? "bg-green-50 border-green-200 opacity-80"
-                                        : tier.isUnlocked
-                                            ? "bg-white border-primary/20 shadow-md ring-1 ring-primary/5"
-                                            : "bg-gray-50 border-gray-200 opacity-70 grayscale-[0.5]"
-                                )}
-                            >
-                                <div className="flex justify-between items-start mb-3">
-                                    <div className="flex items-center gap-3">
-                                        <div className={cn(
-                                            "w-10 h-10 rounded-full flex items-center justify-center border",
-                                            tier.isClaimed ? "bg-green-100 border-green-200 text-green-600" :
-                                                tier.isUnlocked ? "bg-blue-100 border-blue-200 text-blue-600" :
-                                                    "bg-gray-200 border-gray-300 text-gray-500"
-                                        )}>
-                                            {tier.isClaimed ? <CheckCircle className="w-5 h-5" /> :
-                                                tier.isUnlocked ? <Unlock className="w-5 h-5" /> :
-                                                    <Lock className="w-5 h-5" />}
-                                        </div>
-                                        <div>
-                                            <h4 className="font-bold text-gray-900">{tier.name}</h4>
-                                            <p className="text-xs text-gray-500 font-medium">Requires GHS {parseFloat(tier.required_amount).toFixed(2)}</p>
-                                        </div>
-                                    </div>
-
-                                    {tier.isClaimed ? (
-                                        <span className="text-xs font-bold text-green-600 bg-green-100 px-2 py-1 rounded-full">Claimed</span>
-                                    ) : tier.isUnlocked ? (
-                                        <Button
-                                            size="sm"
-                                            className="h-8 rounded-full px-4 font-bold bg-primary hover:bg-primary/90"
-                                            onClick={() => handleClaimClick(tier)}
-                                        >
-                                            Claim
-                                        </Button>
-                                    ) : (
-                                        <span className="text-xs font-bold text-gray-400 bg-gray-200 px-2 py-1 rounded-full">Locked</span>
-                                    )}
+                        tiers.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-10 text-center space-y-3 animate-in fade-in zoom-in duration-300">
+                                <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center">
+                                    <Trophy className="w-8 h-8 text-gray-300" />
                                 </div>
-
-                                {/* Reward Info */}
-                                <div className="grid grid-cols-2 gap-2 mt-2">
-                                    <div className="bg-white/60 rounded-lg p-2 flex items-center gap-2 border border-black/5">
-                                        <Heart className="w-3.5 h-3.5 text-pink-500 fill-current" />
-                                        <span className="text-sm font-bold text-gray-700">{parseInt(tier.reward_likes).toLocaleString()} Likes</span>
-                                    </div>
-                                    <div className="bg-white/60 rounded-lg p-2 flex items-center gap-2 border border-black/5">
-                                        <Eye className="w-3.5 h-3.5 text-indigo-500" />
-                                        <span className="text-sm font-bold text-gray-700">{parseInt(tier.reward_views).toLocaleString()} Views</span>
-                                    </div>
+                                <div className="space-y-1">
+                                    <h3 className="text-sm font-bold text-gray-900">No Rewards Configured</h3>
+                                    <p className="text-xs text-gray-500 max-w-[200px] mx-auto">
+                                        Check back later or contact support if this persists.
+                                    </p>
                                 </div>
                             </div>
-                        ))
+                        ) : (
+                            tiers.map((tier) => (
+                                <div
+                                    key={tier.id}
+                                    className={cn(
+                                        "relative border rounded-2xl p-4 transition-all duration-200",
+                                        tier.isClaimed
+                                            ? "bg-green-50 border-green-200 opacity-80"
+                                            : tier.isUnlocked
+                                                ? "bg-white border-primary/20 shadow-md ring-1 ring-primary/5"
+                                                : "bg-gray-50 border-gray-200 opacity-70 grayscale-[0.5]"
+                                    )}
+                                >
+                                    <div className="flex justify-between items-start mb-3">
+                                        <div className="flex items-center gap-3">
+                                            <div className={cn(
+                                                "w-10 h-10 rounded-full flex items-center justify-center border",
+                                                tier.isClaimed ? "bg-green-100 border-green-200 text-green-600" :
+                                                    tier.isUnlocked ? "bg-blue-100 border-blue-200 text-blue-600" :
+                                                        "bg-gray-200 border-gray-300 text-gray-500"
+                                            )}>
+                                                {tier.isClaimed ? <CheckCircle className="w-5 h-5" /> :
+                                                    tier.isUnlocked ? <Unlock className="w-5 h-5" /> :
+                                                        <Lock className="w-5 h-5" />}
+                                            </div>
+                                            <div>
+                                                <h4 className="font-bold text-gray-900">{tier.name}</h4>
+                                                <p className="text-xs text-gray-500 font-medium">Requires GHS {parseFloat(tier.required_amount).toFixed(2)}</p>
+                                            </div>
+                                        </div>
+
+                                        {tier.isClaimed ? (
+                                            <span className="text-xs font-bold text-green-600 bg-green-100 px-2 py-1 rounded-full">Claimed</span>
+                                        ) : tier.isUnlocked ? (
+                                            <Button
+                                                size="sm"
+                                                className="h-8 rounded-full px-4 font-bold bg-primary hover:bg-primary/90"
+                                                onClick={() => handleClaimClick(tier)}
+                                            >
+                                                Claim
+                                            </Button>
+                                        ) : (
+                                            <span className="text-xs font-bold text-gray-400 bg-gray-200 px-2 py-1 rounded-full">Locked</span>
+                                        )}
+                                    </div>
+
+                                    {/* Reward Info */}
+                                    <div className="grid grid-cols-2 gap-2 mt-2">
+                                        <div className="bg-white/60 rounded-lg p-2 flex items-center gap-2 border border-black/5">
+                                            <Heart className="w-3.5 h-3.5 text-pink-500 fill-current" />
+                                            <span className="text-sm font-bold text-gray-700">{parseInt(tier.reward_likes).toLocaleString()} Likes</span>
+                                        </div>
+                                        <div className="bg-white/60 rounded-lg p-2 flex items-center gap-2 border border-black/5">
+                                            <Eye className="w-3.5 h-3.5 text-indigo-500" />
+                                            <span className="text-sm font-bold text-gray-700">{parseInt(tier.reward_views).toLocaleString()} Views</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        )
                     )}
                 </div>
 
