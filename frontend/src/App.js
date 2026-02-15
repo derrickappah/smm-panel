@@ -100,39 +100,33 @@ function App() {
       }
 
       if (session?.user) {
-        if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION') {
-          loadUserProfile(session.user.id);
-        }
-      } else if (event === 'SIGNED_OUT') {
+        loadUserProfile(session.user.id);
+      } else {
         setUser(null);
         setLoading(false);
-        queryClient.clear();
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      if (subscription) subscription.unsubscribe();
+    };
   }, []);
 
   const loadUserProfile = async (userId) => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
+      const { data: profile, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
         .single();
 
       if (error) {
-        if (error.code === 'PGRST116') {
-          // Profile doesn't exist yet, wait or handle gracefully
-          console.log('Profile not found, might be creating one...');
-        } else {
-          console.error('Error loading profile:', error);
-        }
+        console.error("Error loading profile:", error);
       } else {
-        setUser(data);
+        setUser(profile);
       }
-    } catch (err) {
-      console.error('Unexpected error loading profile:', err);
+    } catch (error) {
+      console.error("Error in loadUserProfile:", error);
     } finally {
       setLoading(false);
     }
@@ -140,6 +134,7 @@ function App() {
 
   const logout = async () => {
     await supabase.auth.signOut();
+    setUser(null);
   };
 
   if (loading) {
@@ -147,43 +142,43 @@ function App() {
   }
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <HelmetProvider>
+    <HelmetProvider>
+      <QueryClientProvider client={queryClient}>
         <TooltipProvider>
-          <div className="min-h-screen bg-background font-sans antialiased">
-            <BrowserRouter>
+          <BrowserRouter>
+            <div className="min-h-screen bg-background">
               <SupabaseSetup />
-              <Toaster position="top-right" expand={false} richColors />
               <Suspense fallback={<PageLoader />}>
                 <Routes>
-                  <Route path="/" element={<LandingPage user={user} onLogout={logout} />} />
+                  {/* Public Routes */}
+                  <Route path="/" element={<LandingPage />} />
+                  <Route path="/services" element={<ServicesPage />} />
+                  <Route path="/pricing" element={<PricingPage />} />
+                  <Route path="/about" element={<AboutPage />} />
+                  <Route path="/terms" element={<TermsPage />} />
+                  <Route path="/faq" element={<FAQPage />} />
+                  <Route path="/blog" element={<BlogListPage />} />
+                  <Route path="/blog/:id" element={<BlogPostPage />} />
+                  <Route path="/guides/:id" element={<GuidePage />} />
+                  <Route path="/s/:slug" element={<ServiceLandingPage />} />
+                  <Route path="/p/:slug" element={<PlatformLandingPage />} />
+
                   <Route
                     path="/auth"
-                    element={user ? <Navigate to="/dashboard" /> : <AuthPage />}
+                    element={user ? <Navigate to="/dashboard" replace /> : <AuthPage />}
                   />
                   <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+                  {/* Protected Routes */}
                   <Route
                     path="/dashboard"
                     element={
                       user ? (
-                        <Dashboard user={user} onLogout={logout} onUpdateUser={() => loadUserProfile(user.id)} />
+                        <Dashboard user={user} onLogout={logout} onUpdateUser={setUser} />
                       ) : (
-                        <Navigate to="/auth" />
+                        <Navigate to="/auth" replace />
                       )
                     }
-                  />
-                  <Route
-                    path="/services"
-                    element={<ServicesPage user={user} onLogout={logout} />}
-                  />
-                  {/* Service Landing Pages */}
-                  <Route
-                    path="/service/:serviceSlug"
-                    element={<ServiceLandingPage user={user} onLogout={logout} />}
-                  />
-                  <Route
-                    path="/platform/:platformSlug"
-                    element={<PlatformLandingPage user={user} onLogout={logout} />}
                   />
                   <Route
                     path="/orders"
@@ -191,10 +186,31 @@ function App() {
                       user ? (
                         <OrderHistory user={user} onLogout={logout} />
                       ) : (
-                        <Navigate to="/auth" />
+                        <Navigate to="/auth" replace />
                       )
                     }
                   />
+                  <Route
+                    path="/transactions"
+                    element={
+                      user ? (
+                        <TransactionsPage user={user} onLogout={logout} />
+                      ) : (
+                        <Navigate to="/auth" replace />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/support"
+                    element={
+                      user ? (
+                        <SupportPage user={user} onLogout={logout} />
+                      ) : (
+                        <Navigate to="/auth" replace />
+                      )
+                    }
+                  />
+                  <Route path="/payment-callback" element={<PaymentCallback />} />
 
                   {/* Admin Routes */}
                   <Route
@@ -203,93 +219,9 @@ function App() {
                       user?.role === 'admin' ? (
                         <AdminDashboard user={user} onLogout={logout} />
                       ) : user ? (
-                        <Navigate to="/dashboard" />
+                        <Navigate to="/dashboard" replace />
                       ) : (
-                        <Navigate to="/auth" />
-                      )
-                    }
-                  />
-                  <Route
-                    path="/admin/users"
-                    element={
-                      user?.role === 'admin' ? (
-                        <AdminDashboard user={user} onLogout={logout} />
-                      ) : user ? (
-                        <Navigate to="/dashboard" />
-                      ) : (
-                        <Navigate to="/auth" />
-                      )
-                    }
-                  />
-                  <Route
-                    path="/admin/deposits"
-                    element={
-                      user?.role === 'admin' ? (
-                        <AdminDashboard user={user} onLogout={logout} />
-                      ) : user ? (
-                        <Navigate to="/dashboard" />
-                      ) : (
-                        <Navigate to="/auth" />
-                      )
-                    }
-                  />
-                  <Route
-                    path="/admin/orders"
-                    element={
-                      user?.role === 'admin' ? (
-                        <AdminDashboard user={user} onLogout={logout} />
-                      ) : user ? (
-                        <Navigate to="/dashboard" />
-                      ) : (
-                        <Navigate to="/auth" />
-                      )
-                    }
-                  />
-                  <Route
-                    path="/admin/services"
-                    element={
-                      user?.role === 'admin' ? (
-                        <AdminDashboard user={user} onLogout={logout} />
-                      ) : user ? (
-                        <Navigate to="/dashboard" />
-                      ) : (
-                        <Navigate to="/auth" />
-                      )
-                    }
-                  />
-                  <Route
-                    path="/admin/settings"
-                    element={
-                      user?.role === 'admin' ? (
-                        <AdminDashboard user={user} onLogout={logout} />
-                      ) : user ? (
-                        <Navigate to="/dashboard" />
-                      ) : (
-                        <Navigate to="/auth" />
-                      )
-                    }
-                  />
-                  <Route
-                    path="/admin/payment-methods"
-                    element={
-                      user?.role === 'admin' ? (
-                        <AdminDashboard user={user} onLogout={logout} />
-                      ) : user ? (
-                        <Navigate to="/dashboard" />
-                      ) : (
-                        <Navigate to="/auth" />
-                      )
-                    }
-                  />
-                  <Route
-                    path="/admin/stats"
-                    element={
-                      user?.role === 'admin' ? (
-                        <AdminDashboard user={user} onLogout={logout} />
-                      ) : user ? (
-                        <Navigate to="/dashboard" />
-                      ) : (
-                        <Navigate to="/auth" />
+                        <Navigate to="/auth" replace />
                       )
                     }
                   />
@@ -297,11 +229,11 @@ function App() {
                     path="/admin/support"
                     element={
                       user?.role === 'admin' ? (
-                        <AdminDashboard user={user} onLogout={logout} />
+                        <AdminSupport user={user} onLogout={logout} />
                       ) : user ? (
-                        <Navigate to="/dashboard" />
+                        <Navigate to="/dashboard" replace />
                       ) : (
-                        <Navigate to="/auth" />
+                        <Navigate to="/auth" replace />
                       )
                     }
                   />
@@ -309,59 +241,24 @@ function App() {
                     path="/admin/support/analytics"
                     element={
                       user?.role === 'admin' ? (
-                        <AdminDashboard user={user} onLogout={logout} />
+                        <AdminSupportAnalytics user={user} onLogout={logout} />
                       ) : user ? (
-                        <Navigate to="/dashboard" />
+                        <Navigate to="/dashboard" replace />
                       ) : (
-                        <Navigate to="/auth" />
+                        <Navigate to="/auth" replace />
                       )
                     }
                   />
-                  <Route
-                    path="/admin/referrals"
-                    element={
-                      user?.role === 'admin' ? (
-                        <AdminDashboard user={user} onLogout={logout} />
-                      ) : user ? (
-                        <Navigate to="/dashboard" />
-                      ) : (
-                        <Navigate to="/auth" />
-                      )
-                    }
-                  />
-                  <Route
-                    path="/admin/updates"
-                    element={
-                      user?.role === 'admin' ? (
-                        <AdminDashboard user={user} onLogout={logout} />
-                      ) : user ? (
-                        <Navigate to="/dashboard" />
-                      ) : (
-                        <Navigate to="/auth" />
-                      )
-                    }
-                  />
-                  <Route
-                    path="/admin/video-tutorials"
-                    element={
-                      user?.role === 'admin' ? (
-                        <AdminDashboard user={user} onLogout={logout} />
-                      ) : user ? (
-                        <Navigate to="/dashboard" />
-                      ) : (
-                        <Navigate to="/auth" />
-                      )
-                    }
-                  />
+                  {/* Reward management routes */}
                   <Route
                     path="/admin/rewards"
                     element={
                       user?.role === 'admin' ? (
                         <AdminDashboard user={user} onLogout={logout} />
                       ) : user ? (
-                        <Navigate to="/dashboard" />
+                        <Navigate to="/dashboard" replace />
                       ) : (
-                        <Navigate to="/auth" />
+                        <Navigate to="/auth" replace />
                       )
                     }
                   />
@@ -371,90 +268,38 @@ function App() {
                       user?.role === 'admin' ? (
                         <AdminDashboard user={user} onLogout={logout} />
                       ) : user ? (
-                        <Navigate to="/dashboard" />
+                        <Navigate to="/dashboard" replace />
                       ) : (
-                        <Navigate to="/auth" />
+                        <Navigate to="/auth" replace />
                       )
                     }
                   />
                   <Route
-                    path="/support"
-                    element={<SupportPage user={user} onLogout={logout} />}
-                  />
-                  <Route
-                    path="/transactions"
-                    element={
-                      user ? (
-                        <TransactionsPage user={user} onLogout={logout} />
-                      ) : (
-                        <Navigate to="/auth" />
-                      )
-                    }
-                  />
-                  <Route
-                    path="/payment/callback"
-                    element={
-                      <PaymentCallback onUpdateUser={() => user && loadUserProfile(user.id)} />
-                    }
-                  />
-                  <Route
-                    path="/payment-callback"
-                    element={
-                      <PaymentCallback onUpdateUser={() => user && loadUserProfile(user.id)} />
-                    }
-                  />
-                  <Route
-                    path="/blog"
-                    element={<BlogListPage user={user} onLogout={logout} />}
-                  />
-                  <Route
-                    path="/blog/:slug"
-                    element={<BlogPostPage user={user} onLogout={logout} />}
-                  />
-                  <Route
-                    path="/guides/:slug"
-                    element={<GuidePage user={user} onLogout={logout} />}
-                  />
-                  <Route
-                    path="/about"
-                    element={<AboutPage user={user} onLogout={logout} />}
-                  />
-                  <Route
-                    path="/pricing"
-                    element={<PricingPage user={user} onLogout={logout} />}
-                  />
-                  <Route
-                    path="/term"
-                    element={<Navigate to="/terms" replace />}
-                  />
-                  <Route
-                    path="/terms"
-                    element={<TermsPage user={user} onLogout={logout} />}
-                  />
-                  <Route
-                    path="/faq"
-                    element={<FAQPage user={user} onLogout={logout} />}
-                  />
-                  <Route
-                    path="/dev"
+                    path="/admin/dev"
                     element={
                       user?.role === 'admin' ? (
-                        <DevDashboard user={user} />
+                        <DevDashboard user={user} onLogout={logout} />
+                      ) : user ? (
+                        <Navigate to="/dashboard" replace />
                       ) : (
-                        <Navigate to="/auth" />
+                        <Navigate to="/auth" replace />
                       )
                     }
                   />
+
+                  {/* Catch-all route */}
+                  <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </Suspense>
+              <Toaster position="top-right" closeButton richColors />
               <WhatsAppButton />
-            </BrowserRouter>
+            </div>
             <SpeedInsights />
             <Analytics />
-          </div>
+          </BrowserRouter>
         </TooltipProvider>
-      </HelmetProvider>
-    </QueryClientProvider>
+      </QueryClientProvider>
+    </HelmetProvider>
   );
 }
 
