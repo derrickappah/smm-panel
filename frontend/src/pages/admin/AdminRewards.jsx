@@ -79,14 +79,39 @@ const AdminRewards = () => {
 
             try {
                 // 1. Create Order in DB (via RPC)
-                await processOrderMutation.mutateAsync({
+                const processingResult = await processOrderMutation.mutateAsync({
                     claimId: claimId,
                     serviceId: selectedServiceId,
                     quantity: claim.reward_amount || 1000 // Default quantity
                 });
 
-                // 2. TODO: Call SMM API here if needed (Client-side)
-                // For now, we just mark as processed in DB which creates the order.
+                const newOrderId = processingResult?.order_id;
+
+                // 2. Automate Panel Placement
+                if (newOrderId) {
+                    try {
+                        const { data: { session } } = await supabase.auth.getSession();
+                        const response = await fetch('/api/admin/retry-order', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${session?.access_token}`
+                            },
+                            body: JSON.stringify({ order_id: newOrderId })
+                        });
+
+                        const result = await response.json();
+                        if (response.ok && result.success) {
+                            console.log(`Successfully placed panel order for ${newOrderId}:`, result.provider_order_id);
+                        } else {
+                            console.warn(`Panel fulfillment failed for ${newOrderId}:`, result.message || result.error);
+                            // We don't fail the whole process if API placement fails, 
+                            // as the order already exists in DB as "Processed Reward"
+                        }
+                    } catch (panelError) {
+                        console.error(`Fulfillment API error for ${newOrderId}:`, panelError);
+                    }
+                }
 
                 successCount++;
             } catch (error) {
