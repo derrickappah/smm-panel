@@ -512,6 +512,9 @@ const OrderHistory = ({ user, onLogout }) => {
                                   } else if (serviceHasSmmcost && !hasSmmcost) {
                                     // Service has SMMCost ID but order doesn't - order failed at SMMCost
                                     return <p className="text-xs text-red-600 italic font-medium">Order not placed</p>;
+                                  } else if (order.is_reward) {
+                                    // Reward order not yet sent to a panel
+                                    return <p className="text-xs text-blue-600 italic font-medium">Processed Reward</p>;
                                   } else if (order.smmcost_order_id === null && order.smmgen_order_id === null && order.jbsmmpanel_order_id === null && order.worldofsmm_order_id === null && order.g1618_order_id === null) {
                                     // No order IDs at all (shouldn't happen, but handle gracefully)
                                     return <p className="text-xs text-gray-400 italic">N/A</p>;

@@ -533,6 +533,13 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                   <p className="text-xs text-red-600 italic font-medium">Order not placed at WorldOfSMM</p>
                 </div>
               );
+            } else if (order.is_reward) {
+              return (
+                <div className="flex items-center gap-1">
+                  <CheckCircle2 className="w-4 h-4 text-blue-500" />
+                  <p className="text-xs text-blue-600 italic font-medium">Processed Reward</p>
+                </div>
+              );
             } else if (order.smmcost_order_id === null && order.jbsmmpanel_order_id === null && order.smmgen_order_id === null && order.worldofsmm_order_id === null) {
               // No order IDs at all
               return (
@@ -848,6 +855,13 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                   <div className="flex items-center gap-1 mt-1">
                     <AlertCircle className="w-4 h-4 text-red-500" />
                     <p className="text-xs text-red-600 italic font-medium">Order not placed at G1618</p>
+                  </div>
+                );
+              } else if (order.is_reward) {
+                return (
+                  <div className="flex items-center gap-1 mt-1">
+                    <CheckCircle2 className="w-4 h-4 text-blue-500" />
+                    <p className="text-xs text-blue-600 italic font-medium">Processed Reward</p>
                   </div>
                 );
               } else if (order.smmcost_order_id === null && order.jbsmmpanel_order_id === null && order.smmgen_order_id === null && order.worldofsmm_order_id === null && order.g1618_order_id === null) {
