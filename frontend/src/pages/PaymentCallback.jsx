@@ -115,8 +115,8 @@ const PaymentCallback = ({ onUpdateUser }) => {
           const paymentStatus = verifyData.status || verifyData.data?.status;
           const isSuccessful = paymentStatus === 'success' || paymentStatus === 'successful' || paymentStatus === 'completed';
 
-          if (isSuccessful && transaction.status !== 'approved') {
-            console.log('Payment successful, updating UI...');
+          if ((isSuccessful || transaction.status === 'approved') && transaction.status !== 'rejected') {
+            console.log('Payment successful (or already approved), updating UI...');
             // Refresh user data
             if (onUpdateUser) {
               const { data: updatedProfile } = await supabase
@@ -131,7 +131,7 @@ const PaymentCallback = ({ onUpdateUser }) => {
             setMessage(`Payment successful! ₵${parseFloat(transaction.amount).toFixed(2)} has been added to your account.`);
             toast.success(`Payment successful! ₵${parseFloat(transaction.amount).toFixed(2)} added to your balance.`);
             setTimeout(() => navigate('/dashboard'), 3000);
-          } else if (paymentStatus === 'failed' || paymentStatus === 'cancelled') {
+          } else if (paymentStatus === 'failed' || paymentStatus === 'cancelled' || transaction.status === 'rejected') {
             await supabase
               .from('transactions')
               .update({ status: 'rejected', korapay_status: 'failed' })
@@ -142,8 +142,17 @@ const PaymentCallback = ({ onUpdateUser }) => {
             toast.error('Payment failed or was cancelled.');
             setTimeout(() => navigate('/dashboard'), 3000);
           } else {
+            // Add retry logic for Korapay
+            retryCountRef.current += 1;
+            if (retryCountRef.current >= MAX_RETRIES) {
+              setStatus('failed');
+              setMessage('Verification timeout. If you have been debited, please contact support with your reference.');
+              toast.error('Verification timeout.');
+              setTimeout(() => navigate('/dashboard'), 5000);
+              return;
+            }
             setStatus('verifying');
-            setMessage('Payment is still being processed. Please wait...');
+            setMessage(`Processing... (${retryCountRef.current}/${MAX_RETRIES})`);
             setTimeout(() => verifyPayment(), 5000);
           }
         } else if (paymentMethod === 'moolre_web' || paymentMethod === 'moolre') {
@@ -200,7 +209,7 @@ const PaymentCallback = ({ onUpdateUser }) => {
 
           const isSuccessful = verifyData.status === 'success' || verifyData.txstatus === 1;
 
-          if (isSuccessful && transaction.status !== 'approved') {
+          if ((isSuccessful || transaction.status === 'approved') && transaction.status !== 'rejected') {
             if (onUpdateUser) {
               const { data: updatedProfile } = await supabase
                 .from('profiles')
@@ -213,8 +222,10 @@ const PaymentCallback = ({ onUpdateUser }) => {
             setMessage(`Payment successful! ₵${parseFloat(transaction.amount).toFixed(2)} added.`);
             toast.success(`Payment successful!`);
             setTimeout(() => navigate('/dashboard'), 3000);
-          } else if (verifyData.status === 'failed' || verifyData.txstatus === 2) {
-            await supabase.from('transactions').update({ status: 'rejected' }).eq('id', transaction.id);
+          } else if (verifyData.status === 'failed' || verifyData.txstatus === 2 || transaction.status === 'rejected') {
+            if (transaction.status !== 'rejected') {
+              await supabase.from('transactions').update({ status: 'rejected' }).eq('id', transaction.id);
+            }
             setStatus('failed');
             setMessage('Payment failed.');
             setTimeout(() => navigate('/dashboard'), 3000);
@@ -222,7 +233,8 @@ const PaymentCallback = ({ onUpdateUser }) => {
             retryCountRef.current += 1;
             if (retryCountRef.current >= MAX_RETRIES) {
               setStatus('failed');
-              setMessage('Verification timeout.');
+              setMessage('Verification timeout. If you have been debited, please contact support with your reference.');
+              toast.error('Verification timeout.');
               setTimeout(() => navigate('/dashboard'), 5000);
               return;
             }
