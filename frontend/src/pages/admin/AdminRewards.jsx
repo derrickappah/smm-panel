@@ -114,8 +114,9 @@ const AdminRewards = () => {
                                 console.log(`Successfully placed panel order for ${newOrderId}:`, result.provider_order_id);
                                 toast.success('Order sent to provider successfully');
                             } else {
-                                console.warn(`Panel fulfillment failed for ${newOrderId}:`, result.message || result.error);
-                                toast.warning(`Order created but panel placement failed: ${result.message || 'Unknown error'}`);
+                                const errorMessage = result.details || result.message || result.error || 'Unknown error';
+                                console.warn(`Panel fulfillment failed for ${newOrderId}:`, result);
+                                toast.warning(`Order created but panel placement failed: ${errorMessage}`);
                             }
                         } catch (panelError) {
                             console.error(`Fulfillment API error for ${newOrderId}:`, panelError);
