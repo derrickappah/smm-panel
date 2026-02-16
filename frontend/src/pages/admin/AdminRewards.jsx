@@ -78,6 +78,13 @@ const AdminRewards = () => {
             const claim = claims.find(c => c.id === claimId);
             if (!claim) continue;
 
+            const selectedService = services?.find(s => s.id === selectedServiceId);
+            const hasProviderConfig = selectedService && (
+                selectedService.smmgen_service_id ||
+                selectedService.smmcost_service_id ||
+                selectedService.jbsmmpanel_service_id
+            );
+
             try {
                 // 1. Create Order in DB (via RPC)
                 const processingResult = await processOrderMutation.mutateAsync({
@@ -90,27 +97,32 @@ const AdminRewards = () => {
 
                 // 2. Automate Panel Placement
                 if (newOrderId) {
-                    try {
-                        const { data: { session } } = await supabase.auth.getSession();
-                        const response = await fetch('/api/admin/retry-order', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${session?.access_token}`
-                            },
-                            body: JSON.stringify({ order_id: newOrderId })
-                        });
+                    if (hasProviderConfig) {
+                        try {
+                            const { data: { session } } = await supabase.auth.getSession();
+                            const response = await fetch('/api/admin/retry-order', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${session?.access_token}`
+                                },
+                                body: JSON.stringify({ order_id: newOrderId })
+                            });
 
-                        const result = await response.json();
-                        if (response.ok && result.success) {
-                            console.log(`Successfully placed panel order for ${newOrderId}:`, result.provider_order_id);
-                        } else {
-                            console.warn(`Panel fulfillment failed for ${newOrderId}:`, result.message || result.error);
-                            // We don't fail the whole process if API placement fails, 
-                            // as the order already exists in DB as "Processed Reward"
+                            const result = await response.json();
+                            if (response.ok && result.success) {
+                                console.log(`Successfully placed panel order for ${newOrderId}:`, result.provider_order_id);
+                                toast.success('Order sent to provider successfully');
+                            } else {
+                                console.warn(`Panel fulfillment failed for ${newOrderId}:`, result.message || result.error);
+                                toast.warning(`Order created but panel placement failed: ${result.message || 'Unknown error'}`);
+                            }
+                        } catch (panelError) {
+                            console.error(`Fulfillment API error for ${newOrderId}:`, panelError);
+                            toast.error('Failed to connect to fulfillment API');
                         }
-                    } catch (panelError) {
-                        console.error(`Fulfillment API error for ${newOrderId}:`, panelError);
+                    } else {
+                        console.log(`Order ${newOrderId} created manually (service has no provider config)`);
                     }
                 }
 
@@ -206,11 +218,20 @@ const AdminRewards = () => {
                                     <SelectValue placeholder="Select Service to Process" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {services?.map(service => (
-                                        <SelectItem key={service.id} value={service.id}>
-                                            {service.name} (ID: {service.id})
-                                        </SelectItem>
-                                    ))}
+                                    {services?.map(service => {
+                                        const isAuto = service.smmgen_service_id || service.smmcost_service_id || service.jbsmmpanel_service_id;
+                                        return (
+                                            <SelectItem key={service.id} value={service.id}>
+                                                <span className="flex items-center gap-2">
+                                                    {isAuto ?
+                                                        <Badge variant="outline" className="text-[10px] h-4 px-1 bg-green-50 text-green-700 border-green-200">AUTO</Badge> :
+                                                        <Badge variant="outline" className="text-[10px] h-4 px-1 bg-gray-50 text-gray-600 border-gray-200">MANUAL</Badge>
+                                                    }
+                                                    {service.name}
+                                                </span>
+                                            </SelectItem>
+                                        );
+                                    })}
                                 </SelectContent>
                             </Select>
                         </div>
