@@ -345,8 +345,8 @@ const ClaimRewardModal = ({ isOpen, onClose }) => {
                         )}
                     </>
                 )}
+
             </DialogContent>
-        </DialogContent>
         </Dialog >
     );
 };
