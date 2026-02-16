@@ -144,8 +144,11 @@ const ClaimRewardModal = ({ isOpen, onClose }) => {
                                     >
                                         <div className={cn("absolute inset-0 opacity-0 transition-opacity", rewardType === 'likes' && "opacity-10 bg-blue-500")} />
                                         <Heart className={cn("w-6 h-6 mb-2 relative z-10", rewardType === 'likes' ? "text-pink-500 fill-current" : "text-gray-400")} />
-                                        <span className="text-lg font-bold text-gray-900 relative z-10">{parseInt(selectedTier.reward_likes).toLocaleString()}</span>
-                                        <span className="text-[10px] font-bold text-gray-500 uppercase relative z-10">Likes</span>
+                                        <div className="flex flex-col items-center relative z-10">
+                                            <span className="text-[10px] font-black text-blue-600 uppercase tracking-wider mb-0.5">Free</span>
+                                            <span className="text-lg font-bold text-gray-900">{parseInt(selectedTier.reward_likes).toLocaleString()}</span>
+                                            <span className="text-[10px] font-bold text-gray-500 uppercase">Likes</span>
+                                        </div>
                                     </button>
 
                                     <button
@@ -158,8 +161,11 @@ const ClaimRewardModal = ({ isOpen, onClose }) => {
                                     >
                                         <div className={cn("absolute inset-0 opacity-0 transition-opacity", rewardType === 'views' && "opacity-10 bg-indigo-500")} />
                                         <Eye className={cn("w-6 h-6 mb-2 relative z-10", rewardType === 'views' ? "text-indigo-500" : "text-gray-400")} />
-                                        <span className="text-lg font-bold text-gray-900 relative z-10">{parseInt(selectedTier.reward_views).toLocaleString()}</span>
-                                        <span className="text-[10px] font-bold text-gray-500 uppercase relative z-10">Views</span>
+                                        <div className="flex flex-col items-center relative z-10">
+                                            <span className="text-[10px] font-black text-indigo-600 uppercase tracking-wider mb-0.5">Free</span>
+                                            <span className="text-lg font-bold text-gray-900">{parseInt(selectedTier.reward_views).toLocaleString()}</span>
+                                            <span className="text-[10px] font-bold text-gray-500 uppercase">Views</span>
+                                        </div>
                                     </button>
                                 </div>
                             </div>
@@ -307,11 +313,11 @@ const ClaimRewardModal = ({ isOpen, onClose }) => {
                                             <div className="grid grid-cols-2 gap-2 mt-2">
                                                 <div className="bg-white/60 rounded-lg p-2 flex items-center gap-2 border border-black/5">
                                                     <Heart className="w-3.5 h-3.5 text-pink-500 fill-current" />
-                                                    <span className="text-sm font-bold text-gray-700">{parseInt(tier.reward_likes).toLocaleString()} Likes</span>
+                                                    <span className="text-sm font-bold text-gray-700">Free {parseInt(tier.reward_likes).toLocaleString()} Likes</span>
                                                 </div>
                                                 <div className="bg-white/60 rounded-lg p-2 flex items-center gap-2 border border-black/5">
                                                     <Eye className="w-3.5 h-3.5 text-indigo-500" />
-                                                    <span className="text-sm font-bold text-gray-700">{parseInt(tier.reward_views).toLocaleString()} Views</span>
+                                                    <span className="text-sm font-bold text-gray-700">Free {parseInt(tier.reward_views).toLocaleString()} Views</span>
                                                 </div>
                                             </div>
                                         </div>
