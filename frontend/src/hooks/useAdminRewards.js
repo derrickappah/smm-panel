@@ -21,6 +21,9 @@ export function useAdminRewardClaims(filters = {}) {
           reward_type,
           reward_amount,
           created_at,
+          status,
+          order_id,
+          service_id,
           profiles!inner(email, name)
         `)
                 .order('created_at', { ascending: false });
