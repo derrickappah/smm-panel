@@ -1,14 +1,20 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Home, Package, History, Shield, LogOut, Menu, X, User, HelpCircle, Receipt, FileText, MessageCircleQuestion, Gift } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Home, Package, History, Shield, LogOut, Menu, X, User, HelpCircle, Receipt, FileText, MessageCircleQuestion, Gift, MoreHorizontal } from 'lucide-react';
 
 const Navbar = ({ user, onLogout }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const navItems = [
+  const allNavItems = [
     { path: '/dashboard', label: 'Home', icon: Home },
     { path: '/services', label: 'Services', icon: Package },
     { path: '/orders', label: 'Orders', icon: History },
@@ -19,8 +25,13 @@ const Navbar = ({ user, onLogout }) => {
     { path: '/terms', label: 'Terms', icon: FileText },
   ];
 
+  const visibleNavItems = allNavItems.slice(0, 5);
+  const droppedNavItems = allNavItems.slice(5);
+
   if (user?.role === 'admin') {
-    navItems.push({ path: '/admin', label: 'Admin', icon: Shield });
+    visibleNavItems.push({ path: '/admin', label: 'Admin', icon: Shield });
+    // Also push to allNavItems for mobile menu
+    allNavItems.push({ path: '/admin', label: 'Admin', icon: Shield });
   }
 
   const handleNavClick = (path) => {
@@ -59,7 +70,7 @@ const Navbar = ({ user, onLogout }) => {
 
           {/* Desktop Nav Items */}
           <div className="hidden md:flex items-center space-x-1">
-            {navItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.path;
               return (
@@ -77,6 +88,34 @@ const Navbar = ({ user, onLogout }) => {
                 </Button>
               );
             })}
+
+            {/* Dropdown for extra items */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="flex items-center space-x-2 rounded-lg px-3 sm:px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                >
+                  <MoreHorizontal className="w-4 h-4" />
+                  <span>More</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {droppedNavItems.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <DropdownMenuItem
+                      key={item.path}
+                      onClick={() => navigate(item.path)}
+                      className="cursor-pointer"
+                    >
+                      <Icon className="mr-2 h-4 w-4" />
+                      <span>{item.label}</span>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
           {/* Desktop User Info & Actions */}
@@ -128,7 +167,7 @@ const Navbar = ({ user, onLogout }) => {
           <div className="md:hidden mt-4 pb-4 animate-slideDown border-t border-gray-200 pt-4">
             {/* Mobile Nav Items */}
             <div className="space-y-2">
-              {navItems.map((item) => {
+              {allNavItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.path;
                 return (
