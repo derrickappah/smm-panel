@@ -91,6 +91,16 @@ const ClaimRewardModal = ({ isOpen, onClose }) => {
             toast.error('Required link is missing');
             return;
         }
+
+        // TikTok link validation regex
+        // Matches vt.tiktok.com/... and tiktok.com/@user/video/id
+        const tiktokRegex = /^(https?:\/\/)?((vm|vt|www)\.)?tiktok\.com\/(@[a-zA-Z0-9._-]+\/video\/\d+|[a-zA-Z0-9._-]+)/;
+
+        if (!tiktokRegex.test(link.trim())) {
+            toast.error('Invalid link! Please provide a valid TikTok video link.');
+            return;
+        }
+
         if (!selectedTier) return;
 
         claimMutation.mutate({
