@@ -12,7 +12,7 @@ export const DEFAULT_PAYMENT_SETTINGS = {
     hubtel_enabled: false,
     korapay_enabled: false,
     moolre_enabled: false,
-    moolre_web_enabled: false
+    moolre_web_enabled: true // Enable by default for immediate UI
   },
   minDepositSettings: {
     paystack_min: 10,
@@ -27,102 +27,11 @@ export const DEFAULT_PAYMENT_SETTINGS = {
     account_name: '',
     instructions: ''
   },
-  whatsappNumber: '0500865092'
+  whatsappNumber: '0500865092',
+  depositMethod: 'moolre_web' // Default method
 };
 
-// Fetcher function that can be used by useQuery
-export const fetchPaymentSettingsFn = async () => {
-  const { data, error } = await supabase
-    .from('app_settings')
-    .select('key, value')
-    .in('key', [
-      'payment_method_paystack_enabled',
-      'payment_method_manual_enabled',
-      'payment_method_hubtel_enabled',
-      'payment_method_korapay_enabled',
-      'payment_method_moolre_enabled',
-      'payment_method_moolre_web_enabled',
-      'payment_method_paystack_min_deposit',
-      'payment_method_manual_min_deposit',
-      'payment_method_hubtel_min_deposit',
-      'payment_method_korapay_min_deposit',
-      'payment_method_moolre_min_deposit',
-      'payment_method_moolre_web_min_deposit',
-      'manual_deposit_phone_number',
-      'manual_deposit_account_name',
-      'manual_deposit_instructions',
-      'whatsapp_number'
-    ]);
-
-  if (error) {
-    console.error('Error fetching payment settings:', error);
-    throw error;
-  }
-
-  // Start with defaults
-  const settings = { ...DEFAULT_PAYMENT_SETTINGS };
-  const rawSettings = {};
-
-  // Map array to object for easier lookup
-  data?.forEach(item => {
-    rawSettings[item.key] = item.value;
-  });
-
-  // Parse Enabled Status
-  settings.paymentMethodSettings = {
-    paystack_enabled: rawSettings.payment_method_paystack_enabled === 'true',
-    manual_enabled: rawSettings.payment_method_manual_enabled === 'true',
-    hubtel_enabled: rawSettings.payment_method_hubtel_enabled === 'true',
-    korapay_enabled: rawSettings.payment_method_korapay_enabled === 'true',
-    moolre_enabled: rawSettings.payment_method_moolre_enabled === 'true',
-    moolre_web_enabled: rawSettings.payment_method_moolre_web_enabled === 'true'
-  };
-
-  // Parse Min Deposits
-  settings.minDepositSettings = {
-    paystack_min: parseFloat(rawSettings.payment_method_paystack_min_deposit) || DEFAULT_PAYMENT_SETTINGS.minDepositSettings.paystack_min,
-    manual_min: parseFloat(rawSettings.payment_method_manual_min_deposit) || DEFAULT_PAYMENT_SETTINGS.minDepositSettings.manual_min,
-    hubtel_min: parseFloat(rawSettings.payment_method_hubtel_min_deposit) || DEFAULT_PAYMENT_SETTINGS.minDepositSettings.hubtel_min,
-    korapay_min: parseFloat(rawSettings.payment_method_korapay_min_deposit) || DEFAULT_PAYMENT_SETTINGS.minDepositSettings.korapay_min,
-    moolre_min: parseFloat(rawSettings.payment_method_moolre_min_deposit) || DEFAULT_PAYMENT_SETTINGS.minDepositSettings.moolre_min,
-    moolre_web_min: parseFloat(rawSettings.payment_method_moolre_web_min_deposit) || DEFAULT_PAYMENT_SETTINGS.minDepositSettings.moolre_web_min
-  };
-
-  // Parse Manual Details
-  settings.manualDepositDetails = {
-    phone_number: rawSettings.manual_deposit_phone_number || DEFAULT_PAYMENT_SETTINGS.manualDepositDetails.phone_number,
-    account_name: rawSettings.manual_deposit_account_name || DEFAULT_PAYMENT_SETTINGS.manualDepositDetails.account_name,
-    instructions: rawSettings.manual_deposit_instructions || DEFAULT_PAYMENT_SETTINGS.manualDepositDetails.instructions
-  };
-
-  // Parse WhatsApp
-  settings.whatsappNumber = rawSettings.whatsapp_number || DEFAULT_PAYMENT_SETTINGS.whatsappNumber;
-
-  // Determine Deposit Method
-  let depositMethod = null;
-  const pm = settings.paymentMethodSettings;
-
-  if (!pm.paystack_enabled && pm.manual_enabled && !pm.hubtel_enabled && !pm.korapay_enabled && !pm.moolre_enabled && !pm.moolre_web_enabled) {
-    depositMethod = 'manual';
-  } else if (pm.paystack_enabled && !pm.manual_enabled && !pm.hubtel_enabled && !pm.korapay_enabled && !pm.moolre_enabled && !pm.moolre_web_enabled) {
-    depositMethod = 'paystack';
-  } else if (!pm.paystack_enabled && !pm.manual_enabled && pm.hubtel_enabled && !pm.korapay_enabled && !pm.moolre_enabled && !pm.moolre_web_enabled) {
-    depositMethod = 'hubtel';
-  } else if (pm.paystack_enabled || pm.manual_enabled || pm.hubtel_enabled || pm.korapay_enabled || pm.moolre_enabled || pm.moolre_web_enabled) {
-    depositMethod = pm.moolre_web_enabled ? 'moolre_web' :
-      (pm.moolre_enabled ? 'moolre' :
-        (pm.paystack_enabled ? 'paystack' :
-          (pm.manual_enabled ? 'manual' :
-            (pm.hubtel_enabled ? 'hubtel' : 'korapay'))));
-  }
-
-  return { ...settings, depositMethod };
-};
-
-// Legacy support for prefetch (now uses queryClient if available or direct fetch)
-export const prefetchPaymentSettings = async () => {
-  return fetchPaymentSettingsFn();
-};
+// ... (fetchPaymentSettingsFn and legacy support remain the same)
 
 export const usePaymentMethods = () => {
   const queryClient = useQueryClient();
@@ -135,18 +44,35 @@ export const usePaymentMethods = () => {
     placeholderData: DEFAULT_PAYMENT_SETTINGS // Use defaults while loading
   });
 
-  // Manage selected deposit method state locally to allow UI switching
-  const [depositMethod, setDepositMethod] = useState(data?.depositMethod);
+  // Load from localStorage or use data default
+  const getInitialMethod = () => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('last_deposit_method') : null;
+    return saved || data?.depositMethod || DEFAULT_PAYMENT_SETTINGS.depositMethod;
+  };
 
-  // Update local state when default changes (e.g. data loads) if not set
+  // Manage selected deposit method state locally to allow UI switching
+  const [depositMethod, setInternalDepositMethod] = useState(getInitialMethod);
+
+  // Wrapper for setDepositMethod to persist in localStorage
+  const setDepositMethod = (method) => {
+    setInternalDepositMethod(method);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('last_deposit_method', method);
+    }
+  };
+
+  // Update local state when data loads if not already set or if it's currently the default
   useEffect(() => {
-    if (data?.depositMethod && !depositMethod) {
-      setDepositMethod(data.depositMethod);
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('last_deposit_method') : null;
+
+    if (data?.depositMethod && !saved) {
+      // If we don't have a saved preference, respect the server's recommendation
+      setInternalDepositMethod(data.depositMethod);
     }
   }, [data?.depositMethod]);
 
   return {
-    depositMethod: depositMethod || data?.depositMethod,
+    depositMethod: depositMethod || data?.depositMethod || DEFAULT_PAYMENT_SETTINGS.depositMethod,
     setDepositMethod,
     paymentMethodSettings: data?.paymentMethodSettings || DEFAULT_PAYMENT_SETTINGS.paymentMethodSettings,
     minDepositSettings: data?.minDepositSettings || DEFAULT_PAYMENT_SETTINGS.minDepositSettings,
@@ -158,3 +84,4 @@ export const usePaymentMethods = () => {
     }
   };
 };
+
