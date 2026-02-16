@@ -1182,10 +1182,15 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       // 1. Atomically updates transaction status to 'approved'
       // 2. Stores the paystack_reference
       // 3. Updates user balance atomically (prevents race conditions)
+      // Get JWT token for API authentication
+      const approveAuthResult = await supabase.auth.getSession();
+      const approveSession = approveAuthResult?.data?.session;
+
       const approveResponse = await fetch('/api/approve-paystack-deposit', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': approveSession?.access_token ? `Bearer ${approveSession.access_token}` : ''
         },
         body: JSON.stringify({
           transaction_id: transactionToUpdate.id,
@@ -1267,10 +1272,15 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       (async () => {
         try {
           console.log('Running automatic verification for transaction:', transactionToUpdate.id);
+
+          const verifyAuthResult = await supabase.auth.getSession();
+          const session = verifyAuthResult?.data?.session;
+
           const verifyResponse = await fetch('/api/manual-verify-paystack-deposit', {
             method: 'POST',
             headers: {
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              'Authorization': session?.access_token ? `Bearer ${session.access_token}` : ''
             },
             body: JSON.stringify({
               transactionId: transactionToUpdate.id
@@ -1493,10 +1503,14 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       // This handles the case where payment succeeded but callback didn't fire
       if (existingTransaction?.paystack_reference) {
         try {
+          const cancelAuthResult = await supabase.auth.getSession();
+          const session = cancelAuthResult?.data?.session;
+
           const verifyResponse = await fetch('/api/verify-paystack-payment', {
             method: 'POST',
             headers: {
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              'Authorization': session?.access_token ? `Bearer ${session.access_token}` : ''
             },
             body: JSON.stringify({
               reference: existingTransaction.paystack_reference
@@ -2124,7 +2138,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               email: user?.email || authUser.email || ''
             },
             notification_url: `${window.location.origin}/api/payment-callback/korapay`,
-            callback_url: `${window.location.origin}/payment/callback?method=korapay`
+            callback_url: `${window.location.origin}/payment-callback?method=korapay`
           })
         });
 
@@ -2393,7 +2407,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       // Callback URL is for server-to-server webhook notifications from Moolre
       const callbackUrl = `${origin}/api/moolre-web-callback?ref=${encodeURIComponent(moolreWebReference)}`;
       // Redirect URL is for browser redirect after payment completion (must match route in App.js)
-      const redirectUrl = `${origin}/payment/callback?method=moolre_web&ref=${encodeURIComponent(moolreWebReference)}`;
+      const redirectUrl = `${origin}/payment-callback?method=moolre_web&ref=${encodeURIComponent(moolreWebReference)}`;
 
       console.log('Initializing Moolre Web payment with:', {
         reference: moolreWebReference,

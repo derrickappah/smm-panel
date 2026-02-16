@@ -133,6 +133,13 @@ function App() {
     }
   };
 
+  const refreshUser = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      await loadUserProfile(session.user.id);
+    }
+  };
+
   const logout = async () => {
     await supabase.auth.signOut();
     setUser(null);
@@ -175,7 +182,7 @@ function App() {
                     path="/dashboard"
                     element={
                       user ? (
-                        <Dashboard user={user} onLogout={logout} onUpdateUser={setUser} />
+                        <Dashboard user={user} onLogout={logout} onUpdateUser={refreshUser} />
                       ) : (
                         <Navigate to="/auth" replace />
                       )
@@ -221,7 +228,7 @@ function App() {
                       )
                     }
                   />
-                  <Route path="/payment-callback" element={<PaymentCallback />} />
+                  <Route path="/payment-callback" element={<PaymentCallback onUpdateUser={refreshUser} />} />
 
                   {/* Admin Routes */}
                   <Route
