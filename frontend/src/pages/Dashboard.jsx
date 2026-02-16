@@ -2138,7 +2138,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               email: user?.email || authUser.email || ''
             },
             notification_url: `${window.location.origin}/api/payment-callback/korapay`,
-            callback_url: `${window.location.origin}/payment-callback?method=korapay`
+            callback_url: `${window.location.origin}/payment/callback?method=korapay`
           })
         });
 
@@ -2407,7 +2407,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       // Callback URL is for server-to-server webhook notifications from Moolre
       const callbackUrl = `${origin}/api/moolre-web-callback?ref=${encodeURIComponent(moolreWebReference)}`;
       // Redirect URL is for browser redirect after payment completion (must match route in App.js)
-      const redirectUrl = `${origin}/payment-callback?method=moolre_web&ref=${encodeURIComponent(moolreWebReference)}`;
+      const redirectUrl = `${origin}/payment/callback?method=moolre_web&ref=${encodeURIComponent(moolreWebReference)}`;
 
       console.log('Initializing Moolre Web payment with:', {
         reference: moolreWebReference,

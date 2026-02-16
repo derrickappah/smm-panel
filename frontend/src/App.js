@@ -228,7 +228,7 @@ function App() {
                       )
                     }
                   />
-                  <Route path="/payment-callback" element={<PaymentCallback onUpdateUser={refreshUser} />} />
+                  <Route path="/payment-callback" element={<PaymentCallback />} />
 
                   {/* Admin Routes */}
                   <Route
