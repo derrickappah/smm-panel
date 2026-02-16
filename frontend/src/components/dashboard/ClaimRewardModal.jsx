@@ -174,7 +174,7 @@ const ClaimRewardModal = ({ isOpen, onClose }) => {
                                 <Label htmlFor="link" className="text-xs font-bold text-gray-500 uppercase">Link to boost</Label>
                                 <Input
                                     id="link"
-                                    placeholder="https://instagram.com/p/..."
+                                    placeholder="put your link here"
                                     className="h-12 bg-gray-50/50"
                                     value={link}
                                     onChange={(e) => setLink(e.target.value)}
