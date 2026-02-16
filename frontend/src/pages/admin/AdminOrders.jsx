@@ -8,7 +8,7 @@ import OrderErrorModal from '@/components/admin/OrderErrorModal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, RefreshCw, Filter, AlertCircle, RotateCcw, Tag, CheckCircle2, AlertTriangle, Bug } from 'lucide-react';
+import { Search, RefreshCw, Filter, AlertCircle, RotateCcw, Tag, CheckCircle2, AlertTriangle, Bug, Gift } from 'lucide-react';
 import { processManualRefund } from '@/lib/refunds';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
@@ -80,7 +80,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
       console.log('[AdminOrders] Fetching pending orders for status check...');
       const { data, error } = await supabase
         .from('orders')
-        .select('id, user_id, service_id, promotion_package_id, link, quantity, total_cost, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, created_at, completed_at, refund_status, last_status_check, services(name, platform, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id), promotion_packages(name, platform, service_type, smmgen_service_id), profiles(name, email, phone_number)')
+        .select('id, user_id, service_id, promotion_package_id, link, quantity, total_cost, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, created_at, completed_at, refund_status, last_status_check, is_reward, services(name, platform, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id), promotion_packages(name, platform, service_type, smmgen_service_id), profiles(name, email, phone_number)')
         .in('status', ['pending', 'processing', 'in progress'])
         .not('status', 'eq', 'completed')
         .not('status', 'eq', 'refunded')
@@ -648,6 +648,11 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
             {order.promotion_package_id && (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded">
                 <Tag className="w-3 h-3" />
+              </span>
+            )}
+            {order.is_reward && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded">
+                <Gift className="w-3 h-3" />
               </span>
             )}
           </div>

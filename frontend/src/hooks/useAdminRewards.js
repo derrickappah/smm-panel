@@ -201,3 +201,25 @@ export function useRewardStats() {
         staleTime: 1 * 60 * 1000, // 1 minute
     });
 }
+
+// Create reward order (Process Claim)
+export function useProcessRewardOrder() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async ({ claimId, serviceId, quantity }) => {
+            const { data, error } = await supabase.rpc('admin_create_reward_order', {
+                claim_id_param: claimId,
+                service_id_param: serviceId,
+                quantity_param: quantity
+            });
+
+            if (error) throw error;
+            return data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['admin', 'reward-claims'] });
+            queryClient.invalidateQueries({ queryKey: ['admin', 'reward-stats'] });
+        }
+    });
+}

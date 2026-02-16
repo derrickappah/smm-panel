@@ -1,16 +1,23 @@
 import React, { useState } from 'react';
-import { useAdminRewardClaims, useRewardStats } from '@/hooks/useAdminRewards';
+import { useAdminRewardClaims, useRewardStats, useProcessRewardOrder } from '@/hooks/useAdminRewards';
+import { useAdminServices } from '@/hooks/useAdminServices'; // Assuming this exists or using direct fetch
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { Gift, Users, TrendingUp, DollarSign, ExternalLink, Calendar, Search } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Gift, Users, TrendingUp, DollarSign, ExternalLink, Calendar, Search, CheckCircle, XCircle, Loader2, Play } from 'lucide-react';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
 
 const AdminRewards = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [dateFilter, setDateFilter] = useState('');
+    const [selectedClaims, setSelectedClaims] = useState([]);
+    const [selectedServiceId, setSelectedServiceId] = useState('');
+    const [isProcessing, setIsProcessing] = useState(false);
 
     const filters = {};
     if (dateFilter) {
@@ -20,16 +27,80 @@ const AdminRewards = () => {
 
     const { data: claims, isLoading: claimsLoading } = useAdminRewardClaims(filters);
     const { data: stats, isLoading: statsLoading } = useRewardStats();
+    const { data: services } = useAdminServices ? useAdminServices() : { data: [] }; // Fallback if hook missing
 
-    // Filter claims by search query (email or name)
+    const processOrderMutation = useProcessRewardOrder();
+
+    // Filter claims by search query AND status
     const filteredClaims = claims?.filter(claim => {
-        if (!searchQuery) return true;
-        const query = searchQuery.toLowerCase();
-        return (
-            claim.profiles?.email?.toLowerCase().includes(query) ||
-            claim.profiles?.name?.toLowerCase().includes(query)
+        const matchesSearch = !searchQuery || (
+            claim.profiles?.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            claim.profiles?.name?.toLowerCase().includes(searchQuery.toLowerCase())
         );
+        return matchesSearch;
     });
+
+    // Handle Bulk Selection
+    const handleSelectAll = (checked) => {
+        if (checked) {
+            const pendingClaims = filteredClaims?.filter(c => c.status === 'pending') || [];
+            setSelectedClaims(pendingClaims.map(c => c.id));
+        } else {
+            setSelectedClaims([]);
+        }
+    };
+
+    const handleSelectClaim = (id, checked) => {
+        if (checked) {
+            setSelectedClaims(prev => [...prev, id]);
+        } else {
+            setSelectedClaims(prev => prev.filter(c => c !== id));
+        }
+    };
+
+    // Process Logic
+    const handleProcess = async () => {
+        if (!selectedServiceId) {
+            toast.error('Please select a service first');
+            return;
+        }
+        if (selectedClaims.length === 0) {
+            toast.error('No claims selected');
+            return;
+        }
+
+        setIsProcessing(true);
+        let successCount = 0;
+        let failCount = 0;
+
+        for (const claimId of selectedClaims) {
+            const claim = claims.find(c => c.id === claimId);
+            if (!claim) continue;
+
+            try {
+                // 1. Create Order in DB (via RPC)
+                await processOrderMutation.mutateAsync({
+                    claimId: claimId,
+                    serviceId: selectedServiceId,
+                    quantity: claim.reward_amount || 1000 // Default quantity
+                });
+
+                // 2. TODO: Call SMM API here if needed (Client-side)
+                // For now, we just mark as processed in DB which creates the order.
+
+                successCount++;
+            } catch (error) {
+                console.error(`Failed to process claim ${claimId}:`, error);
+                failCount++;
+            }
+        }
+
+        setIsProcessing(false);
+        setSelectedClaims([]);
+
+        if (successCount > 0) toast.success(`Successfully processed ${successCount} claims`);
+        if (failCount > 0) toast.error(`Failed to process ${failCount} claims`);
+    };
 
     const statCards = [
         {
@@ -70,7 +141,7 @@ const AdminRewards = () => {
                     Reward Claims
                 </h2>
                 <p className="text-muted-foreground mt-1">
-                    View and manage daily reward claims from users
+                    View and process user reward claims
                 </p>
             </div>
 
@@ -98,6 +169,48 @@ const AdminRewards = () => {
                     ))
                 )}
             </div>
+
+            {/* Processing Toolbar */}
+            <Card className="border-2 border-primary/20 bg-primary/5">
+                <CardContent className="p-4 flex flex-col md:flex-row gap-4 items-center justify-between">
+                    <div className="flex items-center gap-4 w-full md:w-auto">
+                        <div className="w-full md:w-[300px]">
+                            <Select value={selectedServiceId} onValueChange={setSelectedServiceId}>
+                                <SelectTrigger className="bg-white">
+                                    <SelectValue placeholder="Select Service to Process" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {services?.map(service => (
+                                        <SelectItem key={service.id} value={service.id}>
+                                            {service.name} (ID: {service.id})
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <span className="text-sm text-gray-500 whitespace-nowrap">
+                            {selectedClaims.length} selected
+                        </span>
+                    </div>
+                    <Button
+                        onClick={handleProcess}
+                        disabled={selectedClaims.length === 0 || !selectedServiceId || isProcessing}
+                        className="w-full md:w-auto"
+                    >
+                        {isProcessing ? (
+                            <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Processing...
+                            </>
+                        ) : (
+                            <>
+                                <Play className="w-4 h-4 mr-2 fill-current" />
+                                Process Selected
+                            </>
+                        )}
+                    </Button>
+                </CardContent>
+            </Card>
 
             {/* Filters */}
             <Card>
@@ -148,6 +261,13 @@ const AdminRewards = () => {
                             <table className="w-full">
                                 <thead>
                                     <tr className="border-b">
+                                        <th className="w-10 p-4">
+                                            <Checkbox
+                                                checked={selectedClaims.length > 0 && selectedClaims.length === filteredClaims.filter(c => c.status === 'pending').length}
+                                                onCheckedChange={handleSelectAll}
+                                            />
+                                        </th>
+                                        <th className="text-left py-3 px-4 font-semibold text-sm">Status</th>
                                         <th className="text-left py-3 px-4 font-semibold text-sm">User</th>
                                         <th className="text-left py-3 px-4 font-semibold text-sm">Reward</th>
                                         <th className="text-left py-3 px-4 font-semibold text-sm">Deposit</th>
@@ -158,6 +278,24 @@ const AdminRewards = () => {
                                 <tbody>
                                     {filteredClaims.map((claim) => (
                                         <tr key={claim.id} className="border-b hover:bg-gray-50 transition-colors">
+                                            <td className="p-4">
+                                                <Checkbox
+                                                    checked={selectedClaims.includes(claim.id)}
+                                                    onCheckedChange={(checked) => handleSelectClaim(claim.id, checked)}
+                                                    disabled={claim.status === 'processed'}
+                                                />
+                                            </td>
+                                            <td className="py-3 px-4">
+                                                {claim.status === 'processed' ? (
+                                                    <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-none">
+                                                        Processed
+                                                    </Badge>
+                                                ) : (
+                                                    <Badge variant="outline" className="text-yellow-600 border-yellow-200 bg-yellow-50">
+                                                        Pending
+                                                    </Badge>
+                                                )}
+                                            </td>
                                             <td className="py-3 px-4">
                                                 <div>
                                                     <div className="font-medium">{claim.profiles?.name || 'Unknown'}</div>

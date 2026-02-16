@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Tag } from 'lucide-react';
+import { Tag, Gift } from 'lucide-react';
 
 const DashboardOrders = React.memo(({ orders, services }) => {
   const navigate = useNavigate();
@@ -70,6 +70,12 @@ const DashboardOrders = React.memo(({ orders, services }) => {
                 <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
                   <p className="text-sm sm:text-base font-semibold text-gray-900">₵{order.total_cost?.toFixed(2) || '0.00'}</p>
                   <div className="flex items-center gap-2">
+                    {order.is_reward && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded flex-shrink-0">
+                        <Gift className="w-3 h-3" />
+                        Reward
+                      </span>
+                    )}
                     <span className={`text-xs font-medium px-2.5 py-1 rounded border ${getStatusStyles(order.status)}`}>
                       {order.status === 'submission_failed' ? 'Placement Failed' : order.status}
                     </span>
