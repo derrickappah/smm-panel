@@ -152,7 +152,7 @@ const ClaimRewardModal = ({ isOpen, onClose }) => {
                             <Progress value={progressToNext} className="h-2 bg-gray-100" indicatorClassName="bg-gradient-to-r from-blue-500 to-indigo-600" />
                             {nextLockedTier && (
                                 <p className="text-[10px] text-gray-400 mt-1.5 text-right">
-                                    GHS {(parseFloat(nextLockedTier.required_amount) - currentDeposit).toFixed(2)} more to unlock {nextLockedTier.name}
+                                    Deposit GHS {(parseFloat(nextLockedTier.required_amount) - currentDeposit).toFixed(2)} more to unlock {nextLockedTier.name}
                                 </p>
                             )}
                         </div>
