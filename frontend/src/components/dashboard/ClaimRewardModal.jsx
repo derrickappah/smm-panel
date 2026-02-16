@@ -332,7 +332,7 @@ const ClaimRewardModal = ({ isOpen, onClose }) => {
                             }}
                             className="w-full h-12 bg-gray-900 hover:bg-gray-800 text-white font-bold rounded-xl flex items-center justify-between px-6 transition-all"
                         >
-                            <span>Deposit to Unlock Next Tier</span>
+                            <span>Deposit to Unlock Next Reward</span>
                             <ArrowRight className="w-5 h-5" />
                         </Button>
                     </div>
