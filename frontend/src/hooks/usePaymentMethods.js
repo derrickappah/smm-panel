@@ -69,53 +69,63 @@ export const fetchPaymentSettingsFn = async () => {
     rawSettings[item.key] = item.value;
   });
 
+  // Helper to get boolean with default
+  const getEnabled = (key, defaultVal) => {
+    if (rawSettings[key] === undefined) return defaultVal;
+    return rawSettings[key] === 'true';
+  };
+
+  // Helper to get float with default
+  const getMin = (key, defaultVal) => {
+    if (rawSettings[key] === undefined) return defaultVal;
+    return parseFloat(rawSettings[key]) || defaultVal;
+  };
+
+  // Helper to get string with default
+  const getString = (key, defaultVal) => {
+    return rawSettings[key] || defaultVal;
+  };
+
   // Parse Enabled Status
   settings.paymentMethodSettings = {
-    paystack_enabled: rawSettings.payment_method_paystack_enabled === 'true',
-    manual_enabled: rawSettings.payment_method_manual_enabled === 'true',
-    hubtel_enabled: rawSettings.payment_method_hubtel_enabled === 'true',
-    korapay_enabled: rawSettings.payment_method_korapay_enabled === 'true',
-    moolre_enabled: rawSettings.payment_method_moolre_enabled === 'true',
-    moolre_web_enabled: rawSettings.payment_method_moolre_web_enabled === 'true'
+    paystack_enabled: getEnabled('payment_method_paystack_enabled', DEFAULT_PAYMENT_SETTINGS.paymentMethodSettings.paystack_enabled),
+    manual_enabled: getEnabled('payment_method_manual_enabled', DEFAULT_PAYMENT_SETTINGS.paymentMethodSettings.manual_enabled),
+    hubtel_enabled: getEnabled('payment_method_hubtel_enabled', DEFAULT_PAYMENT_SETTINGS.paymentMethodSettings.hubtel_enabled),
+    korapay_enabled: getEnabled('payment_method_korapay_enabled', DEFAULT_PAYMENT_SETTINGS.paymentMethodSettings.korapay_enabled),
+    moolre_enabled: getEnabled('payment_method_moolre_enabled', DEFAULT_PAYMENT_SETTINGS.paymentMethodSettings.moolre_enabled),
+    moolre_web_enabled: getEnabled('payment_method_moolre_web_enabled', DEFAULT_PAYMENT_SETTINGS.paymentMethodSettings.moolre_web_enabled)
   };
 
   // Parse Min Deposits
   settings.minDepositSettings = {
-    paystack_min: parseFloat(rawSettings.payment_method_paystack_min_deposit) || DEFAULT_PAYMENT_SETTINGS.minDepositSettings.paystack_min,
-    manual_min: parseFloat(rawSettings.payment_method_manual_min_deposit) || DEFAULT_PAYMENT_SETTINGS.minDepositSettings.manual_min,
-    hubtel_min: parseFloat(rawSettings.payment_method_hubtel_min_deposit) || DEFAULT_PAYMENT_SETTINGS.minDepositSettings.hubtel_min,
-    korapay_min: parseFloat(rawSettings.payment_method_korapay_min_deposit) || DEFAULT_PAYMENT_SETTINGS.minDepositSettings.korapay_min,
-    moolre_min: parseFloat(rawSettings.payment_method_moolre_min_deposit) || DEFAULT_PAYMENT_SETTINGS.minDepositSettings.moolre_min,
-    moolre_web_min: parseFloat(rawSettings.payment_method_moolre_web_min_deposit) || DEFAULT_PAYMENT_SETTINGS.minDepositSettings.moolre_web_min
+    paystack_min: getMin('payment_method_paystack_min_deposit', DEFAULT_PAYMENT_SETTINGS.minDepositSettings.paystack_min),
+    manual_min: getMin('payment_method_manual_min_deposit', DEFAULT_PAYMENT_SETTINGS.minDepositSettings.manual_min),
+    hubtel_min: getMin('payment_method_hubtel_min_deposit', DEFAULT_PAYMENT_SETTINGS.minDepositSettings.hubtel_min),
+    korapay_min: getMin('payment_method_korapay_min_deposit', DEFAULT_PAYMENT_SETTINGS.minDepositSettings.korapay_min),
+    moolre_min: getMin('payment_method_moolre_min_deposit', DEFAULT_PAYMENT_SETTINGS.minDepositSettings.moolre_min),
+    moolre_web_min: getMin('payment_method_moolre_web_min_deposit', DEFAULT_PAYMENT_SETTINGS.minDepositSettings.moolre_web_min)
   };
 
   // Parse Manual Details
   settings.manualDepositDetails = {
-    phone_number: rawSettings.manual_deposit_phone_number || DEFAULT_PAYMENT_SETTINGS.manualDepositDetails.phone_number,
-    account_name: rawSettings.manual_deposit_account_name || DEFAULT_PAYMENT_SETTINGS.manualDepositDetails.account_name,
-    instructions: rawSettings.manual_deposit_instructions || DEFAULT_PAYMENT_SETTINGS.manualDepositDetails.instructions
+    phone_number: getString('manual_deposit_phone_number', DEFAULT_PAYMENT_SETTINGS.manualDepositDetails.phone_number),
+    account_name: getString('manual_deposit_account_name', DEFAULT_PAYMENT_SETTINGS.manualDepositDetails.account_name),
+    instructions: getString('manual_deposit_instructions', DEFAULT_PAYMENT_SETTINGS.manualDepositDetails.instructions)
   };
 
   // Parse WhatsApp
-  settings.whatsappNumber = rawSettings.whatsapp_number || DEFAULT_PAYMENT_SETTINGS.whatsappNumber;
+  settings.whatsappNumber = getString('whatsapp_number', DEFAULT_PAYMENT_SETTINGS.whatsappNumber);
 
   // Determine Deposit Method
   let depositMethod = null;
   const pm = settings.paymentMethodSettings;
 
-  if (!pm.paystack_enabled && pm.manual_enabled && !pm.hubtel_enabled && !pm.korapay_enabled && !pm.moolre_enabled && !pm.moolre_web_enabled) {
-    depositMethod = 'manual';
-  } else if (pm.paystack_enabled && !pm.manual_enabled && !pm.hubtel_enabled && !pm.korapay_enabled && !pm.moolre_enabled && !pm.moolre_web_enabled) {
-    depositMethod = 'paystack';
-  } else if (!pm.paystack_enabled && !pm.manual_enabled && pm.hubtel_enabled && !pm.korapay_enabled && !pm.moolre_enabled && !pm.moolre_web_enabled) {
-    depositMethod = 'hubtel';
-  } else if (pm.paystack_enabled || pm.manual_enabled || pm.hubtel_enabled || pm.korapay_enabled || pm.moolre_enabled || pm.moolre_web_enabled) {
-    depositMethod = pm.moolre_web_enabled ? 'moolre_web' :
-      (pm.moolre_enabled ? 'moolre' :
-        (pm.paystack_enabled ? 'paystack' :
-          (pm.manual_enabled ? 'manual' :
-            (pm.hubtel_enabled ? 'hubtel' : 'korapay'))));
-  }
+  if (pm.moolre_web_enabled) depositMethod = 'moolre_web';
+  else if (pm.moolre_enabled) depositMethod = 'moolre';
+  else if (pm.paystack_enabled) depositMethod = 'paystack';
+  else if (pm.manual_enabled) depositMethod = 'manual';
+  else if (pm.hubtel_enabled) depositMethod = 'hubtel';
+  else if (pm.korapay_enabled) depositMethod = 'korapay';
 
   return { ...settings, depositMethod };
 };
