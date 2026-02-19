@@ -124,11 +124,39 @@ export default async function handler(req, res) {
                     provider: 'smmgen',
                     service_id: sid
                 }));
-            } else if (pkg.smmgen_service_id) {
-                provider = 'smmgen';
-                provider_service_id = pkg.smmgen_service_id;
-                combo_components = [{ provider: 'smmgen', service_id: pkg.smmgen_service_id }];
+            } else {
+                // Determine provider for single package (same priority as services)
+                if (pkg.smmcost_service_id) {
+                    provider = 'smmcost';
+                    provider_service_id = pkg.smmcost_service_id;
+                } else if (pkg.jbsmmpanel_service_id) {
+                    provider = 'jbsmmpanel';
+                    provider_service_id = pkg.jbsmmpanel_service_id;
+                } else if (pkg.smmgen_service_id) {
+                    provider = 'smmgen';
+                    provider_service_id = pkg.smmgen_service_id;
+                } else if (pkg.worldofsmm_service_id) {
+                    provider = 'worldofsmm';
+                    provider_service_id = pkg.worldofsmm_service_id;
+                } else if (pkg.g1618_service_id) {
+                    provider = 'g1618';
+                    provider_service_id = pkg.g1618_service_id;
+                }
+
+                if (provider && provider_service_id) {
+                    combo_components = [{ provider, service_id: provider_service_id }];
+                }
             }
+
+            // DEBUG: Log provider detection for packages
+            console.log('[ORDER DEBUG] Package provider detection:', {
+                package_id: pkg.id,
+                package_name: pkg.name,
+                is_combo,
+                provider,
+                provider_service_id,
+                combo_components_count: combo_components.length
+            });
         }
 
         // 3. Idempotency Check
