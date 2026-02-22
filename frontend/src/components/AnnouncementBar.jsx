@@ -82,16 +82,18 @@ const AnnouncementBar = () => {
   }, [messages]);
 
   return (
-    <div className="w-full max-w-full overflow-x-hidden bg-indigo-600 text-white py-1.5 md:py-2 border-t border-indigo-700">
-      <div
-        ref={trackRef}
-        className="marquee-ticker flex whitespace-nowrap"
-      >
-        {doubled.map((message, index) => (
-          <span key={index} className="mx-10 text-xs sm:text-sm font-medium flex-shrink-0">
-            {message}
-          </span>
-        ))}
+    <div className="max-w-7xl mx-auto px-4 py-2">
+      <div className="w-full bg-indigo-600 text-white overflow-hidden py-1.5 md:py-2 rounded-lg shadow-md border border-indigo-500">
+        <div
+          ref={trackRef}
+          className="marquee-ticker flex whitespace-nowrap"
+        >
+          {doubled.map((message, index) => (
+            <span key={index} className="mx-10 text-xs sm:text-sm font-medium flex-shrink-0">
+              {message}
+            </span>
+          ))}
+        </div>
       </div>
       <style>{`
         @keyframes ticker {
