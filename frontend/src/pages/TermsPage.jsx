@@ -36,7 +36,7 @@ const TermsPage = ({ user, onLogout }) => {
         structuredDataArray={[breadcrumbSchema]}
       />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 md:pt-6 pb-6 sm:pb-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 md:pt-6 pb-6 sm:pb-8">
         {/* Header Section */}
         <div className="mb-6 sm:mb-8 animate-fadeIn">
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">

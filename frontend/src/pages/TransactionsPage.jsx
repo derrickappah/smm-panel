@@ -6,13 +6,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import SEO from '@/components/SEO';
-import { 
-  Clock, 
-  CheckCircle, 
-  XCircle, 
-  Loader, 
-  RefreshCw, 
-  DollarSign, 
+import {
+  Clock,
+  CheckCircle,
+  XCircle,
+  Loader,
+  RefreshCw,
+  DollarSign,
   TrendingUp,
   AlertCircle,
   Plus,
@@ -95,7 +95,7 @@ const TransactionsPage = ({ user, onLogout }) => {
             .from('orders')
             .select('id, refund_status, user_id')
             .in('user_id', userIds);
-          
+
           if (ordersData) {
             setOrders(ordersData);
           }
@@ -123,7 +123,7 @@ const TransactionsPage = ({ user, onLogout }) => {
   const [balanceCheckResults, setBalanceCheckResults] = useState({});
   const [checkingBalances, setCheckingBalances] = useState(false);
   const [balanceCheckTrigger, setBalanceCheckTrigger] = useState(0); // Trigger for re-checking
-  
+
   // Load verified transactions from database on mount
   useEffect(() => {
     if (isAdmin) {
@@ -248,7 +248,7 @@ const TransactionsPage = ({ user, onLogout }) => {
 
     // Get all transactions for this user
     const userTransactions = transactions.filter(t => t.user_id === userId);
-    
+
     // Calculate expected balance from transactions
     const allApprovedDeposits = userTransactions
       .filter(t => t.type === 'deposit' && t.status === 'approved')
@@ -303,7 +303,7 @@ const TransactionsPage = ({ user, onLogout }) => {
 
     return results;
   };
-  
+
   // Perform balance checks when transactions or userProfiles change
   // Optimized: Check by user (batch all transactions for a user at once)
   useEffect(() => {
@@ -315,7 +315,7 @@ const TransactionsPage = ({ user, onLogout }) => {
 
     const performBalanceChecks = async () => {
       setCheckingBalances(true);
-      
+
       // Load previously verified transactions from database
       let previouslyVerified = {};
       try {
@@ -331,53 +331,53 @@ const TransactionsPage = ({ user, onLogout }) => {
       } catch (error) {
         console.warn('Failed to load verified transactions from database:', error);
       }
-      
+
       // Start with previously verified results
       const results = { ...previouslyVerified };
-      
+
       // Get unique user IDs that have approved deposit transactions
       const depositTransactions = transactions.filter(
         t => t.type === 'deposit' && t.status === 'approved'
       );
-      
+
       const userIdsWithDeposits = [...new Set(depositTransactions.map(t => t.user_id))];
-      
+
       // Check balance for each user (batched - much faster than per-transaction)
       // Use Promise.all to check multiple users in parallel
       const userCheckPromises = userIdsWithDeposits.map(async (userId) => {
         if (!isMounted) return {};
-        
+
         // Skip users that have all transactions already verified as "updated"
         const userDeposits = depositTransactions.filter(t => t.user_id === userId);
         const allVerified = userDeposits.every(t => previouslyVerified[t.id] === 'updated');
         if (allVerified) {
           return {}; // All transactions for this user already verified
         }
-        
+
         return await checkUserBalance(userId);
       });
-      
+
       // Wait for all user checks to complete (parallel execution)
       const userCheckResults = await Promise.all(userCheckPromises);
-      
+
       // Merge all results
       userCheckResults.forEach(userResults => {
         Object.assign(results, userResults);
       });
-      
+
       // Save verified transactions to database (batch save)
       if (isMounted) {
         const transactionsToSave = Object.entries(results)
           .filter(([id, status]) => status && status !== 'checking' && status !== previouslyVerified[id])
           .map(([transactionId, status]) => ({ transactionId, status }));
-        
+
         // Save in parallel (batch)
         await Promise.all(
           transactionsToSave.map(({ transactionId, status }) =>
             saveVerifiedTransaction(transactionId, status)
           )
         );
-        
+
         setBalanceCheckResults(results);
         setCheckingBalances(false);
       }
@@ -436,16 +436,16 @@ const TransactionsPage = ({ user, onLogout }) => {
       );
 
       toast.success(`Balance credited successfully! ₵${depositAmount.toFixed(2)} added to user's account.`);
-      
+
       // Mark this transaction as verified since we just manually credited it
       setBalanceCheckResults(prev => ({
         ...prev,
         [transaction.id]: 'updated'
       }));
-      
+
       // Save to database immediately
       await saveVerifiedTransaction(transaction.id, 'updated');
-      
+
       // Refresh data - verified results will be preserved
       await fetchTransactions();
       // Balance checks will run automatically via useEffect, but will skip already verified transactions
@@ -460,28 +460,28 @@ const TransactionsPage = ({ user, onLogout }) => {
   const getStatusConfig = (status) => {
     switch (status) {
       case 'approved':
-        return { 
-          label: 'Approved', 
-          color: 'bg-green-100 text-green-700 border-green-200', 
-          icon: CheckCircle 
+        return {
+          label: 'Approved',
+          color: 'bg-green-100 text-green-700 border-green-200',
+          icon: CheckCircle
         };
       case 'pending':
-        return { 
-          label: 'Pending', 
-          color: 'bg-yellow-100 text-yellow-700 border-yellow-200', 
-          icon: Clock 
+        return {
+          label: 'Pending',
+          color: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+          icon: Clock
         };
       case 'rejected':
-        return { 
-          label: 'Rejected', 
-          color: 'bg-red-100 text-red-700 border-red-200', 
-          icon: XCircle 
+        return {
+          label: 'Rejected',
+          color: 'bg-red-100 text-red-700 border-red-200',
+          icon: XCircle
         };
       default:
-        return { 
-          label: status || 'Unknown', 
-          color: 'bg-gray-100 text-gray-700 border-gray-200', 
-          icon: AlertCircle 
+        return {
+          label: status || 'Unknown',
+          color: 'bg-gray-100 text-gray-700 border-gray-200',
+          icon: AlertCircle
         };
     }
   };
@@ -489,46 +489,46 @@ const TransactionsPage = ({ user, onLogout }) => {
   const getTypeConfig = (type) => {
     switch (type) {
       case 'deposit':
-        return { 
-          label: 'Deposit', 
-          color: 'bg-blue-100 text-blue-700 border-blue-200', 
-          icon: TrendingUp 
+        return {
+          label: 'Deposit',
+          color: 'bg-blue-100 text-blue-700 border-blue-200',
+          icon: TrendingUp
         };
       case 'order':
-        return { 
-          label: 'Order', 
-          color: 'bg-purple-100 text-purple-700 border-purple-200', 
-          icon: DollarSign 
+        return {
+          label: 'Order',
+          color: 'bg-purple-100 text-purple-700 border-purple-200',
+          icon: DollarSign
         };
       case 'refund':
-        return { 
-          label: 'Refund', 
-          color: 'bg-green-100 text-green-700 border-green-200', 
-          icon: RefreshCw 
+        return {
+          label: 'Refund',
+          color: 'bg-green-100 text-green-700 border-green-200',
+          icon: RefreshCw
         };
       case 'referral_bonus':
-        return { 
-          label: 'Referral Bonus', 
-          color: 'bg-emerald-100 text-emerald-700 border-emerald-200', 
-          icon: TrendingUp 
+        return {
+          label: 'Referral Bonus',
+          color: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+          icon: TrendingUp
         };
       case 'manual_adjustment':
-        return { 
-          label: 'Manual Adjustment', 
-          color: 'bg-indigo-100 text-indigo-700 border-indigo-200', 
-          icon: DollarSign 
+        return {
+          label: 'Manual Adjustment',
+          color: 'bg-indigo-100 text-indigo-700 border-indigo-200',
+          icon: DollarSign
         };
       case 'unknown':
-        return { 
-          label: 'Unknown', 
-          color: 'bg-yellow-100 text-yellow-700 border-yellow-200', 
-          icon: AlertCircle 
+        return {
+          label: 'Unknown',
+          color: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+          icon: AlertCircle
         };
       default:
-        return { 
-          label: type || 'Unknown', 
-          color: 'bg-gray-100 text-gray-700 border-gray-200', 
-          icon: AlertCircle 
+        return {
+          label: type || 'Unknown',
+          color: 'bg-gray-100 text-gray-700 border-gray-200',
+          icon: AlertCircle
         };
     }
   };
@@ -554,10 +554,10 @@ const TransactionsPage = ({ user, onLogout }) => {
         const userEmail = userProfile?.email?.toLowerCase() || '';
         const amount = transaction.amount?.toString() || '';
         const id = transaction.id?.toLowerCase() || '';
-        return userName.includes(searchLower) || 
-               userEmail.includes(searchLower) || 
-               amount.includes(searchLower) ||
-               id.includes(searchLower);
+        return userName.includes(searchLower) ||
+          userEmail.includes(searchLower) ||
+          amount.includes(searchLower) ||
+          id.includes(searchLower);
       } else {
         const amount = transaction.amount?.toString() || '';
         const id = transaction.id?.toLowerCase() || '';
@@ -583,7 +583,7 @@ const TransactionsPage = ({ user, onLogout }) => {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navbar user={user} onLogout={onLogout} />
-        <div className="flex items-center justify-center min-h-[60vh] pt-20 md:pt-0">
+        <div className="flex items-center justify-center min-h-[60vh] pt-28 md:pt-0">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-indigo-600 mx-auto"></div>
             <p className="text-sm text-gray-600 mt-4">Loading transactions...</p>
@@ -602,8 +602,8 @@ const TransactionsPage = ({ user, onLogout }) => {
         noindex={true}
       />
       <Navbar user={user} onLogout={onLogout} />
-      
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 md:pt-6 pb-6 sm:pb-8">
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 md:pt-6 pb-6 sm:pb-8">
         <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 lg:p-8 shadow-sm">
           {/* Header */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
@@ -612,8 +612,8 @@ const TransactionsPage = ({ user, onLogout }) => {
                 {isAdmin ? 'All Transactions' : 'My Transactions'}
               </h1>
               <p className="text-sm sm:text-base text-gray-600">
-                {isAdmin 
-                  ? 'View and manage all user transactions' 
+                {isAdmin
+                  ? 'View and manage all user transactions'
                   : 'Track your deposits and payments'}
               </p>
             </div>
@@ -628,7 +628,7 @@ const TransactionsPage = ({ user, onLogout }) => {
                         .from('verified_transactions')
                         .delete()
                         .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all (using a condition that's always true)
-                      
+
                       if (error) {
                         console.warn('Failed to clear verified transactions:', error);
                         toast.error('Failed to clear verified transactions. Please try again.');
@@ -810,12 +810,12 @@ const TransactionsPage = ({ user, onLogout }) => {
                             {/* Amount */}
                             <div className="text-center">
                               {(() => {
-                                const isCredit = transaction.type === 'deposit' || 
-                                                transaction.type === 'refund' || 
-                                                transaction.type === 'referral_bonus' ||
-                                                (transaction.type === 'manual_adjustment' && transaction.description?.toLowerCase().includes('credit'));
+                                const isCredit = transaction.type === 'deposit' ||
+                                  transaction.type === 'refund' ||
+                                  transaction.type === 'referral_bonus' ||
+                                  (transaction.type === 'manual_adjustment' && transaction.description?.toLowerCase().includes('credit'));
                                 const isDebit = transaction.type === 'order' ||
-                                               (transaction.type === 'manual_adjustment' && transaction.description?.toLowerCase().includes('debit'));
+                                  (transaction.type === 'manual_adjustment' && transaction.description?.toLowerCase().includes('debit'));
                                 return (
                                   <p className={`font-semibold text-gray-900 ${isCredit ? 'text-green-600' : isDebit ? 'text-red-600' : 'text-gray-600'}`}>
                                     {isCredit ? '+' : isDebit ? '-' : ''}₵{parseFloat(transaction.amount || 0).toFixed(2)}
@@ -957,9 +957,8 @@ const TransactionsPage = ({ user, onLogout }) => {
                             variant={transactionsPage === pageNum ? "default" : "outline"}
                             size="sm"
                             onClick={() => setTransactionsPage(pageNum)}
-                            className={`w-9 h-9 p-0 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                              transactionsPage === pageNum ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : ''
-                            }`}
+                            className={`w-9 h-9 p-0 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${transactionsPage === pageNum ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : ''
+                              }`}
                           >
                             {pageNum}
                           </Button>

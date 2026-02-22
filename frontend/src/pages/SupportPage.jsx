@@ -10,12 +10,12 @@ import { Button } from '@/components/ui/button';
 import { MessageSquare, FileText, History } from 'lucide-react';
 
 const SupportPageContent = ({ user, onLogout }) => {
-  const { 
-    tickets, 
-    currentTicket, 
-    isLoadingTickets, 
+  const {
+    tickets,
+    currentTicket,
+    isLoadingTickets,
     loadTickets,
-    selectTicket 
+    selectTicket
   } = useSupport();
   const [activeTab, setActiveTab] = useState('new');
 
@@ -33,7 +33,7 @@ const SupportPageContent = ({ user, onLogout }) => {
       />
       <Navbar user={user} onLogout={onLogout} />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 md:pt-6 pb-6 sm:pb-8 lg:pb-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 md:pt-6 pb-6 sm:pb-8 lg:pb-12">
         {/* Hero Header */}
         <div className="text-center mb-6 sm:mb-8 lg:mb-12 animate-fadeIn">
           <div className="flex items-center justify-center mb-4">
@@ -53,22 +53,20 @@ const SupportPageContent = ({ user, onLogout }) => {
         <div className="flex gap-4 mb-4">
           <Button
             onClick={() => setActiveTab('new')}
-            className={`flex-1 ${
-              activeTab === 'new'
+            className={`flex-1 ${activeTab === 'new'
                 ? 'bg-purple-600 hover:bg-purple-700 text-white'
                 : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-            }`}
+              }`}
           >
             <FileText className="w-4 h-4 mr-2" />
             New Ticket
           </Button>
           <Button
             onClick={() => setActiveTab('history')}
-            className={`flex-1 ${
-              activeTab === 'history'
+            className={`flex-1 ${activeTab === 'history'
                 ? 'bg-purple-600 hover:bg-purple-700 text-white'
                 : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-            }`}
+              }`}
           >
             <History className="w-4 h-4 mr-2" />
             Ticket History
