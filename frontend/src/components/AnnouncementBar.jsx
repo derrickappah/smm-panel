@@ -1,7 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 
-// Filler messages shown when there aren't enough real claims
 const FILLER_MESSAGES = [
   '🚀 Deposit today and unlock free TikTok likes!',
   '⭐ Get free views just by depositing daily!',
@@ -15,6 +14,7 @@ const FILLER_MESSAGES = [
 
 const AnnouncementBar = () => {
   const [messages, setMessages] = useState(FILLER_MESSAGES);
+  const trackRef = useRef(null);
 
   useEffect(() => {
     const fetchRecentClaims = async () => {
@@ -37,12 +37,12 @@ const AnnouncementBar = () => {
               : `🎁 ${name} just claimed their daily bonus!`;
           });
 
-          // Always mix in fillers so we have at least 12 unique messages
+          // Always pad with fillers so we have at least 12 unique items
           const combined = [...claimMessages];
-          let fillerIdx = 0;
+          let i = 0;
           while (combined.length < 12) {
-            combined.push(FILLER_MESSAGES[fillerIdx % FILLER_MESSAGES.length]);
-            fillerIdx++;
+            combined.push(FILLER_MESSAGES[i % FILLER_MESSAGES.length]);
+            i++;
           }
           setMessages(combined);
         }
@@ -56,30 +56,53 @@ const AnnouncementBar = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Quadruple to make the seam invisible
-  const marqueeItems = [...messages, ...messages, ...messages, ...messages];
+  // The key to a seamless loop:
+  // Render messages TWICE side-by-side, then animate by exactly HALF the total width.
+  // When the first copy scrolls fully off screen, the animation resets to 0 — which
+  // looks identical because the second copy has now taken the first copy's position.
+  const doubled = [...messages, ...messages];
 
-  // 1 second per message keeps it fast but readable
-  const duration = Math.max(5, messages.length * 1);
+  // Speed: pixels per second. Higher = faster.
+  const PX_PER_SECOND = 80;
+
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track) return;
+
+    // Wait for the DOM to paint so we can measure actual pixel widths
+    const raf = requestAnimationFrame(() => {
+      const halfWidth = track.scrollWidth / 2;
+      const duration = halfWidth / PX_PER_SECOND;
+
+      track.style.setProperty('--marquee-half', `-${halfWidth}px`);
+      track.style.setProperty('--marquee-duration', `${duration}s`);
+    });
+
+    return () => cancelAnimationFrame(raf);
+  }, [messages]);
 
   return (
-    <div className="w-full bg-indigo-600 text-white overflow-hidden py-1.5 md:py-2 border-t border-indigo-700">
-      <div className="marquee-track flex whitespace-nowrap">
-        {marqueeItems.map((message, index) => (
+    <div className="w-full max-w-full overflow-x-hidden bg-indigo-600 text-white py-1.5 md:py-2 border-t border-indigo-700">
+      <div
+        ref={trackRef}
+        className="marquee-ticker flex whitespace-nowrap"
+      >
+        {doubled.map((message, index) => (
           <span key={index} className="mx-10 text-xs sm:text-sm font-medium flex-shrink-0">
             {message}
           </span>
         ))}
       </div>
       <style>{`
-        @keyframes marquee {
+        @keyframes ticker {
           0%   { transform: translateX(0); }
-          100% { transform: translateX(-25%); }
+          100% { transform: translateX(var(--marquee-half, -50%)); }
         }
-        .marquee-track {
-          animation: marquee ${duration}s linear infinite;
+        .marquee-ticker {
+          will-change: transform;
+          animation: ticker var(--marquee-duration, 12s) linear infinite;
         }
-        .marquee-track:hover {
+        .marquee-ticker:hover {
           animation-play-state: paused;
         }
       `}</style>
