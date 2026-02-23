@@ -261,6 +261,7 @@ function App() {
                 </Routes>
               </Suspense>
               <Toaster position="top-right" closeButton richColors />
+              <WhatsAppButton />
             </div>
             <SpeedInsights />
             <Analytics />
