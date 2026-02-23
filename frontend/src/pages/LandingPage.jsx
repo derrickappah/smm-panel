@@ -11,6 +11,7 @@ import Testimonials from '@/components/landing/Testimonials';
 import HowItWorks from '@/components/landing/HowItWorks';
 import PricingPreview from '@/components/landing/PricingPreview';
 import FAQ from '@/components/landing/FAQ';
+import { LandingHero } from '@/components/landing/LandingHero';
 import { generateOrganizationSchema, generateWebSiteSchema, generateFAQSchema } from '@/utils/schema';
 import { primaryKeywords, longTailKeywords, questionKeywords, locationKeywords } from '@/data/keywords';
 import { useFAQ } from '@/hooks/useFAQ';
@@ -102,28 +103,58 @@ const BackToTop = () => {
 // Scroll Progress Indicator
 const ScrollProgress = () => {
   const [scrollProgress, setScrollProgress] = useState(0);
+  const [isScrolled, setIsScrolled] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    const updateScrollProgress = () => {
+    const updateProgress = () => {
       const windowHeight = window.innerHeight;
       const documentHeight = document.documentElement.scrollHeight;
       const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
       const progress = (scrollTop / (documentHeight - windowHeight)) * 100;
       setScrollProgress(progress);
+      setIsScrolled(scrollTop > 20);
     };
 
-    window.addEventListener('scroll', updateScrollProgress);
-    updateScrollProgress();
-    return () => window.removeEventListener('scroll', updateScrollProgress);
+    window.addEventListener('scroll', updateProgress);
+    updateProgress();
+    return () => window.removeEventListener('scroll', updateProgress);
   }, []);
 
   return (
-    <div className="fixed top-0 left-0 right-0 h-1 bg-gray-200 z-50">
-      <div
-        className="h-full bg-gradient-to-r from-indigo-600 to-purple-600 transition-all duration-150"
-        style={{ width: `${scrollProgress}%` }}
-      />
-    </div>
+    <>
+      <div className="fixed top-0 left-0 right-0 h-1 bg-gray-100 z-[60]">
+        <div
+          className="h-full bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 animate-gradient transition-all duration-150"
+          style={{ width: `${scrollProgress}%` }}
+        />
+      </div>
+      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isScrolled ? 'bg-white/90 backdrop-blur-xl border-b border-gray-100 py-3 shadow-sm' : 'bg-transparent py-5'
+        }`}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
+          <div className="flex items-center cursor-pointer group" onClick={() => navigate('/')}>
+            <img src="/download.png" alt="BoostUpGH" className="h-10 sm:h-12 drop-shadow-md transition-all duration-300 transform group-hover:scale-105" />
+          </div>
+          <div className="flex items-center space-x-4">
+            <Button
+              onClick={() => navigate('/services')}
+              variant="ghost"
+              className="hidden md:flex text-gray-700 hover:text-indigo-600 font-medium"
+            >
+              Services
+            </Button>
+            <Button
+              data-testid="nav-get-started-btn"
+              onClick={() => navigate('/auth')}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 rounded-xl shadow-lg shadow-indigo-500/25 transition-all duration-300 hover:scale-105 active:scale-95"
+            >
+              Sign In
+              <ArrowRight className="ml-2 w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      </nav>
+    </>
   );
 };
 
@@ -409,106 +440,24 @@ const LandingPage = () => {
         canonical="/"
         structuredDataArray={structuredDataArray}
       />
-      {/* Navigation */}
-      <nav className="bg-white border-b border-gray-200 fixed top-0 left-0 right-0 z-50 shadow-sm">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-4 flex justify-between items-center">
-          <div className="flex items-center">
-            <img
-              src="/download.png"
-              alt="BoostUp GH Logo"
-              className="h-8 sm:h-10 max-w-full"
-            />
-          </div>
-          <Button
-            data-testid="nav-get-started-btn"
-            onClick={() => navigate('/auth')}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 sm:px-4 md:px-6 py-2 h-9 sm:h-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors duration-200 text-sm sm:text-base"
-          >
-            Get Started
-            <ArrowRight className="ml-1 sm:ml-2 w-3 h-3 sm:w-4 sm:h-4" />
-          </Button>
-        </div>
-      </nav>
+      <ScrollProgress />
 
       {/* Hero Section */}
-      <section className="pt-28 sm:pt-36 md:pt-44 pb-12 sm:pb-16 md:pb-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-5xl mx-auto text-center">
-          {/* Trust Badges Above Hero */}
-          <div className="mb-8 sm:mb-10 md:mb-12 flex flex-wrap justify-center items-center gap-x-4 gap-y-2 sm:gap-x-6 text-xs sm:text-sm text-gray-600">
-            <div className="flex items-center space-x-1.5">
-              <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 flex-shrink-0" />
-              <span className="font-medium whitespace-nowrap">Trusted by 10K+ users</span>
-            </div>
-            <span className="hidden sm:inline text-gray-400">•</span>
-            <div className="flex items-center space-x-1.5">
-              <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 flex-shrink-0" />
-              <span className="font-medium whitespace-nowrap">99.9% Uptime</span>
-            </div>
-            <span className="hidden sm:inline text-gray-400">•</span>
-            <div className="flex items-center space-x-1.5">
-              <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 flex-shrink-0" />
-              <span className="font-medium whitespace-nowrap">Instant Delivery</span>
-            </div>
-          </div>
-
-          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-gray-900 mb-6 sm:mb-8 leading-tight">
-            Grow Your Social Media
-            <br />
-            <span className="text-indigo-600">
-              Presence Instantly
-            </span>
-          </h1>
-          <p className="text-base sm:text-lg md:text-xl text-gray-600 mb-8 sm:mb-10 md:mb-12 max-w-2xl mx-auto leading-relaxed">
-            The most reliable SMM panel for boosting your followers, likes, views, and engagement across all major platforms. Join thousands of satisfied customers today.
-          </p>
-
-          {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 justify-center items-stretch sm:items-center mb-10 sm:mb-12 md:mb-16">
-            <Button
-              data-testid="hero-get-started-btn"
-              onClick={() => navigate('/auth')}
-              size="lg"
-              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-8 sm:px-10 py-3.5 sm:py-4 h-auto text-base sm:text-lg font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl w-full sm:w-auto min-w-[200px]"
-            >
-              Start Boosting Now
-              <ArrowRight className="ml-2 w-5 h-5" />
-            </Button>
-            <Button
-              onClick={() => {
-                const element = document.getElementById('pricing-preview');
-                element?.scrollIntoView({ behavior: 'smooth' });
-              }}
-              size="lg"
-              variant="outline"
-              className="border-2 border-gray-300 hover:border-indigo-600 text-gray-700 hover:text-indigo-600 px-8 sm:px-10 py-3.5 sm:py-4 h-auto text-base sm:text-lg font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 w-full sm:w-auto min-w-[200px] bg-white"
-            >
-              View Pricing
-            </Button>
-          </div>
-
-          {/* Platform Icons */}
-          <div className="flex justify-center items-center gap-6 sm:gap-8 md:gap-10 mt-12 sm:mt-16 md:mt-20 flex-wrap">
-            {platforms.map((platform) => (
-              <div key={platform.name} className="flex flex-col items-center space-y-2.5 group">
-                <div className="bg-white border border-gray-200 w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-lg flex items-center justify-center shadow-sm hover:shadow-lg hover:border-indigo-300 transition-all duration-200 group-hover:scale-105">
-                  <platform.icon className={`w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 ${platform.color}`} />
-                </div>
-                <span className="text-xs sm:text-sm font-medium text-gray-700 group-hover:text-indigo-600 transition-colors duration-200">{platform.name}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      <LandingHero />
 
       {/* Trust Badges Section */}
       <TrustBadges />
 
       {/* Statistics Section */}
-      <section ref={statsSectionRef} className="py-12 sm:py-16 lg:py-20 px-3 sm:px-4 md:px-6 bg-white">
-        <div className="max-w-6xl mx-auto">
-          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-center text-gray-900 mb-8 sm:mb-12">
-            Our Impact in Numbers
-          </h2>
+      <section ref={statsSectionRef} className="py-24 px-3 sm:px-4 md:px-6 bg-white relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/50 rounded-full blur-3xl -z-10" />
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-gray-900 mb-4 tracking-tight">
+              Powering Global Social Growth
+            </h2>
+            <div className="w-24 h-1.5 bg-indigo-600 mx-auto rounded-full" />
+          </div>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-5 md:gap-6">
             {/* Total Orders */}
             <div className="group relative bg-white rounded-xl p-5 sm:p-6 border border-gray-200 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 overflow-hidden">
@@ -628,22 +577,27 @@ const LandingPage = () => {
       <HowItWorks />
 
       {/* Features Section */}
-      <section className="py-12 sm:py-16 lg:py-20 px-3 sm:px-4 md:px-6 bg-gray-50">
-        <div className="max-w-6xl mx-auto">
-          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-center text-gray-900 mb-8 sm:mb-12">
-            Why Choose BoostUp GH?
-          </h2>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
+      <section className="py-24 px-3 sm:px-4 md:px-6 bg-gray-50/50 relative">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-gray-900 mb-4 tracking-tight">
+              Why Professionals Trust Us
+            </h2>
+            <div className="w-24 h-1.5 bg-indigo-600 mx-auto rounded-full" />
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
             {features.map((feature, index) => (
               <div
                 key={index}
-                className="bg-white border border-gray-200 rounded-lg p-5 sm:p-6 md:p-8 shadow-sm hover:shadow-lg transition-all duration-200"
+                className="group bg-white border border-gray-100 rounded-3xl p-8 shadow-sm hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 relative overflow-hidden"
               >
-                <div className={`w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 bg-gradient-to-br ${feature.color} rounded-lg flex items-center justify-center mb-4 sm:mb-6 shadow-md`}>
-                  <feature.icon className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 text-white" />
+                <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${feature.color} opacity-[0.03] group-hover:opacity-[0.08] transition-opacity duration-500 rounded-bl-full`} />
+
+                <div className={`w-16 h-16 bg-gradient-to-br ${feature.color} rounded-2xl flex items-center justify-center mb-8 shadow-lg group-hover:scale-110 transition-transform duration-500`}>
+                  <feature.icon className="w-8 h-8 text-white" />
                 </div>
-                <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2 sm:mb-3">{feature.title}</h3>
-                <p className="text-sm sm:text-base text-gray-600 leading-relaxed">{feature.description}</p>
+                <h3 className="text-2xl font-bold text-gray-900 mb-4">{feature.title}</h3>
+                <p className="text-gray-600 leading-relaxed text-lg">{feature.description}</p>
               </div>
             ))}
           </div>
@@ -659,30 +613,55 @@ const LandingPage = () => {
       <FAQ />
 
       {/* Final CTA Section */}
-      <section className="py-12 sm:py-16 lg:py-20 px-3 sm:px-4 md:px-6 bg-gradient-to-br from-indigo-600 to-purple-600">
-        <div className="max-w-4xl mx-auto bg-white border border-gray-200 rounded-lg p-6 sm:p-8 md:p-12 shadow-xl text-center">
-          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-3 sm:mb-4 md:mb-6">
-            Ready to Boost Your Social Media?
+      <section className="py-24 px-3 sm:px-4 md:px-6 relative overflow-hidden">
+        <div className="absolute inset-0 bg-indigo-600 -z-20" />
+        <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-indigo-600 via-purple-600 to-indigo-700 -z-10 opacity-90" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-white/10 rounded-full blur-3xl -z-10 animate-pulse" />
+
+        <div className="max-w-4xl mx-auto bg-gray-900/40 backdrop-blur-2xl border border-white/20 rounded-[40px] p-8 sm:p-12 md:p-16 shadow-2xl text-center">
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white mb-6 leading-tight">
+            Ready to Dominate <br />
+            Social Media?
           </h2>
-          <p className="text-sm sm:text-base md:text-lg text-gray-600 mb-4 sm:mb-6 md:mb-8">
-            Join thousands of satisfied customers and start growing today. No credit card required to get started.
+          <p className="text-lg sm:text-xl text-white/90 mb-10 max-w-2xl mx-auto leading-relaxed">
+            Join 100K+ satisfied customers and start growing today.
+            The best time to boost your presence was yesterday. The second best time is now.
           </p>
-          <Button
-            data-testid="cta-get-started-btn"
-            onClick={() => navigate('/auth')}
-            size="lg"
-            className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-6 sm:px-8 py-3 sm:py-4 h-12 sm:h-14 text-base sm:text-lg rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl"
-          >
-            Get Started Free
-            <ArrowRight className="ml-2 w-4 h-4 sm:w-5 sm:h-5" />
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Button
+              data-testid="cta-get-started-btn"
+              onClick={() => {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              size="lg"
+              className="bg-white text-indigo-900 hover:bg-gray-100 px-10 py-4 h-auto text-lg font-bold rounded-2xl transition-all duration-300 hover:scale-105 shadow-xl"
+            >
+              Get Started Free
+              <ArrowRight className="ml-2 w-5 h-5" />
+            </Button>
+          </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="py-6 sm:py-8 px-3 sm:px-4 md:px-6 border-t border-gray-200 bg-white">
-        <div className="max-w-6xl mx-auto text-center text-xs sm:text-sm md:text-base text-gray-600">
-          <p>&copy; 2025 BoostUp GH. All rights reserved.</p>
+      <footer className="py-12 px-3 sm:px-4 md:px-6 bg-white border-t border-gray-100">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
+          <div className="flex items-center">
+            <div className="mr-3">
+              <img src="/download.png" alt="Logo" className="h-8" />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap justify-center gap-x-8 gap-y-4 text-sm font-medium text-gray-500">
+            <a href="/terms" className="hover:text-indigo-600 transition-colors">Terms of Service</a>
+            <a href="/privacy" className="hover:text-indigo-600 transition-colors">Privacy Policy</a>
+            <a href="/contact" className="hover:text-indigo-600 transition-colors">Contact Us</a>
+            <a href="/faq" className="hover:text-indigo-600 transition-colors">Help Center</a>
+          </div>
+
+          <div className="text-sm text-gray-400 font-medium">
+            &copy; 2025 BoostUp GH. Premium Social Solutions.
+          </div>
         </div>
       </footer>
 
