@@ -1,47 +1,50 @@
 <!doctype html>
 <html lang="en" prefix="og: https://ogp.me/ns#">
-    <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="theme-color" content="#6366f1" />
-        <meta name="description" content="BoostUp GH - Grow your social media presence with our reliable SMM panel. Get followers, likes, views, and engagement across Instagram, TikTok, YouTube, Facebook, and Twitter." />
-        <meta name="keywords" content="SMM panel, social media marketing, Instagram followers, TikTok views, YouTube subscribers, Facebook likes, Twitter followers, social media growth" />
-        <meta name="author" content="BoostUp GH" />
-        <meta name="language" content="en" />
-        <meta name="geo.region" content="GH" />
-        <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
-        <meta name="googlebot" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
-        
-        <!-- Open Graph Defaults -->
-        <meta property="og:site_name" content="BoostUp GH" />
-        <meta property="og:locale" content="en_US" />
-        <meta property="og:type" content="website" />
-        
-        <!-- Twitter Card Defaults -->
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:site" content="@boostupgh" />
-        
-        <link rel="icon" type="image/png" href="%PUBLIC_URL%/favicon.png" />
-        <link rel="alternate icon" href="%PUBLIC_URL%/favicon.png" />
-        <link rel="apple-touch-icon" href="%PUBLIC_URL%/favicon.png" />
-        <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-        
-        <!-- Resource Hints for Performance -->
-        <link rel="dns-prefetch" href="https://js.paystack.co" />
-        <link rel="dns-prefetch" href="https://spihsvdchouynfbsotwq.supabase.co" />
-        <link rel="dns-prefetch" href="https://us.i.posthog.com" />
-        <link rel="preconnect" href="https://js.paystack.co" crossorigin />
-        <link rel="preconnect" href="https://spihsvdchouynfbsotwq.supabase.co" crossorigin />
-        <link rel="preconnect" href="https://us.i.posthog.com" crossorigin />
-        <!--
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#6366f1" />
+    <meta name="description"
+        content="BoostUp GH - Grow your social media presence with our reliable SMM panel. Get followers, likes, views, and engagement across Instagram, TikTok, YouTube, Facebook, and Twitter." />
+    <meta name="keywords"
+        content="SMM panel, social media marketing, Instagram followers, TikTok views, YouTube subscribers, Facebook likes, Twitter followers, social media growth" />
+    <meta name="author" content="BoostUp GH" />
+    <meta name="language" content="en" />
+    <meta name="geo.region" content="GH" />
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+    <meta name="googlebot" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+
+    <!-- Open Graph Defaults -->
+    <meta property="og:site_name" content="BoostUp GH" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:type" content="website" />
+
+    <!-- Twitter Card Defaults -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@boostupgh" />
+
+    <link rel="icon" type="image/png" href="%PUBLIC_URL%/favicon.png" />
+    <link rel="alternate icon" href="%PUBLIC_URL%/favicon.png" />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/favicon.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+
+    <!-- Resource Hints for Performance -->
+    <link rel="dns-prefetch" href="https://js.paystack.co" />
+    <link rel="dns-prefetch" href="https://spihsvdchouynfbsotwq.supabase.co" />
+    <link rel="dns-prefetch" href="https://us.i.posthog.com" />
+    <link rel="preconnect" href="https://js.paystack.co" crossorigin />
+    <link rel="preconnect" href="https://spihsvdchouynfbsotwq.supabase.co" crossorigin />
+    <link rel="preconnect" href="https://us.i.posthog.com" crossorigin />
+    <!--
         Note: /api/smmgen/services endpoint requires POST method, so prefetch won't work
         The endpoint will be called via POST when needed by the application
         -->
-        <!--
+    <!--
       manifest.json provides metadata used when your web app is installed on a
       user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
     -->
-        <!--
+    <!--
       Notice the use of %PUBLIC_URL% in the tags above.
       It will be replaced with the URL of the `public` folder during the build.
       Only files inside the `public` folder can be referenced from the HTML.
@@ -50,90 +53,106 @@
       work correctly both with client-side routing and a non-root public URL.
       Learn how to configure a non-root public URL by running `npm run build`.
     -->
-        <title>BoostUp GH - Social Media Growth Platform | Buy Instagram Followers, TikTok Views, YouTube Subscribers</title>
-        <!-- Paystack script is loaded dynamically when payment is initiated -->
-        <!--
+    <title>BoostUp GH - Social Media Growth Platform | Buy Instagram Followers, TikTok Views, YouTube Subscribers
+    </title>
+    <!-- Paystack inline script for payment popup -->
+    <script src="https://js.paystack.co/v1/inline.js"></script>
+    <!--
         These two scripts have been added for the Visual Edits, please do not edit or remove them
         -->
-        <script>
-            // Only load visual edit scripts when inside an iframe and visual edits are enabled
-            if (window.self !== window.top && '%REACT_APP_ENABLE_VISUAL_EDITS%' === 'true') {
-                // Load debug monitor script
-                var debugScript = document.createElement('script');
-                debugScript.src = 'https://assets.emergent.sh/scripts/debug-monitor.js';
-                document.head.appendChild(debugScript);
+    <script>
+        // Only load visual edit scripts when inside an iframe and visual edits are enabled
+        if (window.self !== window.top && '%REACT_APP_ENABLE_VISUAL_EDITS%' === 'true') {
+            // Load debug monitor script
+            var debugScript = document.createElement('script');
+            debugScript.src = 'https://assets.emergent.sh/scripts/debug-monitor.js';
+            document.head.appendChild(debugScript);
 
-                // Configure Tailwind
-                window.tailwind = window.tailwind || {};
-                tailwind.config = {
-                    corePlugins: { preflight: false },
-                };
+            // Configure Tailwind
+            window.tailwind = window.tailwind || {};
+            tailwind.config = {
+                corePlugins: { preflight: false },
+            };
 
-                // Load Tailwind CDN
-                var tailwindScript = document.createElement('script');
-                tailwindScript.src = 'https://cdn.tailwindcss.com';
-                document.head.appendChild(tailwindScript);
-            }
-        </script>
-    </head>
-    <body>
-        <noscript>
-            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; line-height: 1.6;">
-                <h1 style="color: #4f46e5; font-size: 2em; margin-bottom: 20px;">BoostUp GH - Social Media Growth Platform</h1>
-                <p style="font-size: 1.2em; color: #333; margin-bottom: 20px;">
-                    Grow your social media presence with our reliable SMM panel. Get followers, likes, views, and engagement across Instagram, TikTok, YouTube, Facebook, and Twitter.
-                </p>
-                <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                    <h2 style="color: #1f2937; margin-bottom: 15px;">Our Services</h2>
-                    <ul style="list-style: none; padding: 0;">
-                        <li style="padding: 8px 0; border-bottom: 1px solid #e5e7eb;">✓ Instagram Followers, Likes, Views, Comments</li>
-                        <li style="padding: 8px 0; border-bottom: 1px solid #e5e7eb;">✓ TikTok Followers, Likes, Views, Shares</li>
-                        <li style="padding: 8px 0; border-bottom: 1px solid #e5e7eb;">✓ YouTube Subscribers, Views, Likes, Comments</li>
-                        <li style="padding: 8px 0; border-bottom: 1px solid #e5e7eb;">✓ Facebook Page Likes, Post Likes, Followers</li>
-                        <li style="padding: 8px 0;">✓ Twitter Followers, Retweets, Likes, Views</li>
-                    </ul>
-                </div>
-                <div style="margin: 30px 0;">
-                    <h2 style="color: #1f2937; margin-bottom: 15px;">Why Choose BoostUp GH?</h2>
-                    <ul style="list-style: none; padding: 0;">
-                        <li style="padding: 8px 0;">🚀 Instant Delivery - Orders start within minutes</li>
-                        <li style="padding: 8px 0;">🔒 Safe & Secure - 100% safe for your account</li>
-                        <li style="padding: 8px 0;">💰 Best Prices - Competitive rates with transparent pricing</li>
-                        <li style="padding: 8px 0;">📞 24/7 Support - Round-the-clock customer support</li>
-                    </ul>
-                </div>
-                <div style="background: #4f46e5; color: white; padding: 20px; border-radius: 8px; text-align: center; margin-top: 30px;">
-                    <p style="margin: 0; font-size: 1.1em;">
-                        <strong>JavaScript is required to use this application.</strong><br>
-                        Please enable JavaScript in your browser to access BoostUp GH and start growing your social media presence.
-                    </p>
-                </div>
-                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; color: #6b7280;">
-                    <p>Visit <a href="https://boostupgh.com" style="color: #4f46e5; text-decoration: none;">boostupgh.com</a> to get started</p>
-                </div>
-            </div>
-        </noscript>
-        <div id="root">
-            <!-- SEO-friendly fallback content for search engines -->
-            <div style="display: none;" aria-hidden="true">
-                <h1>BoostUp GH - Social Media Growth Platform</h1>
-                <p>Grow your social media presence with our reliable SMM panel. Get followers, likes, views, and engagement across Instagram, TikTok, YouTube, Facebook, and Twitter.</p>
-                <h2>SMM Panel Services</h2>
-                <ul>
-                    <li>Buy Instagram Followers - Get real Instagram followers instantly</li>
-                    <li>Buy Instagram Likes - Increase your Instagram engagement</li>
-                    <li>Buy Instagram Views - Boost your Instagram video views</li>
-                    <li>Buy TikTok Followers - Grow your TikTok account</li>
-                    <li>Buy TikTok Views - Increase TikTok video views</li>
-                    <li>Buy YouTube Subscribers - Grow your YouTube channel</li>
-                    <li>Buy YouTube Views - Increase YouTube video views</li>
-                    <li>Buy Facebook Likes - Boost your Facebook page</li>
-                    <li>Buy Twitter Followers - Grow your Twitter account</li>
+            // Load Tailwind CDN
+            var tailwindScript = document.createElement('script');
+            tailwindScript.src = 'https://cdn.tailwindcss.com';
+            document.head.appendChild(tailwindScript);
+        }
+    </script>
+</head>
+
+<body>
+    <noscript>
+        <div
+            style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; line-height: 1.6;">
+            <h1 style="color: #4f46e5; font-size: 2em; margin-bottom: 20px;">BoostUp GH - Social Media Growth Platform
+            </h1>
+            <p style="font-size: 1.2em; color: #333; margin-bottom: 20px;">
+                Grow your social media presence with our reliable SMM panel. Get followers, likes, views, and engagement
+                across Instagram, TikTok, YouTube, Facebook, and Twitter.
+            </p>
+            <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h2 style="color: #1f2937; margin-bottom: 15px;">Our Services</h2>
+                <ul style="list-style: none; padding: 0;">
+                    <li style="padding: 8px 0; border-bottom: 1px solid #e5e7eb;">✓ Instagram Followers, Likes, Views,
+                        Comments</li>
+                    <li style="padding: 8px 0; border-bottom: 1px solid #e5e7eb;">✓ TikTok Followers, Likes, Views,
+                        Shares</li>
+                    <li style="padding: 8px 0; border-bottom: 1px solid #e5e7eb;">✓ YouTube Subscribers, Views, Likes,
+                        Comments</li>
+                    <li style="padding: 8px 0; border-bottom: 1px solid #e5e7eb;">✓ Facebook Page Likes, Post Likes,
+                        Followers</li>
+                    <li style="padding: 8px 0;">✓ Twitter Followers, Retweets, Likes, Views</li>
                 </ul>
-                <p>Best SMM panel in Ghana. Instant delivery, secure payment, 24/7 support. BoostUp GH is the leading social media marketing platform for Instagram, TikTok, YouTube, Facebook, and Twitter growth services.</p>
+            </div>
+            <div style="margin: 30px 0;">
+                <h2 style="color: #1f2937; margin-bottom: 15px;">Why Choose BoostUp GH?</h2>
+                <ul style="list-style: none; padding: 0;">
+                    <li style="padding: 8px 0;">🚀 Instant Delivery - Orders start within minutes</li>
+                    <li style="padding: 8px 0;">🔒 Safe & Secure - 100% safe for your account</li>
+                    <li style="padding: 8px 0;">💰 Best Prices - Competitive rates with transparent pricing</li>
+                    <li style="padding: 8px 0;">📞 24/7 Support - Round-the-clock customer support</li>
+                </ul>
+            </div>
+            <div
+                style="background: #4f46e5; color: white; padding: 20px; border-radius: 8px; text-align: center; margin-top: 30px;">
+                <p style="margin: 0; font-size: 1.1em;">
+                    <strong>JavaScript is required to use this application.</strong><br>
+                    Please enable JavaScript in your browser to access BoostUp GH and start growing your social media
+                    presence.
+                </p>
+            </div>
+            <div
+                style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; color: #6b7280;">
+                <p>Visit <a href="https://boostupgh.com"
+                        style="color: #4f46e5; text-decoration: none;">boostupgh.com</a> to get started</p>
             </div>
         </div>
-        <!--
+    </noscript>
+    <div id="root">
+        <!-- SEO-friendly fallback content for search engines -->
+        <div style="display: none;" aria-hidden="true">
+            <h1>BoostUp GH - Social Media Growth Platform</h1>
+            <p>Grow your social media presence with our reliable SMM panel. Get followers, likes, views, and engagement
+                across Instagram, TikTok, YouTube, Facebook, and Twitter.</p>
+            <h2>SMM Panel Services</h2>
+            <ul>
+                <li>Buy Instagram Followers - Get real Instagram followers instantly</li>
+                <li>Buy Instagram Likes - Increase your Instagram engagement</li>
+                <li>Buy Instagram Views - Boost your Instagram video views</li>
+                <li>Buy TikTok Followers - Grow your TikTok account</li>
+                <li>Buy TikTok Views - Increase TikTok video views</li>
+                <li>Buy YouTube Subscribers - Grow your YouTube channel</li>
+                <li>Buy YouTube Views - Increase YouTube video views</li>
+                <li>Buy Facebook Likes - Boost your Facebook page</li>
+                <li>Buy Twitter Followers - Grow your Twitter account</li>
+            </ul>
+            <p>Best SMM panel in Ghana. Instant delivery, secure payment, 24/7 support. BoostUp GH is the leading social
+                media marketing platform for Instagram, TikTok, YouTube, Facebook, and Twitter growth services.</p>
+        </div>
+    </div>
+    <!--
       This HTML file is a template.
       If you open it directly in the browser, you will see an empty page.
 
@@ -143,11 +162,11 @@
       To begin the development, run `npm start` or `yarn start`.
       To create a production bundle, use `npm run build` or `yarn build`.
     -->
-        <script>
-            !(function (t, e) {
-                var o, n, p, r;
-                e.__SV ||
-                    ((window.posthog = e),
+    <script>
+        !(function (t, e) {
+            var o, n, p, r;
+            e.__SV ||
+                ((window.posthog = e),
                     (e._i = []),
                     (e.init = function (i, s, a) {
                         function g(t, e) {
@@ -180,23 +199,23 @@
                         var u = e;
                         for (
                             void 0 !== a ? (u = e[a] = []) : (a = "posthog"),
-                                u.people = u.people || [],
-                                u.toString = function (t) {
-                                    var e = "posthog";
-                                    return (
-                                        "posthog" !== a && (e += "." + a),
-                                        t || (e += " (stub)"),
-                                        e
-                                    );
-                                },
-                                u.people.toString = function () {
-                                    return u.toString(1) + ".people (stub)";
-                                },
-                                o =
-                                    "init me ws ys ps bs capture je Di ks register register_once register_for_session unregister unregister_for_session Ps getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSurveysLoaded onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey canRenderSurveyAsync identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty Es $s createPersonProfile Is opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing Ss debug xs getPageViewId captureTraceFeedback captureTraceMetric".split(
-                                        " ",
-                                    ),
-                                n = 0;
+                            u.people = u.people || [],
+                            u.toString = function (t) {
+                                var e = "posthog";
+                                return (
+                                    "posthog" !== a && (e += "." + a),
+                                    t || (e += " (stub)"),
+                                    e
+                                );
+                            },
+                            u.people.toString = function () {
+                                return u.toString(1) + ".people (stub)";
+                            },
+                            o =
+                            "init me ws ys ps bs capture je Di ks register register_once register_for_session unregister unregister_for_session Ps getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSurveysLoaded onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey canRenderSurveyAsync identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty Es $s createPersonProfile Is opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing Ss debug xs getPageViewId captureTraceFeedback captureTraceMetric".split(
+                                " ",
+                            ),
+                            n = 0;
                             n < o.length;
                             n++
                         )
@@ -204,38 +223,39 @@
                         e._i.push([i, s, a]);
                     }),
                     (e.__SV = 1));
-            })(document, window.posthog || []);
-            // Only initialize PostHog if not in development or if explicitly enabled
-            const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-            
-            if (!isDevelopment || window.REACT_APP_ENABLE_POSTHOG === 'true') {
-                try {
-                    posthog.init("phc_yJW1VjHGGwmCbbrtczfqqNxgBDbhlhOWcdzcIJEOTFE", {
-                        api_host: "https://us.i.posthog.com",
-                        person_profiles: "identified_only",
-                        // Disable session recording in development to avoid cross-origin errors
-                        disable_session_recording: isDevelopment,
-                        // Disable autocapture in development
-                        autocapture: !isDevelopment,
-                        // Disable capture_pageview in development
-                        capture_pageview: !isDevelopment,
-                        // Disable capture_pageleave in development
-                        capture_pageleave: !isDevelopment
-                    });
-                    
-                    // Override session recording methods in development to prevent errors
-                    if (isDevelopment && window.posthog) {
-                        window.posthog.startSessionRecording = function() { return; };
-                        window.posthog.stopSessionRecording = function() { return; };
-                        window.posthog.sessionRecordingStarted = function() { return false; };
-                    }
-                } catch (error) {
-                    // Silently fail in development to avoid console noise
-                    if (!isDevelopment) {
-                        console.error('PostHog initialization error:', error);
-                    }
+        })(document, window.posthog || []);
+        // Only initialize PostHog if not in development or if explicitly enabled
+        const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+        if (!isDevelopment || window.REACT_APP_ENABLE_POSTHOG === 'true') {
+            try {
+                posthog.init("phc_yJW1VjHGGwmCbbrtczfqqNxgBDbhlhOWcdzcIJEOTFE", {
+                    api_host: "https://us.i.posthog.com",
+                    person_profiles: "identified_only",
+                    // Disable session recording in development to avoid cross-origin errors
+                    disable_session_recording: isDevelopment,
+                    // Disable autocapture in development
+                    autocapture: !isDevelopment,
+                    // Disable capture_pageview in development
+                    capture_pageview: !isDevelopment,
+                    // Disable capture_pageleave in development
+                    capture_pageleave: !isDevelopment
+                });
+
+                // Override session recording methods in development to prevent errors
+                if (isDevelopment && window.posthog) {
+                    window.posthog.startSessionRecording = function () { return; };
+                    window.posthog.stopSessionRecording = function () { return; };
+                    window.posthog.sessionRecordingStarted = function () { return false; };
+                }
+            } catch (error) {
+                // Silently fail in development to avoid console noise
+                if (!isDevelopment) {
+                    console.error('PostHog initialization error:', error);
                 }
             }
-        </script>
-    </body>
+        }
+    </script>
+</body>
+
 </html>

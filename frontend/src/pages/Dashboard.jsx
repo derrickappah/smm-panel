@@ -3200,8 +3200,32 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       // Use the secure transaction from server
       const transaction = data.transaction;
 
-      // Store transaction - useEffect will trigger payment
+      // Store transaction for polling
       setPendingTransaction(transaction);
+
+      // Initialize Paystack popup
+      if (window.PaystackPop) {
+        const handler = window.PaystackPop.setup({
+          key: paystackPublicKey,
+          email: authUser.email,
+          amount: amount * 100, // Paystack expects amount in pesewas
+          ref: transaction.reference || data.reference || `PAY-${transaction.id}-${Date.now()}`,
+          currency: 'GHS',
+          callback: function (response) {
+            console.log('Payment complete! Reference: ' + response.reference);
+            handlePaymentSuccess(response.reference);
+          },
+          onClose: function () {
+            console.log('Window closed.');
+            toast.info('Payment window closed');
+            setLoading(false);
+          }
+        });
+        handler.openIframe();
+      } else {
+        toast.error('Payment gateway could not be loaded. Please refresh the page.');
+        setLoading(false);
+      }
     } catch (error) {
       console.error('Deposit error (catch block):', error);
       const errorMessage = error.message || '';
