@@ -43,7 +43,7 @@ const DashboardDeposit = React.memo(({
   }
 }) => {
   const { whatsappNumber } = usePaymentMethods();
-  const displayWhatsappNumber = whatsappNumber || '0500865092';
+  const displayWhatsappNumber = whatsappNumber;
   const whatsappLink = `https://wa.me/233${displayWhatsappNumber.startsWith('0') ? displayWhatsappNumber.substring(1) : displayWhatsappNumber}`;
 
   const enabledMethods = useMemo(() => [

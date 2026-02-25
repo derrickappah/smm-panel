@@ -27,7 +27,7 @@ export const DEFAULT_PAYMENT_SETTINGS = {
     account_name: '',
     instructions: ''
   },
-  whatsappNumber: '0500865092',
+  whatsappNumber: '',
   depositMethod: 'moolre_web' // Default method
 };
 
@@ -141,8 +141,8 @@ export const usePaymentMethods = () => {
   const { data, isLoading, refetch } = useQuery({
     queryKey: PAYMENT_SETTINGS_QUERY_KEY,
     queryFn: fetchPaymentSettingsFn,
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
+    staleTime: 0, // always consider data stale
+    refetchOnWindowFocus: true, // refetch when window gains focus
     placeholderData: DEFAULT_PAYMENT_SETTINGS // Use defaults while loading
   });
 
