@@ -8,6 +8,7 @@ import { Analytics } from "@vercel/analytics/react";
 import SupabaseSetup from "@/components/SupabaseSetup";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useNavigate, useLocation } from "react-router-dom";
 import WhatsAppButton from "@/components/WhatsAppButton";
 import { supabase, isConfigured } from "@/lib/supabase";
 import { queryClient } from "@/lib/queryClient";
@@ -60,6 +61,30 @@ const PageLoader = () => (
     </div>
   </div>
 );
+
+const RouteTracker = () => {
+  const location = useLocation();
+
+  useEffect(() => {
+    // Save current path to localStorage, ignoring auth and callback routes
+    const path = location.pathname;
+    if (
+      path !== "/auth" &&
+      path !== "/reset-password" &&
+      path !== "/payment/callback" &&
+      path !== "/"
+    ) {
+      localStorage.setItem("lastVisitedRoute", location.pathname + location.search);
+    }
+  }, [location]);
+
+  return null;
+};
+
+const InitialRedirect = () => {
+  const lastRoute = localStorage.getItem("lastVisitedRoute");
+  return <Navigate to={lastRoute || "/dashboard"} replace />;
+};
 
 function App() {
   const [user, setUser] = useState(null);
@@ -154,12 +179,13 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <BrowserRouter>
+            <RouteTracker />
             <div className="min-h-screen bg-background">
               {!isConfigured && <SupabaseSetup />}
               <Suspense fallback={<PageLoader />}>
                 <Routes>
                   {/* Public Routes */}
-                  <Route path="/" element={<LandingPage />} />
+                  <Route path="/" element={<InitialRedirect />} />
                   <Route path="/services" element={<ServicesPage />} />
                   <Route path="/pricing" element={<PricingPage />} />
                   <Route path="/about" element={<AboutPage />} />
