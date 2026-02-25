@@ -119,7 +119,7 @@ const WhatsAppButton = ({ message, className = "" }) => {
   const handleWhatsAppClick = (e) => {
     // Only open WhatsApp if we haven't dragged (i.e., it was just a click)
     if (!hasDragged) {
-      const number = whatsappNumber || '0500865092';
+      const number = whatsappNumber;
       const whatsappUrl = `https://wa.me/233${number.startsWith('0') ? number.substring(1) : number}`;
 
       // Open WhatsApp in new tab/window
