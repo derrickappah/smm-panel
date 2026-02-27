@@ -452,8 +452,16 @@ const AuthPage = () => {
               </div>
             </div>
 
-            {/* YouTube Embed - autoplays on load */}
-            <div className="rounded-lg overflow-hidden shadow-sm border border-gray-200" style={{ width: 70, height: 40 }}>
+            {/* YouTube Embed - autoplays on load, opens on click */}
+            <a
+              href="https://youtu.be/QopnbFUUvdM?si=Y1k_Xlc7OvLrvyqX"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="relative block rounded-lg overflow-hidden shadow-sm border border-gray-200 group cursor-pointer"
+              style={{ width: 70, height: 40 }}
+            >
+              {/* Overlay to catch clicks and show subtle hover effect */}
+              <div className="absolute inset-0 z-10 bg-black/0 group-hover:bg-black/10 transition-colors duration-200" />
               <iframe
                 src="https://www.youtube.com/embed/QopnbFUUvdM?autoplay=1&mute=1&loop=1&playlist=QopnbFUUvdM&controls=0&modestbranding=1&rel=0"
                 width="70"
@@ -461,9 +469,9 @@ const AuthPage = () => {
                 allow="autoplay; encrypted-media"
                 allowFullScreen
                 title="BoostUp GH Demo"
-                style={{ display: 'block', border: 'none' }}
+                style={{ display: 'block', border: 'none', pointerEvents: 'none' }}
               />
-            </div>
+            </a>
           </div>
         </div>
 
