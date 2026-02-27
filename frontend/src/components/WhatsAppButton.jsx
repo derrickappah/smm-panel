@@ -209,17 +209,19 @@ const WhatsAppButton = ({ message, className = "" }) => {
         onMouseDown={handleMouseDown}
         onTouchStart={handleTouchStart}
       >
-        {/* Fallback Message for TikTok WebView */}
-        <div
-          className="bg-black/80 text-white text-[10px] py-1 px-2 rounded-md whitespace-nowrap pointer-events-none select-none"
-          style={{
-            transform: 'translateY(-4px)',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-          }}
-        >
-          If WhatsApp does not open, tap the three dots (•••) <br />
-          in the top right and choose ‘Open in browser’.
-        </div>
+        {/* Fallback Message for TikTok WebView - Only show if in TikTok */}
+        {isTikTok && (
+          <div
+            className="bg-black/80 text-white text-[10px] py-1 px-2 rounded-md whitespace-nowrap pointer-events-none select-none"
+            style={{
+              transform: 'translateY(-4px)',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+            }}
+          >
+            If WhatsApp does not open, tap the three dots (•••) <br />
+            in the top right and choose ‘Open in browser’.
+          </div>
+        )}
 
         <a
           href={getWhatsAppUrl()}
