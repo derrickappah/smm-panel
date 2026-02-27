@@ -116,16 +116,12 @@ const WhatsAppButton = ({ message, className = "" }) => {
 
   const { whatsappNumber } = usePaymentMethods();
 
-  const handleWhatsAppClick = (e) => {
-    // Only open WhatsApp if we haven't dragged (i.e., it was just a click)
-    if (!hasDragged) {
-      const number = whatsappNumber;
-      const whatsappUrl = `https://wa.me/233${number.startsWith('0') ? number.substring(1) : number}`;
-
-      // Open WhatsApp in new tab/window
-      window.open(whatsappUrl, '_blank');
-      setHasBeenTapped(true); // Stop pulsing when tapped
-    }
+  const getWhatsAppUrl = () => {
+    const number = whatsappNumber || "";
+    // Format: https://wa.me/233XXXXXXXXX (no +, no spaces)
+    const cleanNumber = number.replace(/\D/g, '');
+    const finalNumber = cleanNumber.startsWith('0') ? cleanNumber.substring(1) : cleanNumber;
+    return `https://wa.me/233${finalNumber}`;
   };
 
   // Add global mouse and touch event listeners when dragging
@@ -199,17 +195,42 @@ const WhatsAppButton = ({ message, className = "" }) => {
           touchAction: 'none', // Prevent default touch behaviors
           animation: !hasBeenTapped ? 'pulse-glow 2s ease-in-out infinite' : 'none',
           borderRadius: '50%', // Ensure circular glow
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '8px'
         }}
         onMouseDown={handleMouseDown}
         onTouchStart={handleTouchStart}
       >
-        <button
-          onClick={handleWhatsAppClick}
-          className={`bg-green-500 hover:bg-green-600 text-white p-4 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 relative ${className}`}
-          aria-label="Contact us on WhatsApp - Drag to move"
-          title="Contact us on WhatsApp - Drag to reposition"
+        {/* Fallback Message for TikTok WebView */}
+        <div
+          className="bg-black/80 text-white text-[10px] py-1 px-2 rounded-md whitespace-nowrap pointer-events-none select-none"
           style={{
-            cursor: isDragging ? 'grabbing' : 'pointer'
+            transform: 'translateY(-4px)',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+          }}
+        >
+          If WhatsApp does not open, tap the three dots (•••) <br />
+          in the top right and choose ‘Open in browser’.
+        </div>
+
+        <a
+          href={getWhatsAppUrl()}
+          target="_blank"
+          rel="noopener"
+          onClick={() => {
+            if (!hasDragged) {
+              setHasBeenTapped(true);
+            }
+          }}
+          className={`bg-green-500 hover:bg-green-600 text-white p-4 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 relative flex items-center justify-center ${className}`}
+          aria-label="Chat on WhatsApp"
+          title="Chat on WhatsApp"
+          style={{
+            cursor: isDragging ? 'grabbing' : 'pointer',
+            width: '56px',
+            height: '56px'
           }}
         >
           <img
@@ -223,7 +244,7 @@ const WhatsAppButton = ({ message, className = "" }) => {
           <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-md border-2 border-white">
             <span className="text-[10px] leading-none">!</span>
           </div>
-        </button>
+        </a>
       </div>
     </>
   );
