@@ -115,6 +115,12 @@ const WhatsAppButton = ({ message, className = "" }) => {
   };
 
   const { whatsappNumber } = usePaymentMethods();
+  const [isTikTok, setIsTikTok] = useState(false);
+
+  useEffect(() => {
+    const isTikTokBrowser = /TikTok/i.test(navigator.userAgent);
+    setIsTikTok(isTikTokBrowser);
+  }, []);
 
   const getWhatsAppUrl = () => {
     const number = whatsappNumber || "";
