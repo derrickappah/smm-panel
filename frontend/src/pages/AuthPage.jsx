@@ -389,9 +389,10 @@ const AuthPage = () => {
         canonical="/auth"
       />
       <div className="w-full max-w-md">
+
         {/* Logo */}
-        <div className="text-center mb-6 sm:mb-8 animate-fadeIn">
-          <div className="inline-flex items-center justify-center mb-3 sm:mb-4">
+        <div className="text-center mb-4 animate-fadeIn">
+          <div className="inline-flex items-center justify-center mb-1">
             <img
               src="/download.png"
               alt="BoostUp GH Logo"
@@ -400,6 +401,72 @@ const AuthPage = () => {
           </div>
           <p className="text-sm sm:text-base text-gray-600">Grow your social media presence</p>
         </div>
+
+        {/* Trust Banner */}
+        <div className="mb-4 animate-fadeIn">
+          {/* Trust Badges Row */}
+          <div className="flex items-center justify-center gap-3 mb-3 flex-wrap">
+            <div className="flex items-center gap-1 text-gray-600" style={{ fontSize: '7px' }}>
+              <svg className="w-2.5 h-2.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="font-medium">24/7 Support</span>
+            </div>
+            <div className="w-px h-4 bg-gray-300 hidden sm:block" />
+            <div className="flex items-center gap-1 text-gray-600" style={{ fontSize: '7px' }}>
+              <svg className="w-2.5 h-2.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+              <span className="font-medium">100% Real Engagement</span>
+            </div>
+            <div className="w-px h-4 bg-gray-300 hidden sm:block" />
+            <div className="flex items-center gap-1 text-gray-600" style={{ fontSize: '7px' }}>
+              <svg className="w-2.5 h-2.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+              <span className="font-medium">Secure Payments</span>
+            </div>
+          </div>
+
+          {/* Social Proof Row */}
+          <div className="flex items-center justify-center gap-4">
+            {/* Avatars + User Count */}
+            <div className="flex items-center gap-2">
+              <div className="flex -space-x-1.5">
+                <img src="/avatar_user_1_1771801032120.png" alt="User" className="w-6 h-6 rounded-full border-2 border-white object-cover" />
+                <img src="/avatar_user_2_1771801048478.png" alt="User" className="w-6 h-6 rounded-full border-2 border-white object-cover" />
+                <img src="/avatar_user_3_1771801061535.png" alt="User" className="w-6 h-6 rounded-full border-2 border-white object-cover" />
+              </div>
+              <div className="flex flex-col">
+                {/* Stars */}
+                <div className="flex gap-0">
+                  <span className="text-red-500 text-xs">★</span>
+                  <span className="text-orange-400 text-xs">★</span>
+                  <span className="text-yellow-400 text-xs">★</span>
+                  <span className="text-green-500 text-xs">★</span>
+                  <span className="text-green-600 text-xs">★</span>
+                </div>
+                <p className="text-xs text-gray-600" style={{ fontSize: '10px' }}>
+                  Trusted by <span className="font-bold text-gray-800">174K+</span> users
+                </p>
+              </div>
+            </div>
+
+            {/* YouTube Embed - autoplays on load */}
+            <div className="rounded-lg overflow-hidden shadow-sm border border-gray-200" style={{ width: 70, height: 40 }}>
+              <iframe
+                src="https://www.youtube.com/embed/QopnbFUUvdM?autoplay=1&mute=1&loop=1&playlist=QopnbFUUvdM&controls=0&modestbranding=1&rel=0"
+                width="70"
+                height="40"
+                allow="autoplay; encrypted-media"
+                allowFullScreen
+                title="BoostUp GH Demo"
+                style={{ display: 'block', border: 'none' }}
+              />
+            </div>
+          </div>
+        </div>
+
 
         {/* Auth Form */}
         <div className="bg-white border border-gray-200 rounded-lg p-6 sm:p-8 shadow-sm animate-slideUp">
@@ -627,14 +694,7 @@ const AuthPage = () => {
           </form>
         </div>
 
-        <p className="text-center text-sm sm:text-base text-gray-600 mt-6">
-          <button
-            onClick={() => navigate('/')}
-            className="text-indigo-600 hover:text-indigo-700 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 rounded-lg px-2 py-1 transition-colors duration-200"
-          >
-            ← Back to Home
-          </button>
-        </p>
+
       </div>
 
       <TermsDialog
