@@ -110,7 +110,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
         const match = message.attachment_url.match(/support-attachments\/(.+)$/);
         filePath = match ? match[1] : message.attachment_url.split('/').slice(-2).join('/');
       }
-      
+
       // Generate signed URL (valid for 1 hour)
       if (filePath) {
         supabase.storage
@@ -145,108 +145,81 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
 
   return (
     <div
-      className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'} mb-4 px-4`}
+      className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'} mb-2 px-2`}
     >
       <div
-        className={`max-w-[75%] rounded-lg px-4 py-2 ${
-          isOwnMessage
-            ? 'bg-indigo-600 text-white'
-            : 'bg-white border border-gray-200 text-gray-900'
-        }`}
+        className={`max-w-[85%] sm:max-w-[70%] rounded-lg px-3 py-1.5 shadow-sm relative ${isOwnMessage
+            ? 'bg-[#dcf8c6] text-gray-800 rounded-tr-none'
+            : 'bg-white text-gray-800 rounded-tl-none'
+          }`}
       >
         {/* Attachment - Show first if it exists */}
         {message.attachment_url && (
-          <div className={`${isAttachmentOnly ? '' : 'mb-2'}`}>
+          <div className={`${isAttachmentOnly ? '' : 'mb-1'}`}>
             {message.attachment_type === 'image' ? (
-              <div className="relative group">
+              <div className="relative group overflow-hidden rounded">
                 {imageLoading ? (
-                  <div className="flex items-center justify-center p-8 bg-gray-100 rounded-lg border border-gray-300">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                  <div className="flex items-center justify-center p-8 bg-gray-100/50">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#075e54]"></div>
                   </div>
                 ) : imageError || !imageUrl ? (
                   <div
-                    className="flex items-center gap-2 p-3 rounded-lg border border-gray-300 bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer"
+                    className="flex items-center gap-2 p-2 rounded bg-black/5 hover:bg-black/10 transition-colors cursor-pointer"
                     onClick={() => handleImageClick(message.attachment_url!)}
                   >
-                    <Image className="w-5 h-5 text-gray-600" />
-                    <span className="text-sm text-gray-700">Image attachment</span>
-                    <ExternalLink className="w-4 h-4 text-gray-500 ml-auto" />
+                    <Image className="w-4 h-4 text-gray-600" />
+                    <span className="text-xs text-gray-700 truncate max-w-[150px]">Image</span>
                   </div>
                 ) : (
-                  <>
-                    <img
-                      src={imageUrl}
-                      alt="Attachment"
-                      className="max-w-full max-h-96 h-auto rounded-lg cursor-pointer border border-gray-300 shadow-sm hover:shadow-md transition-shadow"
-                      onClick={() => handleImageClick(imageUrl)}
-                      onError={() => {
-                        setImageError(true);
-                      }}
-                      onLoad={() => setImageError(false)}
-                    />
-                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <div className="bg-black/50 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
-                        <ExternalLink className="w-3 h-3" />
-                        <span>Open</span>
-                      </div>
-                    </div>
-                  </>
+                  <img
+                    src={imageUrl}
+                    alt="Attachment"
+                    className="max-w-full max-h-72 h-auto rounded cursor-pointer transition-opacity hover:opacity-90"
+                    onClick={() => handleImageClick(imageUrl)}
+                    onError={() => setImageError(true)}
+                  />
                 )}
               </div>
             ) : (
               <div
-                className={`flex items-center gap-3 p-3 rounded-lg border ${
-                  isOwnMessage
-                    ? 'bg-indigo-500/20 border-indigo-400/30'
-                    : 'bg-gray-50 border-gray-300 hover:bg-gray-100'
-                } transition-colors cursor-pointer group`}
+                className={`flex items-center gap-2 p-2 rounded bg-black/5 hover:bg-black/10 transition-colors cursor-pointer group`}
                 onClick={() => handleFileDownload(message.attachment_url!, getFilenameFromUrl(message.attachment_url!))}
               >
-                <div
-                  className={`p-2 rounded ${
-                    isOwnMessage ? 'bg-indigo-500/30' : 'bg-white'
-                  }`}
-                >
+                <div className="p-1.5 rounded bg-white shadow-sm">
                   {React.createElement(getFileInfo(message.attachment_url!).icon, {
-                    className: `w-5 h-5 ${isOwnMessage ? 'text-indigo-200' : 'text-gray-600'}`,
+                    className: "w-4 h-4 text-gray-600",
                   })}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className={`text-sm font-medium ${isOwnMessage ? 'text-white' : 'text-gray-900'}`}>
+                  <div className="text-xs font-medium truncate">
                     {getFilenameFromUrl(message.attachment_url!)}
                   </div>
-                  <div className={`text-xs ${isOwnMessage ? 'text-indigo-100' : 'text-gray-500'}`}>
+                  <div className="text-[10px] text-gray-500 uppercase">
                     {getFileInfo(message.attachment_url!).typeLabel}
                   </div>
                 </div>
-                <Download
-                  className={`w-5 h-5 flex-shrink-0 ${
-                    isOwnMessage ? 'text-indigo-200' : 'text-gray-500'
-                  } group-hover:scale-110 transition-transform`}
-                />
+                <Download className="w-4 h-4 text-gray-400 group-hover:text-gray-600" />
               </div>
             )}
           </div>
         )}
 
-        {/* Message content - Hide if it's just the attachment placeholder */}
+        {/* Message content */}
         {!isAttachmentOnly && (
-          <div className="whitespace-pre-wrap break-words">{message.content}</div>
+          <div className="text-[14px] leading-relaxed whitespace-pre-wrap break-words">{message.content}</div>
         )}
 
-        {/* Timestamp and read receipt */}
+        {/* Timestamp and read receipt footer */}
         <div
-          className={`flex items-center gap-2 mt-1 text-xs ${
-            isOwnMessage ? 'text-indigo-100' : 'text-gray-500'
-          }`}
+          className="flex items-center justify-end gap-1 mt-0.5 ml-2 float-right"
         >
-          <span>{formatTime(message.created_at)}</span>
+          <span className="text-[10px] text-gray-500">{formatTime(message.created_at)}</span>
           {isOwnMessage && (
-            <span>
+            <span className="flex-shrink-0">
               {message.read_at ? (
-                <CheckCheck className="w-4 h-4" title="Read" />
+                <CheckCheck className="w-3.5 h-3.5 text-blue-500" title="Read" />
               ) : (
-                <Check className="w-4 h-4" title="Sent" />
+                <Check className="w-3.5 h-3.5 text-gray-400" title="Sent" />
               )}
             </span>
           )}
@@ -254,7 +227,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
 
         {/* Actions for own messages */}
         {canEdit && (
-          <div className="mt-2">
+          <div className="clear-both pt-1">
             <MessageActions
               messageId={message.id}
               content={message.content}

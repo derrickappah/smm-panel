@@ -155,40 +155,61 @@ export const SupportChat: React.FC = () => {
 
   if (!currentTicket && !currentConversation) {
     return (
-      <div className="flex items-center justify-center h-full text-gray-500">
-        {(isLoadingTickets || isLoadingConversations) ? (
-          <div className="flex flex-col items-center gap-2">
-            <div className="w-6 h-6 border-2 border-gray-300 border-t-purple-600 rounded-full animate-spin"></div>
-            <p>Loading...</p>
+      <div className="flex items-center justify-center h-full text-gray-500 bg-[#e5ddd5]">
+        <div className="flex flex-col items-center gap-4 bg-white/80 p-8 rounded-2xl shadow-sm max-w-sm text-center">
+          <div className="w-12 h-12 border-4 border-gray-100 border-t-[#075e54] rounded-full animate-spin"></div>
+          <div>
+            <h3 className="font-semibold text-gray-900 mb-1">Connecting to support...</h3>
+            <p className="text-sm text-gray-500">Please wait while we set up your secure chat session.</p>
           </div>
-        ) : (
-          <p>Select a ticket to view messages</p>
-        )}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full min-h-0">
-      {/* Message Search */}
-      <div className="flex-shrink-0 border-b border-gray-200">
-        <MessageSearch />
+    <div className="flex flex-col h-full min-h-0 bg-[#e5ddd5] relative">
+      {/* WhatsApp Header */}
+      <div className="flex-shrink-0 bg-[#075e54] text-white p-2 sm:p-3 flex items-center gap-2 sm:gap-3 shadow-md z-10 relative">
+        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white/20 flex items-center justify-center overflow-hidden border border-white/10">
+          <img
+            src="/avatar_user_2_1771801048478.png"
+            alt="Support Avatar"
+            className="w-full h-full object-cover"
+          />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-semibold text-sm sm:text-base truncate">BoostUp Support Team</h3>
+          <div className="flex items-center gap-1.5 text-xs text-green-200">
+            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+            <span>Online</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <MessageSearch />
+        </div>
       </div>
 
-      {/* Messages */}
+      {/* Messages area with WhatsApp background pattern (simulated with color) */}
       <div
         ref={messagesContainerRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0 overscroll-contain"
-        style={{ scrollbarWidth: 'thin' }}
+        className="flex-1 overflow-y-auto p-4 space-y-2 min-h-0 overscroll-contain bg-[#e5ddd5]"
+        style={{
+          scrollbarWidth: 'thin',
+          backgroundImage: 'url("https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png")',
+          backgroundRepeat: 'repeat',
+          opacity: 0.9
+        }}
       >
         {hasMoreMessages && (
-          <div className="flex justify-center">
+          <div className="flex justify-center mb-4">
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
               onClick={loadMoreMessages}
               disabled={isLoadingMoreMessages}
+              className="text-gray-600 bg-white/50 hover:bg-white/80 rounded-full"
             >
               <ChevronUp className="w-4 h-4 mr-2" />
               {isLoadingMoreMessages ? 'Loading...' : 'Load older messages'}
@@ -198,11 +219,13 @@ export const SupportChat: React.FC = () => {
 
         {isLoadingMessages ? (
           <div className="flex items-center justify-center h-full">
-            <p className="text-gray-500">Loading messages...</p>
+            <div className="w-8 h-8 border-2 border-gray-300 border-t-[#075e54] rounded-full animate-spin"></div>
           </div>
         ) : messages.length === 0 ? (
           <div className="flex items-center justify-center h-full text-gray-500">
-            <p>No messages yet. Start the conversation!</p>
+            <div className="bg-white/80 px-4 py-2 rounded-lg shadow-sm text-sm">
+              No messages yet. Start the conversation!
+            </div>
           </div>
         ) : (
           <>
@@ -217,16 +240,15 @@ export const SupportChat: React.FC = () => {
         )}
       </div>
 
-      {/* Status Message */}
-      {getStatusMessage() && (
-        <div className="border-t border-gray-200 p-4 flex-shrink-0 bg-yellow-50 border-yellow-200">
-          <p className="text-sm text-yellow-700 text-center">{getStatusMessage()}</p>
-        </div>
-      )}
-
-      {/* File Upload */}
+      {/* File Upload Area */}
       {showFileUpload && (currentTicket || currentConversation) && (
-        <div className="border-t border-gray-200 p-4 flex-shrink-0">
+        <div className="absolute bottom-20 left-4 right-4 z-20 bg-white rounded-lg shadow-xl p-4 border border-gray-200 animate-in slide-in-from-bottom-4">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-sm font-medium text-gray-700">Attach File</span>
+            <Button variant="ghost" size="sm" onClick={() => setShowFileUpload(false)}>
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
           <FileUpload
             conversationId={currentConversation?.id || currentTicket?.id}
             onUploadComplete={handleFileUploadComplete}
@@ -234,12 +256,12 @@ export const SupportChat: React.FC = () => {
         </div>
       )}
 
-      {/* Input */}
-      <div className="border-t border-gray-200 p-4 flex-shrink-0">
+      {/* Input Area */}
+      <div className="bg-[#f0f2f5] p-2 sm:p-3 flex-shrink-0 border-t border-gray-200">
         {attachmentUrl && (
-          <div className="mb-2 flex items-center gap-2 text-sm text-gray-600">
-            <Paperclip className="w-4 h-4" />
-            <span>File attached</span>
+          <div className="mb-2 mx-2 p-2 bg-white rounded-lg border border-green-200 flex items-center gap-2 text-sm text-gray-600">
+            <Paperclip className="w-4 h-4 text-[#075e54]" />
+            <span className="flex-1 truncate">File attached</span>
             <Button
               size="sm"
               variant="ghost"
@@ -247,39 +269,54 @@ export const SupportChat: React.FC = () => {
                 setAttachmentUrl(null);
                 setAttachmentType(null);
               }}
+              className="h-8 w-8 p-0"
             >
               <X className="w-4 h-4" />
             </Button>
           </div>
         )}
-        <form onSubmit={handleSendMessage} className="flex gap-2 items-center">
+        <form onSubmit={handleSendMessage} className="flex gap-2 items-end max-w-4xl mx-auto">
+          <div className="flex-1 bg-white rounded-2xl flex items-end p-1 shadow-sm overflow-hidden border border-gray-200">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setShowFileUpload(!showFileUpload)}
+              className="h-10 w-10 p-0 rounded-full text-gray-500 hover:bg-gray-100 flex-shrink-0"
+              aria-label="Attach file"
+            >
+              <Paperclip className="w-5 h-5 rotate-45" />
+            </Button>
+
+            <textarea
+              rows={1}
+              placeholder="Type a message"
+              value={messageContent}
+              onChange={(e) => {
+                handleInputChange(e.target.value);
+                e.target.style.height = 'auto';
+                e.target.style.height = e.target.scrollHeight + 'px';
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendMessage();
+                }
+              }}
+              className="flex-1 bg-transparent border-none focus:ring-0 py-2.5 px-2 text-sm max-h-32 resize-none"
+              style={{ minHeight: '40px' }}
+            />
+          </div>
+
           <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setShowFileUpload(!showFileUpload)}
-            disabled={isInputDisabled}
-            className="h-10 w-10 p-0 flex-shrink-0 touch-manipulation"
-            aria-label="Attach file"
-          >
-            <Paperclip className="w-4 h-4" />
-          </Button>
-          <Input
-            ref={inputRef}
-            type="text"
-            placeholder={isInputDisabled ? getStatusMessage() || "Type your message..." : "Type your message..."}
-            value={messageContent}
-            onChange={(e) => handleInputChange(e.target.value)}
-            disabled={isInputDisabled}
-            className="flex-1 min-h-[2.5rem]"
-          />
-          <Button 
-            type="submit" 
-            disabled={isInputDisabled || (!messageContent.trim() && !attachmentUrl)}
-            className="h-10 w-10 p-0 flex-shrink-0 touch-manipulation"
+            type="submit"
+            disabled={!messageContent.trim() && !attachmentUrl}
+            className={`h-10 w-10 sm:h-12 sm:w-12 p-0 rounded-full flex-shrink-0 transition-all ${messageContent.trim() || attachmentUrl
+              ? 'bg-[#00a884] hover:bg-[#008f72] shadow-md'
+              : 'bg-gray-400'
+              }`}
             aria-label="Send message"
           >
-            <Send className="w-4 h-4" />
+            <Send className="w-4 h-4 sm:w-5 sm:h-5 text-white ml-0.5" />
           </Button>
         </form>
       </div>

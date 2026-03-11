@@ -41,7 +41,7 @@ const Navbar = ({ user, onLogout }) => {
   };
 
   return (
-    <nav className="fixed md:sticky top-0 left-0 right-0 z-50 pointer-events-none">
+    <nav className={`${location.pathname === '/support' ? 'sticky' : 'fixed md:sticky'} top-0 left-0 right-0 z-50 pointer-events-none`}>
       <div className="bg-white border-b border-gray-200 shadow-sm pointer-events-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
           <div className="flex items-center justify-between">
@@ -209,9 +209,11 @@ const Navbar = ({ user, onLogout }) => {
       </div>
 
       {/* Announcement Bar */}
-      <div className="pointer-events-auto">
-        <AnnouncementBar />
-      </div>
+      {location.pathname !== '/support' && (
+        <div className="pointer-events-auto">
+          <AnnouncementBar />
+        </div>
+      )}
     </nav>
   );
 };

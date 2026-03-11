@@ -11,103 +11,54 @@ import { MessageSquare, FileText, History } from 'lucide-react';
 
 const SupportPageContent = ({ user, onLogout }) => {
   const {
-    tickets,
-    currentTicket,
-    isLoadingTickets,
-    loadTickets,
-    selectTicket
+    currentConversation,
+    getOrCreateConversation,
+    isLoadingConversations,
+    selectConversation
   } = useSupport();
-  const [activeTab, setActiveTab] = useState('new');
 
+  // Automatically get or create conversation on mount
   React.useEffect(() => {
-    loadTickets();
-  }, [loadTickets]);
+    const initChat = async () => {
+      const conv = await getOrCreateConversation();
+      if (conv) {
+        selectConversation(conv.id);
+      }
+    };
+    initChat();
+  }, [getOrCreateConversation, selectConversation]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex flex-col h-screen bg-[#f0f2f5] overflow-hidden">
       <SEO
-        title="Support Center - Help & FAQ | BoostUp GH"
-        description="Get help with your BoostUp GH account, orders, payments, and more. Contact our 24/7 support team for assistance."
-        keywords={['support', 'help', 'customer service', 'contact']}
+        title="Support Center - Live Chat | BoostUp GH"
+        description="Chat with our 24/7 support team for assistance with your account, orders, and more."
+        keywords={['support', 'help', 'live chat', 'contact']}
         canonical="/support"
       />
-      <Navbar user={user} onLogout={onLogout} />
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-32 md:pt-6 pb-6 sm:pb-8 lg:pb-12">
-        {/* Hero Header */}
-        <div className="text-center mb-6 sm:mb-8 lg:mb-12 animate-fadeIn">
-          <div className="flex items-center justify-center mb-4">
-            <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center">
-              <MessageSquare className="w-8 h-8 text-purple-600" />
-            </div>
-          </div>
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2 sm:mb-4">
-            Support Center
-          </h1>
-          <p className="text-sm sm:text-base lg:text-lg text-gray-600 max-w-2xl mx-auto">
-            Create a ticket to get help with your orders and account issues.
-          </p>
-        </div>
-
-        {/* Tab Buttons */}
-        <div className="flex gap-4 mb-4">
-          <Button
-            onClick={() => setActiveTab('new')}
-            className={`flex-1 ${activeTab === 'new'
-              ? 'bg-purple-600 hover:bg-purple-700 text-white'
-              : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-              }`}
-          >
-            <FileText className="w-4 h-4 mr-2" />
-            New Ticket
-          </Button>
-          <Button
-            onClick={() => setActiveTab('history')}
-            className={`flex-1 ${activeTab === 'history'
-              ? 'bg-purple-600 hover:bg-purple-700 text-white'
-              : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-              }`}
-          >
-            <History className="w-4 h-4 mr-2" />
-            Ticket History
-          </Button>
-        </div>
-
-        {/* Main Content Area */}
-        {activeTab === 'new' ? (
-          <Card className="min-h-[600px]">
-            <CardContent className="p-0 h-full">
-              <TicketForm />
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* Ticket List */}
-            <Card className="lg:col-span-1 h-[600px]">
-              <CardContent className="p-0 h-full">
-                {isLoadingTickets ? (
-                  <div className="flex items-center justify-center h-full">
-                    <p className="text-gray-500">Loading tickets...</p>
-                  </div>
-                ) : (
-                  <TicketList
-                    tickets={Array.isArray(tickets) ? tickets : []}
-                    currentTicketId={currentTicket?.id || null}
-                    onSelectTicket={selectTicket}
-                  />
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Chat Area */}
-            <Card className="lg:col-span-2 h-[600px]">
-              <CardContent className="p-0 h-full">
-                <SupportChat />
-              </CardContent>
-            </Card>
-          </div>
-        )}
+      <div className="flex-shrink-0">
+        <Navbar user={user} onLogout={onLogout} />
       </div>
+
+      <main className="flex-1 w-full min-h-0 overflow-hidden">
+        <Card className="h-full shadow-none border-none overflow-hidden rounded-none bg-transparent">
+          <CardContent className="p-0 h-full">
+            {(isLoadingConversations || !currentConversation) ? (
+              <div className="flex flex-col items-center justify-center h-full gap-4 bg-[#e5ddd5]">
+                <div className="flex flex-col items-center gap-4 bg-white/80 p-8 rounded-2xl shadow-sm max-w-sm text-center">
+                  <div className="w-12 h-12 border-4 border-gray-100 border-t-[#075e54] rounded-full animate-spin"></div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900 mb-1">Connecting to support...</h3>
+                    <p className="text-sm text-gray-500">Please wait while we set up your secure chat session.</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <SupportChat />
+            )}
+          </CardContent>
+        </Card>
+      </main>
     </div>
   );
 };

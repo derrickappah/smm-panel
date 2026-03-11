@@ -229,12 +229,16 @@ const WhatsAppButton = ({ message, className = "" }) => {
             {/* Header */}
             <div className="bg-[#25D366] p-4 text-white relative">
               <div className="flex items-center gap-3">
-                <div className="bg-white p-1.5 rounded-full">
-                  <img src="/rYZqPCBaG70.png" alt="WA" className="w-5 h-5" />
+                <div className="bg-white p-2 rounded-full flex items-center justify-center shadow-sm">
+                  <img
+                    src="/rYZqPCBaG70.png"
+                    alt="WA"
+                    className="w-5 h-5 object-contain"
+                  />
                 </div>
                 <div>
-                  <h3 className="font-bold text-base">Start a Conversation</h3>
-                  <p className="text-xs opacity-90">Click one of our members below to chat</p>
+                  <h3 className="font-bold text-lg leading-tight">Start a Conversation</h3>
+                  <p className="text-xs font-light opacity-90">Click one of our members below to chat</p>
                 </div>
               </div>
               <button
@@ -243,27 +247,28 @@ const WhatsAppButton = ({ message, className = "" }) => {
                   setShowPopup(false);
                 }}
                 className="absolute top-4 right-4 p-1 hover:bg-black/10 rounded-full transition-colors"
+                aria-label="Close"
               >
                 <X size={20} />
               </button>
             </div>
 
             {/* Support List */}
-            <div className="p-2 space-y-1 bg-white/50">
+            <div className="p-3 space-y-2 bg-white">
               {[
                 {
-                  title: "Order & Refill Issues",
-                  subtitle: "Staff",
+                  title: "Order & Boost Issues",
+                  subtitle: "Live Agent",
                   avatar: "/images.jpg"
                 },
                 {
-                  title: "Payment support",
+                  title: "Payment Support",
                   subtitle: "Payment Admin",
-                  avatar: "/images (1).jpg"
+                  avatar: "/avatar_user_2_1771801048478.png"
                 },
                 {
-                  title: "For API Users",
-                  subtitle: "Group Manager",
+                  title: "General Support",
+                  subtitle: "Live Agent",
                   avatar: "/download (1).jpg"
                 }
               ].map((item, idx) => (
@@ -271,27 +276,28 @@ const WhatsAppButton = ({ message, className = "" }) => {
                   key={idx}
                   onClick={(e) => {
                     e.stopPropagation();
-                    navigate('/support');
+                    if (item.title === "Payment Support") {
+                      window.open(getWhatsAppUrl(), '_blank', 'noopener');
+                    } else {
+                      navigate('/support');
+                    }
                     setShowPopup(false);
                   }}
-                  className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-green-50 transition-all duration-200 group text-left"
+                  className="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-green-50/50 transition-all duration-200 group text-left border border-transparent hover:border-green-100"
                 >
                   <div className="relative">
                     <img
                       src={item.avatar}
                       alt={item.title}
-                      className="w-12 h-12 rounded-full border-2 border-green-100 p-0.5"
+                      className="w-14 h-14 rounded-full border-2 border-gray-50 object-cover shadow-sm group-hover:border-green-200 transition-colors"
                     />
-                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+                    <div className="absolute bottom-1 right-1 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full"></div>
                   </div>
                   <div className="flex-1">
-                    <h4 className="font-semibold text-gray-800 text-sm group-hover:text-green-700 transition-colors">
+                    <h4 className="font-bold text-gray-800 text-sm group-hover:text-green-700 transition-colors">
                       {item.title}
                     </h4>
-                    <p className="text-xs text-gray-500 italic">{item.subtitle}</p>
-                  </div>
-                  <div className="text-green-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <MessageCircle size={20} />
+                    <p className="text-xs text-gray-400 italic font-medium leading-relaxed">{item.subtitle}</p>
                   </div>
                 </button>
               ))}

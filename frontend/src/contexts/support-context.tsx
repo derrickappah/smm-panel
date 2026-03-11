@@ -17,7 +17,7 @@ import type {
   SupportContextMethods,
 } from '@/types/support';
 
-interface SupportContextType extends SupportContextState, SupportContextMethods {}
+interface SupportContextType extends SupportContextState, SupportContextMethods { }
 
 const SupportContext = createContext<SupportContextType | undefined>(undefined);
 
@@ -80,7 +80,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
   const loadConversations = useCallback(async () => {
     if (isAdmin) return; // Admins use loadAllConversations
     if (!userRole?.userId) return; // Don't query if user ID is not available
-    
+
     setIsLoadingConversations(true);
     try {
       const { data, error } = await supabase
@@ -103,14 +103,14 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
   // Load all conversations (admin only) with pagination
   const loadAllConversations = useCallback(async (reset: boolean = true) => {
     if (!isAdmin) return;
-    
+
     if (reset) {
       setIsLoadingConversations(true);
       conversationsOffsetRef.current = 0;
     } else {
       setIsLoadingMoreConversations(true);
     }
-    
+
     try {
       // Verify authentication before making queries
       const { data: { session }, error: authError } = await supabase.auth.getSession();
@@ -121,7 +121,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
 
       const offset = reset ? 0 : conversationsOffsetRef.current;
       const limit = CONVERSATIONS_PAGE_SIZE;
-      
+
       // Load conversations with pagination
       const { data, error, count } = await supabase
         .from('conversations')
@@ -175,7 +175,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
       let unreadLatestMap: Record<string, string> = {};
       if (userRole?.userId) {
         const conversationIds = data.map(c => c.id);
-        
+
         // Single query to get all unread messages for these conversations (with timestamps)
         const { data: unreadMessages } = await supabase
           .from('messages')
@@ -189,7 +189,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
         (unreadMessages || []).forEach((msg) => {
           // Count unread messages
           unreadCountMap[msg.conversation_id] = (unreadCountMap[msg.conversation_id] || 0) + 1;
-          
+
           // Track most recent unread message timestamp (messages are already sorted desc)
           if (!unreadLatestMap[msg.conversation_id]) {
             unreadLatestMap[msg.conversation_id] = msg.created_at;
@@ -211,14 +211,14 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
         // First priority: conversations with unread messages come first
         if (a.unread_count > 0 && b.unread_count === 0) return -1;
         if (a.unread_count === 0 && b.unread_count > 0) return 1;
-        
+
         // If both have unread, sort by most recent unread message timestamp
         if (a.unread_count > 0 && b.unread_count > 0) {
           const aLatest = a.unread_latest_at || a.last_message_at;
           const bLatest = b.unread_latest_at || b.last_message_at;
           return new Date(bLatest).getTime() - new Date(aLatest).getTime();
         }
-        
+
         // If neither has unread, sort by last_message_at
         return new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime();
       });
@@ -271,7 +271,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
         console.warn('User ID mismatch, cannot get/create conversation', { sessionUserId: session.user.id, userRoleUserId: userRole.userId });
         return null;
       }
-      
+
       console.log('Authentication verified, proceeding with conversation get/create');
 
       // Get the user's single conversation (should only be 0 or 1)
@@ -304,7 +304,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
         });
         return existing;
       }
-      
+
       console.log('No existing conversation found, creating new one...');
 
       // Fetch user's name from profiles to use as subject
@@ -341,7 +341,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
             .select('*')
             .eq('user_id', userRole.userId)
             .maybeSingle();
-          
+
           console.log('Race condition fetch result:', { raceConv, raceError });
           if (raceConv && !raceError) {
             // Add to conversations list if not already there
@@ -364,12 +364,12 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
         console.error('Unexpected error creating conversation:', createError);
         throw createError;
       }
-      
+
       if (!newConv) {
         console.error('Conversation creation succeeded but no data returned');
         return null;
       }
-      
+
       console.log('Successfully created conversation:', newConv.id);
       // Add new conversation to list
       setConversations((prev) => {
@@ -378,7 +378,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
         }
         return [newConv, ...prev];
       });
-      
+
       return newConv;
     } catch (error: any) {
       console.error('Error getting/creating conversation:', error);
@@ -559,10 +559,13 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
     }
 
     // Check if user can send message (status must be 'Replied')
+    // REMOVED: Fluid chat shouldn't be restricted
+    /*
     if (!isAdmin && currentTicket.status !== 'Replied') {
       toast.error('Please wait for admin reply before sending another message');
       return;
     }
+    */
 
     // Check if ticket is closed
     if (currentTicket.status === 'Closed') {
@@ -700,7 +703,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
         .from('messages')
         .update({ content: newContent.trim() })
         .eq('id', messageId);
-      
+
       // Only restrict to own messages if not admin
       if (!isAdmin) {
         query = query.eq('sender_id', userRole.userId);
@@ -844,10 +847,10 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
 
       if (currentConversation?.id === conversationId) {
         setCurrentConversation((prev) => {
-        const updated = prev ? { ...prev, status } : null;
-        currentConversationRef.current = updated;
-        return updated;
-      });
+          const updated = prev ? { ...prev, status } : null;
+          currentConversationRef.current = updated;
+          return updated;
+        });
       }
     } catch (error: any) {
       // Error already handled above, just log for debugging
@@ -1007,7 +1010,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
   const loadTickets = useCallback(async () => {
     if (isAdmin) return; // Admins use loadAllTickets
     if (!userRole?.userId) return;
-    
+
     setIsLoadingTickets(true);
     try {
       const { data, error } = await supabase
@@ -1029,14 +1032,14 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
   // Load all tickets (admin only) with pagination
   const loadAllTickets = useCallback(async (reset: boolean = true) => {
     if (!isAdmin) return;
-    
+
     if (reset) {
       setIsLoadingTickets(true);
       ticketsOffsetRef.current = 0;
     } else {
       setIsLoadingMoreTickets(true);
     }
-    
+
     try {
       const { data: { session }, error: authError } = await supabase.auth.getSession();
       if (authError || !session) {
@@ -1046,7 +1049,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
 
       const offset = reset ? 0 : ticketsOffsetRef.current;
       const limit = TICKETS_PAGE_SIZE;
-      
+
       const { data, error, count } = await supabase
         .from('tickets')
         .select('*', { count: 'exact' })
@@ -1205,7 +1208,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
 
       // Add ticket to list
       setTickets((prev) => [ticket, ...prev]);
-      
+
       toast.success('Ticket created successfully');
       return ticket;
     } catch (error: any) {
@@ -1323,11 +1326,11 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
         },
         async (payload) => {
           console.log('Conversation change event:', payload.eventType, payload.new || payload.old);
-          
+
           if (payload.eventType === 'INSERT' && payload.new) {
             // Optimistically add new conversation
             const newConv = payload.new as Conversation;
-            
+
             // Fetch user profile for the new conversation
             if (newConv.user_id) {
               const { data: profile } = await supabase
@@ -1335,13 +1338,13 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
                 .select('id, name, email')
                 .eq('id', newConv.user_id)
                 .single();
-              
+
               const conversationWithUser = {
                 ...newConv,
                 user: profile || null,
                 unread_count: 0,
               };
-              
+
               setConversations((prev) => {
                 // Check if conversation already exists (avoid duplicates)
                 if (prev.some(c => c.id === conversationWithUser.id)) {
@@ -1360,7 +1363,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
                   : conv
               )
             );
-            
+
             // If it's the current conversation, update it
             const currentConv = currentConversationRef.current;
             if (currentConv?.id === updatedConv.id) {
@@ -1369,7 +1372,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
               currentConversationRef.current = updated;
             }
           }
-          
+
           // Refresh unread counts after conversation updates
           if (isAdmin) {
             const count = await getUnreadCount();
@@ -1402,10 +1405,10 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
         },
         async (payload) => {
           console.log('Ticket change event:', payload.eventType, payload.new || payload.old);
-          
+
           if (payload.eventType === 'INSERT' && payload.new) {
             const newTicket = payload.new as Ticket;
-            
+
             // Fetch user profile for the new ticket
             if (newTicket.user_id) {
               const { data: profile } = await supabase
@@ -1413,12 +1416,12 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
                 .select('id, name, email')
                 .eq('id', newTicket.user_id)
                 .single();
-              
+
               const ticketWithUser = {
                 ...newTicket,
                 user: profile || null,
               };
-              
+
               setTickets((prev) => {
                 if (prev.some(t => t.id === ticketWithUser.id)) {
                   return prev;
@@ -1435,7 +1438,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
                   : t
               )
             );
-            
+
             // If it's the current ticket, update it
             const currentTicket = currentTicketRef.current;
             if (currentTicket?.id === updatedTicket.id) {
@@ -1470,47 +1473,47 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
         async (payload) => {
           const newMessage = payload.new as Message;
           console.log('New message received:', newMessage.id, 'ticket:', newMessage.ticket_id, 'conversation:', newMessage.conversation_id);
-          
+
           // Use refs to get current ticket/conversation (avoids stale closure)
           const currentTicket = currentTicketRef.current;
           const currentConv = currentConversationRef.current;
-          
+
           // Check if message already exists OR if it's from current user (already added by sendMessage)
           setMessages((prev) => {
             if (prev.some(m => m.id === newMessage.id)) {
               return prev; // Already exists
             }
-            
+
             // Skip adding if it's from current user (sendMessage already added it)
             if (newMessage.sender_id === userRole.userId) {
               return prev;
             }
-            
+
             // If it's for the current ticket, add it
             if (currentTicket && newMessage.ticket_id === currentTicket.id) {
               return [...prev, newMessage];
             }
-            
+
             // If it's for the current conversation, add it
             if (currentConv && newMessage.conversation_id === currentConv.id) {
               return [...prev, newMessage];
             }
             return prev;
           });
-          
+
           // Update ticket's last_message_at in the list
           if (newMessage.ticket_id) {
             setTickets((prev) =>
               prev.map((t) =>
                 t.id === newMessage.ticket_id
-                  ? { 
-                      ...t, 
-                      last_message_at: newMessage.created_at,
-                    }
+                  ? {
+                    ...t,
+                    last_message_at: newMessage.created_at,
+                  }
                   : t
               )
             );
-            
+
             // If it's for the current ticket, handle it
             if (currentTicket && newMessage.ticket_id === currentTicket.id) {
               // Auto-mark as read if we're viewing the ticket
@@ -1519,24 +1522,24 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
               }
             }
           }
-          
+
           // Update conversation's last_message_at in the list
           if (newMessage.conversation_id) {
             setConversations((prev) =>
               prev.map((conv) =>
                 conv.id === newMessage.conversation_id
-                  ? { 
-                      ...conv, 
-                      last_message_at: newMessage.created_at,
-                      // Increment unread count if message is not from current user
-                      unread_count: newMessage.sender_id !== userRole.userId 
-                        ? (conv.unread_count || 0) + 1 
-                        : conv.unread_count
-                    }
+                  ? {
+                    ...conv,
+                    last_message_at: newMessage.created_at,
+                    // Increment unread count if message is not from current user
+                    unread_count: newMessage.sender_id !== userRole.userId
+                      ? (conv.unread_count || 0) + 1
+                      : conv.unread_count
+                  }
                   : conv
               )
             );
-            
+
             // If it's for the current conversation, handle it
             if (currentConv && newMessage.conversation_id === currentConv.id) {
               // Auto-mark as read if we're viewing the conversation
@@ -1545,7 +1548,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
               }
             }
           }
-          
+
           // Show browser notification if tab is hidden and message is not from current user
           if (newMessage.sender_id !== userRole.userId && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
             new Notification('New support message', {
@@ -1679,7 +1682,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
       console.log('Waiting for userRole to load...');
       return;
     }
-    
+
     if (!isAdmin && userRole?.userId && !isLoadingConversations) {
       // If we have a conversation but it's not selected (or different), select it
       if (conversations.length > 0) {
@@ -1746,7 +1749,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
     if (isLoadingUserRole) {
       return;
     }
-    
+
     if (userRole?.userId) {
       console.log('Loading tickets for user:', userRole.userId, 'isAdmin:', isAdmin);
       if (isAdmin) {
@@ -1764,7 +1767,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
     if (isLoadingUserRole) {
       return;
     }
-    
+
     if (userRole?.userId) {
       console.log('Loading conversations for user:', userRole.userId, 'isAdmin:', isAdmin);
       if (isAdmin) {

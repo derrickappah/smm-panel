@@ -6,6 +6,7 @@ import { useSupport } from '@/contexts/support-context';
 
 export const MessageSearch: React.FC = () => {
   const { messages, currentConversation } = useSupport();
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<number[]>([]);
   const [currentResultIndex, setCurrentResultIndex] = useState(-1);
@@ -53,58 +54,68 @@ export const MessageSearch: React.FC = () => {
     setSearchQuery('');
     setSearchResults([]);
     setCurrentResultIndex(-1);
+    setIsSearchOpen(false);
   };
 
   if (!currentConversation) return null;
 
+  if (!isSearchOpen) {
+    return (
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => setIsSearchOpen(true)}
+        className="text-white hover:bg-white/10 rounded-full h-9 w-9 p-0"
+      >
+        <Search className="w-5 h-5" />
+      </Button>
+    );
+  }
+
   return (
-    <div className="border-b border-gray-200 p-2">
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-        <Input
-          type="text"
-          placeholder="Search messages..."
-          value={searchQuery}
-          onChange={(e) => handleSearch(e.target.value)}
-          className="pl-10 pr-20"
-        />
-        {searchQuery && (
-          <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
-            {searchResults.length > 0 && (
-              <span className="text-xs text-gray-500">
-                {currentResultIndex + 1} / {searchResults.length}
+    <div className="absolute inset-0 bg-[#075e54] z-20 flex items-center px-2 sm:px-4 animate-in fade-in slide-in-from-right-2 duration-200">
+      <div className="flex-1 relative flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={clearSearch}
+          className="text-white hover:bg-white/10 rounded-full h-8 w-8 p-0 flex-shrink-0"
+        >
+          <X className="w-5 h-5" />
+        </Button>
+        <div className="flex-1 relative">
+          <Input
+            autoFocus
+            type="text"
+            placeholder="Search messages..."
+            value={searchQuery}
+            onChange={(e) => handleSearch(e.target.value)}
+            className="bg-white/10 border-none text-white placeholder:text-white/60 focus-visible:ring-0 focus-visible:ring-offset-0 h-9 pr-24 rounded-full"
+          />
+          {searchQuery && searchResults.length > 0 && (
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+              <span className="text-[10px] text-white/80 mr-1">
+                {currentResultIndex + 1}/{searchResults.length}
               </span>
-            )}
-            {searchResults.length > 1 && (
-              <>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => navigateToResult('prev')}
-                  className="h-6 w-6 p-0"
-                >
-                  ↑
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => navigateToResult('next')}
-                  className="h-6 w-6 p-0"
-                >
-                  ↓
-                </Button>
-              </>
-            )}
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={clearSearch}
-              className="h-6 w-6 p-0"
-            >
-              <X className="w-4 h-4" />
-            </Button>
-          </div>
-        )}
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => navigateToResult('prev')}
+                className="h-6 w-6 p-0 text-white hover:bg-white/20 rounded-full"
+              >
+                ↑
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => navigateToResult('next')}
+                className="h-6 w-6 p-0 text-white hover:bg-white/20 rounded-full"
+              >
+                ↓
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

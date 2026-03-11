@@ -23,11 +23,14 @@ export const AdminSupportChat: React.FC<AdminSupportChatProps> = ({ onBackToList
     updateConversationStatus,
   } = useSupport();
 
-  // Prioritize tickets over conversations
-  if (!currentTicket && !currentConversation) {
+  // Prioritize conversations over tickets
+  if (!currentConversation && !currentTicket) {
     return (
-      <div className="flex items-center justify-center h-full text-gray-500">
-        <p>Select a ticket to view</p>
+      <div className="flex items-center justify-center h-full text-gray-500 bg-[#f0f2f5]">
+        <div className="text-center">
+          <p className="text-lg font-medium">Select a conversation to view</p>
+          <p className="text-sm">Active chats will appear here</p>
+        </div>
       </div>
     );
   }

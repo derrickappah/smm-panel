@@ -86,6 +86,12 @@ const InitialRedirect = () => {
   return <Navigate to={lastRoute || "/dashboard"} replace />;
 };
 
+const ConditionalWhatsAppButton = () => {
+  const location = useLocation();
+  if (location.pathname === '/support') return null;
+  return <WhatsAppButton />;
+};
+
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -287,7 +293,7 @@ function App() {
                 </Routes>
               </Suspense>
               <Toaster position="top-right" closeButton richColors />
-              <WhatsAppButton />
+              <ConditionalWhatsAppButton />
             </div>
             <SpeedInsights />
             <Analytics />
