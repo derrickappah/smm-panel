@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { usePaymentMethods } from '@/hooks/usePaymentMethods';
+import { X, MessageCircle } from 'lucide-react';
 
 const WhatsAppButton = ({ message, className = "" }) => {
   const buttonRef = useRef(null);
@@ -10,6 +12,8 @@ const WhatsAppButton = ({ message, className = "" }) => {
   });
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [hasDragged, setHasDragged] = useState(false);
+  const navigate = useNavigate();
+  const [showPopup, setShowPopup] = useState(false);
   const [hasBeenTapped, setHasBeenTapped] = useState(() => {
     // Check localStorage to see if user has already tapped the button
     return localStorage.getItem('whatsapp-button-tapped') === 'true';
@@ -196,11 +200,11 @@ const WhatsAppButton = ({ message, className = "" }) => {
           position: 'fixed',
           left: `${position.x}px`,
           top: `${position.y}px`,
-          zIndex: 50,
+          zIndex: 100,
           cursor: isDragging ? 'grabbing' : 'grab',
-          touchAction: 'none', // Prevent default touch behaviors
+          touchAction: 'none',
           animation: !hasBeenTapped ? 'pulse-glow 2s ease-in-out infinite' : 'none',
-          borderRadius: '50%', // Ensure circular glow
+          borderRadius: '50%',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -209,7 +213,93 @@ const WhatsAppButton = ({ message, className = "" }) => {
         onMouseDown={handleMouseDown}
         onTouchStart={handleTouchStart}
       >
-        {/* Fallback Message for TikTok WebView - Only show if in TikTok */}
+        {/* WhatsApp Popup */}
+        {showPopup && (
+          <div
+            className="absolute bottom-full mb-4 w-[320px] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300"
+            style={{
+              left: position.x > window.innerWidth / 2 ? 'auto' : '0',
+              right: position.x > window.innerWidth / 2 ? '0' : 'auto',
+              background: 'rgba(255, 255, 255, 0.95)',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              zIndex: 101
+            }}
+          >
+            {/* Header */}
+            <div className="bg-[#25D366] p-4 text-white relative">
+              <div className="flex items-center gap-3">
+                <div className="bg-white p-1.5 rounded-full">
+                  <img src="/rYZqPCBaG70.png" alt="WA" className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base">Start a Conversation</h3>
+                  <p className="text-xs opacity-90">Click one of our members below to chat</p>
+                </div>
+              </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowPopup(false);
+                }}
+                className="absolute top-4 right-4 p-1 hover:bg-black/10 rounded-full transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Support List */}
+            <div className="p-2 space-y-1 bg-white/50">
+              {[
+                {
+                  title: "Order & Refill Issues",
+                  subtitle: "Staff",
+                  avatar: "/images.jpg"
+                },
+                {
+                  title: "Payment support",
+                  subtitle: "Payment Admin",
+                  avatar: "/images (1).jpg"
+                },
+                {
+                  title: "For API Users",
+                  subtitle: "Group Manager",
+                  avatar: "/download (1).jpg"
+                }
+              ].map((item, idx) => (
+                <button
+                  key={idx}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate('/support');
+                    setShowPopup(false);
+                  }}
+                  className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-green-50 transition-all duration-200 group text-left"
+                >
+                  <div className="relative">
+                    <img
+                      src={item.avatar}
+                      alt={item.title}
+                      className="w-12 h-12 rounded-full border-2 border-green-100 p-0.5"
+                    />
+                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-semibold text-gray-800 text-sm group-hover:text-green-700 transition-colors">
+                      {item.title}
+                    </h4>
+                    <p className="text-xs text-gray-500 italic">{item.subtitle}</p>
+                  </div>
+                  <div className="text-green-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <MessageCircle size={20} />
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Fallback Message for TikTok WebView */}
         {isTikTok && (
           <div
             className="bg-black/80 text-white text-[10px] py-1 px-2 rounded-md whitespace-nowrap pointer-events-none select-none"
@@ -223,13 +313,11 @@ const WhatsAppButton = ({ message, className = "" }) => {
           </div>
         )}
 
-        <a
-          href={getWhatsAppUrl()}
-          target="_blank"
-          rel="noopener"
-          onClick={() => {
+        <button
+          onClick={(e) => {
             if (!hasDragged) {
               setHasBeenTapped(true);
+              setShowPopup(!showPopup);
             }
           }}
           className={`bg-green-500 hover:bg-green-600 text-white p-4 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 relative flex items-center justify-center ${className}`}
@@ -252,7 +340,7 @@ const WhatsAppButton = ({ message, className = "" }) => {
           <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-md border-2 border-white">
             <span className="text-[10px] leading-none">!</span>
           </div>
-        </a>
+        </button>
       </div>
     </>
   );
