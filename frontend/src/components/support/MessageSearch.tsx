@@ -90,7 +90,7 @@ export const MessageSearch: React.FC = () => {
             placeholder="Search messages..."
             value={searchQuery}
             onChange={(e) => handleSearch(e.target.value)}
-            className="bg-white/10 border-none text-white placeholder:text-white/60 focus-visible:ring-0 focus-visible:ring-offset-0 h-9 pr-24 rounded-full"
+            className="bg-white/10 border-none text-white placeholder:text-white/60 focus-visible:ring-0 focus-visible:ring-offset-0 h-9 pr-24 rounded-full text-base"
           />
           {searchQuery && searchResults.length > 0 && (
             <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">

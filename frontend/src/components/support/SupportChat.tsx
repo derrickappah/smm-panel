@@ -302,7 +302,7 @@ export const SupportChat: React.FC = () => {
                   handleSendMessage();
                 }
               }}
-              className="flex-1 bg-transparent border-none focus:ring-0 py-2.5 px-2 text-sm max-h-32 resize-none"
+              className="flex-1 bg-transparent border-none focus:ring-0 py-2.5 px-2 text-base max-h-32 resize-none"
               style={{ minHeight: '40px' }}
             />
           </div>

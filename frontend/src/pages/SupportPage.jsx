@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { SupportProvider, useSupport } from '@/contexts/support-context';
 import { SupportChat } from '@/components/support/SupportChat';
 import { TicketForm } from '@/components/support/TicketForm';
@@ -36,6 +37,9 @@ const SupportPageContent = ({ user, onLogout }) => {
         keywords={['support', 'help', 'live chat', 'contact']}
         canonical="/support"
       />
+      <Helmet>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
+      </Helmet>
       <div className="flex-shrink-0">
         <Navbar user={user} onLogout={onLogout} />
       </div>
