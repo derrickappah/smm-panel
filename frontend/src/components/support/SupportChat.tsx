@@ -170,7 +170,7 @@ export const SupportChat: React.FC = () => {
   return (
     <div className="flex flex-col h-full min-h-0 bg-[#e5ddd5] relative">
       {/* WhatsApp Header */}
-      <div className="flex-shrink-0 bg-[#075e54] text-white p-2 sm:p-3 flex items-center gap-2 sm:gap-3 shadow-md z-10 relative">
+      <div className="flex-shrink-0 bg-[#075e54] text-white p-2 sm:p-3 flex items-center gap-2 sm:gap-3 shadow-md z-30 sticky top-0">
         <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white/20 flex items-center justify-center overflow-hidden border border-white/10">
           <img
             src="/avatar_user_2_1771801048478.png"
