@@ -276,11 +276,7 @@ const WhatsAppButton = ({ message, className = "" }) => {
                   key={idx}
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (item.title === "Payment Support") {
-                      window.open(getWhatsAppUrl(), '_blank', 'noopener');
-                    } else {
-                      navigate('/support');
-                    }
+                    window.open(getWhatsAppUrl(), '_blank', 'noopener');
                     setShowPopup(false);
                   }}
                   className="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-green-50/50 transition-all duration-200 group text-left border border-transparent hover:border-green-100"
