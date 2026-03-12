@@ -1959,8 +1959,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
     setLoading(true);
     try {
-      // Use secure server-side deposit initiation
-      const response = await fetch('/api/initiate-secure-deposit', {
+      // Use our new Hubtel-specific initiation API
+      const response = await fetch('/api/payments/hubtel/initiate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1968,7 +1968,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         },
         body: JSON.stringify({
           amount: amount,
-          method: 'hubtel'
+          description: 'Wallet Deposit'
         })
       });
 
@@ -1980,75 +1980,31 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           if (onLogout) onLogout();
           return;
         }
-        if (response.status === 429) {
-          toast.error(data.error || 'Too many deposit attempts. Please try again later.');
-        } else {
-          toast.error(data.error || 'Failed to initiate deposit');
-        }
+        toast.error(data.error || 'Failed to initiate deposit');
         return;
       }
 
-      // ============================================
-      // HUBTEL API INTEGRATION - ADD YOUR CODE HERE
-      // ============================================
-      //
-      // Use the secure transaction data returned from the API
-      // const transaction = data.transaction;
-      //
-      // Example integration structure:
-      //
-      // 1. Initialize Hubtel payment
-      // const hubtelResponse = await fetch('https://api.hubtel.com/v1/merchantaccount/onlinecheckout/invoice/create', {
-      //   method: 'POST',
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //     'Authorization': `Basic ${btoa(CLIENT_ID + ':' + CLIENT_SECRET)}`
-      //   },
-      //   body: JSON.stringify({
-      //     totalAmount: amount,
-      //     description: `Deposit of ₵${amount}`,
-      //     callbackUrl: `${window.location.origin}/payment-callback`,
-      //     returnUrl: `${window.location.origin}/dashboard`,
-      //     merchantReference: transaction.id,
-      //     customerName: user.name,
-      //     customerEmail: user.email,
-      //     customerMsisdn: user.phone_number
-      //   })
-      // });
-      //
-      // const hubtelData = await hubtelResponse.json();
-      //
-      // 2. If successful, redirect to Hubtel payment page
-      // if (hubtelData.responseCode === '0000') {
-      //   window.location.href = hubtelData.data.checkoutUrl;
-      // } else {
-      //   throw new Error(hubtelData.responseMessage || 'Failed to initialize Hubtel payment');
-      // }
-      //
-      // 3. Update transaction with Hubtel reference (if needed)
-      // await supabase
-      //   .from('transactions')
-      //   .update({
-      //     hubtel_reference: hubtelData.data.transactionId,
-      //     hubtel_checkout_url: hubtelData.data.checkoutUrl
-      //   })
-      //   .eq('id', transaction.id);
-      //
-      // ============================================
-      // END OF HUBTEL API INTEGRATION
-      // ============================================
+      if (data.success && data.checkoutUrl) {
+        console.log('Hubtel payment initiated, redirecting to:', data.checkoutUrl);
+        // Save transaction ID if available for potential recovery
+        if (data.transactionId) {
+          localStorage.setItem('lastHubtelTransaction', data.transactionId);
+        }
 
-      // Temporary: Show message until Hubtel API is integrated
-      toast.success(`Secure deposit initiated for ₵${amount}. Transaction ID: ${data.transaction.id}`);
-      toast.info('Hubtel payment integration is in progress. Please use Paystack or Manual deposit for now.');
-      setDepositAmount('');
+        // Redirect to Hubtel checkout page
+        window.location.href = data.checkoutUrl;
+      } else {
+        throw new Error('Invalid response from payment initiation');
+      }
+
     } catch (error) {
-      console.error('Hubtel deposit error:', error);
-      toast.error(error.message || 'Failed to process Hubtel deposit. Please try again.');
+      console.error('Error initiating Hubtel deposit:', error);
+      toast.error(error.message || 'Failed to initiate deposit. Please try again.');
     } finally {
       setLoading(false);
     }
-  }, [depositAmount, minDepositSettings.hubtel_min, onUpdateUser]);
+  }, [depositAmount, minDepositSettings.hubtel_min, onLogout]);
+
 
   const handleKorapayDeposit = useCallback(async (e) => {
     e.preventDefault();

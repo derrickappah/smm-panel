@@ -38,7 +38,10 @@ const PricingPage = lazy(() => import("@/pages/PricingPage"));
 const TermsPage = lazy(() => import("@/pages/TermsPage"));
 const FAQPage = lazy(() => import("@/pages/FAQPage"));
 const DevDashboard = lazy(() => import("@/pages/admin/DevDashboard"));
+const HubtelSuccess = lazy(() => import("@/pages/payment/Success"));
+const HubtelCancelled = lazy(() => import("@/pages/payment/Cancelled"));
 import RewardPage from "@/pages/RewardPage";
+
 
 // Loading fallback component - Skeleton loader
 const PageLoader = () => (
@@ -261,6 +264,9 @@ function App() {
                     }
                   />
                   <Route path="/payment/callback" element={<PaymentCallback onUpdateUser={refreshUser} />} />
+                  <Route path="/payment/success" element={<HubtelSuccess onUpdateUser={refreshUser} />} />
+                  <Route path="/payment/cancelled" element={<HubtelCancelled />} />
+
 
                   {/* Admin Routes */}
                   <Route
