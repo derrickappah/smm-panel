@@ -1,6 +1,7 @@
 import { verifyAuth, getServiceRoleClient } from '../../utils/auth.js';
 import { logUserAction } from '../../utils/activityLogger.js';
-import { v4 as uuidv4 } from 'uuid';
+import crypto from 'crypto';
+
 
 /**
  * Hubtel Online Checkout - Initiate Payment
@@ -46,7 +47,8 @@ export default async function handler(req, res) {
         }
 
         const totalAmount = parseFloat(amount);
-        const clientReference = uuidv4().replace(/-/g, '').substring(0, 32);
+        const clientReference = crypto.randomUUID().replace(/-/g, '').substring(0, 32);
+
 
         // 2. Insert transaction into database as 'Pending'
         const supabase = getServiceRoleClient();
