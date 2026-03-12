@@ -95,6 +95,12 @@ export default async function handler(req, res) {
         // 4. Call Hubtel API
         const authHeader = `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`;
 
+        console.log('Sending Hubtel Initiation Request:', {
+            url: 'https://payproxyapi.hubtel.com/items/initiate',
+            payload: { ...hubtelPayload, merchantAccountNumber: merchantAccountNumber ? '***' + merchantAccountNumber.slice(-3) : 'MISSING' },
+            hasAuthHeader: !!authHeader
+        });
+
         const response = await fetch('https://payproxyapi.hubtel.com/items/initiate', {
             method: 'POST',
             headers: {
@@ -103,6 +109,10 @@ export default async function handler(req, res) {
             },
             body: JSON.stringify(hubtelPayload)
         });
+
+        console.log('Hubtel API Response Status:', response.status);
+        console.log('Hubtel API Response Headers:', JSON.stringify(Object.fromEntries(response.headers.entries())));
+
 
         // Try to parse JSON, providing better error if it fails
         let hubtelData;
