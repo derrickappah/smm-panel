@@ -104,7 +104,21 @@ export default async function handler(req, res) {
             body: JSON.stringify(hubtelPayload)
         });
 
-        const hubtelData = await response.json();
+        // Try to parse JSON, providing better error if it fails
+        let hubtelData;
+        const responseText = await response.text();
+
+        try {
+            hubtelData = JSON.parse(responseText);
+        } catch (e) {
+            console.error('Failed to parse Hubtel response as JSON:', responseText);
+            return res.status(500).json({
+                error: 'Invalid response from Hubtel',
+                status: response.status,
+                rawData: responseText.substring(0, 500) // Keep logs safe but useful
+            });
+        }
+
 
         if (hubtelData.responseCode === '0000') {
             // 5. Update transaction with checkoutId and raw response
