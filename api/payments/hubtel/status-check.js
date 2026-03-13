@@ -83,101 +83,92 @@ export default async function handler(req, res) {
         const encodedAuth = Buffer.from(authString).toString('base64');
         const authHeader = `Basic ${encodedAuth}`;
 
-        // 3. Call Hubtel Checkout Status API (Proxy Gateway)
+        // 3. SECURE REDIRECT FALLBACK: Verify HMAC token before anything else
+        // This allows us to trust the redirect even if the status API is blocked.
+        const { token: receivedToken } = req.body;
+        let tokenVerified = false;
+        const expectedToken = crypto.createHmac('sha256', process.env.HUBTEL_API_KEY || 'boostup_secret').update(clientReference).digest('hex');
+
+        if (receivedToken && receivedToken === expectedToken) {
+            console.log(`Secure Redirect Verified for ${clientReference}. Proceeding with balance update.`);
+            tokenVerified = true;
+        } else if (receivedToken) {
+            console.warn(`Token mismatch for ${clientReference}. Expected: ${expectedToken}, Received: ${receivedToken}`);
+        }
+
+        // 4. Call Hubtel Checkout Status API (Proxy Gateway)
         // We try both path parameter and query parameter variations to be safe.
         const checkoutId = transaction.checkout_id;
+        let hubtelData = null;
+        let isSuccessful = tokenVerified; // Start with token status
 
-        if (!checkoutId) {
-            return res.status(200).json({
-                success: false,
-                error: 'Missing Checkout ID',
-                message: 'The transaction is missing a Hubtel checkout identifier.'
-            });
-        }
+        if (checkoutId) {
+            let response;
+            let hubtelUrl = `https://payproxyapi.hubtel.com/items/checkstatus/${checkoutId}`;
 
-        let response;
-        let hubtelUrl = `https://payproxyapi.hubtel.com/items/checkstatus/${checkoutId}`;
+            try {
+                console.log('Trying Hubtel Status (Path Param):', hubtelUrl);
+                response = await fetch(hubtelUrl, {
+                    method: 'GET',
+                    headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' }
+                });
 
-        console.log('Trying Hubtel Status (Path Param):', hubtelUrl);
-
-        response = await fetch(hubtelUrl, {
-            method: 'GET',
-            headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' }
-        });
-
-        // Fallback to Query Parameter if Path Parameter returns 404 or 405
-        if (response.status === 404 || response.status === 405) {
-            hubtelUrl = `https://payproxyapi.hubtel.com/items/checkstatus?checkoutId=${checkoutId}`;
-            console.log('Trying Fallback Hubtel Status (Query Param):', hubtelUrl);
-            response = await fetch(hubtelUrl, {
-                method: 'GET',
-                headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' }
-            });
-        }
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Hubtel checkout status API error:', response.status, errorText);
-
-            return res.status(200).json({
-                success: false,
-                error: 'Hubtel API Error',
-                message: `Hubtel returned ${response.status}: ${errorText.substring(0, 160) || 'No error message provided'}.`,
-                details: {
-                    status: response.status,
-                    bodySnippet: errorText.substring(0, 200),
-                    url: hubtelUrl
+                // Fallback to Query Parameter if Path Parameter returns 404 or 405
+                if (response.status === 404 || response.status === 405) {
+                    hubtelUrl = `https://payproxyapi.hubtel.com/items/checkstatus?checkoutId=${checkoutId}`;
+                    console.log('Trying Fallback Hubtel Status (Query Param):', hubtelUrl);
+                    response = await fetch(hubtelUrl, {
+                        method: 'GET',
+                        headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' }
+                    });
                 }
-            });
-        }
 
-        let hubtelData;
-        try {
-            hubtelData = await response.json();
-        } catch (parseError) {
-            return res.status(200).json({
-                success: false,
-                error: 'Invalid Hubtel Response',
-                message: 'Hubtel returned a non-JSON response.'
-            });
-        }
-
-        // 4. Update Database based on Hubtel status
-        let newStatus = transaction.status;
-
-        // The checkout status endpoint typically returns responseCode and data object with status/isSuccessful
-        const responseCode = hubtelData.responseCode || hubtelData.ResponseCode;
-
-        let responseData = {};
-        if (hubtelData.data) {
-            responseData = Array.isArray(hubtelData.data) && hubtelData.data.length > 0 ? hubtelData.data[0] : hubtelData.data;
-        } else if (hubtelData.Data) {
-            responseData = Array.isArray(hubtelData.Data) && hubtelData.Data.length > 0 ? hubtelData.Data[0] : hubtelData.Data;
-        } else {
-            responseData = hubtelData; // Sometimes it's flat
-        }
-
-        const transactionStatus = responseData.status || responseData.Status || hubtelData.status || hubtelData.Status;
-
-        console.log(`Hubtel Status for ${clientReference}:`, { responseCode, transactionStatus });
-
-        // "Paid" or "Success" depending on internal variations, "0000" means successful request
-        // For payproxyapi, data.isSuccessful is a common indicator
-        let isSuccessful = responseData.isSuccessful === true ||
-            transactionStatus === 'Paid' ||
-            transactionStatus === 'Success' ||
-            (responseCode === '0000' && transactionStatus && transactionStatus !== 'Unpaid' && transactionStatus !== 'Failed');
-
-        // SECURE REDIRECT FALLBACK: If API failed but we have a valid secure return token, trust it
-        const { token } = req.body;
-        if (!isSuccessful && token) {
-            const expectedToken = crypto.createHmac('sha256', process.env.HUBTEL_API_KEY || 'boostup_secret').update(clientReference).digest('hex');
-            if (token === expectedToken) {
-                console.log(`Secure Redirect Verified for ${clientReference}. Forcing success status.`);
-                isSuccessful = true;
+                if (response.ok) {
+                    hubtelData = await response.json();
+                } else if (!tokenVerified) {
+                    // Only return error if token is NOT verified
+                    const errorText = await response.text();
+                    console.error('Hubtel checkout status API error:', response.status, errorText);
+                    return res.status(200).json({
+                        success: false,
+                        error: 'Hubtel API Error',
+                        message: `Hubtel returned ${response.status}: ${errorText.substring(0, 160) || 'No error message provided'}.`,
+                        details: { status: response.status, bodySnippet: errorText.substring(0, 200), url: hubtelUrl }
+                    });
+                }
+            } catch (apiError) {
+                console.error('Network error during Hubtel status check:', apiError);
+                if (!tokenVerified) {
+                    return res.status(500).json({ error: 'Failed to reach Hubtel API', message: apiError.message });
+                }
             }
         }
 
+        // 5. Update Database based on Hubtel status (if we got data)
+        let responseData = {};
+        let transactionStatus = null;
+        let responseCode = null;
+
+        if (hubtelData) {
+            responseCode = hubtelData.responseCode || hubtelData.ResponseCode;
+            if (hubtelData.data) {
+                responseData = Array.isArray(hubtelData.data) && hubtelData.data.length > 0 ? hubtelData.data[0] : hubtelData.data;
+            } else if (hubtelData.Data) {
+                responseData = Array.isArray(hubtelData.Data) && hubtelData.Data.length > 0 ? hubtelData.Data[0] : hubtelData.Data;
+            } else {
+                responseData = hubtelData;
+            }
+            transactionStatus = responseData.status || responseData.Status || hubtelData.status || hubtelData.Status;
+
+            // Merge API success with token success
+            isSuccessful = isSuccessful || responseData.isSuccessful === true ||
+                transactionStatus === 'Paid' ||
+                transactionStatus === 'Success' ||
+                (responseCode === '0000' && transactionStatus && transactionStatus !== 'Unpaid' && transactionStatus !== 'Failed');
+        }
+
+        // 6. Determine new status and update DB
+        let newStatus = transaction.status;
         if (isSuccessful) {
             newStatus = 'approved';
         } else if (transactionStatus === 'Failed' || transactionStatus === 'Unpaid' || responseCode === '2001') {
