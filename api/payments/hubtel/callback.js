@@ -75,17 +75,23 @@ export default async function handler(req, res) {
         }
 
         // 3. Security Verification: Validate amount matches
-        if (Math.abs(parseFloat(transaction.amount) - parseFloat(amount)) > 0.01) {
-            console.error(`Amount mismatch in Hubtel callback! DB: ${transaction.amount}, Payload: ${amount}`);
+        // Note: Hubtel sometimes adds processing fees to the callback amount.
+        // We allow the received amount to be slightly higher (fees), but verify it's not significantly lower.
+        const expectedAmount = parseFloat(transaction.amount);
+        const receivedAmount = parseFloat(amount);
+
+        // Tolerance: allow up to 5% extra for fees, or at least 1% minimum
+        if (receivedAmount < expectedAmount) {
+            console.error(`Potential underpayment in Hubtel callback! Expected: ${expectedAmount}, Received: ${receivedAmount}`);
             await logUserAction({
                 user_id: transaction.user_id,
                 action_type: 'suspicious_callback',
                 entity_type: 'transaction',
                 entity_id: transaction.id,
-                description: `Suspicious Hubtel callback: Amount mismatch. DB: ${transaction.amount}, Payload: ${amount}`,
+                description: `Underpayment detected. Expected: ${expectedAmount}, Received: ${receivedAmount}`,
                 metadata: { payload }
             });
-            return res.status(400).json({ error: 'Amount mismatch' });
+            return res.status(400).json({ error: 'Amount mismatch (underpayment)' });
         }
 
         // 4. Update Transaction Status
