@@ -121,7 +121,12 @@ export default async function handler(req, res) {
             return res.status(200).json({
                 success: false,
                 error: 'Hubtel API Error',
-                message: `Hubtel returned ${response.status}: ${errorText.substring(0, 160) || 'No error message provided'}. URL tried: ${hubtelUrl}`
+                message: `Hubtel returned ${response.status}: ${errorText.substring(0, 160) || 'No error message provided'}.`,
+                details: {
+                    status: response.status,
+                    bodySnippet: errorText.substring(0, 200),
+                    url: hubtelUrl
+                }
             });
         }
 

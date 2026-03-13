@@ -52,7 +52,8 @@ const SuccessPage = ({ onUpdateUser }) => {
                         setIsAwaitingBalance(true);
                     }
                 } else {
-                    setStatusMessage(data.error || data.message || 'Status check completed.');
+                    const detailMsg = data.details?.bodySnippet ? ` (${data.details.bodySnippet})` : '';
+                    setStatusMessage((data.error || data.message || 'Status check completed.') + detailMsg);
                     if (data.error === 'Transaction not found') {
                         setIsAwaitingBalance(false);
                     }
