@@ -98,8 +98,13 @@ export default async function handler(req, res) {
         console.log('Sending Hubtel Initiation Request:', {
             url: 'https://payproxyapi.hubtel.com/items/initiate',
             payload: { ...hubtelPayload, merchantAccountNumber: merchantAccountNumber ? '***' + merchantAccountNumber.slice(-3) : 'MISSING' },
-            hasAuthHeader: !!authHeader
+            hasAuthHeader: !!authHeader,
+            credentialCheck: {
+                idPrefix: clientId ? clientId.substring(0, 3) + '...' : 'MISSING',
+                secretPrefix: clientSecret ? clientSecret.substring(0, 3) + '...' : 'MISSING'
+            }
         });
+
 
         const response = await fetch('https://payproxyapi.hubtel.com/items/initiate', {
             method: 'POST',
