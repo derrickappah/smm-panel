@@ -87,8 +87,6 @@ export default async function handler(req, res) {
         // Endpoint: GET https://api-txnstatus.hubtel.com/transactions/{POS_Sales_ID}/status?clientReference={clientReference}
         const hubtelUrl = `https://api-txnstatus.hubtel.com/transactions/${posId}/status?clientReference=${clientReference}`;
 
-        console.log('Checking Hubtel Transaction Status:', { clientReference, posId });
-
         const response = await fetch(hubtelUrl, {
             method: 'GET',
             headers: {
@@ -97,7 +95,36 @@ export default async function handler(req, res) {
             }
         });
 
-        const hubtelData = await response.json();
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Hubtel status check API error:', response.status, errorText);
+
+            if (response.status === 403) {
+                return res.status(200).json({
+                    success: false,
+                    error: 'Hubtel IP Whitelisting Error',
+                    message: 'Your server IP needs to be whitelisted by Hubtel for this specific status API. Please contact Hubtel support.'
+                });
+            }
+
+            return res.status(200).json({
+                success: false,
+                error: 'Hubtel API Error',
+                message: `Hubtel returned ${response.status}: ${errorText.substring(0, 100)}`
+            });
+        }
+
+        let hubtelData;
+        try {
+            hubtelData = await response.json();
+        } catch (parseError) {
+            console.error('Failed to parse Hubtel JSON response');
+            return res.status(200).json({
+                success: false,
+                error: 'Invalid Hubtel Response',
+                message: 'Hubtel returned a non-JSON response. This usually happens if the endpoint is blocked.'
+            });
+        }
 
         // 4. Update Database based on Hubtel status
         // Expected structure from api-txnstatus.hubtel.com:
