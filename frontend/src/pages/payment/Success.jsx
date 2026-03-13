@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { CheckCircle, Home, List, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { supabase } from '@/lib/supabase';
 
 const SuccessPage = ({ onUpdateUser }) => {
     const navigate = useNavigate();
@@ -19,11 +20,21 @@ const SuccessPage = ({ onUpdateUser }) => {
             try {
                 // Proactively verify the transaction status with our backend (which queries Hubtel)
                 if (clientReference) {
-                    await fetch('/api/payments/hubtel/status-check', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ clientReference })
-                    });
+                    const { data: authData } = await supabase.auth.getSession();
+                    const token = authData?.session?.access_token;
+
+                    if (token) {
+                        await fetch('/api/payments/hubtel/status-check', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${token}`
+                            },
+                            body: JSON.stringify({ clientReference })
+                        });
+                    } else {
+                        console.warn('No auth token available for payment verification');
+                    }
                 }
 
                 if (onUpdateUser) {
