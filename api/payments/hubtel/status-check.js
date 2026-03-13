@@ -83,31 +83,36 @@ export default async function handler(req, res) {
         const authHeader = `Basic ${encodedAuth}`;
 
         // 3. Call Hubtel Checkout Status API (Proxy Gateway)
-        // This endpoint usually does not require IP whitelisting as it is part of the Payment Proxy API.
-        // Documentation: https://developers.hubtel.com/docs/business/api_documentation/payment_apis/online_checkout#transaction-status-check
-        // Endpoint: GET https://payproxyapi.hubtel.com/items/checkstatus/{checkoutId}
+        // We try both path parameter and query parameter variations to be safe.
         const checkoutId = transaction.checkout_id;
 
         if (!checkoutId) {
-            console.error('Missing checkoutId for transaction:', transaction.id);
             return res.status(200).json({
                 success: false,
                 error: 'Missing Checkout ID',
-                message: 'The transaction is missing a Hubtel checkout identifier. Manual verification required.'
+                message: 'The transaction is missing a Hubtel checkout identifier.'
             });
         }
 
-        const hubtelUrl = `https://payproxyapi.hubtel.com/items/checkstatus/${checkoutId}`;
+        let response;
+        let hubtelUrl = `https://payproxyapi.hubtel.com/items/checkstatus/${checkoutId}`;
 
-        console.log('Checking Hubtel Checkout Status:', { clientReference, checkoutId });
+        console.log('Trying Hubtel Status (Path Param):', hubtelUrl);
 
-        const response = await fetch(hubtelUrl, {
+        response = await fetch(hubtelUrl, {
             method: 'GET',
-            headers: {
-                'Authorization': authHeader,
-                'Content-Type': 'application/json'
-            }
+            headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' }
         });
+
+        // Fallback to Query Parameter if Path Parameter returns 404 or 405
+        if (response.status === 404 || response.status === 405) {
+            hubtelUrl = `https://payproxyapi.hubtel.com/items/checkstatus?checkoutId=${checkoutId}`;
+            console.log('Trying Fallback Hubtel Status (Query Param):', hubtelUrl);
+            response = await fetch(hubtelUrl, {
+                method: 'GET',
+                headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' }
+            });
+        }
 
         if (!response.ok) {
             const errorText = await response.text();
@@ -116,7 +121,7 @@ export default async function handler(req, res) {
             return res.status(200).json({
                 success: false,
                 error: 'Hubtel API Error',
-                message: `Hubtel returned ${response.status}: ${errorText.substring(0, 100)}`
+                message: `Hubtel returned ${response.status}: ${errorText.substring(0, 160) || 'No error message provided'}. URL tried: ${hubtelUrl}`
             });
         }
 
@@ -124,7 +129,6 @@ export default async function handler(req, res) {
         try {
             hubtelData = await response.json();
         } catch (parseError) {
-            console.error('Failed to parse Hubtel JSON response');
             return res.status(200).json({
                 success: false,
                 error: 'Invalid Hubtel Response',
