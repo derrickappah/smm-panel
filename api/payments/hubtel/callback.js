@@ -36,10 +36,10 @@ export default async function handler(req, res) {
          * }
          */
 
-        const clientReference = payload.ClientReference;
-        const hubtelStatus = payload.Status;
-        const responseCode = payload.ResponseCode;
-        const amount = payload.Amount;
+        const clientReference = payload.clientReference || payload.ClientReference || (payload.data && payload.data.clientReference) || (payload.Data && payload.Data.ClientReference);
+        const hubtelStatus = payload.status || payload.Status || (payload.data && payload.data.status) || (payload.Data && payload.Data.Status);
+        const responseCode = payload.responseCode || payload.ResponseCode || (payload.data && payload.data.responseCode) || (payload.Data && payload.Data.ResponseCode);
+        const amount = payload.amount || payload.Amount || (payload.data && payload.data.amount) || (payload.Data && payload.Data.Amount);
 
         if (!clientReference) {
             console.error('Hubtel Callback missing ClientReference');
@@ -82,7 +82,9 @@ export default async function handler(req, res) {
 
         // 4. Update Transaction Status
         let newStatus = 'Pending';
-        if (responseCode === '0000' && hubtelStatus === 'Success') {
+        const isSuccessful = payload.data?.isSuccessful ?? payload.Data?.isSuccessful ?? (hubtelStatus === 'Success' || responseCode === '0000');
+
+        if (isSuccessful || responseCode === '0000') {
             newStatus = 'approved';
         } else if (responseCode === '2001' || hubtelStatus === 'Failed') {
             newStatus = 'rejected';
@@ -92,8 +94,8 @@ export default async function handler(req, res) {
             .from('transactions')
             .update({
                 status: newStatus,
-                hubtel_transaction_id: payload.TransactionId,
-                external_transaction_id: payload.ExternalTransactionId,
+                hubtel_transaction_id: payload.transactionId || payload.TransactionId || payload.data?.transactionId || payload.Data?.TransactionId,
+                external_transaction_id: payload.externalTransactionId || payload.ExternalTransactionId || payload.data?.externalTransactionId || payload.Data?.ExternalTransactionId,
                 payment_method: payload.PaymentDetails?.Channel || transaction.payment_method,
                 raw_callback: payload,
                 updated_at: new Date().toISOString()

@@ -11,20 +11,28 @@ const SuccessPage = ({ onUpdateUser }) => {
     const clientReference = searchParams.get('reference');
 
     useEffect(() => {
-        // Refresh user balance to show updated funds
-        const refreshUser = async () => {
+        const verifyAndRefresh = async () => {
             try {
+                // Proactively verify the transaction status with our backend (which queries Hubtel)
+                if (clientReference) {
+                    await fetch('/api/payments/hubtel/status-check', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ clientReference })
+                    });
+                }
+
                 if (onUpdateUser) {
                     await onUpdateUser();
                 }
                 setVerifying(false);
             } catch (error) {
-                console.error('Error refreshing user after payment:', error);
+                console.error('Error verifying payment or refreshing user:', error);
                 setVerifying(false);
             }
         };
 
-        refreshUser();
+        verifyAndRefresh();
 
         // Show a success toast
         toast.success('Payment completed successfully!');
