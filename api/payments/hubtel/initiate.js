@@ -72,9 +72,17 @@ export default async function handler(req, res) {
         }
 
         // 3. Prepare Hubtel Payload
-        const clientId = process.env.HUBTEL_CLIENT_ID;
-        const clientSecret = process.env.HUBTEL_CLIENT_SECRET;
-        const merchantAccountNumber = process.env.HUBTEL_MERCHANT_ACCOUNT;
+        const clientId = (process.env.HUBTEL_CLIENT_ID || '').trim();
+        const clientSecret = (process.env.HUBTEL_CLIENT_SECRET || '').trim();
+        const merchantAccountNumber = (process.env.HUBTEL_MERCHANT_ACCOUNT || '').trim();
+
+        console.log('Credential Debug Info:', {
+            idLength: clientId.length,
+            secretLength: clientSecret.length,
+            idPrefix: clientId.substring(0, 3) + '...',
+            merchantAccount: merchantAccountNumber
+        });
+
 
         // Use environment-specific URLs or current origin for callbacks
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (origin || 'https://boostupgh.com');
