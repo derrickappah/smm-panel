@@ -114,6 +114,11 @@ export default async function handler(req, res) {
             responseData = Array.isArray(hubtelData.Data) && hubtelData.Data.length > 0 ? hubtelData.Data[0] : hubtelData.Data;
         }
 
+        // Defensive check if responseData is null/undefined after extraction
+        if (!responseData) {
+            responseData = {};
+        }
+
         const transactionStatus = responseData.status || responseData.Status || hubtelData.status || hubtelData.Status;
 
         console.log(`Hubtel Status for ${clientReference}:`, { responseCode, transactionStatus });

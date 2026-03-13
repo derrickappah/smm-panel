@@ -52,7 +52,10 @@ const SuccessPage = ({ onUpdateUser }) => {
                         setIsAwaitingBalance(true);
                     }
                 } else {
-                    setStatusMessage('Status check completed.');
+                    setStatusMessage(data.error || data.message || 'Status check completed.');
+                    if (data.error === 'Transaction not found') {
+                        setIsAwaitingBalance(false);
+                    }
                 }
             } else {
                 console.warn('No auth token available for payment verification');
