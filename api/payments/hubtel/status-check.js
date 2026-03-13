@@ -82,10 +82,24 @@ export default async function handler(req, res) {
         const encodedAuth = Buffer.from(authString).toString('base64');
         const authHeader = `Basic ${encodedAuth}`;
 
-        // 3. Call Hubtel Transaction Status API
-        // Documentation: https://developers.hubtel.com/docs/check-transaction-status
-        // Endpoint: GET https://api-txnstatus.hubtel.com/transactions/{POS_Sales_ID}/status?clientReference={clientReference}
-        const hubtelUrl = `https://api-txnstatus.hubtel.com/transactions/${posId}/status?clientReference=${clientReference}`;
+        // 3. Call Hubtel Checkout Status API (Proxy Gateway)
+        // This endpoint usually does not require IP whitelisting as it is part of the Payment Proxy API.
+        // Documentation: https://developers.hubtel.com/docs/business/api_documentation/payment_apis/online_checkout#transaction-status-check
+        // Endpoint: GET https://payproxyapi.hubtel.com/items/checkstatus/{checkoutId}
+        const checkoutId = transaction.checkout_id;
+
+        if (!checkoutId) {
+            console.error('Missing checkoutId for transaction:', transaction.id);
+            return res.status(200).json({
+                success: false,
+                error: 'Missing Checkout ID',
+                message: 'The transaction is missing a Hubtel checkout identifier. Manual verification required.'
+            });
+        }
+
+        const hubtelUrl = `https://payproxyapi.hubtel.com/items/checkstatus/${checkoutId}`;
+
+        console.log('Checking Hubtel Checkout Status:', { clientReference, checkoutId });
 
         const response = await fetch(hubtelUrl, {
             method: 'GET',
@@ -97,15 +111,7 @@ export default async function handler(req, res) {
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('Hubtel status check API error:', response.status, errorText);
-
-            if (response.status === 403) {
-                return res.status(200).json({
-                    success: false,
-                    error: 'Hubtel IP Whitelisting Error',
-                    message: 'Your server IP needs to be whitelisted by Hubtel for this specific status API. Please contact Hubtel support.'
-                });
-            }
+            console.error('Hubtel checkout status API error:', response.status, errorText);
 
             return res.status(200).json({
                 success: false,
@@ -122,28 +128,23 @@ export default async function handler(req, res) {
             return res.status(200).json({
                 success: false,
                 error: 'Invalid Hubtel Response',
-                message: 'Hubtel returned a non-JSON response. This usually happens if the endpoint is blocked.'
+                message: 'Hubtel returned a non-JSON response.'
             });
         }
 
         // 4. Update Database based on Hubtel status
-        // Expected structure from api-txnstatus.hubtel.com:
-        // { "responseCode": "0000", "data": { "status": "Paid", "transactionId": "..." } }
-
         let newStatus = transaction.status;
 
-        const responseCode = hubtelData.responseCode;
+        // The checkout status endpoint typically returns responseCode and data object with status/isSuccessful
+        const responseCode = hubtelData.responseCode || hubtelData.ResponseCode;
 
         let responseData = {};
         if (hubtelData.data) {
             responseData = Array.isArray(hubtelData.data) && hubtelData.data.length > 0 ? hubtelData.data[0] : hubtelData.data;
         } else if (hubtelData.Data) {
             responseData = Array.isArray(hubtelData.Data) && hubtelData.Data.length > 0 ? hubtelData.Data[0] : hubtelData.Data;
-        }
-
-        // Defensive check if responseData is null/undefined after extraction
-        if (!responseData) {
-            responseData = {};
+        } else {
+            responseData = hubtelData; // Sometimes it's flat
         }
 
         const transactionStatus = responseData.status || responseData.Status || hubtelData.status || hubtelData.Status;
@@ -151,7 +152,11 @@ export default async function handler(req, res) {
         console.log(`Hubtel Status for ${clientReference}:`, { responseCode, transactionStatus });
 
         // "Paid" or "Success" depending on internal variations, "0000" means successful request
-        const isSuccessful = transactionStatus === 'Paid' || transactionStatus === 'Success' || (responseCode === '0000' && transactionStatus && transactionStatus !== 'Unpaid');
+        // For payproxyapi, data.isSuccessful is a common indicator
+        const isSuccessful = responseData.isSuccessful === true ||
+            transactionStatus === 'Paid' ||
+            transactionStatus === 'Success' ||
+            (responseCode === '0000' && transactionStatus && transactionStatus !== 'Unpaid' && transactionStatus !== 'Failed');
 
         if (isSuccessful) {
             newStatus = 'approved';
@@ -164,7 +169,7 @@ export default async function handler(req, res) {
             .from('transactions')
             .update({
                 status: newStatus,
-                hubtel_transaction_id: responseData.transactionId || responseData.TransactionId || hubtelData.transactionId || hubtelData.TransactionId,
+                hubtel_transaction_id: responseData.transactionId || responseData.TransactionId || hubtelData.transactionId || hubtelData.TransactionId || responseData.checkoutId,
                 raw_status_check: hubtelData,
                 updated_at: new Date().toISOString()
             })
