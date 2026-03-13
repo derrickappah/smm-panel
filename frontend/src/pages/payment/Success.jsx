@@ -9,53 +9,77 @@ const SuccessPage = ({ onUpdateUser }) => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const [verifying, setVerifying] = useState(true);
-    const clientReference = searchParams.get('reference');
+    const [statusMessage, setStatusMessage] = useState('Verifying your payment...');
+    const [isAwaitingBalance, setIsAwaitingBalance] = useState(false);
+
+    // Hubtel uses clientReference, others might use reference
+    const clientReference = searchParams.get('clientReference') || searchParams.get('reference');
     const hasVerified = React.useRef(false);
+
+    const verifyAndRefresh = async () => {
+        if (!clientReference) {
+            setVerifying(false);
+            return;
+        }
+
+        setVerifying(true);
+        setStatusMessage('Checking transaction status with Hubtel...');
+
+        try {
+            const { data: authData } = await supabase.auth.getSession();
+            const token = authData?.session?.access_token;
+
+            if (token) {
+                const response = await fetch('/api/payments/hubtel/status-check', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ clientReference })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    if (data.status === 'approved') {
+                        setStatusMessage('Payment verified! Updating your balance...');
+                        if (onUpdateUser) await onUpdateUser();
+                        setIsAwaitingBalance(false);
+                        toast.success('Payment verified and balance updated!');
+                    } else {
+                        setStatusMessage(`Transaction is still ${data.status}. This can take a few minutes.`);
+                        setIsAwaitingBalance(true);
+                    }
+                } else {
+                    setStatusMessage('Status check completed.');
+                }
+            } else {
+                console.warn('No auth token available for payment verification');
+                setStatusMessage('Auth token missing. Please refresh.');
+            }
+
+            setVerifying(false);
+        } catch (error) {
+            console.error('Error verifying payment or refreshing user:', error);
+            setStatusMessage('Verification encountered an issue. Please check your balance in the dashboard.');
+            setVerifying(false);
+        }
+    };
 
     useEffect(() => {
         if (hasVerified.current) return;
         hasVerified.current = true;
-
-        const verifyAndRefresh = async () => {
-            try {
-                // Proactively verify the transaction status with our backend (which queries Hubtel)
-                if (clientReference) {
-                    const { data: authData } = await supabase.auth.getSession();
-                    const token = authData?.session?.access_token;
-
-                    if (token) {
-                        await fetch('/api/payments/hubtel/status-check', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${token}`
-                            },
-                            body: JSON.stringify({ clientReference })
-                        });
-                    } else {
-                        console.warn('No auth token available for payment verification');
-                    }
-                }
-
-                if (onUpdateUser) {
-                    await onUpdateUser();
-                }
-                setVerifying(false);
-            } catch (error) {
-                console.error('Error verifying payment or refreshing user:', error);
-                setVerifying(false);
-            }
-        };
 
         verifyAndRefresh();
 
         // Show a success toast
         toast.success('Payment completed successfully!', { id: 'payment-success' });
 
-        // Auto-redirect to dashboard after 10 seconds if user doesn't click anything
+        // Auto-redirect to dashboard after 20 seconds if successfully verified
         const timer = setTimeout(() => {
             // navigate('/dashboard');
-        }, 10000);
+        }, 20000);
 
         return () => clearTimeout(timer);
     }, [onUpdateUser, navigate, clientReference]);
@@ -69,21 +93,46 @@ const SuccessPage = ({ onUpdateUser }) => {
 
                 <h1 className="text-3xl font-bold text-gray-900 mb-4">Payment Successful!</h1>
 
-                <p className="text-gray-600 mb-8 text-lg">
-                    Your payment has been processed successfully. Your account balance has been updated and you can now place orders.
+                <p className="text-gray-600 mb-6 text-lg">
+                    We've received your payment.
                 </p>
 
-                {clientReference && (
-                    <div className="bg-gray-50 rounded-xl p-4 mb-8 border border-gray-100">
-                        <p className="text-sm text-gray-500 uppercase tracking-wider font-semibold mb-1">Reference ID</p>
-                        <p className="text-indigo-600 font-mono font-medium">{clientReference}</p>
+                <div className="mb-8 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                    <div className="flex items-center justify-center space-x-2 mb-2">
+                        {verifying ? (
+                            <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                        ) : isAwaitingBalance ? (
+                            <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
+                        ) : null}
+                        <span className={`text-sm font-medium ${isAwaitingBalance ? 'text-amber-600' : 'text-gray-600'}`}>
+                            {statusMessage}
+                        </span>
                     </div>
-                )}
+
+                    {clientReference && (
+                        <div className="mt-2 pt-2 border-t border-gray-200">
+                            <p className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Reference</p>
+                            <p className="text-xs font-mono text-indigo-500">{clientReference}</p>
+                        </div>
+                    )}
+
+                    {isAwaitingBalance && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={verifyAndRefresh}
+                            className="mt-2 text-indigo-600 hover:text-indigo-700 h-8 font-semibold"
+                            disabled={verifying}
+                        >
+                            Refresh Status
+                        </Button>
+                    )}
+                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Button
                         asChild
-                        className="h-12 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl"
+                        className="h-12 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-lg shadow-indigo-100"
                     >
                         <Link to="/dashboard">
                             <Home className="w-4 h-4 mr-2" />
@@ -94,7 +143,7 @@ const SuccessPage = ({ onUpdateUser }) => {
                     <Button
                         asChild
                         variant="outline"
-                        className="h-12 border-2 border-indigo-100 hover:bg-indigo-50 text-indigo-600 rounded-xl"
+                        className="h-12 border-2 border-indigo-50 hover:bg-indigo-50 text-indigo-600 rounded-xl"
                     >
                         <Link to="/orders">
                             <ArrowRight className="w-4 h-4 mr-2" />
@@ -104,7 +153,7 @@ const SuccessPage = ({ onUpdateUser }) => {
                 </div>
 
                 <p className="mt-8 text-sm text-gray-400">
-                    Need help? <Link to="/support" className="text-indigo-500 hover:underline">Contact Support</Link>
+                    Your balance should update within 1-2 minutes. Need help? <Link to="/support" className="text-indigo-500 font-medium hover:underline">Contact Support</Link>
                 </p>
             </div>
         </div>

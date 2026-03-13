@@ -146,18 +146,33 @@ export default async function handler(req, res) {
         // If payment was success and we changed status, increment user balance
         console.log(`Updating status to ${newStatus}. Current status: ${transaction.status}`);
         if (newStatus === 'approved' && transaction.status !== 'approved') {
-            const { data: profile } = await supabase
+            const { data: profile, error: profileError } = await supabase
                 .from('profiles')
                 .select('balance')
                 .eq('id', user.id)
                 .single();
 
+            if (profileError) {
+                console.error('Error fetching profile for balance update:', profileError);
+            }
+
             if (profile) {
-                const newBalance = (profile.balance || 0) + parseFloat(transaction.amount);
-                await supabase
+                const currentBalance = parseFloat(profile.balance || 0);
+                const depositAmount = parseFloat(transaction.amount || 0);
+                const newBalance = currentBalance + depositAmount;
+
+                console.log(`Updating balance for user ${user.id}: ${currentBalance} + ${depositAmount} = ${newBalance}`);
+
+                const { error: profileUpdateError } = await supabase
                     .from('profiles')
                     .update({ balance: newBalance })
                     .eq('id', user.id);
+
+                if (profileUpdateError) {
+                    console.error('Error updating profile balance:', profileUpdateError);
+                } else {
+                    console.log('Balance updated successfully');
+                }
 
                 await logUserAction({
                     user_id: user.id,
