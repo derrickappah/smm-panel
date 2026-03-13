@@ -86,7 +86,8 @@ export default async function handler(req, res) {
 
         // Use environment-specific URLs or current origin for callbacks
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (origin || 'https://boostupgh.com');
-        const callbackUrl = `${baseUrl}/api/webhooks/hubtel/route`;
+        const callbackUrl = `${baseUrl}/api/payments/hubtel/callback`;
+
         const returnUrl = `${baseUrl}/payment/success?reference=${clientReference}`;
         const cancellationUrl = `${baseUrl}/payment/cancelled?reference=${clientReference}`;
 
