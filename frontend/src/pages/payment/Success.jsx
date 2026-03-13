@@ -9,8 +9,12 @@ const SuccessPage = ({ onUpdateUser }) => {
     const [searchParams] = useSearchParams();
     const [verifying, setVerifying] = useState(true);
     const clientReference = searchParams.get('reference');
+    const hasVerified = React.useRef(false);
 
     useEffect(() => {
+        if (hasVerified.current) return;
+        hasVerified.current = true;
+
         const verifyAndRefresh = async () => {
             try {
                 // Proactively verify the transaction status with our backend (which queries Hubtel)
@@ -35,7 +39,7 @@ const SuccessPage = ({ onUpdateUser }) => {
         verifyAndRefresh();
 
         // Show a success toast
-        toast.success('Payment completed successfully!');
+        toast.success('Payment completed successfully!', { id: 'payment-success' });
 
         // Auto-redirect to dashboard after 10 seconds if user doesn't click anything
         const timer = setTimeout(() => {
@@ -43,7 +47,7 @@ const SuccessPage = ({ onUpdateUser }) => {
         }, 10000);
 
         return () => clearTimeout(timer);
-    }, [onUpdateUser, navigate]);
+    }, [onUpdateUser, navigate, clientReference]);
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 flex items-center justify-center p-4">
