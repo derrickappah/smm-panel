@@ -36,8 +36,13 @@ export default async function handler(req, res) {
          * }
          */
 
-        // Extract values from the deeply nested Hubtel Data array (if present)
-        const responseData = payload.Data && payload.Data.length > 0 ? payload.Data[0] : (payload.data || {});
+        // Extract values from the deeply nested Hubtel Data array or object
+        let responseData = {};
+        if (payload.Data) {
+            responseData = Array.isArray(payload.Data) && payload.Data.length > 0 ? payload.Data[0] : payload.Data;
+        } else if (payload.data) {
+            responseData = Array.isArray(payload.data) && payload.data.length > 0 ? payload.data[0] : payload.data;
+        }
 
         const clientReference = payload.clientReference || payload.ClientReference || responseData.clientReference || responseData.ClientReference;
         const hubtelStatus = payload.status || payload.Status || responseData.status || responseData.Status;
@@ -111,6 +116,7 @@ export default async function handler(req, res) {
         }
 
         // 5. If successful, update user balance
+        console.log(`Hubtel Callback Status for ${clientReference}: ${newStatus}`);
         if (newStatus === 'approved') {
             const { data: profile } = await supabase
                 .from('profiles')

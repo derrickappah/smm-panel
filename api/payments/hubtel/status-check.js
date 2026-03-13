@@ -82,14 +82,12 @@ export default async function handler(req, res) {
         const encodedAuth = Buffer.from(authString).toString('base64');
         const authHeader = `Basic ${encodedAuth}`;
 
-        // 3. Call Hubtel Status Check API (Online Checkout Redirect Specific)
-        // Documentation: https://developers.hubtel.com/docs/business/api_documentation/payment_apis/online_checkout#transaction-status-check
-        // Endpoint: GET https://payproxyapi.hubtel.com/items/checkstatus/{checkoutId}
-        const checkoutId = transaction.checkout_id;
-        const hubtelUrl = `https://payproxyapi.hubtel.com/items/checkstatus/${checkoutId}`;
+        // 3. Call Hubtel Transaction Status API
+        // Documentation: https://developers.hubtel.com/docs/check-transaction-status
+        // Endpoint: GET https://api-txnstatus.hubtel.com/transactions/{POS_Sales_ID}/status?clientReference={clientReference}
+        const hubtelUrl = `https://api-txnstatus.hubtel.com/transactions/${posId}/status?clientReference=${clientReference}`;
 
-
-        console.log('Checking Hubtel Transaction Status:', { clientReference, checkoutId });
+        console.log('Checking Hubtel Transaction Status:', { clientReference, posId });
 
         const response = await fetch(hubtelUrl, {
             method: 'GET',
@@ -101,32 +99,40 @@ export default async function handler(req, res) {
 
         const hubtelData = await response.json();
 
-
         // 4. Update Database based on Hubtel status
-        // Status codes: 0000 (Success), 0001 (Pending), 2001 (Failed), etc.
+        // Expected structure from api-txnstatus.hubtel.com:
+        // { "responseCode": "0000", "data": { "status": "Paid", "transactionId": "..." } }
+
         let newStatus = transaction.status;
 
-        // Extract values from the deeply nested Hubtel Data array
-        const responseData = hubtelData.Data && hubtelData.Data.length > 0 ? hubtelData.Data[0] : (hubtelData.data || {});
+        const responseCode = hubtelData.responseCode;
 
-        const responseCode = hubtelData.ResponseCode || hubtelData.responseCode;
-        const transactionStatus = responseData.Status || responseData.status;
+        let responseData = {};
+        if (hubtelData.data) {
+            responseData = Array.isArray(hubtelData.data) && hubtelData.data.length > 0 ? hubtelData.data[0] : hubtelData.data;
+        } else if (hubtelData.Data) {
+            responseData = Array.isArray(hubtelData.Data) && hubtelData.Data.length > 0 ? hubtelData.Data[0] : hubtelData.Data;
+        }
 
-        const isSuccessful = transactionStatus === 'Success' || responseCode === '0000';
+        const transactionStatus = responseData.status || responseData.Status || hubtelData.status || hubtelData.Status;
+
+        console.log(`Hubtel Status for ${clientReference}:`, { responseCode, transactionStatus });
+
+        // "Paid" or "Success" depending on internal variations, "0000" means successful request
+        const isSuccessful = transactionStatus === 'Paid' || transactionStatus === 'Success' || (responseCode === '0000' && transactionStatus && transactionStatus !== 'Unpaid');
 
         if (isSuccessful) {
             newStatus = 'approved';
-        } else if (transactionStatus === 'Failed' || responseCode === '2001') {
+        } else if (transactionStatus === 'Failed' || transactionStatus === 'Unpaid' || responseCode === '2001') {
             newStatus = 'rejected';
         }
-
 
         // Update transaction record
         const { error: updateError } = await supabase
             .from('transactions')
             .update({
                 status: newStatus,
-                hubtel_transaction_id: responseData.TransactionId || responseData.transactionId || hubtelData.TransactionId,
+                hubtel_transaction_id: responseData.transactionId || responseData.TransactionId || hubtelData.transactionId || hubtelData.TransactionId,
                 raw_status_check: hubtelData,
                 updated_at: new Date().toISOString()
             })
@@ -138,6 +144,7 @@ export default async function handler(req, res) {
         }
 
         // If payment was success and we changed status, increment user balance
+        console.log(`Updating status to ${newStatus}. Current status: ${transaction.status}`);
         if (newStatus === 'approved' && transaction.status !== 'approved') {
             const { data: profile } = await supabase
                 .from('profiles')
