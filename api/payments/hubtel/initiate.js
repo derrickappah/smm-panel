@@ -71,9 +71,9 @@ export default async function handler(req, res) {
             return res.status(500).json({ error: 'Failed to create transaction' });
         }
 
-        // 3. Prepare Hubtel Payload
-        const clientId = (process.env.HUBTEL_CLIENT_ID || '').trim();
-        const clientSecret = (process.env.HUBTEL_CLIENT_SECRET || '').trim();
+        // 3. Prepare Hubtel Payload (Fixed variable names to standard)
+        const clientId = (process.env.HUBTEL_API_ID || process.env.HUBTEL_CLIENT_ID || '').trim();
+        const clientSecret = (process.env.HUBTEL_API_KEY || process.env.HUBTEL_CLIENT_SECRET || '').trim();
         const merchantAccountNumber = (process.env.HUBTEL_MERCHANT_ACCOUNT || '').trim();
 
         console.log('Credential Debug Info:', {
@@ -102,7 +102,10 @@ export default async function handler(req, res) {
         };
 
         // 4. Call Hubtel API
-        const authHeader = `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`;
+        // Format: Basic base64(API_ID:API_KEY)
+        const authString = `${clientId}:${clientSecret}`;
+        const encodedAuth = Buffer.from(authString).toString('base64');
+        const authHeader = `Basic ${encodedAuth}`;
 
         console.log('Sending Hubtel Initiation Request:', {
             url: 'https://payproxyapi.hubtel.com/items/initiate',

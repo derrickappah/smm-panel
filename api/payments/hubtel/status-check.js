@@ -69,16 +69,18 @@ export default async function handler(req, res) {
         }
 
         // 2. Prepare Hubtel API credentials
-        const clientId = process.env.HUBTEL_CLIENT_ID;
-        const clientSecret = process.env.HUBTEL_CLIENT_SECRET;
-        const posId = process.env.HUBTEL_POS_ID;
+        const clientId = (process.env.HUBTEL_API_ID || process.env.HUBTEL_CLIENT_ID || '').trim();
+        const clientSecret = (process.env.HUBTEL_API_KEY || process.env.HUBTEL_CLIENT_SECRET || '').trim();
+        const posId = process.env.HUBTEL_POS_ID || process.env.HUBTEL_MERCHANT_ACCOUNT; // Just in case
 
         if (!clientId || !clientSecret || !posId) {
             console.error('Missing Hubtel credentials in environment variables');
             return res.status(500).json({ error: 'Payment provider configuration error' });
         }
 
-        const authHeader = `Basic ${Buffer.from(`${clientId.trim()}:${clientSecret.trim()}`).toString('base64')}`;
+        const authString = `${clientId}:${clientSecret}`;
+        const encodedAuth = Buffer.from(authString).toString('base64');
+        const authHeader = `Basic ${encodedAuth}`;
 
         // 3. Call Hubtel Status Check API (Online Checkout Redirect Specific)
         // Documentation: https://developers.hubtel.com/docs/business/api_documentation/payment_apis/online_checkout#transaction-status-check
