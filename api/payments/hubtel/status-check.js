@@ -106,14 +106,17 @@ export default async function handler(req, res) {
         // Status codes: 0000 (Success), 0001 (Pending), 2001 (Failed), etc.
         let newStatus = transaction.status;
 
-        // Handle both PascalCase and camelCase response fields
-        const responseCode = hubtelData.responseCode || hubtelData.ResponseCode;
-        const hubtelStatus = hubtelData.status || hubtelData.Status;
-        const isSuccessful = hubtelData.data?.isSuccessful ?? (hubtelData.Data?.[0]?.Status === 'Success' || responseCode === '0000');
+        // Extract values from the deeply nested Hubtel Data array
+        const responseData = hubtelData.Data && hubtelData.Data.length > 0 ? hubtelData.Data[0] : (hubtelData.data || {});
 
-        if (isSuccessful || responseCode === '0000') {
+        const responseCode = hubtelData.ResponseCode || hubtelData.responseCode;
+        const transactionStatus = responseData.Status || responseData.status;
+
+        const isSuccessful = transactionStatus === 'Success' || responseCode === '0000';
+
+        if (isSuccessful) {
             newStatus = 'approved';
-        } else if (hubtelStatus === 'Failed' || responseCode === '2001') {
+        } else if (transactionStatus === 'Failed' || responseCode === '2001') {
             newStatus = 'rejected';
         }
 
@@ -123,7 +126,7 @@ export default async function handler(req, res) {
             .from('transactions')
             .update({
                 status: newStatus,
-                hubtel_transaction_id: hubtelData.data?.transactionId || hubtelData.Data?.[0]?.TransactionId || hubtelData.TransactionId,
+                hubtel_transaction_id: responseData.TransactionId || responseData.transactionId || hubtelData.TransactionId,
                 raw_status_check: hubtelData,
                 updated_at: new Date().toISOString()
             })

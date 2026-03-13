@@ -36,10 +36,13 @@ export default async function handler(req, res) {
          * }
          */
 
-        const clientReference = payload.clientReference || payload.ClientReference || (payload.data && payload.data.clientReference) || (payload.Data && payload.Data.ClientReference);
-        const hubtelStatus = payload.status || payload.Status || (payload.data && payload.data.status) || (payload.Data && payload.Data.Status);
-        const responseCode = payload.responseCode || payload.ResponseCode || (payload.data && payload.data.responseCode) || (payload.Data && payload.Data.ResponseCode);
-        const amount = payload.amount || payload.Amount || (payload.data && payload.data.amount) || (payload.Data && payload.Data.Amount);
+        // Extract values from the deeply nested Hubtel Data array (if present)
+        const responseData = payload.Data && payload.Data.length > 0 ? payload.Data[0] : (payload.data || {});
+
+        const clientReference = payload.clientReference || payload.ClientReference || responseData.clientReference || responseData.ClientReference;
+        const hubtelStatus = payload.status || payload.Status || responseData.status || responseData.Status;
+        const responseCode = payload.responseCode || payload.ResponseCode || responseData.responseCode || responseData.ResponseCode;
+        const amount = payload.amount || payload.Amount || responseData.amount || responseData.Amount;
 
         if (!clientReference) {
             console.error('Hubtel Callback missing ClientReference');
@@ -82,7 +85,7 @@ export default async function handler(req, res) {
 
         // 4. Update Transaction Status
         let newStatus = 'Pending';
-        const isSuccessful = payload.data?.isSuccessful ?? payload.Data?.isSuccessful ?? (hubtelStatus === 'Success' || responseCode === '0000');
+        const isSuccessful = responseData.isSuccessful ?? (hubtelStatus === 'Success' || responseCode === '0000');
 
         if (isSuccessful || responseCode === '0000') {
             newStatus = 'approved';
@@ -94,9 +97,9 @@ export default async function handler(req, res) {
             .from('transactions')
             .update({
                 status: newStatus,
-                hubtel_transaction_id: payload.transactionId || payload.TransactionId || payload.data?.transactionId || payload.Data?.TransactionId,
-                external_transaction_id: payload.externalTransactionId || payload.ExternalTransactionId || payload.data?.externalTransactionId || payload.Data?.ExternalTransactionId,
-                payment_method: payload.PaymentDetails?.Channel || transaction.payment_method,
+                hubtel_transaction_id: payload.transactionId || payload.TransactionId || responseData.transactionId || responseData.TransactionId,
+                external_transaction_id: payload.externalTransactionId || payload.ExternalTransactionId || responseData.externalTransactionId || responseData.ExternalTransactionId,
+                payment_method: payload.PaymentDetails?.Channel || responseData.PaymentDetails?.Channel || transaction.payment_method,
                 raw_callback: payload,
                 updated_at: new Date().toISOString()
             })
