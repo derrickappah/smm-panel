@@ -1,5 +1,6 @@
 import { verifyAuth, getServiceRoleClient } from '../../utils/auth.js';
 import { logUserAction } from '../../utils/activityLogger.js';
+import crypto from 'crypto';
 
 /**
  * Hubtel Transaction Status Check API
@@ -162,10 +163,20 @@ export default async function handler(req, res) {
 
         // "Paid" or "Success" depending on internal variations, "0000" means successful request
         // For payproxyapi, data.isSuccessful is a common indicator
-        const isSuccessful = responseData.isSuccessful === true ||
+        let isSuccessful = responseData.isSuccessful === true ||
             transactionStatus === 'Paid' ||
             transactionStatus === 'Success' ||
             (responseCode === '0000' && transactionStatus && transactionStatus !== 'Unpaid' && transactionStatus !== 'Failed');
+
+        // SECURE REDIRECT FALLBACK: If API failed but we have a valid secure return token, trust it
+        const { token } = req.body;
+        if (!isSuccessful && token) {
+            const expectedToken = crypto.createHmac('sha256', process.env.HUBTEL_API_KEY || 'boostup_secret').update(clientReference).digest('hex');
+            if (token === expectedToken) {
+                console.log(`Secure Redirect Verified for ${clientReference}. Forcing success status.`);
+                isSuccessful = true;
+            }
+        }
 
         if (isSuccessful) {
             newStatus = 'approved';

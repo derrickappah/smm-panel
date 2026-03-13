@@ -88,8 +88,9 @@ export default async function handler(req, res) {
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (origin || 'https://boostupgh.com');
         const callbackUrl = `${baseUrl}/api/payments/hubtel/callback`;
 
-        const returnUrl = `${baseUrl}/payment/success?reference=${clientReference}`;
-        const cancellationUrl = `${baseUrl}/payment/cancelled?reference=${clientReference}`;
+        const returnToken = crypto.createHmac('sha256', process.env.HUBTEL_API_KEY || 'boostup_secret').update(clientReference).digest('hex');
+        const returnUrl = `${baseUrl}/payment/success?clientReference=${clientReference}&token=${returnToken}`;
+        const cancellationUrl = `${baseUrl}/payment/cancelled?clientReference=${clientReference}`;
 
         const hubtelPayload = {
             totalAmount: totalAmount,

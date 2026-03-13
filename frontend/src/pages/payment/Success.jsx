@@ -14,6 +14,7 @@ const SuccessPage = ({ onUpdateUser }) => {
 
     // Hubtel uses clientReference, others might use reference
     const clientReference = searchParams.get('clientReference') || searchParams.get('reference');
+    const tokenFromUrl = searchParams.get('token');
     const hasVerified = React.useRef(false);
 
     const verifyAndRefresh = async () => {
@@ -36,7 +37,10 @@ const SuccessPage = ({ onUpdateUser }) => {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`
                     },
-                    body: JSON.stringify({ clientReference })
+                    body: JSON.stringify({
+                        clientReference,
+                        token: tokenFromUrl
+                    })
                 });
 
                 const data = await response.json();
