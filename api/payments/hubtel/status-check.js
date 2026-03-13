@@ -82,9 +82,10 @@ export default async function handler(req, res) {
 
         // 3. Call Hubtel Status Check API (Online Checkout Redirect Specific)
         // Documentation: https://developers.hubtel.com/docs/business/api_documentation/payment_apis/online_checkout#transaction-status-check
-        // Endpoint: GET https://payproxyapi.hubtel.com/items/checkstatus?checkoutId={checkoutId}&clientReference={clientReference}
+        // Endpoint: GET https://payproxyapi.hubtel.com/items/checkstatus/{checkoutId}
         const checkoutId = transaction.checkout_id;
-        const hubtelUrl = `https://payproxyapi.hubtel.com/items/checkstatus?checkoutId=${checkoutId}&clientReference=${clientReference}`;
+        const hubtelUrl = `https://payproxyapi.hubtel.com/items/checkstatus/${checkoutId}`;
+
 
         console.log('Checking Hubtel Transaction Status:', { clientReference, checkoutId });
 
