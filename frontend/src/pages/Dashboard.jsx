@@ -107,9 +107,10 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     setPendingTransaction,
     setOptimisticBalance,
     {
-      interval: 2000, // Poll every 2 seconds
-      maxDuration: 60000, // Max 1 minute
-      maxAttempts: 30, // 30 attempts * 2 seconds = 1 minute
+      initialInterval: 5000, // Start with 5 seconds
+      baseInterval: 15000,   // Then 15 seconds
+      longInterval: 30000,   // Then 30 seconds
+      maxDuration: 180000,   // Max 3 minutes
       onStatusChange: handleMoolrePaymentStatusChange
     }
   );

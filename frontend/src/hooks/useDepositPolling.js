@@ -26,16 +26,20 @@ export function useDepositPolling(
   options = {}
 ) {
   const {
-    interval = 2000, // 2 seconds
-    maxDuration = 60000, // 1 minute
-    maxAttempts = 30, // 30 attempts * 2 seconds = 1 minute
+    initialInterval = 5000,   // Start with 5 seconds
+    baseInterval = 15000,    // Move to 15 seconds after initial phase
+    longInterval = 30000,    // Move to 30 seconds for long-running checks
+    maxDuration = 180000,    // 3 minutes
+    maxAttempts = 30,
     onStatusChange
   } = options;
 
   const intervalRef = useRef(null);
+  const currentIntervalRef = useRef(initialInterval);
   const attemptsRef = useRef(0);
   const startTimeRef = useRef(null);
   const isPollingRef = useRef(false);
+  const isTabVisibleRef = useRef(true);
   const processedTransactionIdsRef = useRef(new Set());
   const [isPollingState, setIsPollingState] = useState(false);
 
@@ -203,65 +207,55 @@ export function useDepositPolling(
       const statusData = await checkTransactionStatus(transactionId);
 
       if (statusData.status === 'approved') {
-        // Call status change callback if provided
+        // ... (rest of approved logic remains same)
         if (onStatusChange) {
           onStatusChange('approved');
         }
         
-        // Transaction is approved - verify balance and refresh UI if not already processed
         if (!processedTransactionIdsRef.current.has(transactionId)) {
-          console.log('Transaction approved, verifying balance and refreshing UI...', {
-            transactionId,
-            amount: statusData.amount
-          });
-
           processedTransactionIdsRef.current.add(transactionId);
-
-          // Verify balance was updated (read-only) and refresh UI
-          // Balance is already updated by atomic function, we just need to refresh
           const success = await verifyBalanceForTransaction({
             id: transactionId,
             amount: statusData.amount || pendingTransaction.amount
           });
-
-          // Always clear pending transaction when approved, even if verification fails
-          // The transaction is already approved in the database, verification is just for UI
           setPendingTransaction(null);
           stopPolling();
-          
           if (!success) {
-            // Verification failed but transaction is approved - log warning
-            console.warn('Transaction approved but balance verification failed. Balance should still be updated in database.');
-            // Don't retry - transaction is already approved, just refresh user data
             onUpdateUser();
           }
         } else {
-          // Already processed, just stop polling
-          console.log('Transaction already processed, stopping polling');
           setPendingTransaction(null);
           stopPolling();
         }
       } else if (statusData.status === 'rejected' || statusData.status === 'failed') {
-        // Call status change callback if provided
         if (onStatusChange) {
           onStatusChange(statusData.status);
         }
-        
-        // Transaction was rejected/failed
-        console.log('Transaction rejected/failed, stopping polling');
         setPendingTransaction(null);
         stopPolling();
         toast.error('Payment was not successful. Please try again.');
       } else {
-        // Still pending, continue polling
+        // Still pending - adjust interval based on time elapsed
+        const elapsed = Date.now() - startTimeRef.current;
+        let nextInterval = initialInterval;
+        
+        if (elapsed > 120000) { // > 2 minutes
+          nextInterval = longInterval;
+        } else if (elapsed > 30000) { // > 30 seconds
+          nextInterval = baseInterval;
+        }
+
+        if (nextInterval !== currentIntervalRef.current) {
+          console.log(`Adjusting polling interval to ${nextInterval}ms`);
+          currentIntervalRef.current = nextInterval;
+          resetInterval(nextInterval);
+        }
+        
         console.log(`Transaction still pending (attempt ${attemptsRef.current}/${maxAttempts})`);
       }
     } catch (error) {
       console.error('Error polling transaction:', error);
-      
-      // If we've had too many consecutive errors, stop polling and mark as rejected
       if (attemptsRef.current > 10 && attemptsRef.current % 5 === 0) {
-        console.warn('Multiple polling errors, stopping and marking transaction as rejected...');
         await markTransactionAsRejected(transactionId, 'Multiple polling errors');
         stopPolling();
       }
@@ -290,6 +284,17 @@ export function useDepositPolling(
     console.log('Stopped deposit polling');
   }, []);
 
+  const resetInterval = useCallback((newInterval) => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+    if (isPollingRef.current && isTabVisibleRef.current) {
+      intervalRef.current = setInterval(() => {
+        pollTransaction();
+      }, newInterval);
+    }
+  }, [pollTransaction]);
+
   /**
    * Start polling
    */
@@ -298,14 +303,11 @@ export function useDepositPolling(
       return;
     }
 
-    // Don't start if transaction was already processed
     if (processedTransactionIdsRef.current.has(pendingTransaction.id)) {
       return;
     }
 
-    // If already polling a different transaction, stop and switch to new one
     if (isPollingRef.current) {
-      console.log('Switching to new transaction, stopping previous polling');
       stopPolling();
     }
 
@@ -315,31 +317,51 @@ export function useDepositPolling(
     setIsPollingState(true);
     attemptsRef.current = 0;
     startTimeRef.current = Date.now();
+    currentIntervalRef.current = initialInterval;
 
-    // Poll immediately on start
     pollTransaction();
 
-    // Set up interval for subsequent polls
-    intervalRef.current = setInterval(() => {
-      pollTransaction();
-    }, interval);
-  }, [pendingTransaction, pollTransaction, interval, stopPolling]);
+    if (isTabVisibleRef.current) {
+      intervalRef.current = setInterval(() => {
+        pollTransaction();
+      }, initialInterval);
+    }
+  }, [pendingTransaction, pollTransaction, initialInterval, stopPolling]);
 
   /**
    * Effect to start/stop polling based on pending transaction
    */
   useEffect(() => {
+    const handleVisibilityChange = () => {
+      const isVisible = document.visibilityState === 'visible';
+      isTabVisibleRef.current = isVisible;
+      
+      if (isVisible && isPollingRef.current && !intervalRef.current) {
+        console.log('Tab visible, resuming polling');
+        pollTransaction();
+        intervalRef.current = setInterval(() => {
+          pollTransaction();
+        }, currentIntervalRef.current);
+      } else if (!isVisible && intervalRef.current) {
+        console.log('Tab hidden, pausing polling');
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     if (pendingTransaction && pendingTransaction.id) {
       startPolling();
     } else {
       stopPolling();
     }
 
-    // Cleanup on unmount
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       stopPolling();
     };
-  }, [pendingTransaction?.id, startPolling, stopPolling]);
+  }, [pendingTransaction?.id, startPolling, stopPolling, pollTransaction]);
 
   return {
     isPolling: isPollingState,

@@ -41,10 +41,11 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // OPTIMIZATION: Add Cache-Control to prevent excessive client polling
-  // Standard polling interval should be 5-10s. Telling clients (and proxies/CDNs) to cache for 3s
-  // helps absorb bursts without hurting UX significantly.
-  res.setHeader('Cache-Control', 'private, max-age=3, stale-while-revalidate=5');
+  // OPTIMIZATION: Enable Edge Caching
+  // private: Cache for specific user only
+  // s-maxage=5: Vercel's Edge (CDN) caches for 5 seconds
+  // stale-while-revalidate=10: Serve stale content while revalidating in background
+  res.setHeader('Cache-Control', 'private, s-maxage=5, stale-while-revalidate=10');
 
   try {
     // Authenticate user - Optimized auth.js now uses local verification (0 DB calls)
