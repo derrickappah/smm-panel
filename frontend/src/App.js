@@ -75,6 +75,8 @@ const RouteTracker = () => {
       path !== "/auth" &&
       path !== "/reset-password" &&
       path !== "/payment/callback" &&
+      path !== "/payment/success" &&
+      path !== "/payment/cancelled" &&
       path !== "/"
     ) {
       localStorage.setItem("lastVisitedRoute", location.pathname + location.search);
