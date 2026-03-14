@@ -65,30 +65,9 @@ const PageLoader = () => (
   </div>
 );
 
-const RouteTracker = () => {
-  const location = useLocation();
-
-  useEffect(() => {
-    // Save current path to localStorage, ignoring auth and callback routes
-    const path = location.pathname;
-    if (
-      path !== "/auth" &&
-      path !== "/reset-password" &&
-      path !== "/payment/callback" &&
-      path !== "/payment/success" &&
-      path !== "/payment/cancelled" &&
-      path !== "/"
-    ) {
-      localStorage.setItem("lastVisitedRoute", location.pathname + location.search);
-    }
-  }, [location]);
-
-  return null;
-};
 
 const InitialRedirect = () => {
-  const lastRoute = localStorage.getItem("lastVisitedRoute");
-  return <Navigate to={lastRoute || "/dashboard"} replace />;
+  return <Navigate to="/dashboard" replace />;
 };
 
 const ConditionalWhatsAppButton = () => {
@@ -190,7 +169,7 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <BrowserRouter>
-            <RouteTracker />
+
             <div className="min-h-screen bg-background">
               {!isConfigured && <SupabaseSetup />}
               <Suspense fallback={<PageLoader />}>
