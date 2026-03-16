@@ -96,51 +96,42 @@ export default async function handler(req, res) {
             console.warn(`Token mismatch for ${clientReference}. Expected: ${expectedToken}, Received: ${receivedToken}`);
         }
 
-        // 4. Call Hubtel Checkout Status API (Proxy Gateway)
-        // We try both path parameter and query parameter variations to be safe.
-        const checkoutId = transaction.checkout_id;
+        // 4. Call Mandatory Hubtel Status API (Public RMSC Endpoint)
+        // This endpoint does not require a static IP.
+        // POS Sales ID is the Hubtel POS ID from environment.
         let hubtelData = null;
         let isSuccessful = tokenVerified; // Start with token status
 
-        if (checkoutId) {
-            let response;
-            let hubtelUrl = `https://payproxyapi.hubtel.com/items/checkstatus/${checkoutId}`;
+        const hubtelUrl = `https://rmsc.hubtel.com/v1/merchantaccount/merchants/${posId}/transactions/status?clientReference=${clientReference}`;
+        
+        try {
+            console.log('Trying Mandatory Hubtel Status API:', hubtelUrl);
+            const response = await fetch(hubtelUrl, {
+                method: 'GET',
+                headers: { 
+                    'Authorization': authHeader, 
+                    'Content-Type': 'application/json' 
+                }
+            });
 
-            try {
-                console.log('Trying Hubtel Status (Path Param):', hubtelUrl);
-                response = await fetch(hubtelUrl, {
-                    method: 'GET',
-                    headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' }
+            if (response.ok) {
+                hubtelData = await response.json();
+                console.log('Hubtel API Response:', JSON.stringify(hubtelData));
+            } else if (!tokenVerified) {
+                // Only return error if token is NOT verified
+                const errorText = await response.text();
+                console.error('Hubtel status API error:', response.status, errorText);
+                return res.status(200).json({ 
+                    success: false, 
+                    error: 'Hubtel API Error',
+                    message: `Hubtel returned ${response.status}: ${errorText.substring(0, 160) || 'No error message provided'}.`,
+                    details: { status: response.status, bodySnippet: errorText.substring(0, 200), url: hubtelUrl }
                 });
-
-                // Fallback to Query Parameter if Path Parameter returns 404 or 405
-                if (response.status === 404 || response.status === 405) {
-                    hubtelUrl = `https://payproxyapi.hubtel.com/items/checkstatus?checkoutId=${checkoutId}`;
-                    console.log('Trying Fallback Hubtel Status (Query Param):', hubtelUrl);
-                    response = await fetch(hubtelUrl, {
-                        method: 'GET',
-                        headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' }
-                    });
-                }
-
-                if (response.ok) {
-                    hubtelData = await response.json();
-                } else if (!tokenVerified) {
-                    // Only return error if token is NOT verified
-                    const errorText = await response.text();
-                    console.error('Hubtel checkout status API error:', response.status, errorText);
-                    return res.status(200).json({
-                        success: false,
-                        error: 'Hubtel API Error',
-                        message: `Hubtel returned ${response.status}: ${errorText.substring(0, 160) || 'No error message provided'}.`,
-                        details: { status: response.status, bodySnippet: errorText.substring(0, 200), url: hubtelUrl }
-                    });
-                }
-            } catch (apiError) {
-                console.error('Network error during Hubtel status check:', apiError);
-                if (!tokenVerified) {
-                    return res.status(500).json({ error: 'Failed to reach Hubtel API', message: apiError.message });
-                }
+            }
+        } catch (apiError) {
+            console.error('Network error during Hubtel status check:', apiError);
+            if (!tokenVerified) {
+                return res.status(500).json({ error: 'Failed to reach Hubtel API', message: apiError.message });
             }
         }
 
