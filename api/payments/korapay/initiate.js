@@ -55,8 +55,8 @@ export default async function handler(req, res) {
             return res.status(500).json({ error: 'KoraPay is not configured on the server. Please contact support.' });
         }
 
-        // 3. Generate unique reference
-        const reference = `KORA_${crypto.randomUUID().replace(/-/g, '')}`.substring(0, 40);
+        // Generate unique reference — must fit varchar(32): "KORA_" (5) + 27 hex chars = 32
+        const reference = `KORA_${crypto.randomUUID().replace(/-/g, '').substring(0, 27)}`;
 
         // 4. Insert transaction into database as 'pending'
         const supabase = getServiceRoleClient();
