@@ -2021,10 +2021,9 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     }
 
     setLoading(true);
-    let transaction = null; // Declare outside try block so it's accessible in catch
     try {
-      // Use secure server-side deposit initiation
-      const response = await fetch('/api/initiate-secure-deposit', {
+      // Use KoraPay Checkout Redirect initiation
+      const response = await fetch('/api/payments/korapay/initiate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -2032,7 +2031,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         },
         body: JSON.stringify({
           amount: amount,
-          method: 'korapay'
+          description: 'Wallet Deposit'
         })
       });
 
@@ -2044,139 +2043,25 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           if (onLogout) onLogout();
           return;
         }
-        if (response.status === 429) {
-          toast.error(data.error || 'Too many deposit attempts. Please try again later.');
-        } else {
-          toast.error(data.error || 'Failed to initiate deposit');
-        }
+        toast.error(data.error || 'Failed to initiate deposit');
         return;
       }
 
-      transaction = data.transaction; // Use the secure transaction from server
-
-      // Check if Korapay SDK is loaded
-      if (!window.Korapay) {
-        // Wait a bit for script to load, then retry
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        if (!window.Korapay) {
-          // Try loading the script again
-          const korapayScript = document.createElement('script');
-          korapayScript.src = 'https://korablobstorage.blob.core.windows.net/modal-bucket/korapay-collections.min.js';
-          korapayScript.async = true;
-          document.head.appendChild(korapayScript);
-
-          // Wait a bit more for script to load
-          await new Promise(resolve => setTimeout(resolve, 2000));
-
-          if (!window.Korapay) {
-            toast.error('Korapay payment gateway is not available. Please refresh the page and try again.');
-            setLoading(false);
-            return;
-          }
-        }
-      }
-
-      // Generate unique reference for this transaction
-      const korapayReference = `KORA_${transaction.id}_${Date.now()}`;
-
-      // Initialize Korapay payment via serverless function to bypass CORS
-      try {
-        const initResponse = await fetch('/api/korapay-init', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            amount: amount,
-            currency: 'GHS',
-            reference: korapayReference,
-            customer: {
-              name: user?.name || authUser.user_metadata?.name || 'Customer',
-              email: user?.email || authUser.email || ''
-            },
-            notification_url: `${window.location.origin}/api/payment-callback/korapay`,
-            callback_url: `${window.location.origin}/payment/callback?method=korapay`
-          })
-        });
-
-        if (!initResponse.ok) {
-          if (initResponse.status === 401) {
-            toast.error('Session expired. Please log in again.');
-            if (onLogout) onLogout();
-            return;
-          }
-          const errorData = await initResponse.json().catch(() => ({ error: 'Unknown error' }));
-          throw new Error(errorData.error || 'Failed to initialize Korapay payment');
-        }
-
-        const initData = await initResponse.json();
-
-        if (!initData.success || !initData.authorization_url) {
-          throw new Error(initData.error || 'Failed to get payment authorization URL');
-        }
-
-        // Update transaction with Korapay reference
-        await supabase
-          .from('transactions')
-          .update({
-            korapay_reference: korapayReference,
-            korapay_status: 'pending'
-          })
-          .eq('id', transaction.id);
-
-        // Redirect user to Korapay payment page
-        window.location.href = initData.authorization_url;
-
-        // Note: User will be redirected back via callback_url after payment
-        // The callback handler should verify the payment and update the transaction
-
-      } catch (initError) {
-        console.error('Error initializing Korapay payment:', initError);
-        toast.error(initError.message || 'Failed to initialize payment. Please try again or use another payment method.');
-        setLoading(false);
-
-        // Update transaction to rejected
-        supabase
-          .from('transactions')
-          .update({
-            status: 'rejected',
-            korapay_reference: korapayReference,
-            korapay_status: 'failed',
-            korapay_error: initError.message || 'Initialization failed'
-          })
-          .eq('id', transaction.id)
-          .then(() => {
-            // Update successful
-          })
-          .catch((updateError) => {
-            console.error('Error updating transaction:', updateError);
-          });
+      if (data.success && data.checkoutUrl) {
+        console.log('KoraPay payment initiated, redirecting to:', data.checkoutUrl);
+        // Redirect to KoraPay hosted checkout page
+        window.location.href = data.checkoutUrl;
+      } else {
+        throw new Error(data.error || 'Invalid response from payment initiation');
       }
 
     } catch (error) {
-      console.error('Korapay deposit error:', error);
-      toast.error(error.message || 'Failed to initialize Korapay payment. Please try again.');
+      console.error('Error initiating KoraPay deposit:', error);
+      toast.error(error.message || 'Failed to initiate deposit. Please try again.');
+    } finally {
       setLoading(false);
-
-      // Update transaction to rejected if it was created
-      if (transaction?.id) {
-        supabase
-          .from('transactions')
-          .update({
-            status: 'rejected',
-            korapay_status: 'failed',
-            korapay_error: error.message || 'Initialization failed'
-          })
-          .eq('id', transaction.id)
-          .then(() => {
-            // Update successful
-          })
-          .catch((updateError) => {
-            console.error('Error updating transaction:', updateError);
-          });
-      }
     }
-  }, [depositAmount, minDepositSettings.korapay_min, onUpdateUser]);
+  }, [depositAmount, minDepositSettings.korapay_min, onLogout]);
 
   // Helper function to check if a phone number + channel is already verified
   const checkMoolreVerification = useCallback(async (phoneNumber, channel) => {

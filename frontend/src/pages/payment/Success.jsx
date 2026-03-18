@@ -12,7 +12,8 @@ const SuccessPage = ({ onUpdateUser }) => {
     const [statusMessage, setStatusMessage] = useState('Verifying your payment...');
     const [isAwaitingBalance, setIsAwaitingBalance] = useState(false);
 
-    // Hubtel uses clientReference, others might use reference
+    // KoraPay uses `reference`; Hubtel uses `clientReference`
+    const provider = searchParams.get('provider'); // 'korapay' or undefined (Hubtel)
     const clientReference = searchParams.get('clientReference') || searchParams.get('reference');
     const tokenFromUrl = searchParams.get('token');
     const hasVerified = React.useRef(false);
@@ -24,13 +25,52 @@ const SuccessPage = ({ onUpdateUser }) => {
         }
 
         setVerifying(true);
-        setStatusMessage('Checking transaction status with Hubtel...');
 
         try {
             const { data: authData } = await supabase.auth.getSession();
             const token = authData?.session?.access_token;
 
-            if (token) {
+            if (!token) {
+                console.warn('No auth token available for payment verification');
+                setStatusMessage('Auth token missing. Please refresh.');
+                setVerifying(false);
+                return;
+            }
+
+            if (provider === 'korapay') {
+                // ── KoraPay Checkout Redirect verify ─────────────────────────────
+                setStatusMessage('Checking transaction status with KoraPay...');
+                const response = await fetch('/api/payments/korapay/verify', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ reference: clientReference })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    if (data.status === 'approved') {
+                        setStatusMessage('Payment verified! Updating your balance...');
+                        if (onUpdateUser) await onUpdateUser();
+                        setIsAwaitingBalance(false);
+                        toast.success('Payment verified and balance updated!');
+                    } else if (data.korapayStatus === 'failed') {
+                        setStatusMessage('Payment failed or was declined.');
+                        setIsAwaitingBalance(false);
+                    } else {
+                        setStatusMessage(`Transaction is still ${data.status}. This can take a few minutes.`);
+                        setIsAwaitingBalance(true);
+                    }
+                } else {
+                    setStatusMessage(data.message || data.error || 'Status check completed.');
+                    setIsAwaitingBalance(false);
+                }
+            } else {
+                // ── Hubtel status-check (default) ─────────────────────────────────
+                setStatusMessage('Checking transaction status with Hubtel...');
                 const response = await fetch('/api/payments/hubtel/status-check', {
                     method: 'POST',
                     headers: {
@@ -62,9 +102,6 @@ const SuccessPage = ({ onUpdateUser }) => {
                         setIsAwaitingBalance(false);
                     }
                 }
-            } else {
-                console.warn('No auth token available for payment verification');
-                setStatusMessage('Auth token missing. Please refresh.');
             }
 
             setVerifying(false);
