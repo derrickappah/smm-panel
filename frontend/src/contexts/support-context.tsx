@@ -532,7 +532,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
         // Update local messages
         setMessages((prev) =>
           prev.map((msg) =>
-            msg.conversation_id === ticketIdOrConversationId && !msg.read_at
+            msg.conversation_id === ticketIdOrConversationId && !msg.read_at && msg.sender_id !== userRole?.userId
               ? { ...msg, read_at: new Date().toISOString() }
               : msg
           )
@@ -1466,95 +1466,109 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: '*', // Listen to INSERT and UPDATE
           schema: 'public',
           table: 'messages',
         },
         async (payload) => {
-          const newMessage = payload.new as Message;
-          console.log('New message received:', newMessage.id, 'ticket:', newMessage.ticket_id, 'conversation:', newMessage.conversation_id);
-
           // Use refs to get current ticket/conversation (avoids stale closure)
           const currentTicket = currentTicketRef.current;
           const currentConv = currentConversationRef.current;
 
-          // Check if message already exists OR if it's from current user (already added by sendMessage)
-          setMessages((prev) => {
-            if (prev.some(m => m.id === newMessage.id)) {
-              return prev; // Already exists
-            }
+          if (payload.eventType === 'INSERT') {
+            const newMessage = payload.new as Message;
+            console.log('New message received:', newMessage.id, 'ticket:', newMessage.ticket_id, 'conversation:', newMessage.conversation_id);
 
-            // Skip adding if it's from current user (sendMessage already added it)
-            if (newMessage.sender_id === userRole.userId) {
+            // Check if message already exists OR if it's from current user (already added by sendMessage)
+            setMessages((prev) => {
+              if (prev.some(m => m.id === newMessage.id)) {
+                return prev; // Already exists
+              }
+
+              // Skip adding if it's from current user (sendMessage already added it)
+              if (newMessage.sender_id === userRole.userId) {
+                return prev;
+              }
+
+              // If it's for the current ticket, add it
+              if (currentTicket && newMessage.ticket_id === currentTicket.id) {
+                return [...prev, newMessage];
+              }
+
+              // If it's for the current conversation, add it
+              if (currentConv && newMessage.conversation_id === currentConv.id) {
+                return [...prev, newMessage];
+              }
               return prev;
-            }
-
-            // If it's for the current ticket, add it
-            if (currentTicket && newMessage.ticket_id === currentTicket.id) {
-              return [...prev, newMessage];
-            }
-
-            // If it's for the current conversation, add it
-            if (currentConv && newMessage.conversation_id === currentConv.id) {
-              return [...prev, newMessage];
-            }
-            return prev;
-          });
-
-          // Update ticket's last_message_at in the list
-          if (newMessage.ticket_id) {
-            setTickets((prev) =>
-              prev.map((t) =>
-                t.id === newMessage.ticket_id
-                  ? {
-                    ...t,
-                    last_message_at: newMessage.created_at,
-                  }
-                  : t
-              )
-            );
-
-            // If it's for the current ticket, handle it
-            if (currentTicket && newMessage.ticket_id === currentTicket.id) {
-              // Auto-mark as read if we're viewing the ticket
-              if (isAtBottomRef.current && newMessage.sender_id !== userRole.userId) {
-                markMessagesAsRead(currentTicket.id, true).catch(console.error);
-              }
-            }
-          }
-
-          // Update conversation's last_message_at in the list
-          if (newMessage.conversation_id) {
-            setConversations((prev) =>
-              prev.map((conv) =>
-                conv.id === newMessage.conversation_id
-                  ? {
-                    ...conv,
-                    last_message_at: newMessage.created_at,
-                    // Increment unread count if message is not from current user
-                    unread_count: newMessage.sender_id !== userRole.userId
-                      ? (conv.unread_count || 0) + 1
-                      : conv.unread_count
-                  }
-                  : conv
-              )
-            );
-
-            // If it's for the current conversation, handle it
-            if (currentConv && newMessage.conversation_id === currentConv.id) {
-              // Auto-mark as read if we're viewing the conversation
-              if (isAtBottomRef.current && newMessage.sender_id !== userRole.userId) {
-                markMessagesAsRead(currentConv.id, false).catch(console.error);
-              }
-            }
-          }
-
-          // Show browser notification if tab is hidden and message is not from current user
-          if (newMessage.sender_id !== userRole.userId && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-            new Notification('New support message', {
-              body: newMessage.content.substring(0, 100),
-              icon: '/favicon.svg',
             });
+
+            // Update ticket's last_message_at in the list
+            if (newMessage.ticket_id) {
+              setTickets((prev) =>
+                prev.map((t) =>
+                  t.id === newMessage.ticket_id
+                    ? {
+                      ...t,
+                      last_message_at: newMessage.created_at,
+                    }
+                    : t
+                )
+              );
+
+              // If it's for the current ticket, handle it
+              if (currentTicket && newMessage.ticket_id === currentTicket.id) {
+                // Auto-mark as read if we're viewing the ticket
+                if (isAtBottomRef.current && newMessage.sender_id !== userRole.userId) {
+                  markMessagesAsRead(currentTicket.id, true).catch(console.error);
+                }
+              }
+            }
+
+            // Update conversation's last_message_at in the list
+            if (newMessage.conversation_id) {
+              setConversations((prev) =>
+                prev.map((conv) =>
+                  conv.id === newMessage.conversation_id
+                    ? {
+                      ...conv,
+                      last_message_at: newMessage.created_at,
+                      // Increment unread count if message is not from current user
+                      unread_count: newMessage.sender_id !== userRole.userId
+                        ? (conv.unread_count || 0) + 1
+                        : conv.unread_count
+                    }
+                    : conv
+                )
+              );
+
+              // If it's for the current conversation, handle it
+              if (currentConv && newMessage.conversation_id === currentConv.id) {
+                // Auto-mark as read if we're viewing the conversation
+                if (isAtBottomRef.current && newMessage.sender_id !== userRole.userId) {
+                  markMessagesAsRead(currentConv.id, false).catch(console.error);
+                }
+              }
+            }
+
+            // Show browser notification if tab is hidden and message is not from current user
+            if (newMessage.sender_id !== userRole.userId && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+              new Notification('New support message', {
+                body: newMessage.content.substring(0, 100),
+                icon: '/favicon.svg',
+              });
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedMessage = payload.new as Message;
+            console.log('Message updated:', updatedMessage.id, 'read_at:', updatedMessage.read_at);
+
+            // Update message in local state (specifically for read receipts)
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === updatedMessage.id
+                  ? { ...msg, read_at: updatedMessage.read_at }
+                  : msg
+              )
+            );
           }
 
           // Update unread count for admins
