@@ -1,6 +1,6 @@
 // Service Worker for offline support and caching
-const CACHE_NAME = 'boostup-gh-v2';
-const RUNTIME_CACHE = 'boostup-gh-runtime-v2';
+const CACHE_NAME = 'boostup-gh-v3';
+const RUNTIME_CACHE = 'boostup-gh-runtime-v3';
 
 // Assets to cache on install
 const PRECACHE_ASSETS = [

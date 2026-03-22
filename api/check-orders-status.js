@@ -22,6 +22,12 @@ export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    
+    // Add Private Caching (Browser-only) - Cache for 60s
+    // Using 'private' prevents CDN caching and ensures data isn't leaked between users.
+    // 'Vary: Authorization' ensures the browser differentiates the cache by the auth token.
+    res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
+    res.setHeader('Vary', 'Authorization');
 
     if (req.method === 'OPTIONS') return res.status(200).end();
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
