@@ -11,7 +11,11 @@ import { ConnectionStatus } from './ConnectionStatus';
 import { toast } from 'sonner';
 import type { AttachmentType } from '@/types/support';
 
-export const SupportChat: React.FC = () => {
+interface SupportChatProps {
+  hideHeader?: boolean;
+}
+
+export const SupportChat: React.FC<SupportChatProps> = ({ hideHeader = false }) => {
   const {
     currentTicket,
     currentConversation,
@@ -168,38 +172,39 @@ export const SupportChat: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-full min-h-0 bg-[#e5ddd5] relative">
-      {/* WhatsApp Header */}
-      <div className="flex-shrink-0 bg-[#075e54] text-white p-2 sm:p-3 flex items-center gap-2 sm:gap-3 shadow-md z-30 sticky top-0">
-        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white/20 flex items-center justify-center overflow-hidden border border-white/10">
-          <img
-            src="/avatar_user_2_1771801048478.png"
-            alt="Support Avatar"
-            className="w-full h-full object-cover"
-          />
-        </div>
-        <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-sm sm:text-base truncate">BoostUp Support Team</h3>
-          <div className="flex items-center gap-1.5 text-xs text-green-200">
-            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
-            <span>Online</span>
+    <div className="flex flex-col h-full min-h-0 bg-slate-50 relative">
+      {/* WhatsApp Header - Only show if not hidden */}
+      {!hideHeader && (
+        <div className="flex-shrink-0 bg-indigo-700 text-white p-2 sm:p-3 flex items-center gap-2 sm:gap-3 shadow-md z-30 sticky top-0">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white/20 flex items-center justify-center overflow-hidden border border-white/10">
+            <img
+              src="/avatar_user_2_1771801048478.png"
+              alt="Support Avatar"
+              className="w-full h-full object-cover"
+            />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-sm sm:text-base truncate">BoostUp Support Team</h3>
+            <div className="flex items-center gap-1.5 text-xs text-indigo-100">
+              <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+              <span>Online</span>
+            </div>
+          </div>
+          <div className="flex-center gap-2">
+            <MessageSearch />
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <MessageSearch />
-        </div>
-      </div>
+      )}
 
-      {/* Messages area with WhatsApp background pattern (simulated with color) */}
+      {/* Messages area */}
       <div
         ref={messagesContainerRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto p-4 space-y-2 min-h-0 overscroll-contain bg-[#e5ddd5]"
+        className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-4 scroll-smooth"
         style={{
           scrollbarWidth: 'thin',
-          backgroundImage: 'url("https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png")',
-          backgroundRepeat: 'repeat',
-          opacity: 0.9
+          backgroundImage: 'radial-gradient(#e2e8f0 0.5px, transparent 0.5px)',
+          backgroundSize: '20px 20px',
         }}
       >
         {hasMoreMessages && (

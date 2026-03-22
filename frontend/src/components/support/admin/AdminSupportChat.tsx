@@ -67,7 +67,7 @@ export const AdminSupportChat: React.FC<AdminSupportChatProps> = ({ onBackToList
         </TabsList>
 
         <TabsContent value="chat" className="flex-1 flex flex-col mt-0 min-h-0 overflow-hidden">
-          <SupportChat />
+          <SupportChat hideHeader={true} />
         </TabsContent>
 
         {currentConversation && (

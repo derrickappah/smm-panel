@@ -521,6 +521,13 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
               : msg
           )
         );
+
+        // Update unread count for the ticket in the list
+        setTickets((prev) =>
+          prev.map((t) =>
+            t.id === ticketIdOrConversationId ? { ...t, unread_count: 0 } : t
+          )
+        );
       } else {
         // Use the SECURITY DEFINER function for conversations
         const { error } = await supabase.rpc('mark_conversation_messages_read', {
@@ -535,6 +542,13 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
             msg.conversation_id === ticketIdOrConversationId && !msg.read_at && msg.sender_id !== userRole?.userId
               ? { ...msg, read_at: new Date().toISOString() }
               : msg
+          )
+        );
+
+        // Update unread count for the conversation in the list
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === ticketIdOrConversationId ? { ...c, unread_count: 0 } : c
           )
         );
       }
@@ -1569,6 +1583,28 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
                   : msg
               )
             );
+
+            // If a message was marked as read by someone else, update the unread count in the list
+            if (updatedMessage.read_at) {
+              if (updatedMessage.conversation_id) {
+                setConversations((prev) =>
+                  prev.map((c) =>
+                    c.id === updatedMessage.conversation_id
+                      ? { ...c, unread_count: Math.max(0, (c.unread_count || 0) - 1) }
+                      : c
+                  )
+                );
+              }
+              if (updatedMessage.ticket_id) {
+                setTickets((prev) =>
+                  prev.map((t) =>
+                    t.id === updatedMessage.ticket_id
+                      ? { ...t, unread_count: Math.max(0, (t.unread_count || 0) - 1) }
+                      : t
+                  )
+                );
+              }
+            }
           }
 
           // Update unread count for admins

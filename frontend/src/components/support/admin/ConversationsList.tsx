@@ -69,52 +69,77 @@ export const ConversationsList: React.FC<ConversationsListProps> = ({
         </div>
       ) : (
         <div className="space-y-2 p-2 md:p-2">
-          {filteredConversations.map((conversation) => (
-            <Card
-              key={conversation.id}
-              className={`cursor-pointer transition-colors touch-manipulation ${
-                currentConversationId === conversation.id
-                  ? 'bg-indigo-50 border-indigo-200'
-                  : 'hover:bg-gray-50 active:bg-gray-100'
-              }`}
-              onClick={() => onSelectConversation(conversation.id)}
-            >
-              <CardContent className="p-4 md:p-4">
-                <div className="space-y-2">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">
-                        {conversation.subject || 'No subject'}
-                      </p>
-                      {conversation.user && (
-                        <p className="text-sm text-gray-600 truncate">
-                          {conversation.user.name || conversation.user.email}
-                        </p>
+          {filteredConversations.map((conversation) => {
+            const userName = conversation.user?.name || conversation.user?.email || 'Unknown User';
+            const subject = conversation.subject || 'No subject';
+            const showSubject = subject !== userName;
+            const initials = userName
+              .split(' ')
+              .map((n) => n[0])
+              .join('')
+              .toUpperCase()
+              .substring(0, 2);
+
+            return (
+              <Card
+                key={conversation.id}
+                className={`cursor-pointer transition-all duration-200 border-l-4 touch-manipulation hover:shadow-md ${
+                  currentConversationId === conversation.id
+                    ? 'bg-indigo-50 border-indigo-500 shadow-sm'
+                    : 'hover:bg-gray-50 active:bg-gray-100 border-transparent'
+                }`}
+                onClick={() => onSelectConversation(conversation.id)}
+              >
+                <CardContent className="p-3 md:p-4">
+                  <div className="flex gap-3">
+                    {/* User Avatar/Initials */}
+                    <div className="flex-shrink-0">
+                      <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-semibold text-sm border border-indigo-200">
+                        {initials}
+                      </div>
+                    </div>
+
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-gray-900 truncate">
+                            {userName}
+                          </p>
+                          {showSubject && (
+                            <p className="text-sm text-gray-500 truncate leading-tight">
+                              {subject}
+                            </p>
+                          )}
+                        </div>
+                        {conversation.unread_count && conversation.unread_count > 0 && (
+                          <Badge className="bg-red-500 text-white hover:bg-red-600 rounded-full h-5 min-w-[20px] flex items-center justify-center px-1 text-[10px]">
+                            {conversation.unread_count}
+                          </Badge>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-wrap pt-1">
+                        <StatusBadge status={conversation.status} />
+                        <Badge variant="outline" className={`text-[10px] h-5 px-1.5 font-normal capitalize ${
+                          conversation.priority === 'urgent' ? 'text-red-600 border-red-200 bg-red-50' :
+                          conversation.priority === 'high' ? 'text-orange-600 border-orange-200 bg-orange-50' :
+                          'text-gray-600 border-gray-200 bg-white'
+                        }`}>
+                          {conversation.priority}
+                        </Badge>
+                      </div>
+
+                      {conversation.last_message_at && (
+                        <div className="flex items-center text-[11px] text-gray-400 pt-1">
+                          <span>{formatDistanceToNow(new Date(conversation.last_message_at), { addSuffix: true })}</span>
+                        </div>
                       )}
                     </div>
-                    {conversation.unread_count && conversation.unread_count > 0 && (
-                      <Badge className="bg-red-500 text-white">
-                        {conversation.unread_count}
-                      </Badge>
-                    )}
                   </div>
-
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <StatusBadge status={conversation.status} />
-                    <Badge variant="outline" className="text-xs">
-                      {conversation.priority}
-                    </Badge>
-                  </div>
-
-                  {conversation.last_message_at && (
-                    <p className="text-xs text-gray-500">
-                      {formatDistanceToNow(new Date(conversation.last_message_at), { addSuffix: true })}
-                    </p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
           
           {/* Load More Button */}
           {hasMoreConversations && (

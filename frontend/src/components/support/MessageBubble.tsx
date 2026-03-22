@@ -141,40 +141,38 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
       setImageUrl(null);
       setImageLoading(false);
     }
-  }, [message.attachment_url, message.attachment_type]);
-
-  return (
+  }, [message.attachment_url, message.attachment_type]);  return (
     <div
-      className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'} mb-2 px-2`}
+      className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'} mb-3 px-2 group`}
     >
       <div
-        className={`max-w-[85%] sm:max-w-[70%] rounded-lg px-3 py-1.5 shadow-sm relative ${isOwnMessage
-            ? 'bg-[#dcf8c6] text-gray-800 rounded-tr-none'
-            : 'bg-white text-gray-800 rounded-tl-none'
+        className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-2 shadow-sm relative transition-all ${isOwnMessage
+            ? 'bg-indigo-600 text-white rounded-tr-none'
+            : 'bg-white text-gray-800 rounded-tl-none border border-gray-100 shadow-sm'
           }`}
       >
         {/* Attachment - Show first if it exists */}
         {message.attachment_url && (
-          <div className={`${isAttachmentOnly ? '' : 'mb-1'}`}>
+          <div className={`${isAttachmentOnly ? '' : 'mb-2'}`}>
             {message.attachment_type === 'image' ? (
-              <div className="relative group overflow-hidden rounded">
+              <div className="relative overflow-hidden rounded-xl bg-black/5">
                 {imageLoading ? (
-                  <div className="flex items-center justify-center p-8 bg-gray-100/50">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#075e54]"></div>
+                  <div className="flex items-center justify-center p-8">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-current opacity-50"></div>
                   </div>
                 ) : imageError || !imageUrl ? (
                   <div
-                    className="flex items-center gap-2 p-2 rounded bg-black/5 hover:bg-black/10 transition-colors cursor-pointer"
+                    className="flex items-center gap-2 p-3 rounded-xl bg-black/5 hover:bg-black/10 transition-colors cursor-pointer"
                     onClick={() => handleImageClick(message.attachment_url!)}
                   >
-                    <Image className="w-4 h-4 text-gray-600" />
-                    <span className="text-xs text-gray-700 truncate max-w-[150px]">Image</span>
+                    <Image className="w-5 h-5 text-gray-500" />
+                    <span className="text-sm font-medium truncate">View Image</span>
                   </div>
                 ) : (
                   <img
                     src={imageUrl}
                     alt="Attachment"
-                    className="max-w-full max-h-72 h-auto rounded cursor-pointer transition-opacity hover:opacity-90"
+                    className="max-w-full max-h-80 h-auto rounded-xl cursor-pointer transition-transform hover:scale-[1.02]"
                     onClick={() => handleImageClick(imageUrl)}
                     onError={() => setImageError(true)}
                   />
@@ -182,23 +180,25 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
               </div>
             ) : (
               <div
-                className={`flex items-center gap-2 p-2 rounded bg-black/5 hover:bg-black/10 transition-colors cursor-pointer group`}
+                className={`flex items-center gap-3 p-3 rounded-xl transition-all cursor-pointer ${
+                  isOwnMessage ? 'bg-white/10 hover:bg-white/20' : 'bg-gray-50 hover:bg-gray-100'
+                }`}
                 onClick={() => handleFileDownload(message.attachment_url!, getFilenameFromUrl(message.attachment_url!))}
               >
-                <div className="p-1.5 rounded bg-white shadow-sm">
+                <div className={`p-2 rounded-lg ${isOwnMessage ? 'bg-white/20' : 'bg-white shadow-sm'}`}>
                   {React.createElement(getFileInfo(message.attachment_url!).icon, {
-                    className: "w-4 h-4 text-gray-600",
+                    className: `w-5 h-5 ${isOwnMessage ? 'text-white' : 'text-indigo-600'}`,
                   })}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs font-medium truncate">
+                  <div className={`text-sm font-semibold truncate ${isOwnMessage ? 'text-white' : 'text-gray-900'}`}>
                     {getFilenameFromUrl(message.attachment_url!)}
                   </div>
-                  <div className="text-[10px] text-gray-500 uppercase">
+                  <div className={`text-[10px] uppercase font-bold tracking-wider ${isOwnMessage ? 'text-indigo-100' : 'text-gray-500'}`}>
                     {getFileInfo(message.attachment_url!).typeLabel}
                   </div>
                 </div>
-                <Download className="w-4 h-4 text-gray-400 group-hover:text-gray-600" />
+                <Download className={`w-5 h-5 ${isOwnMessage ? 'text-white/70' : 'text-gray-400'}`} />
               </div>
             )}
           </div>
@@ -206,28 +206,30 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
 
         {/* Message content */}
         {!isAttachmentOnly && (
-          <div className="text-[14px] leading-relaxed whitespace-pre-wrap break-words">{message.content}</div>
+          <div className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">{message.content}</div>
         )}
 
-        {/* Timestamp and read receipt footer */}
+        {/* Footer: Timestamp and read receipt */}
         <div
-          className="flex items-center justify-end gap-1 mt-0.5 ml-2 float-right"
+          className={`flex items-center justify-end gap-1.5 mt-1.5 opacity-80 ${
+            isOwnMessage ? 'text-indigo-100' : 'text-gray-400'
+          }`}
         >
-          <span className="text-[10px] text-gray-500">{formatTime(message.created_at)}</span>
+          <span className="text-[10px] font-medium">{formatTime(message.created_at)}</span>
           {isOwnMessage && (
             <span className="flex-shrink-0">
               {message.read_at ? (
-                <CheckCheck className="w-3.5 h-3.5 text-blue-500" title="Read" />
+                <CheckCheck className="w-4 h-4 text-white" title="Read" />
               ) : (
-                <Check className="w-3.5 h-3.5 text-gray-400" title="Sent" />
+                <Check className="w-4 h-4 text-indigo-300" title="Sent" />
               )}
             </span>
           )}
         </div>
 
-        {/* Actions for own messages */}
+        {/* Message Actions - Subtle on hover */}
         {canEdit && (
-          <div className="clear-both pt-1">
+          <div className="absolute -right-12 top-0 opacity-0 group-hover:opacity-100 transition-opacity">
             <MessageActions
               messageId={message.id}
               content={message.content}
@@ -239,5 +241,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
       </div>
     </div>
   );
+};
+;
 };
 
