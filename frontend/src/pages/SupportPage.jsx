@@ -18,9 +18,15 @@ const SupportPageContent = ({ user, onLogout }) => {
     selectConversation
   } = useSupport();
 
+  // Ref to prevent infinite loops from dependency updates
+  const initialized = React.useRef(false);
+
   // Automatically get or create conversation on mount
   React.useEffect(() => {
+    if (initialized.current) return;
+    
     const initChat = async () => {
+      initialized.current = true;
       const conv = await getOrCreateConversation();
       if (conv) {
         selectConversation(conv.id);
@@ -47,19 +53,7 @@ const SupportPageContent = ({ user, onLogout }) => {
       <main className="flex-1 w-full min-h-0 overflow-hidden">
         <Card className="h-full shadow-none border-none overflow-hidden rounded-none bg-transparent">
           <CardContent className="p-0 h-full">
-            {(isLoadingConversations || !currentConversation) ? (
-              <div className="flex flex-col items-center justify-center h-full gap-4 bg-[#e5ddd5]">
-                <div className="flex flex-col items-center gap-4 bg-white/80 p-8 rounded-2xl shadow-sm max-w-sm text-center">
-                  <div className="w-12 h-12 border-4 border-gray-100 border-t-[#075e54] rounded-full animate-spin"></div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900 mb-1">Connecting to support...</h3>
-                    <p className="text-sm text-gray-500">Please wait while we set up your secure chat session.</p>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <SupportChat />
-            )}
+            <SupportChat />
           </CardContent>
         </Card>
       </main>

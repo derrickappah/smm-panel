@@ -157,19 +157,7 @@ export const SupportChat: React.FC<SupportChatProps> = ({ hideHeader = false }) 
     return null;
   };
 
-  if (!currentTicket && !currentConversation) {
-    return (
-      <div className="flex items-center justify-center h-full text-gray-500 bg-[#e5ddd5]">
-        <div className="flex flex-col items-center gap-4 bg-white/80 p-8 rounded-2xl shadow-sm max-w-sm text-center">
-          <div className="w-12 h-12 border-4 border-gray-100 border-t-[#075e54] rounded-full animate-spin"></div>
-          <div>
-            <h3 className="font-semibold text-gray-900 mb-1">Connecting to support...</h3>
-            <p className="text-sm text-gray-500">Please wait while we set up your secure chat session.</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+
 
   return (
     <div className="flex flex-col h-full min-h-0 bg-slate-50 relative">
