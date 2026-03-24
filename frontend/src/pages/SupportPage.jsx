@@ -18,22 +18,17 @@ const SupportPageContent = ({ user, onLogout }) => {
     selectConversation
   } = useSupport();
 
-  // Ref to prevent infinite loops from dependency updates
-  const initialized = React.useRef(false);
-
   // Automatically get or create conversation on mount
   React.useEffect(() => {
-    if (initialized.current) return;
-    
     const initChat = async () => {
-      initialized.current = true;
       const conv = await getOrCreateConversation();
       if (conv) {
         selectConversation(conv.id);
       }
     };
     initChat();
-  }, [getOrCreateConversation, selectConversation]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [getOrCreateConversation]);
 
   return (
     <div className="flex flex-col h-screen bg-[#f0f2f5] overflow-hidden">
