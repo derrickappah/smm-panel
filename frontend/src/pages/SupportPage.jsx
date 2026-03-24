@@ -27,7 +27,6 @@ const SupportPageContent = ({ user, onLogout }) => {
       }
     };
     initChat();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [getOrCreateConversation]);
 
   return (
