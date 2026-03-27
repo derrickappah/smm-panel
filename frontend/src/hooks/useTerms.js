@@ -28,8 +28,8 @@ export const useTerms = () => {
         updated_at: data?.updated_at || null
       };
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: 0, // 5 minutes
+    gcTime: 0, // 10 minutes
   });
 };
 

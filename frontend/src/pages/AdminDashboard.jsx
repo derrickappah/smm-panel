@@ -165,8 +165,8 @@ const AdminDashboard = memo(({ user, onLogout }) => {
 
       return settings;
     },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
+    staleTime: 0,
+    gcTime: 0,
   });
 
   // Fetch data for AdminStats (minimal data needed)
@@ -313,8 +313,8 @@ const AdminDashboard = memo(({ user, onLogout }) => {
 
       return { open_tickets: openTickets, pending_deposits: pendingDeposits };
     },
-    staleTime: 1 * 60 * 1000,
-    gcTime: 5 * 60 * 1000,
+    staleTime: 0,
+    gcTime: 0,
   });
 
   // Section titles mapping

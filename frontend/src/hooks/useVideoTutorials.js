@@ -122,8 +122,8 @@ export const useVideoTutorials = () => {
   return useQuery({
     queryKey: ['video-tutorials'],
     queryFn: fetchVideoTutorials,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: 0, // 5 minutes
+    gcTime: 0, // 10 minutes
   });
 };
 
@@ -132,7 +132,7 @@ export const useAllVideoTutorials = () => {
   return useQuery({
     queryKey: ['admin', 'video-tutorials'],
     queryFn: fetchAllVideoTutorials,
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    staleTime: 0, // 2 minutes
   });
 };
 

@@ -84,8 +84,8 @@ export const useUpdates = () => {
   return useQuery({
     queryKey: ['updates'],
     queryFn: fetchUpdates,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: 0, // 5 minutes
+    gcTime: 0, // 10 minutes
   });
 };
 
@@ -94,7 +94,7 @@ export const useAllUpdates = () => {
   return useQuery({
     queryKey: ['admin', 'updates'],
     queryFn: fetchAllUpdates,
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    staleTime: 0, // 2 minutes
   });
 };
 

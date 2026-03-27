@@ -88,7 +88,7 @@ export const useAdminStats = (options = {}) => {
       return data || [];
     },
     enabled,
-    staleTime: 1 * 60 * 1000,
+    staleTime: 0,
     retry: false, // Don't retry on auth/permission errors
   });
   

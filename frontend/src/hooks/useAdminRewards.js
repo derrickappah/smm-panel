@@ -44,7 +44,7 @@ export function useAdminRewardClaims(filters = {}) {
             if (error) throw error;
             return data;
         },
-        staleTime: 2 * 60 * 1000, // 2 minutes
+        staleTime: 0, // 2 minutes
     });
 }
 
@@ -61,7 +61,7 @@ export function useRewardSettings() {
             if (error) throw error;
             return data;
         },
-        staleTime: 5 * 60 * 1000, // 5 minutes
+        staleTime: 0, // 5 minutes
     });
 }
 
@@ -86,7 +86,7 @@ export function useRewardSettingLogs(limit = 20) {
             if (error) throw error;
             return data;
         },
-        staleTime: 2 * 60 * 1000, // 2 minutes
+        staleTime: 0, // 2 minutes
     });
 }
 
@@ -103,7 +103,7 @@ export function useRewardTiers() {
             if (error) throw error;
             return data;
         },
-        staleTime: 5 * 60 * 1000,
+        staleTime: 0,
     });
 }
 
@@ -201,7 +201,7 @@ export function useRewardStats() {
                 averageDeposit: averageDeposit
             };
         },
-        staleTime: 1 * 60 * 1000, // 1 minute
+        staleTime: 0, // 1 minute
     });
 }
 

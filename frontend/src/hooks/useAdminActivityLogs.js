@@ -160,8 +160,8 @@ export const useAdminActivityLogs = (options = {}) => {
       getNextPageParam: (lastPage) => lastPage.nextPage,
       initialPageParam: 0,
       enabled: queryEnabled,
-      staleTime: 30 * 1000, // 30 seconds
-      gcTime: 5 * 60 * 1000, // 5 minutes
+      staleTime: 0, // 30 seconds
+      gcTime: 0, // 5 minutes
     });
   }
 
@@ -169,8 +169,8 @@ export const useAdminActivityLogs = (options = {}) => {
     queryKey: ['admin', 'activity-logs', filters],
     queryFn: () => fetchActivityLogs({ pageParam: 0, filters }),
     enabled: queryEnabled,
-    staleTime: 30 * 1000,
-    gcTime: 5 * 60 * 1000,
+    staleTime: 0,
+    gcTime: 0,
   });
 };
 
@@ -183,8 +183,8 @@ export const useActivityStatistics = (days = 30) => {
     queryKey: ['admin', 'activity-statistics', days],
     queryFn: () => fetchActivityStatistics(days),
     enabled: queryEnabled,
-    staleTime: 60 * 1000, // 1 minute
-    gcTime: 5 * 60 * 1000,
+    staleTime: 0, // 1 minute
+    gcTime: 0,
   });
 };
 
@@ -197,8 +197,8 @@ export const useSecurityEvents = (days = 7) => {
     queryKey: ['admin', 'security-events', days],
     queryFn: () => fetchSecurityEvents(days),
     enabled: queryEnabled,
-    staleTime: 30 * 1000,
-    gcTime: 5 * 60 * 1000,
+    staleTime: 0,
+    gcTime: 0,
   });
 };
 

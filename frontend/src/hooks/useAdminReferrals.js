@@ -63,8 +63,8 @@ export const useAdminReferrals = (options = {}) => {
     queryKey: ['admin', 'referrals'],
     queryFn: fetchReferrals,
     enabled: queryEnabled,
-    staleTime: 2 * 60 * 1000, // 2 minutes
-    gcTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 0, // 2 minutes
+    gcTime: 0, // 5 minutes
   });
 };
 
@@ -92,8 +92,8 @@ export const useReferralStats = () => {
         total_bonus_amount: totalBonusAmount
       };
     },
-    staleTime: 2 * 60 * 1000,
-    gcTime: 5 * 60 * 1000,
+    staleTime: 0,
+    gcTime: 0,
   });
 };
 

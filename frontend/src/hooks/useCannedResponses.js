@@ -88,8 +88,8 @@ export const useCannedResponses = (searchTerm = '', category = '') => {
     queryKey: ['canned_responses', searchTerm, category],
     queryFn: () => fetchCannedResponses(searchTerm, category),
     enabled: isAdmin,
-    staleTime: 2 * 60 * 1000, // 2 minutes
-    gcTime: 5 * 60 * 1000,
+    staleTime: 0, // 2 minutes
+    gcTime: 0,
   });
 };
 

@@ -149,8 +149,8 @@ const AdminMoolre = () => {
     enabled: true,
     refetchInterval: isPolling ? POLLING_INTERVAL : false,
     refetchIntervalInBackground: false, // Only poll when tab is active
-    staleTime: 30 * 1000, // 30 seconds
-    gcTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 0, // 30 seconds
+    gcTime: 0, // 5 minutes
     onSuccess: () => {
       setLastRefresh(new Date());
     },

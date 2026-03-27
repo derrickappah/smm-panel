@@ -70,8 +70,8 @@ export const useKnowledgeBase = (searchTerm = '', category = '') => {
   return useQuery({
     queryKey: ['knowledge_base', searchTerm, category],
     queryFn: () => fetchKnowledgeBase(searchTerm, category),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: 0, // 5 minutes
+    gcTime: 0, // 10 minutes
   });
 };
 
@@ -80,7 +80,7 @@ export const useKnowledgeBaseArticle = (articleId) => {
     queryKey: ['knowledge_base', 'article', articleId],
     queryFn: () => fetchArticle(articleId),
     enabled: !!articleId,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
   });
 };
 

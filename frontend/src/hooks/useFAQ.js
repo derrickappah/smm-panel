@@ -84,8 +84,8 @@ export const useFAQ = () => {
   return useQuery({
     queryKey: ['faqs'],
     queryFn: fetchFAQs,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: 0, // 5 minutes
+    gcTime: 0, // 10 minutes
   });
 };
 
@@ -94,7 +94,7 @@ export const useAllFAQs = () => {
   return useQuery({
     queryKey: ['admin', 'faqs'],
     queryFn: fetchAllFAQs,
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    staleTime: 0, // 2 minutes
   });
 };
 

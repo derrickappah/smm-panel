@@ -63,8 +63,8 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
 
       return details;
     },
-    staleTime: 2 * 60 * 1000, // 2 minutes
-    gcTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 0, // 2 minutes
+    gcTime: 0, // 5 minutes
   });
 
   const {
