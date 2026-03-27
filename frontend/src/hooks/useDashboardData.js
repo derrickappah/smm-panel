@@ -279,8 +279,8 @@ export const useDashboardData = () => {
   } = useQuery({
     queryKey: ['services'],
     queryFn: fetchServices,
-    staleTime: 60 * 60 * 1000, // 1 hour - services change very rarely
-    gcTime: 24 * 60 * 60 * 1000, // 24 hours
+    staleTime: 0, // 1 hour - services change very rarely
+    gcTime: 0, // 24 hours
     retry: 1,
     onError: (error) => {
       if (!error.message?.includes('500') && !error.message?.includes('Internal Server Error')) {
