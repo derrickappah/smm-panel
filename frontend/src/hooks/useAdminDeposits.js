@@ -1,6 +1,7 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useUserRole } from './useUserRole';
+import { useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 
 const PAGE_SIZE = 1000;
@@ -85,6 +86,111 @@ export const useAdminDeposits = (options = {}) => {
   // Only enable queries if user is admin
   const queryEnabled = enabled && !roleLoading && isAdmin;
 
+  const queryClient = useQueryClient();
+  const isSubscribedRef = useRef(false);
+
+  // Helper to update both infinite and regular query data
+  const updateQueryData = (payload) => {
+    // 1. Update infinite query [ 'admin', 'deposits' ]
+    queryClient.setQueryData(['admin', 'deposits'], (oldData) => {
+      if (!oldData?.pages) return oldData;
+      
+      const { eventType, new: next, old } = payload;
+      
+      if (eventType === 'INSERT') {
+        const firstPage = oldData.pages[0];
+        return {
+          ...oldData,
+          pages: [
+            {
+              ...firstPage,
+              data: [next, ...(firstPage.data || [])],
+              total: (firstPage.total || 0) + 1
+            },
+            ...oldData.pages.slice(1)
+          ]
+        };
+      }
+      
+      if (eventType === 'UPDATE') {
+        return {
+          ...oldData,
+          pages: oldData.pages.map(page => ({
+            ...page,
+            data: page.data?.map(tx => tx.id === next.id ? { ...tx, ...next } : tx) || []
+          }))
+        };
+      }
+      
+      if (eventType === 'DELETE') {
+        return {
+          ...oldData,
+          pages: oldData.pages.map(page => ({
+            ...page,
+            data: page.data?.filter(tx => tx.id !== old.id) || [],
+            total: Math.max(0, (page.total || 0) - 1)
+          }))
+        };
+      }
+      
+      return oldData;
+    });
+
+    // 2. Update regular query [ 'admin', 'deposits', 'all' ]
+    queryClient.setQueryData(['admin', 'deposits', 'all'], (oldData) => {
+      if (!oldData) return oldData;
+      
+      const { eventType, new: next, old } = payload;
+      
+      if (eventType === 'INSERT') return [next, ...oldData];
+      if (eventType === 'UPDATE') return oldData.map(tx => tx.id === next.id ? { ...tx, ...next } : tx);
+      if (eventType === 'DELETE') return oldData.filter(tx => tx.id !== old.id);
+      
+      return oldData;
+    });
+
+    // 3. Invalidate related queries
+    queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
+    if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+       queryClient.invalidateQueries({ queryKey: ['admin', 'deposits'] });
+       queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
+       queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+    }
+  };
+
+  useEffect(() => {
+    if (!queryEnabled || isSubscribedRef.current) return;
+
+    console.log('[useAdminDeposits] Setting up real-time subscription for deposits');
+
+    const channel = supabase
+      .channel('admin-deposits-hook-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'transactions',
+          filter: 'type=eq.deposit'
+        },
+        (payload) => {
+          console.log('[useAdminDeposits] Realtime event received:', payload.eventType, payload.new || payload.old);
+          updateQueryData(payload);
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          isSubscribedRef.current = true;
+        }
+      });
+
+    return () => {
+      console.log('[useAdminDeposits] Cleaning up real-time subscription');
+      supabase.removeChannel(channel);
+      isSubscribedRef.current = false;
+    };
+  }, [queryEnabled]);
+
   if (useInfinite) {
     return useInfiniteQuery({
       queryKey: ['admin', 'deposits'],
@@ -92,8 +198,8 @@ export const useAdminDeposits = (options = {}) => {
       getNextPageParam: (lastPage) => lastPage.nextPage,
       initialPageParam: 0,
       enabled: queryEnabled,
-      staleTime: 0, // 2 minutes
-      gcTime: 0, // 5 minutes
+      staleTime: 0, 
+      gcTime: 60 * 1000, // 1 minute
     });
   }
 
@@ -101,8 +207,8 @@ export const useAdminDeposits = (options = {}) => {
     queryKey: ['admin', 'deposits', 'all'],
     queryFn: fetchAllDeposits,
     enabled: queryEnabled,
-    staleTime: 0, // 3 minutes - increased for better caching
-    gcTime: 0, // 10 minutes - keep in cache longer
+    staleTime: 0, 
+    gcTime: 60 * 1000, // 1 minute
   });
 };
 
