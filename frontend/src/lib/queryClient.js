@@ -34,7 +34,13 @@ if (typeof window !== 'undefined') {
     queryClient,
     persister: localStoragePersister,
     maxAge: 1000 * 60 * 60 * 24, // 24 hours
-    buster: 'v1', // Cache buster to invalidate cache if needed
+    buster: 'v2', // Cache buster to invalidate old cache
+    dehydrateOptions: {
+      shouldDehydrateQuery: (query) => {
+        // Exclude admin queries from persistence to prevent showing stale data on refresh
+        return !query.queryKey.includes('admin');
+      },
+    },
   });
 }
 

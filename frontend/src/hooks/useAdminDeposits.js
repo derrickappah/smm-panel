@@ -199,7 +199,7 @@ export const useAdminDeposits = (options = {}) => {
       initialPageParam: 0,
       enabled: queryEnabled,
       staleTime: 0, 
-      gcTime: 60 * 1000, // 1 minute
+      gcTime: 0, // Never keep stale admin data in cache
     });
   }
 
@@ -208,7 +208,7 @@ export const useAdminDeposits = (options = {}) => {
     queryFn: fetchAllDeposits,
     enabled: queryEnabled,
     staleTime: 0, 
-    gcTime: 60 * 1000, // 1 minute
+    gcTime: 0, // Never keep stale admin data in cache
   });
 };
 
