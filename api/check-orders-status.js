@@ -15,6 +15,85 @@ import {
     mapG1618Status
 } from './utils/statusMapping.js';
 
+/**
+ * Handle automatic refund for an order using atomic RPC
+ * @param {object} supabase - Supabase client (service role)
+ * @param {object} order - Order from DB
+ * @param {object} statusInfo - Status from provider API
+ * @param {string} mappedStatus - Our internal mapped status
+ * @returns {promise} - Refund result object
+ */
+async function handleAutomaticRefund(supabase, order, statusInfo, mappedStatus) {
+    try {
+        let refundAmount = 0;
+        let refundType = 'full';
+        let remains = 0;
+
+        if (mappedStatus === 'canceled' || mappedStatus === 'refunded') {
+            refundAmount = order.total_cost;
+            refundType = 'full';
+        } else if (mappedStatus === 'partial') {
+            // Calculate partial refund: (remains / quantity) * total_cost
+            remains = parseInt(statusInfo.remains || 0, 10);
+            const quantity = parseInt(order.quantity || 1, 10);
+            const totalCost = parseFloat(order.total_cost || 0);
+
+            if (remains > 0 && quantity > 0) {
+                // Precision: (Total Cost / Quantity) * Remains, rounded to 2 decimals
+                refundAmount = (totalCost / quantity) * remains;
+                refundAmount = Math.round((refundAmount + Number.EPSILON) * 100) / 100;
+                
+                // Safety: Refund cannot exceed total cost
+                if (refundAmount > totalCost) refundAmount = totalCost;
+                refundType = 'partial';
+            } else {
+                console.warn(`[Refund] Partial status for order ${order.id} but remains (${remains}) or quantity (${quantity}) is 0. Skipping refund.`);
+                return { success: false, error: 'Invalid remains or quantity' };
+            }
+        } else {
+            return null; // No refund for other statuses
+        }
+
+        if (refundAmount <= 0) {
+            console.warn(`[Refund] Calculated 0 refund amount for order ${order.id}. Skipping.`);
+            return { success: false, error: 'Zero refund amount' };
+        }
+
+        console.log(`[Refund] Process ${refundType} refund for order ${order.id}: ${refundAmount}`);
+
+        const { data, error } = await supabase.rpc('process_automatic_refund', {
+            p_order_id: order.id,
+            p_refund_amount: refundAmount,
+            p_refund_type: refundType,
+            p_remains: remains
+        });
+
+        if (error) {
+            console.error(`[Refund] RPC error for order ${order.id}:`, error);
+            // Record error in orders table for visibility
+            await supabase.from('orders').update({
+                refund_status: 'failed',
+                refund_error: error.message,
+                refund_attempted_at: new Date().toISOString()
+            }).eq('id', order.id);
+            
+            return { success: false, error: error.message };
+        }
+
+        if (!data?.success) {
+            console.warn(`[Refund] Failed to process refund for ${order.id}:`, data?.error);
+            return data;
+        }
+
+        console.log(`[Refund] Success for order ${order.id}: Refund ID ${data.refund_id}`);
+        return data;
+
+    } catch (err) {
+        console.error(`[Refund] Exception for order ${order.id}:`, err);
+        return { success: false, error: err.message };
+    }
+}
+
 const REQUEST_TIMEOUT = 15000; // 15 seconds per provider call
 
 export default async function handler(req, res) {
@@ -135,9 +214,36 @@ export default async function handler(req, res) {
                         const mappedStatus = mapper(rawStatus);
 
                         if (mappedStatus && mappedStatus !== order.status) {
-                            if (await updateOrder(order.id, mappedStatus, providerName)) {
+                            // Check if automatic refund is needed (only if not already refunded)
+                            let refundResult = null;
+                            const shouldRefund = (mappedStatus === 'canceled' || mappedStatus === 'refunded' || mappedStatus === 'partial') && 
+                                               order.status !== 'refunded';
+
+                            if (shouldRefund) {
+                                // Use service role client for refunds to ensure it has permissions
+                                const adminClient = getServiceRoleClient();
+                                refundResult = await handleAutomaticRefund(adminClient, order, statusInfo, mappedStatus);
+                            }
+
+                            // If refund was processed, it already updated the status, so we only update last_status_check
+                            // If no refund was processed or it failed, we update the status normally
+                            const updateFields = {
+                                last_status_check: new Date().toISOString()
+                            };
+
+                            if (!refundResult?.success) {
+                                updateFields.status = mappedStatus;
+                            }
+
+                            if (await dbClient.from('orders').update(updateFields).eq('id', order.id)) {
                                 results.updated++;
-                                results.details.push({ id: order.id, old: order.status, new: mappedStatus, provider: providerName });
+                                results.details.push({ 
+                                    id: order.id, 
+                                    old: order.status, 
+                                    new: mappedStatus, 
+                                    provider: providerName,
+                                    refunded: !!refundResult?.success
+                                });
                             }
                         }
                     } else {
@@ -146,9 +252,33 @@ export default async function handler(req, res) {
                             const rawStatus = data.status || data.Status;
                             const mappedStatus = mapper(rawStatus);
                             if (mappedStatus && mappedStatus !== order.status) {
-                                if (await updateOrder(order.id, mappedStatus, providerName)) {
+                                // Individual order refund logic
+                                let refundResult = null;
+                                const shouldRefund = (mappedStatus === 'canceled' || mappedStatus === 'refunded' || mappedStatus === 'partial') && 
+                                                   order.status !== 'refunded';
+
+                                if (shouldRefund) {
+                                    const adminClient = getServiceRoleClient();
+                                    refundResult = await handleAutomaticRefund(adminClient, order, data, mappedStatus);
+                                }
+
+                                const updateFields = {
+                                    last_status_check: new Date().toISOString()
+                                };
+
+                                if (!refundResult?.success) {
+                                    updateFields.status = mappedStatus;
+                                }
+
+                                if (await dbClient.from('orders').update(updateFields).eq('id', order.id)) {
                                     results.updated++;
-                                    results.details.push({ id: order.id, old: order.status, new: mappedStatus, provider: providerName });
+                                    results.details.push({ 
+                                        id: order.id, 
+                                        old: order.status, 
+                                        new: mappedStatus, 
+                                        provider: providerName,
+                                        refunded: !!refundResult?.success
+                                    });
                                 }
                             }
                         } else {
