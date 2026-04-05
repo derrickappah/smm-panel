@@ -1,7 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
+// NOTE: Create React App requires the REACT_APP_ prefix for environment variables
+// to be visible in the browser. If you use SUPABASE_ANON_KEY (no prefix), 
+// it will be UNDEFINED here.
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || process.env.SUPABASE_URL;
+const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 
 // Check if Supabase is configured
 const isConfigured = supabaseUrl &&
@@ -31,8 +34,11 @@ if (isConfigured) {
     }
   });
 
-  console.log('✅ Supabase client initialized (Bearer Token Auth)');
+  console.log('✅ Supabase client initialized');
 } else {
+  console.error('❌ Supabase configuration error: Missing keys.');
+  console.info('If you removed the REACT_APP_ prefix for security, the browser can no longer read the keys.');
+  console.info('Recommendation: Re-add the prefix for public keys (URL/Anon) or fetch them from /api/config');
   console.warn('⚠️ Supabase not configured - using placeholder client');
   console.warn('Please update frontend/.env with your Supabase credentials');
 
