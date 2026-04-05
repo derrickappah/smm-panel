@@ -17,7 +17,8 @@ const VIRTUAL_SCROLL_THRESHOLD = 100;
 
 const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [dateFilter, setDateFilter] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [depositStatusFilter, setDepositStatusFilter] = useState('all');
   const [page, setPage] = useState(1);
   const [editingUser, setEditingUser] = useState(null);
@@ -83,15 +84,18 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
     }
 
     // Date filter
-    if (dateFilter) {
-      const filterDate = new Date(dateFilter);
-      filterDate.setHours(0, 0, 0, 0);
-      const filterDateEnd = new Date(filterDate);
-      filterDateEnd.setHours(23, 59, 59, 999);
+    if (startDate || endDate) {
+      const start = startDate ? new Date(startDate) : null;
+      if (start) start.setHours(0, 0, 0, 0);
+      
+      const end = endDate ? new Date(endDate) : null;
+      if (end) end.setHours(23, 59, 59, 999);
       
       filtered = filtered.filter(user => {
         const userDate = new Date(user.created_at);
-        return userDate >= filterDate && userDate <= filterDateEnd;
+        if (start && userDate < start) return false;
+        if (end && userDate > end) return false;
+        return true;
       });
     }
 
@@ -144,7 +148,7 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
     }
 
     return filtered;
-  }, [allUsers, debouncedSearch, dateFilter, depositStatusFilter, depositStatusMap, sortField, sortDirection]);
+  }, [allUsers, debouncedSearch, startDate, endDate, depositStatusFilter, depositStatusMap, sortField, sortDirection]);
 
   // Paginate filtered results
   const paginatedUsers = useMemo(() => {
@@ -195,11 +199,11 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
 
   // Load all pages when there are no filters (to show accurate total count)
   useEffect(() => {
-    if (!isLoading && hasNextPage && !isFetchingNextPage && !debouncedSearch && !dateFilter) {
+    if (!isLoading && hasNextPage && !isFetchingNextPage && !debouncedSearch && !startDate && !endDate) {
       // Load all remaining pages to get accurate total count
       fetchNextPage();
     }
-  }, [isLoading, hasNextPage, isFetchingNextPage, debouncedSearch, dateFilter, fetchNextPage]);
+  }, [isLoading, hasNextPage, isFetchingNextPage, debouncedSearch, startDate, endDate, fetchNextPage]);
 
   // Load more pages when needed for pagination with filters
   useEffect(() => {
@@ -569,16 +573,32 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
             />
           </div>
           <div className="flex flex-col sm:flex-row gap-3">
-            <Input
-              type="date"
-              placeholder="Filter by date"
-              value={dateFilter}
-              onChange={(e) => {
-                setDateFilter(e.target.value);
-                setPage(1);
-              }}
-              className="w-full sm:flex-1 h-12 text-base"
-            />
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:flex-[2]">
+              <div className="relative flex-1">
+                <span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-gray-500 z-10 transition-all peer-placeholder-shown:text-base peer-placeholder-shown:top-2 peer-focus:-top-2 peer-focus:text-[10px]">From</span>
+                <Input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full h-12 text-base pt-4"
+                />
+              </div>
+              <div className="relative flex-1">
+                <span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-gray-500 z-10 transition-all peer-placeholder-shown:text-base peer-placeholder-shown:top-2 peer-focus:-top-2 peer-focus:text-[10px]">To</span>
+                <Input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => {
+                    setEndDate(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full h-12 text-base pt-4"
+                />
+              </div>
+            </div>
             <Select 
               value={depositStatusFilter} 
               onValueChange={(value) => {
