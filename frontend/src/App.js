@@ -86,28 +86,24 @@ function App() {
 
     // Skip if Supabase is not configured
     if (!isConfigured) {
+      console.warn("Supabase not configured, skipping auth setup");
       setLoading(false);
       return;
     }
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        loadUserProfile(session.user.id);
-      } else {
-        setLoading(false);
-      }
-    });
+    let isInitialCheck = true;
+    console.log('Setting up auth listener...');
 
     // Listen for auth state changes
+    // This listener handles INITIAL_SESSION, SIGNED_IN, SIGNED_OUT, etc.
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event, session?.user?.id);
+      console.log('Auth state changed event:', event, 'User ID:', session?.user?.id);
 
       // Handle password recovery event
       if (event === 'PASSWORD_RECOVERY') {
-        // Supabase has already extracted tokens from URL hash
-        // Ensure user is on reset password page
+        console.log('Password recovery event detected, redirecting...');
         if (window.location.pathname !== '/reset-password') {
           window.location.href = '/reset-password';
         }
@@ -116,19 +112,29 @@ function App() {
       }
 
       if (session?.user) {
+        console.log('Session user present, loading profile...');
         loadUserProfile(session.user.id);
       } else {
+        console.log('No session user, clearing user state');
         setUser(null);
         setLoading(false);
       }
+      
+      isInitialCheck = false;
     });
 
     return () => {
-      if (subscription) subscription.unsubscribe();
+      if (subscription) {
+        console.log('Unsubscribing from auth listener');
+        subscription.unsubscribe();
+      }
     };
   }, []);
 
   const loadUserProfile = async (userId) => {
+    if (!userId) return;
+    
+    console.log(`[PROFILE] Loading profile for: ${userId}`);
     try {
       const { data: profile, error } = await supabase
         .from("profiles")
@@ -137,12 +143,20 @@ function App() {
         .single();
 
       if (error) {
-        console.error("Error loading profile:", error);
-      } else {
+        console.error("[PROFILE] Error loading profile:", error.message || error);
+        // Important: If profile fails to load, we still need to stop the loading state
+        // and decide what to do. For now we leave user as null.
+        setUser(null);
+      } else if (profile) {
+        console.log(`[PROFILE] Profile loaded successfully for ${profile.email} (Role: ${profile.role})`);
         setUser(profile);
+      } else {
+        console.warn("[PROFILE] No profile found for user ID");
+        setUser(null);
       }
     } catch (error) {
-      console.error("Error in loadUserProfile:", error);
+      console.error("[PROFILE] Exception in loadUserProfile:", error);
+      setUser(null);
     } finally {
       setLoading(false);
     }

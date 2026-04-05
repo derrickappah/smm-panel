@@ -16,8 +16,14 @@ export default async function handler(req, res) {
         const { service_id, package_id, link, quantity, total_cost, comments } = req.body;
 
         // 1. Basic Validation
-        if (!link || !quantity || !total_cost || (!service_id && !package_id)) {
+        if (!link || !quantity || (!service_id && !package_id)) {
             return res.status(400).json({ error: 'Missing required fields' });
+        }
+
+        // Strict numeric validation for total_cost
+        const numericCost = parseFloat(total_cost);
+        if (isNaN(numericCost) || numericCost <= 0) {
+            return res.status(400).json({ error: 'Invalid total cost. Must be a positive number.' });
         }
 
         // URL Validation (Defensive)

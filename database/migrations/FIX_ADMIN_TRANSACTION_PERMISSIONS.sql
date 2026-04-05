@@ -8,23 +8,14 @@
 DROP POLICY IF EXISTS "Admins can insert transactions" ON transactions;
 CREATE POLICY "Admins can insert transactions" 
     ON transactions FOR INSERT 
-    WITH CHECK (
-        EXISTS (
-            SELECT 1 FROM profiles 
-            WHERE id = auth.uid() AND role = 'admin'
-        )
-    );
+    WITH CHECK ( is_admin() );
 
 -- 2. Ensure admins can also update any transaction (already exists, but reinforcing)
 DROP POLICY IF EXISTS "Admins can update all transactions" ON transactions;
 CREATE POLICY "Admins can update all transactions" 
     ON transactions FOR UPDATE 
-    USING (
-        EXISTS (
-            SELECT 1 FROM profiles 
-            WHERE id = auth.uid() AND role = 'admin'
-        )
-    );
+    USING ( is_admin() );
+
 
 -- 3. Log this permission fix
 DO $$ 
