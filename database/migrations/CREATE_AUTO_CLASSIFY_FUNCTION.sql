@@ -52,6 +52,7 @@ BEGIN
     END IF;
     
     -- Check if admin action (manual adjustment)
+    -- We only return manual_adjustment if we haven't already found a more specific type (like refund)
     IF p_is_admin_action THEN
         RETURN jsonb_build_object(
             'type', 'manual_adjustment',
@@ -59,7 +60,7 @@ BEGIN
                 WHEN p_amount > 0 THEN format('Manual balance credit of ₵%s', p_amount)
                 ELSE format('Manual balance debit of ₵%s', ABS(p_amount))
             END,
-            'auto_classified', false
+            'auto_classified', false -- Admin actions are considered explicit
         );
     END IF;
     

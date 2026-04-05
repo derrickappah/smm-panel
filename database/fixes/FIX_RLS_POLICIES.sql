@@ -27,7 +27,8 @@ CREATE POLICY "Users can view own profile"
 
 CREATE POLICY "Users can update own profile" 
     ON profiles FOR UPDATE 
-    USING (auth.uid() = id);
+    USING (auth.uid() = id)
+    WITH CHECK (auth.uid() = id);
 
 CREATE POLICY "Users can insert own profile" 
     ON profiles FOR INSERT 
@@ -77,7 +78,11 @@ CREATE POLICY "Users can view own transactions"
 
 CREATE POLICY "Users can create own transactions" 
     ON transactions FOR INSERT 
-    WITH CHECK (auth.uid() = user_id);
+    WITH CHECK (
+        auth.uid() = user_id 
+        AND status = 'pending' 
+        AND type = 'deposit'
+    );
 
 CREATE POLICY "Admins can view all transactions" 
     ON transactions FOR SELECT 
@@ -90,6 +95,27 @@ CREATE POLICY "Admins can update transactions"
     USING (
         (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin'
     );
+
+-- Recreate Security Triggers
+CREATE OR REPLACE FUNCTION validate_profile_update()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF (NEW.balance IS DISTINCT FROM OLD.balance OR NEW.role IS DISTINCT FROM OLD.role) THEN
+        IF current_user IN ('authenticated', 'anon') THEN
+            IF OLD.role != 'admin' THEN
+                RAISE EXCEPTION 'Security Violation: Direct modification of balance or role is not allowed.';
+            END IF;
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS tr_validate_profile_update ON profiles;
+CREATE TRIGGER tr_validate_profile_update
+    BEFORE UPDATE ON profiles
+    FOR EACH ROW
+    EXECUTE FUNCTION validate_profile_update();
 
 -- Verify policies were created
 SELECT 

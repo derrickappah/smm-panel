@@ -86,7 +86,8 @@ CREATE POLICY "Users can view own profile"
 
 CREATE POLICY "Users can update own profile" 
     ON profiles FOR UPDATE 
-    USING (auth.uid() = id);
+    USING (auth.uid() = id)
+    WITH CHECK (auth.uid() = id); -- This is more secure and works better with PostgREST
 
 CREATE POLICY "Users can insert own profile" 
     ON profiles FOR INSERT 
@@ -140,7 +141,11 @@ CREATE POLICY "Users can view own transactions"
 
 CREATE POLICY "Users can create own transactions" 
     ON transactions FOR INSERT 
-    WITH CHECK (auth.uid() = user_id);
+    WITH CHECK (
+        auth.uid() = user_id 
+        AND status = 'pending' 
+        AND type = 'deposit'
+    );
 
 CREATE POLICY "Admins can view all transactions" 
     ON transactions FOR SELECT 
@@ -182,6 +187,26 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
     AFTER INSERT ON auth.users
     FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- Security: Prevent direct balance/role updates via PostgREST
+CREATE OR REPLACE FUNCTION validate_profile_update()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF (NEW.balance IS DISTINCT FROM OLD.balance OR NEW.role IS DISTINCT FROM OLD.role) THEN
+        IF current_user IN ('authenticated', 'anon') THEN
+            IF OLD.role != 'admin' THEN
+                RAISE EXCEPTION 'Security Violation: Direct modification of balance or role is not allowed.';
+            END IF;
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER tr_validate_profile_update
+    BEFORE UPDATE ON profiles
+    FOR EACH ROW
+    EXECUTE FUNCTION validate_profile_update();
 
 -- Grant necessary permissions
 GRANT USAGE ON SCHEMA public TO anon, authenticated;

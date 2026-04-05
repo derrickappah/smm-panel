@@ -92,7 +92,7 @@ BEGIN
         p_order_id := NULL, -- We don't have order context in audit log
         p_payment_method := NULL, -- We don't have payment method in audit log
         p_payment_reference := NULL,
-        p_is_admin_action := (NEW.change_reason LIKE '%admin%' OR NEW.change_reason LIKE '%manual%' OR NEW.change_reason LIKE '%Balance update%')
+        p_is_admin_action := (NEW.change_reason LIKE '%admin%' OR NEW.change_reason LIKE '%manual%')
     );
     
     -- Create transaction record

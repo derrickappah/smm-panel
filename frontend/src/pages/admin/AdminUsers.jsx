@@ -220,29 +220,72 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
 
   const handleUpdateUser = useCallback(async (userId, updates) => {
     try {
-      await updateUserMutation.mutateAsync({ userId, updates });
+      const { adjustmentType, adjustmentAmount, adjustmentReason, ...profileUpdates } = updates;
       
-      // Log admin action
+      // Handle balance adjustment if requested
+      if (adjustmentType && adjustmentType !== 'none' && adjustmentAmount) {
+        const amount = parseFloat(adjustmentAmount);
+        if (isNaN(amount) || amount <= 0) {
+          toast.error('Invalid adjustment amount');
+          return;
+        }
+
+        const user = allUsers.find(u => u.id === userId);
+        if (!user) throw new Error('User not found');
+
+        const adjustmentSign = adjustmentType === 'add' ? 1 : -1;
+        const netAdjustment = amount * adjustmentSign;
+        const newBalance = (user.balance || 0) + netAdjustment;
+
+        if (newBalance < 0) {
+          toast.error('Adjustment would result in negative balance');
+          return;
+        }
+
+        // 1. Create transaction record FIRST
+        const { createManualAdjustmentTransaction } = await import('@/lib/transactionHelpers');
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        
+        const transactionResult = await createManualAdjustmentTransaction(
+          userId,
+          netAdjustment,
+          authUser?.id,
+          adjustmentReason || `Manual balance ${adjustmentType === 'add' ? 'credit' : 'debit'} by admin`
+        );
+
+        if (!transactionResult.success) {
+          toast.error(`Failed to create transaction: ${transactionResult.error}`);
+          return;
+        }
+
+        // 2. Add the new balance to profile updates
+        profileUpdates.balance = newBalance;
+      }
+
+      // Perform the actual profile update (now including the adjusted balance if any)
+      await updateUserMutation.mutateAsync({ userId, updates: profileUpdates });
+      
+      // Log admin activity
       await logUserActivity({
         action_type: 'user_updated',
         entity_type: 'user',
         entity_id: userId,
-        description: `Admin updated user: ${Object.keys(updates).join(', ')}`,
+        description: `Admin updated user profile. ${adjustmentType !== 'none' ? 'Includes balance adjustment.' : ''}`,
         metadata: {
-          updated_fields: Object.keys(updates),
-          updates: updates
+          updated_fields: Object.keys(profileUpdates),
+          has_balance_adjustment: adjustmentType !== 'none'
         },
         severity: 'info'
       });
       
       setEditingUser(null);
-      if (onRefresh) {
-        onRefresh();
-      }
+      toast.success('User updated successfully');
+      if (onRefresh) onRefresh();
     } catch (error) {
       console.error('Failed to update user:', error);
+      toast.error(error.message || 'Failed to update user');
     }
-  }, [updateUserMutation, onRefresh]);
+  }, [updateUserMutation, onRefresh, allUsers]);
 
   const handleViewUserDetails = useCallback((user) => {
     setSelectedUserId(user.id);
