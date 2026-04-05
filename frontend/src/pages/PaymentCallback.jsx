@@ -132,10 +132,20 @@ const PaymentCallback = ({ onUpdateUser }) => {
             toast.success(`Payment successful! ₵${parseFloat(transaction.amount).toFixed(2)} added to your balance.`);
             setTimeout(() => navigate('/dashboard'), 3000);
           } else if (paymentStatus === 'failed' || paymentStatus === 'cancelled' || transaction.status === 'rejected') {
-            await supabase
-              .from('transactions')
-              .update({ status: 'rejected', korapay_status: 'failed' })
-              .eq('id', transaction.id);
+            // Mark as rejected via server-side API (no direct client write to transactions)
+            if (transaction.status !== 'rejected') {
+              await fetch('/api/reject-transaction', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': authToken
+                },
+                body: JSON.stringify({
+                  transaction_id: transaction.id,
+                  payment_method: 'korapay'
+                })
+              });
+            }
 
             setStatus('failed');
             setMessage('Payment failed or was cancelled.');
@@ -223,8 +233,19 @@ const PaymentCallback = ({ onUpdateUser }) => {
             toast.success(`Payment successful!`);
             setTimeout(() => navigate('/dashboard'), 3000);
           } else if (verifyData.status === 'failed' || verifyData.txstatus === 2 || transaction.status === 'rejected') {
+            // Mark as rejected via server-side API (no direct client write to transactions)
             if (transaction.status !== 'rejected') {
-              await supabase.from('transactions').update({ status: 'rejected' }).eq('id', transaction.id);
+              await fetch('/api/reject-transaction', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': authToken
+                },
+                body: JSON.stringify({
+                  transaction_id: transaction.id,
+                  payment_method: paymentMethod
+                })
+              });
             }
             setStatus('failed');
             setMessage('Payment failed.');

@@ -217,50 +217,36 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
   const handleApproveManualDeposit = useCallback(async (deposit) => {
     setApprovingDeposit(deposit.id);
     try {
-      const { error: transactionError } = await supabase
-        .from('transactions')
-        .update({ status: 'approved' })
-        .eq('id', deposit.id);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('No session. Please log in again.');
 
-      if (transactionError) throw transactionError;
+      const response = await fetch('/api/approve-deposit-universal', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          transaction_id: deposit.id,
+          payment_method: deposit.deposit_method || 'manual',
+          payment_status: 'success',
+          payment_reference: deposit.manual_reference || `admin-manual-${Date.now()}`
+        })
+      });
 
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('balance')
-        .eq('id', deposit.user_id)
-        .single();
-
-      if (profileError) throw profileError;
-
-      const newBalance = (parseFloat(profile.balance) || 0) + parseFloat(deposit.amount);
-      const { error: balanceError } = await supabase
-        .from('profiles')
-        .update({ balance: newBalance })
-        .eq('id', deposit.user_id);
-
-      if (balanceError) throw balanceError;
-
-      // Get current admin user ID
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-
-      // Create transaction record for manual adjustment (if deposit was already a transaction, this is just for tracking)
-      // Note: The deposit itself is already a transaction, so we don't need to create another one
-      // But we could update the existing transaction with admin_id if needed
-      if (authUser?.id) {
-        await supabase
-          .from('transactions')
-          .update({ admin_id: authUser.id })
-          .eq('id', deposit.id);
-      }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to approve deposit');
 
       toast.success('Deposit approved successfully');
+      queryClient.invalidateQueries({ queryKey: ['admin', 'deposits'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
       if (onRefresh) onRefresh();
     } catch (error) {
       toast.error(error.message || 'Failed to approve deposit');
     } finally {
       setApprovingDeposit(null);
     }
-  }, [onRefresh]);
+  }, [onRefresh, queryClient]);
 
   const handleVerifyPaystackDeposit = useCallback(async (deposit, manualRef = null) => {
     setVerifyingDeposit(deposit.id);

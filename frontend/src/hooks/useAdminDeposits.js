@@ -216,179 +216,32 @@ export const useApproveDeposit = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ transactionId, userId, amount }) => {
-      const maxRetries = 3;
-      let statusUpdated = false;
-      let statusUpdateError = null;
+    mutationFn: async ({ transactionId }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('No session. Please log in again.');
 
-      // Update transaction status with retry logic
-      for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-          const { data: updatedData, error: transactionError } = await supabase
-            .from('transactions')
-            .update({ status: 'approved' })
-            .eq('id', transactionId)
-            .select('status');
+      const response = await fetch('/api/approve-deposit-universal', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          transaction_id: transactionId,
+          payment_method: 'manual',
+          payment_status: 'success',
+          payment_reference: `admin-manual-${Date.now()}`
+        })
+      });
 
-          if (transactionError) {
-            console.error(`[ADMIN] Approval attempt ${attempt} error:`, transactionError);
-            statusUpdateError = transactionError;
-            if (attempt < maxRetries) {
-              await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-              continue;
-            }
-            throw transactionError;
-          }
-
-          // Verify the update succeeded
-          if (updatedData && updatedData.length > 0) {
-            const updatedStatus = updatedData[0]?.status;
-            if (updatedStatus === 'approved') {
-              statusUpdated = true;
-              console.log(`[ADMIN] Transaction ${transactionId} status updated to approved (attempt ${attempt})`);
-              break;
-            } else {
-              console.warn(`[ADMIN] Status update returned but status is ${updatedStatus}, retrying...`);
-              if (attempt < maxRetries) {
-                await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-                continue;
-              }
-            }
-          } else {
-            // No data returned - verify current status
-            const { data: currentTx } = await supabase
-              .from('transactions')
-              .select('status')
-              .eq('id', transactionId)
-              .single();
-
-            if (currentTx?.status === 'approved') {
-              statusUpdated = true;
-              console.log(`[ADMIN] Transaction ${transactionId} already approved`);
-              break;
-            } else {
-              console.warn(`[ADMIN] Update returned no data, current status: ${currentTx?.status}, retrying...`);
-              if (attempt < maxRetries) {
-                await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-                continue;
-              }
-            }
-          }
-        } catch (retryError) {
-          console.error(`[ADMIN] Approval attempt ${attempt} exception:`, retryError);
-          statusUpdateError = retryError;
-          if (attempt < maxRetries) {
-            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-          } else {
-            throw retryError;
-          }
-        }
-      }
-
-      // Final verification - check status one more time
-      if (!statusUpdated) {
-        const { data: finalCheck } = await supabase
-          .from('transactions')
-          .select('status')
-          .eq('id', transactionId)
-          .single();
-
-        if (finalCheck?.status === 'approved') {
-          statusUpdated = true;
-          console.log(`[ADMIN] Transaction ${transactionId} verified as approved after retries`);
-        } else {
-          throw new Error(`Failed to update transaction status to approved after ${maxRetries} attempts. Current status: ${finalCheck?.status || 'unknown'}`);
-        }
-      }
-
-      // Update user balance (independent of status update)
-      let balanceUpdated = false;
-      let balanceUpdateError = null;
-
-      for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-          // Get current balance
-          const { data: profile, error: profileError } = await supabase
-            .from('profiles')
-            .select('balance')
-            .eq('id', userId)
-            .single();
-
-          if (profileError) {
-            console.error(`[ADMIN] Balance fetch attempt ${attempt} error:`, profileError);
-            balanceUpdateError = profileError;
-            if (attempt < maxRetries) {
-              await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-              continue;
-            }
-            throw profileError;
-          }
-
-          // Calculate and update balance
-          const currentBalance = parseFloat(profile.balance || 0);
-          const newBalance = currentBalance + parseFloat(amount);
-
-          const { error: balanceError } = await supabase
-            .from('profiles')
-            .update({ balance: newBalance })
-            .eq('id', userId);
-
-          if (balanceError) {
-            console.error(`[ADMIN] Balance update attempt ${attempt} error:`, balanceError);
-            balanceUpdateError = balanceError;
-            if (attempt < maxRetries) {
-              await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-              continue;
-            }
-            throw balanceError;
-          }
-
-          // Verify balance was updated
-          const { data: verifyProfile } = await supabase
-            .from('profiles')
-            .select('balance')
-            .eq('id', userId)
-            .single();
-
-          if (verifyProfile && parseFloat(verifyProfile.balance) === newBalance) {
-            balanceUpdated = true;
-            console.log(`[ADMIN] Balance updated successfully (attempt ${attempt}):`, {
-              userId,
-              oldBalance: currentBalance,
-              newBalance,
-              amount
-            });
-            break;
-          } else {
-            console.warn(`[ADMIN] Balance verification failed, expected ${newBalance}, got ${verifyProfile?.balance}`);
-            if (attempt < maxRetries) {
-              await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-              continue;
-            }
-          }
-        } catch (balanceRetryError) {
-          console.error(`[ADMIN] Balance update attempt ${attempt} exception:`, balanceRetryError);
-          balanceUpdateError = balanceRetryError;
-          if (attempt < maxRetries) {
-            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-          } else {
-            throw balanceRetryError;
-          }
-        }
-      }
-
-      if (!balanceUpdated) {
-        throw new Error(`Failed to update user balance after ${maxRetries} attempts: ${balanceUpdateError?.message || 'Unknown error'}`);
-      }
-
-      return { transactionId, userId, amount };
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to approve deposit');
+      return data;
     },
     onSuccess: async () => {
-      // Invalidate and refetch queries
       await queryClient.invalidateQueries({ queryKey: ['admin', 'deposits'] });
       await queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
       await queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
-      // Trigger refetch for infinite queries
       await queryClient.refetchQueries({ queryKey: ['admin', 'deposits'] });
       toast.success('Deposit approved successfully');
     },
@@ -404,18 +257,25 @@ export const useRejectDeposit = () => {
 
   return useMutation({
     mutationFn: async (transactionId) => {
-      const { error } = await supabase
-        .from('transactions')
-        .update({ status: 'rejected' })
-        .eq('id', transactionId);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('No session. Please log in again.');
 
-      if (error) throw error;
+      const response = await fetch('/api/reject-transaction', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ transaction_id: transactionId })
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to reject deposit');
+      return data;
     },
     onSuccess: async () => {
-      // Invalidate and refetch queries
       await queryClient.invalidateQueries({ queryKey: ['admin', 'deposits'] });
       await queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
-      // Trigger refetch for infinite queries
       await queryClient.refetchQueries({ queryKey: ['admin', 'deposits'] });
       toast.success('Deposit rejected');
     },
