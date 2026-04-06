@@ -216,7 +216,7 @@ export const useApproveDeposit = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ transactionId }) => {
+    mutationFn: async ({ transactionId, paymentMethod }) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error('No session. Please log in again.');
 
@@ -228,7 +228,7 @@ export const useApproveDeposit = () => {
         },
         body: JSON.stringify({
           transaction_id: transactionId,
-          payment_method: 'manual',
+          payment_method: paymentMethod || 'manual',
           payment_status: 'success',
           payment_reference: `admin-manual-${Date.now()}`
         })

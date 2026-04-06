@@ -170,12 +170,15 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
       await approveDepositMutation.mutateAsync({
         transactionId: deposit.id,
         userId: deposit.user_id,
-        amount: deposit.amount
+        amount: deposit.amount,
+        paymentMethod: deposit.deposit_method || deposit.payment_method || 'manual'
       });
+      toast.success('Deposit approved successfully');
       // Mutation's onSuccess will handle refetch and invalidation
       if (onRefresh) onRefresh();
     } catch (error) {
       console.error('Failed to approve deposit:', error);
+      toast.error(error.message || 'Failed to approve deposit');
       // Revert optimistic update on error by invalidating
       queryClient.invalidateQueries({ queryKey: ['admin', 'deposits'] });
     } finally {

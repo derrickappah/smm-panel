@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Search, RefreshCw, Edit, Download, Eye, ArrowUpDown, ArrowUp, ArrowDown, Filter } from 'lucide-react';
 import { toast } from 'sonner';
 import { logUserActivity } from '@/lib/activityLogger';
+import { supabase } from '@/lib/supabase';
 
 const ITEMS_PER_PAGE = 50;
 const VIRTUAL_SCROLL_THRESHOLD = 100;

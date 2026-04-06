@@ -142,22 +142,33 @@ BEGIN
         WHERE id = p_transaction_id
         AND status = 'pending';
         
-        -- Try to update reference if provided
-        IF p_payment_reference IS NOT NULL THEN
-            BEGIN
-                EXECUTE format('UPDATE transactions SET %I = $1 WHERE id = $2', 
-                    p_payment_method || '_reference', p_payment_reference, p_transaction_id);
-            EXCEPTION WHEN OTHERS THEN
-                NULL;
-            END;
+        -- Store whether the update succeeded before any other operations
+        IF FOUND THEN
+            -- Try to update reference if provided
+            IF p_payment_reference IS NOT NULL THEN
+                BEGIN
+                    EXECUTE format('UPDATE transactions SET %I = $1 WHERE id = $2', 
+                        p_payment_method || '_reference')
+                    USING p_payment_reference, p_transaction_id;
+                EXCEPTION WHEN OTHERS THEN
+                    -- Silently ignore if column doesn't exist or update fails
+                    NULL;
+                END;
+            END IF;
+            
+            -- Set FOUND back to true for the subsequent check
+            -- (In PL/pgSQL, we can't directly assign to FOUND, but the previous UPDATE was successful)
+            -- We'll use a local variable instead to be safe.
         END IF;
     END IF;
 
-    -- Check if update succeeded
-    IF NOT FOUND THEN
+    -- Check if update succeeded (now checking the initial update result)
+    -- Since we can't reliably rely on FOUND after the EXCEPTION block, 
+    -- let's refactor the check to be more robust.
+    IF NOT EXISTS (SELECT 1 FROM transactions WHERE id = p_transaction_id AND status = 'approved') THEN
         RETURN QUERY SELECT 
             FALSE, 
-            'Transaction status changed during update (race condition)'::TEXT,
+            'Transaction status changed during update (race condition) or update failed'::TEXT,
             v_old_status,
             (SELECT status FROM transactions WHERE id = p_transaction_id),
             v_old_balance,
@@ -208,7 +219,7 @@ BEGIN
         v_new_balance,
         v_final_amount;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Grant execute permission
 GRANT EXECUTE ON FUNCTION approve_deposit_transaction_universal(UUID, TEXT, TEXT, TEXT, NUMERIC) TO service_role, authenticated;
