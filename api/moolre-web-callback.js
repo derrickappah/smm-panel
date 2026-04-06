@@ -51,8 +51,13 @@ export default async function handler(req, res) {
       }
     });
 
-    // Get reference from query params (GET) or body (POST)
-    const reference = req.query.ref || req.query.reference || req.body.ref || req.body.reference;
+    // Get reference from query params (GET), body (POST format 1), or Moolre Webhook payload format
+    let reference = req.query.ref || req.query.reference || req.query.externalref;
+    
+    if (!reference && req.body) {
+      const payloadData = req.body.data || req.body;
+      reference = payloadData.externalref || payloadData.ref || payloadData.reference || req.body.ref || req.body.reference;
+    }
 
     if (!reference) {
       console.error('Missing reference in callback');

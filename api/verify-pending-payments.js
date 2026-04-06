@@ -297,6 +297,15 @@ export default async function handler(req, res) {
     sessionMetrics.totalTransactions = pendingTransactions.length;
     console.log(`[VERIFY] Found ${pendingTransactions.length} pending transactions to verify`);
 
+    // Log script start to system_events
+    await supabase.rpc('log_system_event', {
+      p_type: 'verification_script_started',
+      p_severity: 'info',
+      p_source: 'verify-pending-payments',
+      p_description: `Background verification started: ${pendingTransactions.length} pending transactions found from last ${hours} hours.`,
+      p_metadata: { total_pending: pendingTransactions.length, hours }
+    }).catch(() => {});
+
     let verified = 0;
     let updated = 0;
     let errors = [];
@@ -1197,6 +1206,15 @@ export default async function handler(req, res) {
                     verified++;
                     moolreWebProcessed++;
                     console.log(`[VERIFY] Moolre Web transaction ${transaction.id} successfully updated to approved with balance`);
+                    
+                    // Log success to system_events
+                    await supabase.rpc('log_system_event', {
+                      p_type: 'moolre_verification_success',
+                      p_severity: 'info',
+                      p_source: 'verify-pending-payments',
+                      p_description: `Moolre transaction ${transaction.id} verified and approved via background task.`,
+                      p_metadata: { transaction_id: transaction.id, moolre_reference: transaction.moolre_reference }
+                    }).catch(() => {});
                   } else {
                     const errorMsg = `Moolre Web transaction ${transaction.id}: approval failed - ${approvalError?.message || 'Unknown error'}`;
                     errors.push(errorMsg);
@@ -1415,6 +1433,21 @@ export default async function handler(req, res) {
       errors: errors.length,
       totalTime: `${totalTime}ms`
     });
+
+    // Log script completion to system_events
+    await supabase.rpc('log_system_event', {
+      p_type: 'verification_script_completed',
+      p_severity: 'info',
+      p_source: 'verify-pending-payments',
+      p_description: `Background verification completed: ${updated}/${pendingTransactions.length} transactions updated.`,
+      p_metadata: { 
+        total: pendingTransactions.length, 
+        updated, 
+        moolre_processed: moolreWebProcessed,
+        errors_count: errors.length,
+        total_time_ms: totalTime 
+      }
+    }).catch(() => {});
 
     return res.status(200).json({
       message: 'Verification completed',
