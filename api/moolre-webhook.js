@@ -49,6 +49,12 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Early logging for debugging - log raw request to console at least
+  console.log('[MOOLRE-WEBHOOK] Request received:', {
+    headers: req.headers,
+    body: req.body
+  });
+
   // ────────────────────────────────────────────────────────────────────────────
   // 1. Parse payload
   // ────────────────────────────────────────────────────────────────────────────
@@ -95,9 +101,23 @@ export default async function handler(req, res) {
   if (expectedSecret) {
     if (!incomingSecret || incomingSecret !== expectedSecret) {
       console.error('[MOOLRE-WEBHOOK] Secret mismatch — possible spoofed webhook', {
-        expected: expectedSecret?.substring(0, 8) + '...',
         received: incomingSecret?.substring(0, 8) + '...'
       });
+
+      // Log failure to system_events for debugging
+      const supabaseErrorLog = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+      await supabaseErrorLog.rpc('log_system_event', {
+        p_type: 'moolre_webhook_auth_failed',
+        p_severity: 'warning',
+        p_source: 'moolre-webhook',
+        p_description: `Moolre webhook secret mismatch. Received: ${incomingSecret?.substring(0, 8)}...`,
+        p_metadata: { 
+          externalref: data?.externalref,
+          txstatus: data?.txstatus,
+          received_secret_prefix: incomingSecret?.substring(0, 8)
+        }
+      }).catch(() => {});
+
       // Return 200 so Moolre doesn't retry; we silently discard spoofed webhooks
       return res.status(200).json({ received: true, error: 'Invalid secret' });
     }
@@ -142,6 +162,16 @@ export default async function handler(req, res) {
 
   if (fetchError || !transactions || transactions.length === 0) {
     console.error('[MOOLRE-WEBHOOK] Transaction not found for externalref:', externalref, fetchError);
+    
+    // Log missing transaction for debugging
+    await supabase.rpc('log_system_event', {
+      p_type: 'moolre_webhook_tx_not_found',
+      p_severity: 'warning',
+      p_source: 'moolre-webhook',
+      p_description: `Moolre webhook received but transaction not found for externalref: ${externalref}`,
+      p_metadata: { externalref, txstatus: txstatusNum, fetchError }
+    }).catch(() => {});
+
     // Return 200 — Moolre should not retry for unknown references
     return res.status(200).json({ received: true, error: 'Transaction not found' });
   }

@@ -222,9 +222,7 @@ export default async function handler(req, res) {
     const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!PAYSTACK_SECRET_KEY) {
-      return res.status(500).json({
-        error: 'Paystack secret key not configured'
-      });
+      console.warn('[VERIFY] Paystack secret key not configured. Paystack verification will be skipped.');
     }
 
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
@@ -322,7 +320,7 @@ export default async function handler(req, res) {
     console.log(`Other methods: ${otherMethods.length}`);
 
     // If we have Paystack transactions without references, query Paystack to find matches
-    if (paystackWithoutRef.length > 0) {
+    if (paystackWithoutRef.length > 0 && PAYSTACK_SECRET_KEY) {
       try {
         const startDate = new Date(Date.now() - hours * 60 * 60 * 1000);
         const endDate = new Date();
@@ -468,6 +466,11 @@ export default async function handler(req, res) {
 
             // Query Paystack for transactions in this time window with matching amount
             const paystackQueryUrl = `https://api.paystack.co/transaction?perPage=50&page=1&from=${startDateStr}&to=${endDateStr}`;
+            
+            if (!PAYSTACK_SECRET_KEY) {
+              throw new Error('Paystack secret key missing');
+            }
+
             const paystackResponse = await fetch(paystackQueryUrl, {
               method: 'GET',
               headers: {
@@ -1050,7 +1053,7 @@ export default async function handler(req, res) {
           } else {
             console.log(`Transaction ${transaction.id} still pending without reference (age: ${Math.round(transactionAge / 60000)} minutes)`);
           }
-        } else if (transaction.deposit_method === 'moolre_web') {
+        } else if (transaction.deposit_method === 'moolre_web' || transaction.deposit_method === 'moolre') {
           // Verify Moolre Web transactions
           if (transaction.moolre_reference) {
             try {
@@ -1134,11 +1137,13 @@ export default async function handler(req, res) {
 
                   for (let attempt = 1; attempt <= maxRetries; attempt++) {
                     try {
-                      const { data: result, error: rpcError } = await supabase.rpc('approve_deposit_transaction_universal', {
+                      const { data: result, error: rpcError } = await supabase.rpc('approve_deposit_transaction_universal_v2', {
                         p_transaction_id: transaction.id,
-                        p_payment_method: 'moolre_web',
+                        p_payment_method: transaction.deposit_method || 'moolre_web',
                         p_payment_status: 'success',
-                        p_payment_reference: transaction.moolre_reference
+                        p_payment_reference: transaction.moolre_reference,
+                        p_actual_amount: parseFloat(moolreData.data?.amount || transaction.amount),
+                        p_provider_event_id: moolreData.data?.id ? String(moolreData.data.id) : null
                       });
 
                       if (rpcError) {
