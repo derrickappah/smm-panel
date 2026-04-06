@@ -208,13 +208,17 @@ export default async function handler(req, res) {
   }).catch(err => console.warn('[MOOLRE-WEBHOOK] Failed to log system event:', err.message));
 
   // ────────────────────────────────────────────────────────────────────────────
-  // 8. Idempotency — skip if already finalized
+  // 8. Idempotency — skip if already APPROVED
+  // NOTE: We intentionally allow 'rejected' transactions to proceed here.
+  // A 'rejected' status may mean the UI polling timed out (3-min window),
+  // NOT that the payment provider confirmed a failure. If Moolre sends a
+  // late success webhook, we must honour it and credit the user.
   // ────────────────────────────────────────────────────────────────────────────
-  if (transaction.status === 'approved' || transaction.status === 'rejected') {
-    console.log('[MOOLRE-WEBHOOK] Transaction already finalized, skipping:', transaction.status);
+  if (transaction.status === 'approved') {
+    console.log('[MOOLRE-WEBHOOK] Transaction already approved, skipping (idempotent).');
     return res.status(200).json({
       received: true,
-      message: `Transaction already ${transaction.status}`,
+      message: 'Transaction already approved',
       transaction_id: transaction.id
     });
   }

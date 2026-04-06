@@ -163,20 +163,55 @@ export default async function handler(req, res) {
               const txstatus = moolreData.data?.txstatus; // 1=Success
 
               if (txstatus === 1) {
-                const moolreAmount = parseFloat(moolreData.data?.amount || moolreData.amount);
-                // Perform update if successful
-                // Use universal function
-                await serviceClient.rpc('approve_deposit_transaction_universal', {
-                  p_transaction_id: transaction.id,
-                  p_payment_method: transaction.deposit_method || 'moolre',
-                  p_payment_status: 'success',
-                  p_payment_reference: transaction.moolre_reference,
-                  p_actual_amount: moolreAmount
-                });
+                // SECURITY ENFORCEMENT: Amount matching
+                const rawValue = moolreData.data?.value;
+                const rawAmount = moolreData.data?.amount || moolreData.amount;
+                const moolreAmount = parseFloat(rawValue || rawAmount || 0);
+                const storedAmount = parseFloat(transaction.amount || 0);
 
-                // Update local transaction object to reflect change immediately
-                transaction.status = 'approved';
-                transaction.amount = moolreAmount || transaction.amount;
+                let tolerance;
+                if (storedAmount < 1.00) {
+                  tolerance = 0.01;
+                } else if (storedAmount < 10.00) {
+                  tolerance = 0.05;
+                } else {
+                  tolerance = Math.max(0.10, storedAmount * 0.01);
+                }
+
+                if (Math.abs(moolreAmount - storedAmount) <= tolerance) {
+                  // Perform update if successful
+                  // Use secure universal function v2
+                  await serviceClient.rpc('approve_deposit_transaction_universal_v2', {
+                    p_transaction_id: transaction.id,
+                    p_payment_method: transaction.deposit_method || 'moolre',
+                    p_payment_status: 'success',
+                    p_payment_reference: transaction.moolre_reference,
+                    p_actual_amount: moolreAmount,
+                    p_provider_event_id: moolreData.data?.transactionid || moolreData.data?.id ? String(moolreData.data?.transactionid || moolreData.data?.id) : null
+                  });
+
+                  // Update local transaction object to reflect change immediately
+                  transaction.status = 'approved';
+                  transaction.amount = moolreAmount || transaction.amount;
+                } else {
+                  console.error(`[CHECK-TRANSACTION] AMOUNT MISMATCH for ${transaction.id}: Expected ${storedAmount}, Got ${moolreAmount}`);
+                  // Securely reject based on amount manipulation attempt
+                  await serviceClient.from('transactions').update({ 
+                    status: 'rejected', 
+                    moolre_status: 'amount_mismatch' 
+                  }).eq('id', transaction.id);
+                  transaction.status = 'rejected';
+
+                  // Log the security violation
+                  await serviceClient.rpc('log_system_event', {
+                    p_type: 'payment_amount_mismatch',
+                    p_severity: 'critical',
+                    p_source: 'check-transaction-status',
+                    p_description: `Amount mismatch for transaction ${transaction.id}. Polled amount: ${moolreAmount}, Stored: ${storedAmount}`,
+                    p_metadata: { transaction_id: transaction.id, user_id: transaction.user_id, paid_amount: moolreAmount, stored_amount: storedAmount },
+                    p_entity_type: 'transaction', p_entity_id: transaction.id
+                  }).catch(() => {});
+                }
               } else if (txstatus === 2) {
                 await serviceClient.from('transactions')
                   .update({ status: 'rejected', moolre_status: 'failed' })

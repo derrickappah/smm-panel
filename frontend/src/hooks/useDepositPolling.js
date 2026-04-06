@@ -82,25 +82,26 @@ export function useDepositPolling(
    */
   const markTransactionAsRejected = useCallback(async (transactionId, reason) => {
     try {
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (!authUser) {
-        console.warn('No authenticated user found, cannot update transaction status');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        console.warn('No authenticated session found, cannot update transaction status');
         return;
       }
 
-      // Update transaction status to rejected
-      const { error: updateError } = await supabase
-        .from('transactions')
-        .update({
-          status: 'rejected'
-        })
-        .eq('id', transactionId)
-        .eq('status', 'pending'); // Only update if still pending
+      const response = await fetch('/api/reject-pending-deposit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ transactionId, reason })
+      });
 
-      if (updateError) {
-        console.error('Error updating transaction status to rejected:', updateError);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Error securely rejecting transaction:', errorData);
       } else {
-        console.log('Transaction marked as rejected:', { transactionId, reason });
+        console.log('Transaction securely marked as rejected:', { transactionId, reason });
         
         // Call status change callback if provided
         if (onStatusChange) {
@@ -117,7 +118,7 @@ export function useDepositPolling(
         onUpdateUser();
       }
     } catch (error) {
-      console.error('Error marking transaction as rejected:', error);
+      console.error('Error instructing server to mark transaction as rejected:', error);
     }
   }, [onStatusChange, setPendingTransaction, onUpdateUser]);
 
