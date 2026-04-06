@@ -2237,9 +2237,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       }
 
       transaction = data.transaction;
-
-      // Generate unique reference for this transaction
-      const moolreWebReference = `MOOLRE_WEB_${transaction.id}_${Date.now()}`;
+      const moolreWebReference = transaction.reference;
 
       // Ensure we have a proper origin (handle cases where window.location.origin might not be available)
       const origin = window.location.origin ||
@@ -2326,17 +2324,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       // Use the extracted payment link
       const finalPaymentLink = paymentLink;
 
-      // Store the Moolre Web reference in the database so polling can verify payment status
-      // The reference is needed for check-transaction-status API to verify with Moolre API
-      await supabase
-        .from('transactions')
-        .update({
-          moolre_reference: moolreWebReference,
-          moolre_status: 'pending'
-        })
-        .eq('id', transaction.id);
-
-      console.log('Stored Moolre Web reference for polling:', {
+      console.log('Moolre Web reference successfully initialized server-side:', {
         transactionId: transaction.id,
         reference: moolreWebReference
       });

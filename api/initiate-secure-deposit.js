@@ -140,8 +140,12 @@ export default async function handler(req, res) {
       });
     }
 
-    // Generate unique reference if not provided
-    const depositReference = reference || `${method}_${user.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    // For moolre_web, generate a placeholder first — the canonical reference needs the transaction ID.
+    // We'll update it server-side after insert so we never need a client-side DB write.
+    const isPlaceholderRef = method === 'moolre_web';
+    const depositReference = isPlaceholderRef
+      ? `moolre_web_init_${user.id}_${Date.now()}` // temporary placeholder
+      : (reference || `${method}_${user.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
 
     // Create transaction record server-side with validated data
     const { data: transaction, error: insertError } = await supabase
@@ -169,6 +173,28 @@ export default async function handler(req, res) {
       });
     }
 
+    // For moolre_web: now that we have the transaction ID, generate the canonical
+    // reference and update it server-side using the service role key.
+    // This avoids the client-side RLS UPDATE block that silently fails for non-admin users.
+    let finalReference = depositReference;
+    if (isPlaceholderRef) {
+      finalReference = `MOOLRE_WEB_${transaction.id}_${Date.now()}`;
+      const { error: refUpdateError } = await supabase
+        .from('transactions')
+        .update({ moolre_reference: finalReference })
+        .eq('id', transaction.id);
+
+      if (refUpdateError) {
+        // This would be a serious error — clean up and fail
+        console.error('Failed to set moolre_web reference — rolling back transaction:', refUpdateError);
+        await supabase.from('transactions').delete().eq('id', transaction.id);
+        return res.status(500).json({
+          error: 'Failed to initialize moolre_web reference',
+          details: refUpdateError.message
+        });
+      }
+    }
+
     // Log the secure deposit initiation
     await logUserAction({
       user_id: user.id,
@@ -179,7 +205,7 @@ export default async function handler(req, res) {
       metadata: {
         amount: depositAmount,
         method: method,
-        reference: depositReference,
+        reference: finalReference,
         transaction_id: transaction.id,
         validated_server_side: true,
         rate_limit_check_passed: true
@@ -196,7 +222,7 @@ export default async function handler(req, res) {
         amount: transaction.amount,
         method: transaction.deposit_method,
         status: transaction.status,
-        reference: depositReference,
+        reference: finalReference,
         created_at: transaction.created_at
       },
       limits: {
