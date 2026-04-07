@@ -92,16 +92,7 @@
         }
       ]
     }
-  ],
-  "crons": [
-    {
-      "path": "/api/verify-pending-payments",
-      "schedule": "*/10 * * * *"
-    },
-    {
-      "path": "/api/fill-missing-paystack-references",
-      "schedule": "0 */6 * * *"
-    }
   ]
 }
+
 
