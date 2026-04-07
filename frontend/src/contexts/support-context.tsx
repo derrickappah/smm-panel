@@ -1862,11 +1862,17 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
     checkAdminPresence();
     
     // Initial update
-    supabase
-      .from('profiles')
-      .update({ last_seen_at: new Date().toISOString() })
-      .eq('id', userRole.userId)
-      .catch(console.error);
+    (async () => {
+      try {
+        const { error } = await supabase
+          .from('profiles')
+          .update({ last_seen_at: new Date().toISOString() })
+          .eq('id', userRole.userId);
+        if (error) console.error('Initial presence update failed:', error);
+      } catch (err) {
+        console.error('Initial presence update error:', err);
+      }
+    })();
 
     // Set up interval (every 60 seconds)
     globalPresenceHeartbeatRef.current = setInterval(async () => {
