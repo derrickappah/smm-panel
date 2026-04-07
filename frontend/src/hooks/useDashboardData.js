@@ -107,6 +107,24 @@ const fetchRecentOrders = async () => {
   return orders;
 };
 
+// Fetch total order count query function
+const fetchTotalOrderCount = async () => {
+  const { data: { user: authUser } } = await supabase.auth.getUser();
+  if (!authUser) return 0;
+
+  const { count, error } = await supabase
+    .from('orders')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', authUser.id);
+
+  if (error) {
+    console.error('Error fetching total order count:', error);
+    return 0;
+  }
+
+  return count || 0;
+};
+
 // Fetch all pending orders for the current user
 const fetchAllPendingOrders = async () => {
   console.log('fetchAllPendingOrders called');
@@ -304,6 +322,19 @@ export const useDashboardData = () => {
     enabled: !!supabase.auth.getUser(), // Only fetch if user is authenticated
   });
 
+  // Total order count query with React Query
+  const {
+    data: totalOrderCount = 0,
+    refetch: refetchTotalOrderCount
+  } = useQuery({
+    queryKey: ['totalOrderCount'],
+    queryFn: fetchTotalOrderCount,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    gcTime: 5 * 60 * 1000,
+    retry: 1,
+    enabled: !!supabase.auth.getUser(),
+  });
+
   // Function to check all pending orders status (wrapped with queryClient)
   const checkAllPendingOrdersStatusWrapper = () => {
     return checkAllPendingOrdersStatus(queryClient);
@@ -316,8 +347,10 @@ export const useDashboardData = () => {
     ordersLoading,
     servicesError,
     ordersError,
+    totalOrderCount,
     fetchServices: refetchServices,
     fetchRecentOrders: refetchRecentOrders,
+    fetchTotalOrderCount: refetchTotalOrderCount,
     checkAllPendingOrdersStatus: checkAllPendingOrdersStatusWrapper,
   };
 };

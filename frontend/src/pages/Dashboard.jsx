@@ -28,7 +28,14 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
   const location = useLocation();
 
   // Use custom hooks
-  const { services, recentOrders, fetchServices, fetchRecentOrders, checkAllPendingOrdersStatus } = useDashboardData();
+  const { 
+    services, 
+    recentOrders, 
+    totalOrderCount,
+    fetchServices, 
+    fetchRecentOrders, 
+    checkAllPendingOrdersStatus 
+  } = useDashboardData();
   const { data: promotionPackages = [] } = usePromotionPackages();
   const {
     depositMethod,
@@ -3220,7 +3227,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         )}
 
         {/* Stats Cards */}
-        <DashboardStats user={displayUser} orderCount={recentOrders.length} />
+        <DashboardStats user={displayUser} orderCount={totalOrderCount} />
 
         <div className="grid lg:grid-cols-2 gap-6 lg:gap-8">
           {/* Add Funds */}
