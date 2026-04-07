@@ -65,6 +65,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
   const conversationsOffsetRef = useRef(0);
   const CONVERSATIONS_PAGE_SIZE = 100;
   const [unreadCount, setUnreadCount] = useState(0);
+  const [isAdminOnline, setIsAdminOnline] = useState(false);
 
   // Refs for real-time subscriptions
   const conversationsChannelRef = useRef<any>(null);
@@ -75,6 +76,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
   const typingTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
   const currentConversationRef = useRef<Conversation | null>(null);
   const presenceHeartbeatRef = useRef<NodeJS.Timeout | null>(null);
+  const globalPresenceHeartbeatRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load user's conversations (should only be 0 or 1 conversation)
   const loadConversations = useCallback(async () => {
@@ -1835,6 +1837,60 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
     }
   }, []);
 
+  // Check if any admin is online
+  const checkAdminPresence = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('role', 'admin')
+        .gt('last_seen_at', new Date(Date.now() - 2 * 60 * 1000).toISOString())
+        .limit(1);
+
+      if (error) throw error;
+      setIsAdminOnline(data && data.length > 0);
+    } catch (error) {
+      console.error('Error checking admin presence:', error);
+    }
+  }, []);
+
+  // Global heartbeat to update current user's presence and check admin presence
+  useEffect(() => {
+    if (isLoadingUserRole || !userRole?.userId) return;
+
+    // Initial check
+    checkAdminPresence();
+    
+    // Initial update
+    supabase
+      .from('profiles')
+      .update({ last_seen_at: new Date().toISOString() })
+      .eq('id', userRole.userId)
+      .catch(console.error);
+
+    // Set up interval (every 60 seconds)
+    globalPresenceHeartbeatRef.current = setInterval(async () => {
+      // 1. Update current user's last_seen_at
+      try {
+        await supabase
+          .from('profiles')
+          .update({ last_seen_at: new Date().toISOString() })
+          .eq('id', userRole.userId);
+      } catch (error) {
+        console.error('Error updating presence heartbeat:', error);
+      }
+
+      // 2. Check if any admin is online
+      checkAdminPresence();
+    }, 60000);
+
+    return () => {
+      if (globalPresenceHeartbeatRef.current) {
+        clearInterval(globalPresenceHeartbeatRef.current);
+      }
+    };
+  }, [userRole?.userId, isLoadingUserRole, checkAdminPresence]);
+
   const value: SupportContextType = {
     // Ticket state
     tickets: Array.isArray(tickets) ? tickets : [],
@@ -1854,6 +1910,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
     isLoadingMessages,
     isLoadingMoreMessages,
     hasMoreMessages,
+    isAdminOnline,
     unreadCount,
     isAdmin,
     // Ticket methods

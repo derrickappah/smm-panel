@@ -176,6 +176,7 @@ export interface SupportContextState {
   isLoadingConversations: boolean;
   isLoadingMoreConversations: boolean;
   hasMoreConversations: boolean;
+  isAdminOnline: boolean;
 }
 
 export interface SupportContextMethods {

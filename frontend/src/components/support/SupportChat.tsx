@@ -29,6 +29,7 @@ export const SupportChat: React.FC<SupportChatProps> = ({ hideHeader = false }) 
     isLoadingTickets,
     isLoadingConversations,
     isAdmin,
+    isAdminOnline,
   } = useSupport();
 
   const [messageContent, setMessageContent] = useState('');
@@ -174,8 +175,8 @@ export const SupportChat: React.FC<SupportChatProps> = ({ hideHeader = false }) 
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-sm sm:text-base truncate">BoostUp Support Team</h3>
             <div className="flex items-center gap-1.5 text-xs text-indigo-100">
-              <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
-              <span>Online</span>
+              <span className={`w-2 h-2 rounded-full ${isAdminOnline ? 'bg-green-400 animate-pulse' : 'bg-gray-400'}`}></span>
+              <span>{isAdminOnline ? 'Online' : 'Away'}</span>
             </div>
           </div>
           <div className="flex-center gap-2">

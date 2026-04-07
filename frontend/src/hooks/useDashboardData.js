@@ -67,11 +67,11 @@ const fetchServices = async () => {
 // Fetch recent orders query function
 const fetchRecentOrders = async () => {
   const { data: { user: authUser } } = await supabase.auth.getUser();
-  if (!authUser) return [];
+  if (!authUser) return { orders: [], count: 0 };
 
-  const { data, error } = await supabase
+  const { data, error, count } = await supabase
     .from('orders')
-    .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, created_at, completed_at, refund_status, total_cost, last_status_check, promotion_packages(name, platform, service_type)')
+    .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, created_at, completed_at, refund_status, total_cost, last_status_check, promotion_packages(name, platform, service_type)', { count: 'exact' })
     .eq('user_id', authUser.id)
     .order('created_at', { ascending: false })
     .limit(5);
@@ -79,12 +79,13 @@ const fetchRecentOrders = async () => {
   if (error) {
     if (error.code === 'PGRST301' || error.message?.includes('500') || error.message?.includes('Internal Server Error')) {
       console.warn('Orders table may not exist or RLS policy issue:', error.message);
-      return [];
+      return { orders: [], count: 0 };
     }
     throw error;
   }
 
   const orders = data || [];
+  const totalCount = count || 0;
 
   // Check SMMGen status for orders using optimized batch utility
   if (orders.length > 0) {
@@ -101,29 +102,13 @@ const fetchRecentOrders = async () => {
       .in('id', orders.map(o => o.id))
       .order('created_at', { ascending: false });
 
-    return updatedData || orders;
+    return { orders: updatedData || orders, count: totalCount };
   }
 
-  return orders;
+  return { orders, count: totalCount };
 };
 
-// Fetch total order count query function
-const fetchTotalOrderCount = async () => {
-  const { data: { user: authUser } } = await supabase.auth.getUser();
-  if (!authUser) return 0;
-
-  const { count, error } = await supabase
-    .from('orders')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', authUser.id);
-
-  if (error) {
-    console.error('Error fetching total order count:', error);
-    return 0;
-  }
-
-  return count || 0;
-};
+// Removed redundant fetchTotalOrderCount function
 
 // Fetch all pending orders for the current user
 const fetchAllPendingOrders = async () => {
@@ -307,9 +292,9 @@ export const useDashboardData = () => {
     }
   });
 
-  // Recent orders query with React Query
+  // Recent orders query with React Query - now also includes total count
   const {
-    data: recentOrders = [],
+    data: dashboardOrdersData = { orders: [], count: 0 },
     isLoading: ordersLoading,
     error: ordersError,
     refetch: refetchRecentOrders
@@ -322,18 +307,8 @@ export const useDashboardData = () => {
     enabled: !!supabase.auth.getUser(), // Only fetch if user is authenticated
   });
 
-  // Total order count query with React Query
-  const {
-    data: totalOrderCount = 0,
-    refetch: refetchTotalOrderCount
-  } = useQuery({
-    queryKey: ['totalOrderCount'],
-    queryFn: fetchTotalOrderCount,
-    staleTime: 2 * 60 * 1000, // 2 minutes
-    gcTime: 5 * 60 * 1000,
-    retry: 1,
-    enabled: !!supabase.auth.getUser(),
-  });
+  const recentOrders = dashboardOrdersData.orders;
+  const totalOrderCount = dashboardOrdersData.count;
 
   // Function to check all pending orders status (wrapped with queryClient)
   const checkAllPendingOrdersStatusWrapper = () => {
@@ -350,7 +325,6 @@ export const useDashboardData = () => {
     totalOrderCount,
     fetchServices: refetchServices,
     fetchRecentOrders: refetchRecentOrders,
-    fetchTotalOrderCount: refetchTotalOrderCount,
     checkAllPendingOrdersStatus: checkAllPendingOrdersStatusWrapper,
   };
 };
