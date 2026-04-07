@@ -27,7 +27,7 @@ const DashboardOrders = React.memo(({ orders, services }) => {
     };
   }, []);
 
-  if (orders.length === 0) {
+  if (!orders || orders.length === 0) {
     return null;
   }
 
@@ -46,7 +46,7 @@ const DashboardOrders = React.memo(({ orders, services }) => {
       </div>
       <div className="space-y-3">
         {orders.map((order) => {
-          const service = services.find(s => s.id === order.service_id);
+          const service = services?.find(s => s.id === order.service_id);
           const isPackageOrder = !!order.promotion_package_id;
           const serviceName = isPackageOrder
             ? order.promotion_packages?.name || 'Package'

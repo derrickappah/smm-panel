@@ -304,11 +304,11 @@ export const useDashboardData = () => {
     staleTime: 2 * 60 * 1000, // 2 minutes - orders change more frequently
     gcTime: 5 * 60 * 1000, // 5 minutes
     retry: 1,
-    enabled: !!supabase.auth.getUser(), // Only fetch if user is authenticated
+    enabled: true, // Let the query run, fetchRecentOrders handles missing user
   });
 
-  const recentOrders = dashboardOrdersData.orders;
-  const totalOrderCount = dashboardOrdersData.count;
+  const recentOrders = dashboardOrdersData?.orders || [];
+  const totalOrderCount = dashboardOrdersData?.count || 0;
 
   // Function to check all pending orders status (wrapped with queryClient)
   const checkAllPendingOrdersStatusWrapper = () => {
@@ -316,13 +316,13 @@ export const useDashboardData = () => {
   };
 
   return {
-    services,
-    recentOrders,
+    services: services || [],
+    recentOrders: recentOrders || [],
     servicesLoading,
     ordersLoading,
     servicesError,
     ordersError,
-    totalOrderCount,
+    totalOrderCount: totalOrderCount || 0,
     fetchServices: refetchServices,
     fetchRecentOrders: refetchRecentOrders,
     checkAllPendingOrdersStatus: checkAllPendingOrdersStatusWrapper,
