@@ -16,10 +16,10 @@ export const processAutomaticRefund = async (order) => {
       return { success: order.refund_status === 'succeeded', message: order.refund_status === 'succeeded' ? 'Refund already processed' : 'Refund already in progress' };
     }
 
-    // Skip if order is not cancelled or failed (also check for 'canceled' to match SMMGen)
-    if (order.status !== 'cancelled' && order.status !== 'canceled') {
-      console.log('Order is not cancelled, skipping refund:', order.id, order.status);
-      return { success: false, error: 'Order is not cancelled' };
+    // Skip if order is not cancelled or failed (also check for 'canceled' to match SMMGen and 'submission_failed' for placement failures)
+    if (order.status !== 'cancelled' && order.status !== 'canceled' && order.status !== 'submission_failed') {
+      console.log('Order is not in a refundable state, skipping refund:', order.id, order.status);
+      return { success: false, error: `Order is not in a refundable state (Current: ${order.status})` };
     }
 
     // Atomically mark refund as pending ONLY if it's not already pending or succeeded
@@ -214,12 +214,12 @@ export const processManualRefund = async (order) => {
       };
     }
 
-    // Validation: Ensure order is cancelled
-    if (order.status !== 'cancelled' && order.status !== 'canceled') {
-      console.log('Order is not cancelled, cannot process refund:', order.id, order.status);
+    // Validation: Ensure order is cancelled or placement failed
+    if (order.status !== 'cancelled' && order.status !== 'canceled' && order.status !== 'submission_failed') {
+      console.log('Order is not in a refundable state, cannot process refund:', order.id, order.status);
       return { 
         success: false, 
-        error: `Order must be cancelled to process refund. Current status: ${order.status}` 
+        error: `Order must be cancelled or failed to process refund. Current status: ${order.status}` 
       };
     }
 

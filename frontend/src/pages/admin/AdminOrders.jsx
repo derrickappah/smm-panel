@@ -723,7 +723,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                 {safeRetryMutation.isPending ? 'Retrying...' : 'Safe Retry'}
               </Button>
             )}
-            {(order.status === 'canceled' || order.status === 'cancelled') &&
+            {(order.status === 'canceled' || order.status === 'cancelled' || order.status === 'submission_failed') &&
               order.refund_status !== 'succeeded' &&
               order.status !== 'refunded' && (
                 <Button
@@ -746,7 +746,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                       : 'Refund'}
                 </Button>
               )}
-            {(order.status === 'canceled' || order.status === 'cancelled') &&
+            {(order.status === 'canceled' || order.status === 'cancelled' || order.status === 'submission_failed') &&
               (order.refund_status === 'succeeded' || order.status === 'refunded') && (
                 <div className="w-full min-h-[44px] flex items-center justify-center text-xs text-gray-500 italic">
                   Already Refunded
@@ -1065,7 +1065,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               {safeRetryMutation.isPending ? 'Retrying...' : 'Safe Retry'}
             </Button>
           )}
-          {(order.status === 'canceled' || order.status === 'cancelled') &&
+          {(order.status === 'canceled' || order.status === 'cancelled' || order.status === 'submission_failed') &&
             order.refund_status !== 'succeeded' &&
             order.status !== 'refunded' && (
               <Button
@@ -1088,7 +1088,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                     : 'Refund'}
               </Button>
             )}
-          {(order.status === 'canceled' || order.status === 'cancelled') &&
+          {(order.status === 'canceled' || order.status === 'cancelled' || order.status === 'submission_failed') &&
             (order.refund_status === 'succeeded' || order.status === 'refunded') && (
               <div className="w-full min-h-[44px] flex items-center justify-center text-xs text-gray-500 italic">
                 Already Refunded
