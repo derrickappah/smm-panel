@@ -70,7 +70,7 @@ export const processAutomaticRefund = async (order) => {
 
     const currentBalance = parseFloat(profile.balance || 0);
     const refundAmount = parseFloat(order.total_cost || 0);
-    const newBalance = currentBalance + refundAmount;
+    const newBalance = Math.round((currentBalance + refundAmount) * 100) / 100;
 
     console.log('Processing automatic refund:', {
       orderId: order.id,
@@ -410,7 +410,7 @@ export const processManualRefund = async (order) => {
       throw new Error('Invalid refund amount. Order total cost must be greater than 0.');
     }
 
-    const newBalance = currentBalance + refundAmount;
+    const newBalance = Math.round((currentBalance + refundAmount) * 100) / 100;
 
     console.log('Processing manual refund:', {
       orderId: order.id,

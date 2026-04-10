@@ -386,6 +386,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
         // Invalidate queries to ensure data consistency (refetch in background)
         queryClient.invalidateQueries({ queryKey: ['admin', 'orders'] });
         queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
+        queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
         // Refetch to ensure UI is updated with latest data
         await refetch();
         if (onRefresh) onRefresh();
