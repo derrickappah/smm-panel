@@ -1,4 +1,5 @@
 import { verifyAuth } from './utils/auth.js';
+import { checkDepositRateLimit } from './utils/depositRateLimit.js';
 
 export default async function handler(req, res) {
   // Enable CORS
@@ -18,14 +19,23 @@ export default async function handler(req, res) {
 
   try {
     // Authenticate user
+    let user;
     try {
-      await verifyAuth(req);
+      const authResult = await verifyAuth(req);
+      user = authResult.user;
     } catch (authError) {
       return res.status(401).json({
         error: 'Authentication required',
         message: authError.message
       });
     }
+
+    // Check Rate Limit (5 rejected deposits per hour)
+    const rateLimit = await checkDepositRateLimit(user.id, req);
+    if (rateLimit.blocked) {
+      return res.status(429).json({ error: rateLimit.message });
+    }
+
     const {
       amount,
       currency = 'GHS',

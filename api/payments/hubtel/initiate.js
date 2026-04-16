@@ -1,5 +1,6 @@
 import { verifyAuth, getServiceRoleClient } from '../../utils/auth.js';
 import { logUserAction } from '../../utils/activityLogger.js';
+import { checkDepositRateLimit } from '../../utils/depositRateLimit.js';
 import crypto from 'crypto';
 
 
@@ -42,11 +43,14 @@ export default async function handler(req, res) {
         const { user } = await verifyAuth(req);
         const { amount, description } = req.body;
 
-        if (!amount || isNaN(amount) || parseFloat(amount) <= 0) {
-            return res.status(400).json({ error: 'Valid amount is required' });
+        const totalAmount = parseFloat(amount);
+
+        // 1b. Check Rate Limit (5 rejected deposits per hour)
+        const rateLimit = await checkDepositRateLimit(user.id, req);
+        if (rateLimit.blocked) {
+            return res.status(429).json({ error: rateLimit.message });
         }
 
-        const totalAmount = parseFloat(amount);
         const clientReference = crypto.randomUUID().replace(/-/g, '').substring(0, 32);
 
 

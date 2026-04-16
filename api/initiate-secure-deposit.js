@@ -18,6 +18,7 @@
 
 import { verifyAuth, getServiceRoleClient } from './utils/auth.js';
 import { logUserAction } from './utils/activityLogger.js';
+import { checkDepositRateLimit } from './utils/depositRateLimit.js';
 
 // Deposit limits by payment method
 const DEPOSIT_LIMITS = {
@@ -117,27 +118,10 @@ export default async function handler(req, res) {
       });
     }
 
-    // Rate limiting check: Count recent deposits in last hour
-    const supabase = getServiceRoleClient();
-    const oneHourAgo = new Date(Date.now() - 3600000);
-    const { data: recentDeposits, error: rateLimitError } = await supabase
-      .from('transactions')
-      .select('id, created_at')
-      .eq('user_id', user.id)
-      .eq('type', 'deposit')
-      .gte('created_at', oneHourAgo.toISOString())
-      .order('created_at', { ascending: false });
-
-    if (rateLimitError) {
-      console.error('Rate limiting check error:', rateLimitError);
-      // Continue anyway - don't block legitimate users due to DB errors
-    } else if (recentDeposits && recentDeposits.length >= RATE_LIMIT_DEPOSITS_PER_HOUR) {
-      return res.status(429).json({
-        error: 'Too many deposit attempts. Please try again later.',
-        limit: RATE_LIMIT_DEPOSITS_PER_HOUR,
-        timeframe: 'per hour',
-        retry_after: 3600 // seconds
-      });
+    // Rate limiting check (5 rejected deposits per hour)
+    const rateLimit = await checkDepositRateLimit(user.id, req);
+    if (rateLimit.blocked) {
+      return res.status(429).json({ error: rateLimit.message });
     }
 
     // For moolre_web, generate a placeholder first — the canonical reference needs the transaction ID.
