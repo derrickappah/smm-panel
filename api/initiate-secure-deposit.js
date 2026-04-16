@@ -124,6 +124,8 @@ export default async function handler(req, res) {
       return res.status(429).json({ error: rateLimit.message });
     }
 
+    const supabase = getServiceRoleClient();
+
     // For moolre_web, generate a placeholder first — the canonical reference needs the transaction ID.
     // We'll update it server-side after insert so we never need a client-side DB write.
     const isPlaceholderRef = method === 'moolre_web';
