@@ -163,15 +163,34 @@ export const usePaymentMethods = () => {
     }
   };
 
-  // Update local state when data loads if not already set or if it's currently the default
+  // Update local state when data loads or when settings change
+  // Ensure the currently selected method is actually enabled
   useEffect(() => {
     const saved = typeof window !== 'undefined' ? localStorage.getItem('last_deposit_method') : null;
 
-    if (data?.depositMethod && !saved) {
-      // If we don't have a saved preference, respect the server's recommendation
-      setInternalDepositMethod(data.depositMethod);
+    if (data?.paymentMethodSettings && data?.depositMethod) {
+      const pm = data.paymentMethodSettings;
+      const isEnabled = (method) => {
+        if (!method) return false;
+        if (method === 'paystack') return pm.paystack_enabled;
+        if (method === 'manual') return pm.manual_enabled;
+        if (method === 'hubtel') return pm.hubtel_enabled;
+        if (method === 'korapay') return pm.korapay_enabled;
+        if (method === 'moolre') return pm.moolre_enabled;
+        if (method === 'moolre_web') return pm.moolre_web_enabled;
+        return false;
+      };
+
+      const currentMethod = depositMethod || saved;
+
+      // Update method if:
+      // 1. We don't have a saved preference
+      // 2. The current method (from state or saved) is now disabled
+      if (!saved || !isEnabled(currentMethod)) {
+        setInternalDepositMethod(data.depositMethod);
+      }
     }
-  }, [data?.depositMethod]);
+  }, [data?.depositMethod, data?.paymentMethodSettings, depositMethod]);
 
   return {
     depositMethod: depositMethod || data?.depositMethod || DEFAULT_PAYMENT_SETTINGS.depositMethod,
