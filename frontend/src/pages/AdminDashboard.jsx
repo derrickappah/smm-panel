@@ -11,9 +11,6 @@ import {
   ChevronLeft, ChevronRight, FileText, Server, HelpCircle, CreditCard, Scale, Bell, Video,
   Gift, Settings
 } from 'lucide-react';
-import { useAdminOrders } from '@/hooks/useAdminOrders';
-import { useAdminDeposits } from '@/hooks/useAdminDeposits';
-import { useAdminTransactions } from '@/hooks/useAdminTransactions';
 import { useReferralStats } from '@/hooks/useAdminReferrals';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
@@ -169,24 +166,10 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     gcTime: 0,
   });
 
-  // Fetch data for AdminStats (minimal data needed)
-  const { data: ordersData } = useAdminOrders({
-    enabled: activeSection === 'dashboard',
-    useInfinite: false
-  });
-  const { data: depositsData } = useAdminDeposits({
-    enabled: activeSection === 'dashboard',
-    useInfinite: false
-  });
-  const { data: transactionsData } = useAdminTransactions({
-    enabled: activeSection === 'dashboard',
-    useInfinite: false
-  });
   const { data: referralStats = { total_referrals: 0, pending_bonuses: 0 } } = useReferralStats();
 
-  const orders = useMemo(() => ordersData || [], [ordersData]);
-  const deposits = useMemo(() => depositsData || [], [depositsData]);
-  const allTransactions = useMemo(() => transactionsData || [], [transactionsData]);
+  // Note: The heavy fetchAll hooks for orders/deposits/transactions have been removed.
+  // AdminStats now gets its data directly from the get_admin_dashboard_stats() RPC.
 
   // Memoized section change handler - now uses URL navigation
   const handleSectionChange = useCallback((section) => {
@@ -679,9 +662,6 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                       dateRangeStart={dateRangeStart}
                       dateRangeEnd={dateRangeEnd}
                       referralStats={referralStats}
-                      orders={orders}
-                      deposits={deposits}
-                      allTransactions={allTransactions}
                       getBalanceCheckResult={getBalanceCheckResult}
                       onSectionChange={handleSectionChange}
                       paymentMethodSettings={paymentMethodSettings}

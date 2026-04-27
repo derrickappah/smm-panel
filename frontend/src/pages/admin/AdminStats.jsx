@@ -1,7 +1,5 @@
 import React, { memo, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useAdminStats } from '@/hooks/useAdminStats';
-import { useAdminOrders } from '@/hooks/useAdminOrders';
-import { useAdminDeposits } from '@/hooks/useAdminDeposits';
 import AnimatedNumber from '@/components/admin/AnimatedNumber';
 import { Button } from '@/components/ui/button';
 import { 
@@ -14,14 +12,10 @@ const AdminStats = memo(({
   dateRangeStart, 
   dateRangeEnd, 
   referralStats = { total_referrals: 0, pending_bonuses: 0 },
-  orders = [],
-  deposits = [],
-  allTransactions = [],
-  getBalanceCheckResult = () => null,
   onSectionChange,
   paymentMethodSettings = {}
 }) => {
-  const { data: stats = {}, isLoading } = useAdminStats({ 
+  const { data: stats = {}, isLoading, recentOrders, recentDeposits, topCustomers } = useAdminStats({ 
     dateRangeStart, 
     dateRangeEnd,
     enabled: true
@@ -45,50 +39,11 @@ const AdminStats = memo(({
     }
   }, [onSectionChange]);
 
-  const recentOrders = useMemo(() => orders.slice(0, 5), [orders]);
-  const recentDeposits = useMemo(() => deposits.slice(0, 5), [deposits]);
+  // recentOrders, recentDeposits, and topCustomers now come from the useAdminStats hook (database RPC)
 
-  const topCustomers = useMemo(() => {
-    // Aggregate deposits by user_id, summing only approved deposits
-    const customerTotals = {};
-    
-    (deposits || []).forEach(deposit => {
-      if (deposit.status === 'approved' && deposit.user_id) {
-        const userId = deposit.user_id;
-        const amount = parseFloat(deposit.amount || 0);
-        
-        if (!customerTotals[userId]) {
-          customerTotals[userId] = {
-            user_id: userId,
-            totalDeposits: 0,
-            depositCount: 0,
-            name: deposit.profiles?.name || deposit.profiles?.email || 'Unknown User',
-            email: deposit.profiles?.email || '',
-          };
-        }
-        
-        customerTotals[userId].totalDeposits += amount;
-        customerTotals[userId].depositCount += 1;
-      }
-    });
-    
-    // Convert to array, sort by total deposits descending, and take top 100
-    return Object.values(customerTotals)
-      .sort((a, b) => b.totalDeposits - a.totalDeposits)
-      .slice(0, 100)
-      .map((customer, index) => ({
-        ...customer,
-        rank: index + 1
-      }));
-  }, [deposits]);
-
-  const balanceNotUpdatedCount = useMemo(() => {
-    return allTransactions.filter(t => 
-      t.type === 'deposit' && 
-      t.status === 'approved' && 
-      getBalanceCheckResult(t) === 'not_updated'
-    ).length;
-  }, [allTransactions, getBalanceCheckResult]);
+  // balanceNotUpdatedCount is no longer computed here since we removed the heavy allTransactions fetch.
+  // This check is available on the Transactions tab where the data is loaded incrementally.
+  const balanceNotUpdatedCount = 0;
 
   const statsWithPaymentMethods = {
     ...stats,
