@@ -38,6 +38,7 @@ const AdminFAQ = lazy(() => import('@/pages/admin/AdminFAQ'));
 const AdminTerms = lazy(() => import('@/pages/admin/AdminTerms'));
 const AdminUpdates = lazy(() => import('@/pages/admin/AdminUpdates'));
 const AdminVideoTutorials = lazy(() => import('@/pages/admin/AdminVideoTutorials'));
+const AdminServiceNotifications = lazy(() => import('@/pages/admin/AdminServiceNotifications'));
 import AdminRewards from '@/pages/admin/AdminRewards';
 import AdminRewardSettings from '@/pages/admin/AdminRewardSettings';
 
@@ -90,6 +91,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
         'terms': 'terms',
         'updates': 'updates',
         'video-tutorials': 'video-tutorials',
+        'notifications': 'notifications',
         'rewards': 'rewards',
         'rewards-settings': 'rewards-settings'
       };
@@ -313,6 +315,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     support: 'Support',
     balance: 'Balance Check',
     faq: 'FAQ Management',
+    notifications: 'Service Notifications',
     referrals: 'Referrals',
     'activity-logs': 'Activity Logs',
     smmcost: 'SMMCost Integration',
@@ -344,6 +347,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     { id: 'terms', label: 'Terms & Conditions', icon: Scale },
     { id: 'updates', label: 'Updates', icon: Bell },
     { id: 'video-tutorials', label: 'Video Tutorials', icon: Video },
+    { id: 'notifications', label: 'Service Notifications', icon: Bell },
     { id: 'smmcost', label: 'SMMCost', icon: Server },
     { id: 'smmgen', label: 'SMMGen', icon: Server },
     { id: 'jbsmmpanel', label: 'JB SMM Panel', icon: Server },
@@ -797,6 +801,13 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                 <TabsContent value="faq" className="lg:mt-0 w-full max-w-full">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminFAQ />
+                  </Suspense>
+                </TabsContent>
+
+                {/* Notifications Section */}
+                <TabsContent value="notifications" className="lg:mt-0 w-full max-w-full">
+                  <Suspense fallback={<ComponentLoader />}>
+                    <AdminServiceNotifications />
                   </Suspense>
                 </TabsContent>
 

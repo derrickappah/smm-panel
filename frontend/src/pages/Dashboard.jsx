@@ -17,6 +17,8 @@ import DashboardOrderForm from '@/components/dashboard/DashboardOrderForm';
 import DashboardOrders from '@/components/dashboard/DashboardOrders';
 import PromotionBanner from '@/components/dashboard/PromotionBanner';
 import ClaimRewardModal from '@/components/dashboard/ClaimRewardModal';
+import ForcedNotificationPopup from '@/components/dashboard/ForcedNotificationPopup';
+
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { usePaymentMethods } from '@/hooks/usePaymentMethods';
 import { usePromotionPackages } from '@/hooks/useAdminPromotionPackages';
@@ -3181,6 +3183,10 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         noindex={true}
       />
       <Navbar user={displayUser} onLogout={onLogout} />
+      
+      {/* Forced Targeted Notifications */}
+      {user?.id && <ForcedNotificationPopup userId={user.id} />}
+
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-32 md:pt-6 pb-6 sm:pb-8">
         {/* Welcome Section */}
@@ -3299,6 +3305,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         onClose={() => setShowRewardModal(false)}
       />
 
+      {/* Targeted Service Notifications - Forced Popup */}
+      <ForcedNotificationPopup userId={user?.id} />
     </div>
   );
 };
