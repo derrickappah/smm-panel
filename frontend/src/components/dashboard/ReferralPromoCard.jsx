@@ -3,7 +3,10 @@ import { Users, Wallet, ArrowRight } from 'lucide-react';
 
 const ReferralPromoCard = ({ onAction }) => {
   return (
-    <div className="bg-white rounded-2xl py-6 px-4 sm:py-12 sm:px-10 shadow-sm border border-gray-100 flex flex-row items-center justify-between gap-3 sm:gap-8 overflow-hidden relative group animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div 
+      onClick={onAction}
+      className="bg-white rounded-2xl py-6 px-4 sm:py-12 sm:px-10 shadow-sm border border-gray-100 flex flex-row items-center justify-between gap-3 sm:gap-8 overflow-hidden relative group animate-in fade-in slide-in-from-bottom-4 duration-700 cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
+    >
       {/* Decorative background element */}
       <div className="absolute -top-24 -right-24 w-64 h-64 bg-purple-50 rounded-full blur-3xl opacity-50 group-hover:opacity-70 transition-opacity duration-500" />
       
@@ -25,13 +28,12 @@ const ReferralPromoCard = ({ onAction }) => {
           </div>
         </div>
 
-        <button 
-          onClick={onAction}
-          className="flex items-center gap-1 sm:gap-2 text-purple-600 font-bold text-xs sm:text-xl hover:gap-3 transition-all duration-300 group/btn focus:outline-none pt-2 sm:pt-4"
+        <div 
+          className="flex items-center gap-1 sm:gap-2 text-purple-600 font-bold text-xs sm:text-xl hover:gap-3 transition-all duration-300 group/btn pt-2 sm:pt-4"
         >
           Start Earning Now
           <ArrowRight className="w-3 h-3 sm:w-6 sm:h-6 transition-transform group-hover/btn:translate-x-1" />
-        </button>
+        </div>
       </div>
 
       {/* Right Graphic */}
