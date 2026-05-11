@@ -64,9 +64,10 @@ DECLARE
     v_current_balance DECIMAL;
 BEGIN
     -- Validation: Minimum amount
-    IF p_amount < 10 THEN
-        RETURN json_build_object('success', false, 'message', 'Minimum transfer amount is GHS 10');
+    IF p_amount < 0.1 THEN
+        RETURN json_build_object('success', false, 'message', 'Minimum transfer amount is GHS 0.1');
     END IF;
+
 
     -- Get current referral balance
     SELECT balance INTO v_current_balance
@@ -110,10 +111,11 @@ DECLARE
     v_user_id UUID := auth.uid();
     v_current_balance DECIMAL;
 BEGIN
-    -- Validation: Minimum amount (usually higher for cash out, let's say 20)
-    IF p_amount < 20 THEN
-        RETURN json_build_object('success', false, 'message', 'Minimum withdrawal amount is GHS 20');
+    -- Validation: Minimum amount (lowered to 5 as requested)
+    IF p_amount < 5 THEN
+        RETURN json_build_object('success', false, 'message', 'Minimum withdrawal amount is GHS 5');
     END IF;
+
 
     -- Get current referral balance
     SELECT balance INTO v_current_balance

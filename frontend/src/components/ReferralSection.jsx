@@ -117,10 +117,11 @@ const ReferralSection = ({ user }) => {
 
   const handleTransfer = async () => {
     const amount = parseFloat(transferAmount);
-    if (isNaN(amount) || amount < 10) {
-      toast.error('Minimum transfer amount is GHS 10');
+    if (isNaN(amount) || amount < 0.1) {
+      toast.error('Minimum transfer amount is GHS 0.1');
       return;
     }
+
 
     try {
       setActionLoading(true);
@@ -147,10 +148,11 @@ const ReferralSection = ({ user }) => {
 
   const handleWithdrawal = async () => {
     const amount = parseFloat(withdrawalAmount);
-    if (isNaN(amount) || amount < 20) {
-      toast.error('Minimum withdrawal amount is GHS 20');
+    if (isNaN(amount) || amount < 5) {
+      toast.error('Minimum withdrawal amount is GHS 5');
       return;
     }
+
 
     if (!withdrawalDetails.trim()) {
       toast.error('Please provide payment details');
@@ -396,11 +398,12 @@ const ReferralSection = ({ user }) => {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Amount (Min GHS 10)</Label>
+              <Label>Amount (Min GHS 0.1)</Label>
               <div className="relative">
                 <span className="absolute left-3 top-2.5 text-gray-500">₵</span>
                 <Input
                   type="number"
+                  step="0.01"
                   placeholder="0.00"
                   className="pl-7"
                   value={transferAmount}
@@ -414,9 +417,10 @@ const ReferralSection = ({ user }) => {
             <Button variant="outline" onClick={() => setIsTransferModalOpen(false)}>Cancel</Button>
             <Button 
               onClick={handleTransfer} 
-              disabled={actionLoading || !transferAmount || parseFloat(transferAmount) < 10}
+              disabled={actionLoading || !transferAmount || parseFloat(transferAmount) < 0.1}
               className="bg-indigo-600 hover:bg-indigo-700"
             >
+
               {actionLoading ? 'Processing...' : 'Transfer Now'}
             </Button>
           </DialogFooter>
@@ -434,11 +438,12 @@ const ReferralSection = ({ user }) => {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Amount (Min GHS 20)</Label>
+              <Label>Amount (Min GHS 5)</Label>
               <div className="relative">
                 <span className="absolute left-3 top-2.5 text-gray-500">₵</span>
                 <Input
                   type="number"
+                  step="0.01"
                   placeholder="0.00"
                   className="pl-7"
                   value={withdrawalAmount}
@@ -462,9 +467,10 @@ const ReferralSection = ({ user }) => {
             <Button variant="outline" onClick={() => setIsWithdrawModalOpen(false)}>Cancel</Button>
             <Button 
               onClick={handleWithdrawal} 
-              disabled={actionLoading || !withdrawalAmount || parseFloat(withdrawalAmount) < 20 || !withdrawalDetails}
+              disabled={actionLoading || !withdrawalAmount || parseFloat(withdrawalAmount) < 5 || !withdrawalDetails}
               className="bg-indigo-600 hover:bg-indigo-700"
             >
+
               {actionLoading ? 'Submitting...' : 'Submit Request'}
             </Button>
           </DialogFooter>
