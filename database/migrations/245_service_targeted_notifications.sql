@@ -27,22 +27,50 @@ ALTER TABLE public.service_notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.service_notification_acknowledgments ENABLE ROW LEVEL SECURITY;
 
 -- 4. RLS Policies
--- service_notifications: Public read for active ones, full access for service_role
+-- service_notifications: Public read for active ones, full access for service_role and admins
+DROP POLICY IF EXISTS "Allow public read for active notifications" ON public.service_notifications;
 CREATE POLICY "Allow public read for active notifications" 
 ON public.service_notifications FOR SELECT 
 USING (is_active = true);
 
+DROP POLICY IF EXISTS "Admins can manage service notifications" ON public.service_notifications;
+CREATE POLICY "Admins can manage service notifications" 
+ON public.service_notifications FOR ALL 
+TO authenticated 
+USING (
+    EXISTS (
+        SELECT 1 FROM public.profiles 
+        WHERE profiles.id = auth.uid() 
+        AND profiles.role = 'admin'
+    )
+);
+
+DROP POLICY IF EXISTS "Allow service_role full access to notifications" ON public.service_notifications;
 CREATE POLICY "Allow service_role full access to notifications" 
 ON public.service_notifications FOR ALL 
 TO service_role 
 USING (true);
 
--- acknowledgments: Users can read/insert their own, service_role full access
+-- acknowledgments: Users can read/insert their own, admins and service_role full access
+DROP POLICY IF EXISTS "Users can manage their own acknowledgments" ON public.service_notification_acknowledgments;
 CREATE POLICY "Users can manage their own acknowledgments" 
 ON public.service_notification_acknowledgments FOR ALL 
 TO authenticated 
 USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Admins can manage acknowledgments" ON public.service_notification_acknowledgments;
+CREATE POLICY "Admins can manage acknowledgments" 
+ON public.service_notification_acknowledgments FOR ALL 
+TO authenticated 
+USING (
+    EXISTS (
+        SELECT 1 FROM public.profiles 
+        WHERE profiles.id = auth.uid() 
+        AND profiles.role = 'admin'
+    )
+);
+
+DROP POLICY IF EXISTS "Allow service_role full access to acknowledgments" ON public.service_notification_acknowledgments;
 CREATE POLICY "Allow service_role full access to acknowledgments" 
 ON public.service_notification_acknowledgments FOR ALL 
 TO service_role 
