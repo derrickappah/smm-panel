@@ -74,7 +74,7 @@ const fetchRecentOrders = async () => {
     .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, created_at, completed_at, refund_status, total_cost, last_status_check, promotion_packages(name, platform, service_type)', { count: 'exact' })
     .eq('user_id', authUser.id)
     .order('created_at', { ascending: false })
-    .limit(5);
+    .limit(1);
 
   if (error) {
     if (error.code === 'PGRST301' || error.message?.includes('500') || error.message?.includes('Internal Server Error')) {
