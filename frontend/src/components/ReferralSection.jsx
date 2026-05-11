@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { Copy, Users, DollarSign, UserPlus, CheckCircle, Clock, Gift } from 'lucide-react';
 
+import ReferralPromoCard from './dashboard/ReferralPromoCard';
+
 const ReferralSection = ({ user }) => {
   const [referralCode, setReferralCode] = useState('');
   const [referrals, setReferrals] = useState([]);
@@ -16,6 +18,13 @@ const ReferralSection = ({ user }) => {
     totalEarnings: 0,
     pendingBonuses: 0,
   });
+
+  const scrollToCode = () => {
+    const element = document.getElementById('referral-code-section');
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
 
   useEffect(() => {
     if (user) {
@@ -201,12 +210,14 @@ const ReferralSection = ({ user }) => {
 
   return (
     <div className="space-y-6">
+      <ReferralPromoCard onAction={scrollToCode} />
+
       {/* Referral Code and Link Section */}
-      <Card className="border-2 border-gray-300 shadow-xl">
+      <Card id="referral-code-section" className="border-2 border-gray-300 shadow-xl scroll-mt-24">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Gift className="w-5 h-5" />
-            Your Referral Code
+            Your Referral Details
           </CardTitle>
           <CardDescription>
             Share your referral link and earn 10% of your referrals' first deposit
@@ -223,14 +234,15 @@ const ReferralSection = ({ user }) => {
                   <Input
                     value={referralCode}
                     readOnly
-                    className="font-mono font-semibold"
+                    className="font-mono font-semibold h-11"
                   />
                   <Button
                     onClick={() => copyToClipboard(referralCode, 'Referral code')}
                     variant="outline"
-                    size="icon"
+                    className="h-11 px-4"
                   >
-                    <Copy className="w-4 h-4" />
+                    <Copy className="w-4 h-4 mr-2" />
+                    Copy Code
                   </Button>
                 </div>
               </div>
@@ -243,20 +255,21 @@ const ReferralSection = ({ user }) => {
                   <Input
                     value={getReferralLink()}
                     readOnly
-                    className="font-mono text-sm"
+                    className="font-mono text-sm h-11"
                   />
                   <Button
                     onClick={() => copyToClipboard(getReferralLink(), 'Referral link')}
                     variant="outline"
-                    size="icon"
+                    className="h-11 px-4"
                   >
-                    <Copy className="w-4 h-4" />
+                    <Copy className="w-4 h-4 mr-2" />
+                    Copy Link
                   </Button>
                 </div>
               </div>
             </>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-3 text-center py-4">
               <p className="text-sm text-gray-500">
                 Your referral code is being generated. This may take a moment.
               </p>
@@ -264,13 +277,10 @@ const ReferralSection = ({ user }) => {
                 onClick={fetchReferralData}
                 variant="outline"
                 size="sm"
-                className="w-full"
+                className="w-full h-11"
               >
                 Refresh Referral Code
               </Button>
-              <p className="text-xs text-gray-400">
-                If this persists, please run GENERATE_CODES_AND_FIX.sql in Supabase SQL Editor to generate codes for all users.
-              </p>
             </div>
           )}
         </CardContent>
