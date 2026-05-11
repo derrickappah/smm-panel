@@ -14,6 +14,8 @@ import { supabase, isConfigured } from "@/lib/supabase";
 import { queryClient } from "@/lib/queryClient";
 import { prefetchPaymentSettings } from "@/hooks/usePaymentMethods";
 import * as serviceWorkerRegistration from "./serviceWorkerRegistration";
+import ReferralTracker from "@/components/ReferralTracker";
+
 
 // Lazy load all page components for code splitting
 const LandingPage = lazy(() => import("@/pages/LandingPage"));
@@ -186,7 +188,9 @@ function App() {
           <BrowserRouter>
 
             <div className="min-h-screen bg-background">
+              <ReferralTracker />
               {!isConfigured && <SupabaseSetup />}
+
               <Suspense fallback={<PageLoader />}>
                 <Routes>
                   {/* Public Routes */}

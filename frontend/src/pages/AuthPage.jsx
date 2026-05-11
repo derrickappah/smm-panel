@@ -116,8 +116,8 @@ const formatGhanaPhone = (value) => {
 const AuthPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  // Check if referral code exists in URL - if so, default to signup form
-  const hasReferralCode = searchParams.get('ref');
+  // Check if referral code exists in URL or localStorage - if so, default to signup form
+  const hasReferralCode = searchParams.get('ref') || localStorage.getItem('referral_code');
   const [isLogin, setIsLogin] = useState(!hasReferralCode); // Show signup if referral code exists
   const [loading, setLoading] = useState(false);
   const [emailError, setEmailError] = useState('');
@@ -134,18 +134,25 @@ const AuthPage = () => {
     phone_number: '',
   });
 
-  // Read referral code from URL query params and pre-fill input
+  // Read referral code from URL query params or localStorage and pre-fill input
   useEffect(() => {
-    const ref = searchParams.get('ref');
+    const refFromUrl = searchParams.get('ref');
+    const refFromStorage = localStorage.getItem('referral_code');
+    const ref = refFromUrl || refFromStorage;
+
     if (ref) {
       const trimmedRef = ref.trim();
       setReferralCode(trimmedRef);
       setManualReferralCode(trimmedRef); // Pre-fill the input field
-      setShowReferralCode(true); // Enable the referral toggle when URL has ref
-      // Automatically switch to signup form when referral code is present
-      setIsLogin(false);
+      setShowReferralCode(true); // Enable the referral toggle when code exists
+      
+      // If we're not in login mode already (from hasReferralCode logic), switch to signup
+      if (!isLogin) {
+        setIsLogin(false);
+      }
     }
-  }, [searchParams]);
+  }, [searchParams, isLogin]);
+
 
   // Get the active referral code (manual input takes precedence over URL param)
   // Only returns a code if the toggle is enabled

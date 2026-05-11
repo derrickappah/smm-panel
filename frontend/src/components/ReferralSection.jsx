@@ -5,158 +5,108 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { Copy, Users, DollarSign, UserPlus, CheckCircle, Clock, Gift } from 'lucide-react';
+import { 
+  Copy, 
+  Users, 
+  DollarSign, 
+  UserPlus, 
+  CheckCircle, 
+  Clock, 
+  Gift, 
+  ArrowRightLeft, 
+  Wallet,
+  History,
+  AlertCircle
+} from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 
 const ReferralSection = ({ user }) => {
   const [referralCode, setReferralCode] = useState('');
   const [referrals, setReferrals] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({
-    totalReferrals: 0,
-    totalEarnings: 0,
-    pendingBonuses: 0,
+  const [transactions, setTransactions] = useState([]);
+  const [wallet, setWallet] = useState({
+    balance: 0,
+    total_earned: 0,
+    total_withdrawn: 0
   });
+  const [loading, setLoading] = useState(true);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
+  const [transferAmount, setTransferAmount] = useState('');
+  const [withdrawalAmount, setWithdrawalAmount] = useState('');
+  const [withdrawalDetails, setWithdrawalDetails] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     if (user) {
       fetchReferralData();
-
-      // If no referral code found, set up polling to check again
-      // This handles cases where code is being generated
-      if (!referralCode) {
-        const pollInterval = setInterval(() => {
-          fetchReferralData();
-        }, 2000); // Check every 2 seconds
-
-        // Stop polling after 30 seconds or when code is found
-        const timeout = setTimeout(() => {
-          clearInterval(pollInterval);
-        }, 30000);
-
-        return () => {
-          clearInterval(pollInterval);
-          clearTimeout(timeout);
-        };
-      }
     }
-  }, [user, referralCode]);
+  }, [user]);
 
   const fetchReferralData = async () => {
     try {
       setLoading(true);
 
-      // Fetch user's referral code from profile
-      // Also fetch full profile to ensure we have latest data
-      const { data: profile, error: profileError } = await supabase
+      // 1. Fetch user's referral code
+      const { data: profile } = await supabase
         .from('profiles')
-        .select('referral_code, created_at')
+        .select('referral_code')
         .eq('id', user.id)
         .single();
-
-      if (profileError) {
-        console.error('Error fetching referral code:', profileError);
-      } else if (profile) {
-        const code = profile.referral_code || '';
-        setReferralCode(code);
-
-        // If user was just created (within last 5 minutes) and no code, keep polling
-        if (!code && profile.created_at) {
-          const createdTime = new Date(profile.created_at).getTime();
-          const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
-          if (createdTime > fiveMinutesAgo) {
-            // User is new, code might still be generating
-            console.log('New user detected, code may still be generating...');
-          }
-        }
+      
+      if (profile?.referral_code) {
+        setReferralCode(profile.referral_code);
       }
 
-      // Fetch referrals where this user is the referrer
-      const { data: referralsData, error: referralsError } = await supabase
+      // 2. Fetch referral wallet
+      const { data: walletData } = await supabase
+        .from('referral_wallets')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+      
+      if (walletData) {
+        setWallet(walletData);
+      }
+
+      // 3. Fetch referrals list
+      const { data: referralsData } = await supabase
         .from('referrals')
-        .select('id, referrer_id, referee_id, referral_bonus, bonus_awarded, first_deposit_amount, created_at')
+        .select('*, profiles:referee_id(name, email, created_at)')
         .eq('referrer_id', user.id)
         .order('created_at', { ascending: false });
-
-      if (referralsError) {
-        console.error('Error fetching referrals:', referralsError);
-        // Show user-friendly error message
-        if (referralsError.code === 'PGRST301' || referralsError.message?.includes('permission') || referralsError.message?.includes('RLS')) {
-          console.warn('RLS policy may be blocking referral access. This is normal if you have no referrals yet.');
-          // Don't show error toast for RLS issues - just set empty array
-        } else if (referralsError.code === '42P01') {
-          console.warn('Referrals table does not exist yet.');
-          toast.error('Referrals feature not set up yet. Please contact admin.');
-        } else {
-          toast.error('Failed to fetch referrals: ' + (referralsError.message || 'Unknown error'));
-        }
-        setReferrals([]);
-        setStats({
-          totalReferrals: 0,
-          totalEarnings: 0,
-          pendingBonuses: 0,
-        });
-        return;
-      } else if (referralsData && referralsData.length > 0) {
-        // Fetch referee profiles separately
-        const refereeIds = referralsData.map(ref => ref.referee_id);
-
-        const { data: refereeProfiles, error: profilesError } = await supabase
-          .from('profiles')
-          .select('id, email, name, created_at')
-          .in('id', refereeIds);
-
-        if (profilesError) {
-          console.error('Error fetching referee profiles:', profilesError);
-          // If RLS blocks, try fetching one by one or use admin client
-        }
-
-        // Combine referral data with referee profiles
-        const referralsWithProfiles = referralsData.map(referral => {
-          const refereeProfile = refereeProfiles?.find(p => p.id === referral.referee_id);
-
-          // Extract name - use email prefix if name is null/empty
-          let displayName = 'User';
-          if (refereeProfile) {
-            if (refereeProfile.name && refereeProfile.name.trim()) {
-              displayName = refereeProfile.name.trim();
-            } else if (refereeProfile.email) {
-              displayName = refereeProfile.email.split('@')[0];
-            }
-          }
-
-          return {
-            ...referral,
-            referee: {
-              id: referral.referee_id,
-              email: refereeProfile?.email || '',
-              name: displayName,
-              created_at: refereeProfile?.created_at || referral.created_at,
-            },
-          };
-        });
-
-        setReferrals(referralsWithProfiles);
-
-        // Calculate stats
-        const totalReferrals = referralsWithProfiles.length;
-        const totalEarnings = referralsWithProfiles.reduce((sum, ref) => {
-          return sum + (parseFloat(ref.referral_bonus) || 0);
-        }, 0);
-        const pendingBonuses = referralsWithProfiles.filter(ref => !ref.bonus_awarded).length;
-
-        setStats({
-          totalReferrals,
-          totalEarnings,
-          pendingBonuses,
-        });
-      } else {
-        setReferrals([]);
-        setStats({
-          totalReferrals: 0,
-          totalEarnings: 0,
-          pendingBonuses: 0,
-        });
+      
+      if (referralsData) {
+        setReferrals(referralsData);
       }
+
+      // 4. Fetch referral transactions
+      const { data: transData } = await supabase
+        .from('referral_transactions')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      
+      if (transData) {
+        setTransactions(transData);
+      }
+
     } catch (error) {
       console.error('Error fetching referral data:', error);
       toast.error('Failed to load referral data');
@@ -165,249 +115,363 @@ const ReferralSection = ({ user }) => {
     }
   };
 
+  const handleTransfer = async () => {
+    const amount = parseFloat(transferAmount);
+    if (isNaN(amount) || amount < 10) {
+      toast.error('Minimum transfer amount is GHS 10');
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      const { data, error } = await supabase.rpc('transfer_referral_to_main_wallet', {
+        p_amount: amount
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        toast.success(data.message);
+        setIsTransferModalOpen(false);
+        setTransferAmount('');
+        fetchReferralData();
+      } else {
+        toast.error(data.message);
+      }
+    } catch (error) {
+      toast.error(error.message || 'Transfer failed');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleWithdrawal = async () => {
+    const amount = parseFloat(withdrawalAmount);
+    if (isNaN(amount) || amount < 20) {
+      toast.error('Minimum withdrawal amount is GHS 20');
+      return;
+    }
+
+    if (!withdrawalDetails.trim()) {
+      toast.error('Please provide payment details');
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      const { data, error } = await supabase.rpc('request_referral_withdrawal', {
+        p_amount: amount,
+        p_details: withdrawalDetails
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        toast.success(data.message);
+        setIsWithdrawModalOpen(false);
+        setWithdrawalAmount('');
+        setWithdrawalDetails('');
+        fetchReferralData();
+      } else {
+        toast.error(data.message);
+      }
+    } catch (error) {
+      toast.error(error.message || 'Withdrawal request failed');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const copyToClipboard = (text, label) => {
     navigator.clipboard.writeText(text).then(() => {
-      toast.success(`${label} copied to clipboard!`);
-    }).catch(() => {
-      toast.error('Failed to copy to clipboard');
+      toast.success(`${label} copied!`);
     });
   };
 
   const getReferralLink = () => {
-    if (!referralCode) return '';
     return `${window.location.origin}/auth?ref=${referralCode}`;
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-  };
-
   if (loading) {
-    return (
-      <Card className="border-2 border-gray-300 shadow-xl">
-        <CardHeader>
-          <CardTitle>Referral Program</CardTitle>
-          <CardDescription>Loading referral information...</CardDescription>
-        </CardHeader>
-      </Card>
-    );
+    return <div className="flex justify-center p-12"><Clock className="animate-spin" /></div>;
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fadeIn">
       {/* Referral Code and Link Section */}
-      <Card id="referral-code-section" className="border-2 border-gray-300 shadow-xl scroll-mt-24">
+      <Card className="border-none shadow-lg bg-gradient-to-br from-indigo-500 to-purple-600 text-white">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Gift className="w-5 h-5" />
-            Your Referral Details
+            <Gift className="w-6 h-6" />
+            Invite & Earn
           </CardTitle>
-          <CardDescription>
-            Share your referral link and earn 10% of your referrals' first deposit
+          <CardDescription className="text-indigo-100 text-lg">
+            Share your link and earn 5% commission on every deposit your referrals make!
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {referralCode ? (
-            <>
-              <div>
-                <Label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Your Referral Code
-                </Label>
-                <div className="flex gap-2">
-                  <Input
-                    value={referralCode}
-                    readOnly
-                    className="font-mono font-semibold h-11"
-                  />
-                  <Button
-                    onClick={() => copyToClipboard(referralCode, 'Referral code')}
-                    variant="outline"
-                    className="h-11 px-4"
-                  >
-                    <Copy className="w-4 h-4 mr-2" />
-                    Copy Code
-                  </Button>
-                </div>
-              </div>
-
-              <div>
-                <Label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Your Referral Link
-                </Label>
-                <div className="flex gap-2">
-                  <Input
-                    value={getReferralLink()}
-                    readOnly
-                    className="font-mono text-sm h-11"
-                  />
-                  <Button
-                    onClick={() => copyToClipboard(getReferralLink(), 'Referral link')}
-                    variant="outline"
-                    className="h-11 px-4"
-                  >
-                    <Copy className="w-4 h-4 mr-2" />
-                    Copy Link
-                  </Button>
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="space-y-3 text-center py-4">
-              <p className="text-sm text-gray-500">
-                Your referral code is being generated. This may take a moment.
-              </p>
+        <CardContent className="grid md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label className="text-indigo-100">Your Referral Code</Label>
+            <div className="flex gap-2">
+              <Input
+                value={referralCode}
+                readOnly
+                className="bg-white/10 border-white/20 text-white font-mono h-12"
+              />
               <Button
-                onClick={fetchReferralData}
-                variant="outline"
-                size="sm"
-                className="w-full h-11"
+                onClick={() => copyToClipboard(referralCode, 'Code')}
+                variant="secondary"
+                className="h-12"
               >
-                Refresh Referral Code
+                <Copy className="w-4 h-4" />
               </Button>
             </div>
-          )}
+          </div>
+          <div className="space-y-2">
+            <Label className="text-indigo-100">Your Referral Link</Label>
+            <div className="flex gap-2">
+              <Input
+                value={getReferralLink()}
+                readOnly
+                className="bg-white/10 border-white/20 text-white font-mono h-12 text-sm"
+              />
+              <Button
+                onClick={() => copyToClipboard(getReferralLink(), 'Link')}
+                variant="secondary"
+                className="h-12"
+              >
+                <Copy className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Stats Section */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <Card className="border-2 border-gray-300 shadow-xl">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Referrals</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.totalReferrals}</p>
+      {/* Stats and Wallet Section */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="border-none shadow-md overflow-hidden">
+          <div className="p-6 flex flex-col h-full bg-white">
+            <div className="flex items-center justify-between mb-4">
+              <div className="bg-green-100 p-3 rounded-full">
+                <Wallet className="w-6 h-6 text-green-600" />
               </div>
-              <Users className="w-8 h-8 text-indigo-600" />
+              <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">Available</Badge>
             </div>
+            <p className="text-gray-600 text-sm font-medium">Referral Balance</p>
+            <h2 className="text-3xl font-bold text-gray-900 mt-1">₵{parseFloat(wallet.balance).toFixed(2)}</h2>
+            <div className="grid grid-cols-2 gap-2 mt-auto pt-6">
+              <Button 
+                onClick={() => setIsTransferModalOpen(true)}
+                className="bg-indigo-600 hover:bg-indigo-700 text-xs"
+              >
+                <ArrowRightLeft className="w-3 h-3 mr-1" /> Transfer
+              </Button>
+              <Button 
+                onClick={() => setIsWithdrawModalOpen(true)}
+                variant="outline"
+                className="text-xs"
+              >
+                <DollarSign className="w-3 h-3 mr-1" /> Withdraw
+              </Button>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="border-none shadow-md">
+          <div className="p-6">
+            <div className="bg-blue-100 p-3 rounded-full w-fit mb-4">
+              <History className="w-6 h-6 text-blue-600" />
+            </div>
+            <p className="text-gray-600 text-sm font-medium">Total Lifetime Earnings</p>
+            <h2 className="text-3xl font-bold text-gray-900 mt-1">₵{parseFloat(wallet.total_earned).toFixed(2)}</h2>
+            <p className="text-xs text-gray-500 mt-4 flex items-center gap-1">
+              <CheckCircle className="w-3 h-3 text-green-500" /> All-time commissions
+            </p>
+          </div>
+        </Card>
+
+        <Card className="border-none shadow-md">
+          <div className="p-6">
+            <div className="bg-purple-100 p-3 rounded-full w-fit mb-4">
+              <Users className="w-6 h-6 text-purple-600" />
+            </div>
+            <p className="text-gray-600 text-sm font-medium">Total Referrals</p>
+            <h2 className="text-3xl font-bold text-gray-900 mt-1">{referrals.length}</h2>
+            <p className="text-xs text-gray-500 mt-4 flex items-center gap-1">
+              <UserPlus className="w-3 h-3 text-purple-500" /> Successful invites
+            </p>
+          </div>
+        </Card>
+      </div>
+
+      {/* Transactions & Referrals Tabs */}
+      <div className="grid lg:grid-cols-5 gap-6">
+        <Card className="lg:col-span-3 border-none shadow-md">
+          <CardHeader>
+            <CardTitle className="text-lg">Recent Ledger</CardTitle>
+            <CardDescription>Commissions, transfers and withdrawals</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {transactions.length === 0 ? (
+              <div className="text-center py-12 text-gray-400">No transactions found</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {transactions.map((tx) => (
+                      <TableRow key={tx.id}>
+                        <TableCell>
+                          <span className="capitalize font-medium">{tx.type}</span>
+                        </TableCell>
+                        <TableCell className={tx.amount > 0 ? 'text-green-600' : 'text-red-600'}>
+                          {tx.amount > 0 ? '+' : ''}₵{Math.abs(tx.amount).toFixed(2)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={tx.status === 'completed' ? 'success' : tx.status === 'pending' ? 'warning' : 'destructive'}>
+                            {tx.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs text-gray-500">
+                          {new Date(tx.created_at).toLocaleDateString()}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        <Card className="border-2 border-gray-300 shadow-xl">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Earnings</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  ₵{stats.totalEarnings.toFixed(2)}
-                </p>
+        <Card className="lg:col-span-2 border-none shadow-md">
+          <CardHeader>
+            <CardTitle className="text-lg">Your Referrals</CardTitle>
+            <CardDescription>People who joined using your code</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {referrals.length === 0 ? (
+              <div className="text-center py-12 text-gray-400">No referrals yet</div>
+            ) : (
+              <div className="space-y-4">
+                {referrals.map((ref) => (
+                  <div key={ref.id} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold">
+                        {ref.profiles?.name?.charAt(0) || 'U'}
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm">{ref.profiles?.name || 'User'}</p>
+                        <p className="text-xs text-gray-500">{new Date(ref.created_at).toLocaleDateString()}</p>
+                      </div>
+                    </div>
+                    {ref.bonus_awarded ? (
+                      <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Active</Badge>
+                    ) : (
+                      <Badge variant="secondary">Pending</Badge>
+                    )}
+                  </div>
+                ))}
               </div>
-              <DollarSign className="w-8 h-8 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-2 border-gray-300 shadow-xl col-span-2 md:col-span-1">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Pending Bonuses</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.pendingBonuses}</p>
-              </div>
-              <Clock className="w-8 h-8 text-yellow-600" />
-            </div>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Referred Users List */}
-      <Card className="border-2 border-gray-300 shadow-xl">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <UserPlus className="w-5 h-5" />
-            Your Referrals
-          </CardTitle>
-          <CardDescription>
-            People you've referred and their deposit status
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {referrals.length === 0 ? (
-            <div className="text-center py-8">
-              <UserPlus className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500">No referrals yet</p>
-              <p className="text-sm text-gray-400 mt-2">
-                Share your referral link to start earning!
+      {/* Transfer Modal */}
+      <Dialog open={isTransferModalOpen} onOpenChange={setIsTransferModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Transfer to Main Wallet</DialogTitle>
+            <DialogDescription>
+              Move funds from your referral balance to your main account balance for purchases.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Amount (Min GHS 10)</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-2.5 text-gray-500">₵</span>
+                <Input
+                  type="number"
+                  placeholder="0.00"
+                  className="pl-7"
+                  value={transferAmount}
+                  onChange={(e) => setTransferAmount(e.target.value)}
+                />
+              </div>
+              <p className="text-xs text-gray-500">Available: ₵{parseFloat(wallet.balance).toFixed(2)}</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsTransferModalOpen(false)}>Cancel</Button>
+            <Button 
+              onClick={handleTransfer} 
+              disabled={actionLoading || !transferAmount || parseFloat(transferAmount) < 10}
+              className="bg-indigo-600 hover:bg-indigo-700"
+            >
+              {actionLoading ? 'Processing...' : 'Transfer Now'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Withdrawal Modal */}
+      <Dialog open={isWithdrawModalOpen} onOpenChange={setIsWithdrawModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Withdraw Funds</DialogTitle>
+            <DialogDescription>
+              Request a direct cash out to your Mobile Money or Bank account.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Amount (Min GHS 20)</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-2.5 text-gray-500">₵</span>
+                <Input
+                  type="number"
+                  placeholder="0.00"
+                  className="pl-7"
+                  value={withdrawalAmount}
+                  onChange={(e) => setWithdrawalAmount(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Payment Details</Label>
+              <Input
+                placeholder="MTN Momo: 024XXXXXXX (John Doe)"
+                value={withdrawalDetails}
+                onChange={(e) => setWithdrawalDetails(e.target.value)}
+              />
+              <p className="text-[10px] text-gray-500 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" /> Withdrawal requests are processed within 24 hours.
               </p>
             </div>
-          ) : (
-            <div className="space-y-4">
-              {referrals.map((referral) => {
-                const referee = referral.referee;
-                return (
-                  <div
-                    key={referral.id}
-                    className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
-                          <span className="text-indigo-600 font-semibold">
-                            {referee?.name?.charAt(0)?.toUpperCase() ||
-                              referee?.email?.charAt(0)?.toUpperCase() ||
-                              '?'}
-                          </span>
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-900">
-                            {referee?.name ||
-                              (referee?.email ? referee.email.split('@')[0] : null) ||
-                              'User'}
-                          </p>
-                          {referee?.email ? (
-                            <p className="text-sm text-gray-500">{referee.email}</p>
-                          ) : (
-                            <p className="text-sm text-gray-400 italic">Email not available</p>
-                          )}
-                          <p className="text-xs text-gray-400">
-                            Joined: {formatDate(referee?.created_at || referral?.created_at)}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      {referral.bonus_awarded ? (
-                        <div className="flex items-center gap-2 text-green-600">
-                          <CheckCircle className="w-4 h-4" />
-                          <div>
-                            <p className="text-sm font-medium">Bonus Awarded</p>
-                            <p className="text-xs">₵{parseFloat(referral.referral_bonus || 0).toFixed(2)}</p>
-                          </div>
-                        </div>
-                      ) : referral.first_deposit_amount ? (
-                        <div className="flex items-center gap-2 text-yellow-600">
-                          <Clock className="w-4 h-4" />
-                          <div>
-                            <p className="text-sm font-medium">Pending</p>
-                            <p className="text-xs">Deposit: ₵{parseFloat(referral.first_deposit_amount || 0).toFixed(2)}</p>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2 text-gray-400">
-                          <Clock className="w-4 h-4" />
-                          <div>
-                            <p className="text-sm font-medium">No Deposit Yet</p>
-                            <p className="text-xs">Waiting for first deposit</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsWithdrawModalOpen(false)}>Cancel</Button>
+            <Button 
+              onClick={handleWithdrawal} 
+              disabled={actionLoading || !withdrawalAmount || parseFloat(withdrawalAmount) < 20 || !withdrawalDetails}
+              className="bg-indigo-600 hover:bg-indigo-700"
+            >
+              {actionLoading ? 'Submitting...' : 'Submit Request'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
 
 export default ReferralSection;
-
