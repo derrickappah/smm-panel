@@ -32,19 +32,19 @@ const DashboardOrders = React.memo(({ orders, services }) => {
   }
 
   return (
-    <div className="mt-6 sm:mt-8 bg-white border-2 border-gray-300 rounded-lg p-6 sm:p-8 shadow-xl animate-slideUp">
-      <div className="flex items-center justify-between mb-6 gap-4">
-        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Recent Orders</h2>
+    <div className="mt-6 sm:mt-8 bg-white border-2 border-gray-300 rounded-lg p-4 sm:p-6 shadow-xl animate-slideUp">
+      <div className="flex items-center justify-between mb-4 gap-4">
+        <h2 className="text-lg sm:text-xl font-bold text-gray-900">Recent Orders</h2>
         <Button
           data-testid="view-all-orders-btn"
           variant="ghost"
           onClick={() => navigate('/orders')}
-          className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-lg whitespace-nowrap"
+          className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-lg whitespace-nowrap h-8 px-3 text-sm"
         >
           View All
         </Button>
       </div>
-      <div className="space-y-3">
+      <div className="space-y-2">
         {orders.map((order) => {
           const service = services?.find(s => s.id === order.service_id);
           const isPackageOrder = !!order.promotion_package_id;
@@ -53,38 +53,36 @@ const DashboardOrders = React.memo(({ orders, services }) => {
             : service?.name || 'Service';
 
           return (
-            <div key={order.id} className={`bg-gray-50 border ${isPackageOrder ? 'border-purple-200' : 'border-gray-200'} p-4 rounded-lg hover:border-gray-300 transition-colors`}>
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                <div className="flex-1 min-w-0 max-w-full">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <p className="text-sm sm:text-base font-medium text-gray-900 truncate max-w-full">{serviceName}</p>
-                    {isPackageOrder && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded flex-shrink-0">
-                        <Tag className="w-3 h-3" />
-                        Package
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs sm:text-sm text-gray-600 mt-0.5">Quantity: {order.quantity?.toLocaleString() || '0'}</p>
+            <div key={order.id} className={`bg-gray-50 border ${isPackageOrder ? 'border-purple-200' : 'border-gray-200'} px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg hover:border-gray-300 transition-colors`}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex-1 min-w-0 flex items-center gap-2">
+                  <p className="text-sm font-medium text-gray-900 truncate max-w-[150px] sm:max-w-none">{serviceName}</p>
+                  <span className="text-[10px] sm:text-xs text-gray-500 whitespace-nowrap shrink-0">({order.quantity?.toLocaleString() || '0'})</span>
+                  {isPackageOrder && (
+                    <span className="hidden md:inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 text-[10px] font-medium rounded flex-shrink-0">
+                      <Tag className="w-2.5 h-2.5" />
+                      Package
+                    </span>
+                  )}
                 </div>
-                <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-                  <p className="text-sm sm:text-base font-semibold text-gray-900">₵{order.total_cost?.toFixed(2) || '0.00'}</p>
+                <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+                  <p className="text-sm font-semibold text-gray-900 whitespace-nowrap">₵{order.total_cost?.toFixed(2) || '0.00'}</p>
                   <div className="flex items-center gap-2">
                     {order.is_reward && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded flex-shrink-0">
-                        <Gift className="w-3 h-3" />
+                      <span className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-medium rounded flex-shrink-0">
+                        <Gift className="w-2.5 h-2.5" />
                         Reward
                       </span>
                     )}
-                    <span className={`text-xs font-medium px-2.5 py-1 rounded border ${getStatusStyles(order.status)}`}>
-                      {order.status === 'submission_failed' ? 'Placement Failed' : order.status}
+                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded border whitespace-nowrap ${getStatusStyles(order.status)}`}>
+                      {order.status === 'submission_failed' ? 'Failed' : order.status}
                     </span>
                     {order.status === 'submission_failed' && (
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => navigate('/orders')}
-                        className="text-xs h-7 px-2 border-red-200 text-red-600 hover:bg-red-50"
+                        className="text-[10px] h-6 px-1.5 border-red-200 text-red-600 hover:bg-red-50"
                       >
                         Retry
                       </Button>
