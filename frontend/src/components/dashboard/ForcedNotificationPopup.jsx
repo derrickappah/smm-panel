@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useServiceNotifications } from '@/hooks/useServiceNotifications';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, CheckCircle } from 'lucide-react';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Bell, AlertCircle, CheckCircle2, ShieldCheck, Lightbulb } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
 
 const ForcedNotificationPopup = ({ userId }) => {
   const { notifications, acknowledge, isAcknowledging } = useServiceNotifications(userId);
@@ -22,9 +22,8 @@ const ForcedNotificationPopup = ({ userId }) => {
     try {
       await acknowledge({
         notificationId: currentNotification.notification_id,
-        order_id: currentNotification.order_id
+        orderId: currentNotification.order_id
       });
-      // useServiceNotifications will invalidate query and update notifications list
     } catch (error) {
       console.error('Failed to acknowledge:', error);
     }
@@ -33,66 +32,92 @@ const ForcedNotificationPopup = ({ userId }) => {
   if (!currentNotification) return null;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-4">
-      {/* Darkened/Blurred Backdrop - Enhanced for premium feel */}
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-xl animate-in fade-in duration-700" />
+    <div className="fixed inset-0 z-[9999] flex items-end justify-center">
+      {/* Deep blurred backdrop */}
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-md animate-in fade-in duration-500" />
       
-      {/* Popup Content */}
-      <Card className="relative w-full max-w-lg shadow-[0_20px_50px_rgba(0,0,0,0.3)] animate-in slide-in-from-bottom-full duration-700 bg-white border-none overflow-hidden rounded-2xl">
-        <CardHeader className="bg-gradient-to-r from-red-50 to-orange-50 border-b border-red-100 flex flex-row items-center gap-4 py-6">
-          <div className="bg-red-500 p-2.5 rounded-xl shadow-lg shadow-red-200">
-            <AlertTriangle className="w-7 h-7 text-white" />
-          </div>
-          <div>
-            <CardTitle className="text-red-950 text-xl font-extrabold tracking-tight">ATTENTION REQUIRED</CardTitle>
-            <p className="text-[10px] text-red-600 font-black uppercase tracking-[0.2em]">Urgent Service Update</p>
-          </div>
-        </CardHeader>
-        
-        <CardContent className="pt-6 space-y-4">
-          {currentNotification.image_url && (
-            <div className="rounded-lg overflow-hidden border border-gray-100 mb-4">
-              <img 
-                src={currentNotification.image_url} 
-                alt="Notification" 
-                className="w-full h-auto object-cover max-h-60"
-              />
+      {/* Bottom Sheet Popup */}
+      <Card className="relative w-full max-w-2xl bg-white rounded-t-[2.5rem] shadow-[0_-10px_40px_rgba(0,0,0,0.2)] animate-in slide-in-from-bottom-full duration-700 overflow-hidden border-none">
+        {/* Handle Bar */}
+        <div className="flex justify-center pt-4 pb-2">
+          <div className="w-16 h-1.5 bg-indigo-600/20 rounded-full" />
+        </div>
+
+        <CardContent className="px-6 sm:px-10 pb-10 pt-2 space-y-6">
+          {/* Header Section */}
+          <div className="flex items-center gap-4">
+            <div className="bg-indigo-50 p-3 rounded-2xl">
+              <Bell className="w-6 h-6 text-indigo-600" />
             </div>
-          )}
-          
-          <div className="prose prose-sm text-gray-700 leading-relaxed">
-            <p className="font-medium text-base whitespace-pre-wrap">
-              {currentNotification.message}
-            </p>
+            <div>
+              <h3 className="text-xl font-bold text-gray-900">Important Notification</h3>
+              <p className="text-xs text-gray-400 font-medium">Just now</p>
+            </div>
           </div>
 
-          <div className="bg-gray-50 p-3 rounded-md border border-gray-100 flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-500 uppercase">Related Order ID</span>
-            <span className="text-sm font-mono font-bold text-gray-900 bg-white px-2 py-1 rounded shadow-sm border border-gray-200">
-              {currentNotification.order_id.slice(0, 8).toUpperCase()}
-            </span>
+          {/* User & Order Info Card */}
+          <div className="bg-[#F8F7FF] rounded-3xl p-6 border border-indigo-50">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-bold text-xl border-2 border-white shadow-sm">
+                  {userId ? 'AA' : '??'}
+                </div>
+                <div>
+                  <h4 className="font-bold text-gray-900 text-lg">System Update</h4>
+                  <p className="text-sm text-gray-500 font-medium">Order ID: {currentNotification.order_id.slice(0, 10).toUpperCase()}</p>
+                </div>
+              </div>
+              <div className="bg-indigo-50 px-4 py-2 rounded-2xl flex items-center gap-2 border border-indigo-100">
+                <AlertCircle className="w-4 h-4 text-indigo-600" />
+                <span className="text-xs font-bold text-indigo-600 uppercase tracking-tight">Attention</span>
+              </div>
+            </div>
+
+            {/* Notification Content */}
+            <div className="space-y-4">
+              <h2 className="text-2xl font-bold text-gray-900 leading-tight">
+                {currentNotification.message.split('.')[0]}.
+              </h2>
+              
+              <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100/50">
+                <div className="flex items-center gap-3 mb-4 text-indigo-700">
+                  <Lightbulb className="w-5 h-5" />
+                  <span className="font-bold">What you need to do:</span>
+                </div>
+                
+                <div className="prose prose-sm text-gray-700 leading-relaxed max-w-none">
+                  <p className="whitespace-pre-wrap font-medium">
+                    {currentNotification.message}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Button */}
+          <div className="space-y-4">
+            <Button 
+              onClick={handleAcknowledge}
+              disabled={isAcknowledging}
+              className="w-full h-16 rounded-2xl text-xl font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xl shadow-indigo-200 transition-all active:scale-95 flex items-center justify-center gap-3"
+            >
+              {isAcknowledging ? (
+                <div className="w-6 h-6 border-3 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <>
+                  <CheckCircle2 className="w-7 h-7" />
+                  I Understand
+                </>
+              )}
+            </Button>
+
+            {/* Footer Notice */}
+            <div className="flex items-center justify-center gap-2 text-gray-400 text-sm font-medium">
+              <ShieldCheck className="w-4 h-4 text-indigo-400" />
+              <span>This message is important. Please read carefully.</span>
+            </div>
           </div>
         </CardContent>
-
-        <CardFooter className="bg-gray-50/50 border-t border-gray-100 pt-4 pb-4">
-          <Button 
-            onClick={handleAcknowledge}
-            disabled={isAcknowledging}
-            className="w-full h-12 text-lg font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98]"
-          >
-            {isAcknowledging ? (
-              <span className="flex items-center gap-2">
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Processing...
-              </span>
-            ) : (
-              <span className="flex items-center gap-2">
-                <CheckCircle className="w-5 h-5" />
-                I Understand
-              </span>
-            )}
-          </Button>
-        </CardFooter>
       </Card>
     </div>
   );
