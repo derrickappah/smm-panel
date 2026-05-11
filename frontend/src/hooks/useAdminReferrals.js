@@ -3,204 +3,110 @@ import { supabase } from '@/lib/supabase';
 import { useUserRole } from './useUserRole';
 import { toast } from 'sonner';
 
-// Fetch all referrals with profiles
+// 1. Fetch all referral relationships
 const fetchReferrals = async () => {
-  const { data: referralsData, error: referralsError } = await supabase
+  const { data: referralsData, error } = await supabase
     .from('referrals')
-    .select('id, referrer_id, referee_id, referral_bonus, bonus_awarded, bonus_awarded_at, first_deposit_amount, created_at')
+    .select('*, referrer:referrer_id(name, email), referee:referee_id(name, email)')
     .order('created_at', { ascending: false });
 
-  if (referralsError) {
-    if (referralsError.code === '42P01') {
-      return [];
-    }
-    throw referralsError;
-  }
-
-  if (!referralsData || referralsData.length === 0) {
-    return [];
-  }
-
-  // Fetch referrer and referee profiles
-  const referrerIds = [...new Set(referralsData.map(ref => ref.referrer_id))];
-  const refereeIds = [...new Set(referralsData.map(ref => ref.referee_id))];
-  const allUserIds = [...new Set([...referrerIds, ...refereeIds])];
-
-  const { data: profilesData, error: profilesError } = await supabase
-    .from('profiles')
-    .select('id, name, email')
-    .in('id', allUserIds);
-
-  if (profilesError) {
-    console.error('Error fetching profiles:', profilesError);
-  }
-
-  // Combine referral data with profiles
-  const referralsWithProfiles = referralsData.map(referral => {
-    const referrerProfile = profilesData?.find(p => p.id === referral.referrer_id);
-    const refereeProfile = profilesData?.find(p => p.id === referral.referee_id);
-    return {
-      ...referral,
-      referrer: referrerProfile || { id: referral.referrer_id, name: null, email: null },
-      referee: refereeProfile || { id: referral.referee_id, name: null, email: null }
-    };
-  });
-
-  return referralsWithProfiles;
+  if (error) throw error;
+  return referralsData || [];
 };
 
-export const useAdminReferrals = (options = {}) => {
-  const { enabled = true } = options;
-  
-  // Check role at hook level (cached)
-  const { data: userRole, isLoading: roleLoading } = useUserRole();
-  const isAdmin = userRole?.isAdmin ?? false;
-  
-  // Only enable queries if user is admin
-  const queryEnabled = enabled && !roleLoading && isAdmin;
+// 2. Fetch all referral wallets
+const fetchReferralWallets = async () => {
+  const { data, error } = await supabase
+    .from('referral_wallets')
+    .select('*, profiles:user_id(name, email)')
+    .order('balance', { ascending: false });
 
+  if (error) throw error;
+  return data || [];
+};
+
+// 3. Fetch all referral transactions
+const fetchReferralTransactions = async () => {
+  const { data, error } = await supabase
+    .from('referral_transactions')
+    .select('*, profiles:user_id(name, email)')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data || [];
+};
+
+export const useAdminReferrals = () => {
+  const { data: userRole } = useUserRole();
   return useQuery({
     queryKey: ['admin', 'referrals'],
     queryFn: fetchReferrals,
-    enabled: queryEnabled,
-    staleTime: 0, // 2 minutes
-    gcTime: 0, // 5 minutes
+    enabled: !!userRole?.isAdmin,
   });
 };
 
+export const useAdminReferralWallets = () => {
+  const { data: userRole } = useUserRole();
+  return useQuery({
+    queryKey: ['admin', 'referral-wallets'],
+    queryFn: fetchReferralWallets,
+    enabled: !!userRole?.isAdmin,
+  });
+};
+
+export const useAdminReferralTransactions = () => {
+  const { data: userRole } = useUserRole();
+  return useQuery({
+    queryKey: ['admin', 'referral-transactions'],
+    queryFn: fetchReferralTransactions,
+    enabled: !!userRole?.isAdmin,
+  });
+};
+
+export const useUpdateReferralTxStatus = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ txId, status }) => {
+      const { data, error } = await supabase.rpc('update_referral_transaction_status', {
+        p_tx_id: txId,
+        p_status: status
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      if (data.success) {
+        toast.success(data.message);
+        queryClient.invalidateQueries({ queryKey: ['admin', 'referral-transactions'] });
+        queryClient.invalidateQueries({ queryKey: ['admin', 'referral-wallets'] });
+      } else {
+        toast.error(data.message);
+      }
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to update status');
+    }
+  });
+};
+
+// Keep existing hooks if they are still needed for some pages, but marked for deprecation
 export const useReferralStats = () => {
   return useQuery({
     queryKey: ['admin', 'referrals', 'stats'],
     queryFn: async () => {
-      const referrals = await fetchReferrals();
+      const wallets = await fetchReferralWallets();
+      const txs = await fetchReferralTransactions();
       
-      const totalReferrals = referrals.length;
-      const totalBonusesPaid = referrals.reduce((sum, ref) => {
-        return sum + (ref.bonus_awarded ? (parseFloat(ref.referral_bonus) || 0) : 0);
-      }, 0);
-      const pendingBonuses = referrals.filter(ref => {
-        return !ref.bonus_awarded && ref.first_deposit_amount;
-      }).length;
-      const totalBonusAmount = referrals.reduce((sum, ref) => {
-        return sum + (parseFloat(ref.referral_bonus) || 0);
-      }, 0);
+      const totalEarned = wallets.reduce((sum, w) => sum + (parseFloat(w.total_earned) || 0), 0);
+      const totalWithdrawn = wallets.reduce((sum, w) => sum + (parseFloat(w.total_withdrawn) || 0), 0);
+      const pendingWithdrawals = txs.filter(t => t.type === 'withdrawal' && t.status === 'pending').length;
 
       return {
-        total_referrals: totalReferrals,
-        total_bonuses_paid: totalBonusesPaid,
-        pending_bonuses: pendingBonuses,
-        total_bonus_amount: totalBonusAmount
+        total_earned: totalEarned,
+        total_withdrawn: totalWithdrawn,
+        pending_withdrawals: pendingWithdrawals,
+        total_wallets: wallets.length
       };
-    },
-    staleTime: 0,
-    gcTime: 0,
+    }
   });
 };
-
-export const useAwardReferralBonus = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({ referralId, referral }) => {
-      // If first_deposit_amount is missing, use the database function
-      if (!referral.first_deposit_amount) {
-        const { data, error } = await supabase.rpc('process_referral_bonus_manual', {
-          p_user_id: referral.referee_id,
-          p_transaction_id: null
-        });
-
-        if (error) throw error;
-        if (!data || !data.success) {
-          throw new Error(data?.error || 'Failed to process bonus');
-        }
-
-        return data;
-      }
-
-      // Original logic for when first_deposit_amount exists
-      const bonusAmount = parseFloat(referral.referral_bonus) || (parseFloat(referral.first_deposit_amount) * 0.1);
-
-      // Update referral record
-      const { error: updateError } = await supabase
-        .from('referrals')
-        .update({
-          bonus_awarded: true,
-          bonus_awarded_at: new Date().toISOString(),
-          referral_bonus: bonusAmount
-        })
-        .eq('id', referralId);
-
-      if (updateError) throw updateError;
-
-      // Get referrer's current balance
-      const { data: referrerProfile, error: profileError } = await supabase
-        .from('profiles')
-        .select('balance')
-        .eq('id', referral.referrer_id)
-        .single();
-
-      if (profileError) throw profileError;
-
-      // Update referrer's balance
-      const newBalance = (parseFloat(referrerProfile.balance) || 0) + bonusAmount;
-      const { error: balanceError } = await supabase
-        .from('profiles')
-        .update({ balance: newBalance })
-        .eq('id', referral.referrer_id);
-
-      if (balanceError) throw balanceError;
-
-      // Create transaction record for the bonus
-      await supabase
-        .from('transactions')
-        .insert({
-          user_id: referral.referrer_id,
-          amount: bonusAmount,
-          type: 'referral_bonus',
-          status: 'approved',
-          description: 'Referral bonus for first deposit'
-        });
-
-      return { success: true, bonus_amount: bonusAmount };
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'referrals'] });
-      queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
-      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
-      toast.success('Bonus awarded successfully!');
-    },
-    onError: (error) => {
-      toast.error(error.message || 'Failed to award bonus');
-    },
-  });
-};
-
-export const useProcessAllMissedBonuses = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async () => {
-      const { data, error } = await supabase.rpc('process_all_missed_referral_bonuses');
-
-      if (error) throw error;
-      if (!data || !data.success) {
-        throw new Error('Failed to process missed bonuses');
-      }
-
-      return data;
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'referrals'] });
-      queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
-      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
-      toast.success(
-        `Processed ${data.processed_count} bonus(es) successfully. ` +
-        (data.error_count > 0 ? `${data.error_count} error(s) occurred.` : '')
-      );
-    },
-    onError: (error) => {
-      toast.error(error.message || 'Failed to process missed bonuses');
-    },
-  });
-};
-
