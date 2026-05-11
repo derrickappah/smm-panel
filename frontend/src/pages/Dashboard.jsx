@@ -10,7 +10,7 @@ import { saveOrderStatusHistory } from '@/lib/orderStatusHistory';
 import { normalizePhoneNumber } from '@/utils/phoneUtils';
 import Navbar from '@/components/Navbar';
 import SEO from '@/components/SEO';
-import ReferralSection from '@/components/ReferralSection';
+import ReferralPromoCard from '@/components/dashboard/ReferralPromoCard';
 import DashboardStats from '@/components/dashboard/DashboardStats';
 import DashboardDeposit from '@/components/dashboard/DashboardDeposit';
 import DashboardOrderForm from '@/components/dashboard/DashboardOrderForm';
@@ -3287,7 +3287,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
         {/* Referral Section */}
         <div className="mt-6 sm:mt-8 animate-slideUp">
-          <ReferralSection user={displayUser} />
+          <ReferralPromoCard onAction={() => navigate('/referrals')} />
         </div>
       </div>
 

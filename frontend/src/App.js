@@ -41,6 +41,7 @@ const DevDashboard = lazy(() => import("@/pages/admin/DevDashboard"));
 const HubtelSuccess = lazy(() => import("@/pages/payment/Success"));
 const HubtelCancelled = lazy(() => import("@/pages/payment/Cancelled"));
 import RewardPage from "@/pages/RewardPage";
+const ReferralsPage = lazy(() => import("@/pages/ReferralsPage"));
 
 
 // Loading fallback component - Skeleton loader
@@ -253,6 +254,16 @@ function App() {
                     element={
                       user ? (
                         <RewardPage user={user} onLogout={logout} />
+                      ) : (
+                        <Navigate to="/auth" replace />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/referrals"
+                    element={
+                      user ? (
+                        <ReferralsPage user={user} onLogout={logout} />
                       ) : (
                         <Navigate to="/auth" replace />
                       )

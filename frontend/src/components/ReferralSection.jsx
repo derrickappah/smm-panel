@@ -7,8 +7,6 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { Copy, Users, DollarSign, UserPlus, CheckCircle, Clock, Gift } from 'lucide-react';
 
-import ReferralPromoCard from './dashboard/ReferralPromoCard';
-
 const ReferralSection = ({ user }) => {
   const [referralCode, setReferralCode] = useState('');
   const [referrals, setReferrals] = useState([]);
@@ -18,13 +16,6 @@ const ReferralSection = ({ user }) => {
     totalEarnings: 0,
     pendingBonuses: 0,
   });
-
-  const scrollToCode = () => {
-    const element = document.getElementById('referral-code-section');
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
 
   useEffect(() => {
     if (user) {
@@ -210,8 +201,6 @@ const ReferralSection = ({ user }) => {
 
   return (
     <div className="space-y-6">
-      <ReferralPromoCard onAction={scrollToCode} />
-
       {/* Referral Code and Link Section */}
       <Card id="referral-code-section" className="border-2 border-gray-300 shadow-xl scroll-mt-24">
         <CardHeader>
