@@ -8,7 +8,8 @@ const fetchReferrals = async () => {
   const { data: referralsData, error } = await supabase
     .from('referrals')
     .select('*, referrer:referrer_id(name, email), referee:referee_id(name, email)')
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .range(0, 99999);
 
   if (error) throw error;
   return referralsData || [];
@@ -19,7 +20,8 @@ const fetchReferralWallets = async () => {
   const { data, error } = await supabase
     .from('referral_wallets')
     .select('*, profiles:user_id(name, email)')
-    .order('balance', { ascending: false });
+    .order('balance', { ascending: false })
+    .range(0, 99999);
 
   if (error) throw error;
   return data || [];
@@ -30,7 +32,8 @@ const fetchReferralTransactions = async () => {
   const { data, error } = await supabase
     .from('referral_transactions')
     .select('*, profiles:user_id(name, email)')
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .range(0, 99999);
 
   if (error) throw error;
   return data || [];
