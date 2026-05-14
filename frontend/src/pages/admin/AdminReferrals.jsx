@@ -51,19 +51,19 @@ const AdminReferrals = () => {
   };
 
   const filteredTxs = transactions.filter(tx => 
-    tx.profiles?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    tx.profiles?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    tx.type.toLowerCase().includes(searchTerm.toLowerCase())
+    (tx.profiles?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (tx.profiles?.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (tx.type || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const filteredWallets = wallets.filter(w => 
-    w.profiles?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    w.profiles?.email?.toLowerCase().includes(searchTerm.toLowerCase())
+    (w.profiles?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (w.profiles?.email || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const filteredReferrals = referrals.filter(r => 
-    r.referrer?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    r.referee?.name?.toLowerCase().includes(searchTerm.toLowerCase())
+    (r.referrer?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (r.referee?.name || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
