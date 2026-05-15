@@ -3184,8 +3184,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       />
       <Navbar user={displayUser} onLogout={onLogout} />
       
-      {/* Forced Targeted Notifications */}
-      {user?.id && <ForcedNotificationPopup userId={user.id} />}
+      {/* Premium Targeted Notifications */}
+      <PremiumNotificationPopup user={user} />
 
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-32 md:pt-6 pb-6 sm:pb-8">
@@ -3305,8 +3305,6 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         onClose={() => setShowRewardModal(false)}
       />
 
-      {/* Targeted Service Notifications - Forced Popup */}
-      <PremiumNotificationPopup user={user} />
     </div>
   );
 };
