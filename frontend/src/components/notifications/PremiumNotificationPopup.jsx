@@ -9,7 +9,8 @@ const PremiumNotificationPopup = ({ user }) => {
   const { notifications, acknowledge, isAcknowledging } = useServiceNotifications(user?.id);
   const [currentNotification, setCurrentNotification] = useState(null);
   const [isVisible, setIsVisible] = useState(false);
-
+  const [showVideoModal, setShowVideoModal] = useState(false);
+ 
   useEffect(() => {
     if (notifications.length > 0) {
       setCurrentNotification(notifications[0]);
@@ -23,7 +24,7 @@ const PremiumNotificationPopup = ({ user }) => {
       return () => clearTimeout(timer);
     }
   }, [notifications]);
-
+ 
   const handleAcknowledge = async () => {
     if (!currentNotification) return;
     
@@ -32,9 +33,24 @@ const PremiumNotificationPopup = ({ user }) => {
         notificationId: currentNotification.notification_id,
         orderId: currentNotification.order_id
       });
+      setShowVideoModal(false); // Close video if open
     } catch (error) {
       console.error('Failed to acknowledge:', error);
     }
+  };
+ 
+  const getEmbedUrl = (url) => {
+    if (!url) return '';
+    
+    // YouTube
+    const ytMatch = url.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com|youtu\.be)\/(?:watch\?v=)?(.+)/);
+    if (ytMatch) return `https://www.youtube.com/embed/${ytMatch[1]}`;
+    
+    // Vimeo
+    const vimeoMatch = url.match(/(?:https?:\/\/)?(?:www\.)?vimeo\.com\/(.+)/);
+    if (vimeoMatch) return `https://player.vimeo.com/video/${vimeoMatch[1]}`;
+    
+    return url; // Fallback
   };
 
   if (!currentNotification) return null;
@@ -132,11 +148,9 @@ const PremiumNotificationPopup = ({ user }) => {
 
           {/* Video Section (Conditional) */}
           {currentNotification.show_video && currentNotification.video_url && (
-            <a 
-              href={currentNotification.video_url} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="flex items-center justify-between p-3 bg-white border border-indigo-100 rounded-xl hover:bg-indigo-50 transition-colors group"
+            <button 
+              onClick={() => setShowVideoModal(true)}
+              className="w-full flex items-center justify-between p-3 bg-white border border-indigo-100 rounded-xl hover:bg-indigo-50 transition-colors group"
             >
               <div className="flex items-center gap-2">
                 <div className="p-1.5 bg-indigo-50 rounded-lg group-hover:bg-white transition-colors">
@@ -144,8 +158,8 @@ const PremiumNotificationPopup = ({ user }) => {
                 </div>
                 <span className="text-xs font-bold text-gray-900">Watch Video Tutorial</span>
               </div>
-              <X className="w-3 h-3 text-gray-400 rotate-45" />
-            </a>
+              <PlayCircle className="w-4 h-4 text-indigo-400 opacity-50" />
+            </button>
           )}
 
           {/* Action Button */}
@@ -175,6 +189,33 @@ const PremiumNotificationPopup = ({ user }) => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Video Modal Popup */}
+      <div className={cn(
+        "fixed inset-0 z-[10000] flex items-center justify-center p-4 transition-all duration-500",
+        showVideoModal ? "opacity-100" : "opacity-0 pointer-events-none"
+      )}>
+        <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setShowVideoModal(false)} />
+        <div className={cn(
+          "relative w-full max-w-4xl aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl transition-all duration-500",
+          showVideoModal ? "scale-100 translate-y-0" : "scale-95 translate-y-8"
+        )}>
+          <button 
+            onClick={() => setShowVideoModal(false)}
+            className="absolute top-4 right-4 z-10 p-2 bg-black/50 text-white rounded-full hover:bg-black/70 transition-colors"
+          >
+            <X className="w-6 h-6" />
+          </button>
+          {showVideoModal && (
+            <iframe
+              src={getEmbedUrl(currentNotification.video_url)}
+              className="w-full h-full border-none"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          )}
+        </div>
+      </div>
     </div>
   );
 };
