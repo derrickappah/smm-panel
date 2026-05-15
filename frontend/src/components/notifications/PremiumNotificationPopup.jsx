@@ -40,10 +40,6 @@ const PremiumNotificationPopup = ({ user }) => {
   if (!currentNotification) return null;
 
   // Get initials for the avatar
-  const getInitials = (name) => {
-    if (!name) return '??';
-    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-  };
 
   return (
     <div className={cn(
@@ -88,9 +84,6 @@ const PremiumNotificationPopup = ({ user }) => {
           {/* User & Order Profile Section */}
           <div className="bg-[#F9F9FF] rounded-2xl p-4 flex items-center justify-between border border-indigo-50/50">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-sm">
-                {getInitials(user?.name)}
-              </div>
               <div>
                 <h4 className="font-bold text-gray-900 text-sm">{user?.name || 'User'}</h4>
                 {currentNotification.show_order_id && (
