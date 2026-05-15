@@ -43,7 +43,7 @@ const PremiumNotificationPopup = ({ user }) => {
 
   return (
     <div className={cn(
-      "fixed inset-0 z-[9999] flex items-end justify-center p-4 transition-all duration-700",
+      "fixed inset-0 z-[9999] flex items-end justify-center transition-all duration-700",
       isVisible ? "opacity-100" : "opacity-0 pointer-events-none"
     )}>
       {/* luxury glassmorphism backdrop */}
@@ -51,13 +51,11 @@ const PremiumNotificationPopup = ({ user }) => {
       
       {/* Popup Modal */}
       <Card className={cn(
-        "relative w-full max-w-[440px] bg-white rounded-[2.5rem] shadow-[0_-20px_50px_rgba(0,0,0,0.3)] border-none overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]",
-        isVisible ? "translate-y-0 opacity-100 scale-100" : "translate-y-[100%] opacity-0 scale-95"
+        "relative w-full max-w-[440px] bg-white rounded-t-[2.5rem] rounded-b-none shadow-[0_-20px_50px_rgba(0,0,0,0.2)] border-none overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]",
+        isVisible ? "translate-y-0 opacity-100" : "translate-y-[100%] opacity-0"
       )}>
-        {/* Top Accent Bar */}
-        <div className="h-1.5 w-12 bg-indigo-600 rounded-full mx-auto mt-4 mb-2 opacity-50" />
 
-        <CardContent className="px-6 py-6 space-y-5">
+        <CardContent className="px-5 py-4 space-y-3 max-h-[75vh] overflow-y-auto scrollbar-hide">
           {/* Main Header */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -65,10 +63,10 @@ const PremiumNotificationPopup = ({ user }) => {
                 <Bell className="w-5 h-5 text-indigo-600" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-gray-900 leading-tight">
+                <h3 className="text-sm font-bold text-gray-900 leading-tight">
                   {currentNotification.title || "Important Notification"}
                 </h3>
-                <p className="text-[10px] text-gray-400 font-bold tracking-wide uppercase">
+                <p className="text-[9px] text-gray-400 font-bold tracking-wide uppercase">
                   {currentNotification.subtitle || "Just now"}
                 </p>
               </div>
@@ -82,7 +80,7 @@ const PremiumNotificationPopup = ({ user }) => {
           </div>
 
           {/* User & Order Profile Section */}
-          <div className="bg-[#F9F9FF] rounded-2xl p-4 flex items-center justify-between border border-indigo-50/50">
+          <div className="bg-[#F9F9FF] rounded-xl p-3 flex items-center justify-between border border-indigo-50/50">
             <div className="flex items-center gap-3">
               <div>
                 <h4 className="font-bold text-gray-900 text-sm">{user?.name || 'User'}</h4>
@@ -102,7 +100,7 @@ const PremiumNotificationPopup = ({ user }) => {
           {/* Main Message Section */}
           <div className="space-y-2">
             <div 
-              className="text-lg font-bold text-gray-900 leading-tight whitespace-pre-wrap"
+              className="text-base font-bold text-gray-900 leading-tight whitespace-pre-wrap"
               dangerouslySetInnerHTML={{ 
                 __html: currentNotification.message.replace(/\*\*(.*?)\*\*/g, '<span class="text-indigo-600">$1</span>') 
               }}
@@ -111,17 +109,17 @@ const PremiumNotificationPopup = ({ user }) => {
 
           {/* "What You Need To Do" Section (Conditional) */}
           {currentNotification.show_instructions && (
-            <div className="bg-indigo-50/40 rounded-2xl p-5 border border-indigo-100/50 space-y-3">
-              <div className="flex items-center gap-2.5 text-indigo-700">
-                <Lightbulb className="w-4 h-4" />
-                <span className="font-bold text-sm tracking-tight">
+            <div className="bg-indigo-50/40 rounded-xl p-3 border border-indigo-100/50 space-y-2">
+              <div className="flex items-center gap-2 text-indigo-700">
+                <Lightbulb className="w-3.5 h-3.5" />
+                <span className="font-bold text-xs tracking-tight">
                   {currentNotification.instructions_title || "What you need to do:"}
                 </span>
               </div>
               
-              <ul className="space-y-2.5">
+              <ul className="space-y-1.5">
                 {(currentNotification.instructions_steps || []).map((step, idx) => (
-                  <li key={idx} className="flex gap-2 text-[13px] text-gray-700 font-medium leading-snug">
+                  <li key={idx} className="flex gap-2 text-[12px] text-gray-700 font-medium leading-snug">
                     <span className="text-indigo-400 font-bold">{idx + 1}.</span>
                     <span dangerouslySetInnerHTML={{ 
                       __html: step.replace(/\[(.*?)\]/g, '<span class="text-indigo-600 font-bold">$1</span>') 
@@ -138,31 +136,31 @@ const PremiumNotificationPopup = ({ user }) => {
               href={currentNotification.video_url} 
               target="_blank" 
               rel="noopener noreferrer"
-              className="flex items-center justify-between p-4 bg-white border border-indigo-100 rounded-2xl hover:bg-indigo-50 transition-colors group"
+              className="flex items-center justify-between p-3 bg-white border border-indigo-100 rounded-xl hover:bg-indigo-50 transition-colors group"
             >
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-50 rounded-xl group-hover:bg-white transition-colors">
-                  <PlayCircle className="w-5 h-5 text-indigo-600" />
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-indigo-50 rounded-lg group-hover:bg-white transition-colors">
+                  <PlayCircle className="w-4 h-4 text-indigo-600" />
                 </div>
-                <span className="text-sm font-bold text-gray-900">Watch Video Tutorial</span>
+                <span className="text-xs font-bold text-gray-900">Watch Video Tutorial</span>
               </div>
-              <X className="w-4 h-4 text-gray-400 rotate-45" />
+              <X className="w-3 h-3 text-gray-400 rotate-45" />
             </a>
           )}
 
           {/* Action Button */}
-          <div className="space-y-4 pt-2">
+          <div className="space-y-3 pt-1">
             <Button 
               onClick={handleAcknowledge}
               disabled={isAcknowledging}
-              className="w-full h-14 rounded-2xl text-base font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xl shadow-indigo-200 transition-all active:scale-95 flex items-center justify-center gap-2.5"
+              className="w-full h-11 rounded-xl text-sm font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-100 transition-all active:scale-95 flex items-center justify-center gap-2"
             >
               {isAcknowledging ? (
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
                 <>
-                  <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
-                    <CheckCircle2 className="w-4 h-4" />
+                  <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
+                    <CheckCircle2 className="w-3 h-3" />
                   </div>
                   I Understand
                 </>
