@@ -63,7 +63,7 @@ const PremiumNotificationPopup = ({ user }) => {
       isVisible ? "opacity-100" : "opacity-0 pointer-events-none"
     )}>
       {/* luxury glassmorphism backdrop */}
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-xl" />
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-lg" />
       
       {/* Popup Modal */}
       <Card className={cn(
@@ -195,7 +195,7 @@ const PremiumNotificationPopup = ({ user }) => {
         "fixed inset-0 z-[10000] flex items-center justify-center p-4 transition-all duration-500",
         showVideoModal ? "opacity-100" : "opacity-0 pointer-events-none"
       )}>
-        <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setShowVideoModal(false)} />
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowVideoModal(false)} />
         <div className={cn(
           "relative w-full max-w-4xl aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl transition-all duration-500",
           showVideoModal ? "scale-100 translate-y-0" : "scale-95 translate-y-8"
