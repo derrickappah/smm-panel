@@ -43,7 +43,7 @@ const PremiumNotificationPopup = ({ user }) => {
 
   return (
     <div className={cn(
-      "fixed inset-0 z-[9999] flex items-center justify-center p-4 transition-all duration-500",
+      "fixed inset-0 z-[9999] flex items-end justify-center p-4 transition-all duration-700",
       isVisible ? "opacity-100" : "opacity-0 pointer-events-none"
     )}>
       {/* luxury glassmorphism backdrop */}
@@ -51,8 +51,8 @@ const PremiumNotificationPopup = ({ user }) => {
       
       {/* Popup Modal */}
       <Card className={cn(
-        "relative w-full max-w-[420px] bg-white rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.3)] border-none overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]",
-        isVisible ? "scale-100 translate-y-0" : "scale-90 translate-y-10"
+        "relative w-full max-w-[440px] bg-white rounded-[2.5rem] shadow-[0_-20px_50px_rgba(0,0,0,0.3)] border-none overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]",
+        isVisible ? "translate-y-0 opacity-100 scale-100" : "translate-y-[100%] opacity-0 scale-95"
       )}>
         {/* Top Accent Bar */}
         <div className="h-1.5 w-12 bg-indigo-600 rounded-full mx-auto mt-4 mb-2 opacity-50" />
