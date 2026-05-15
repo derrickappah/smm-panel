@@ -17,7 +17,7 @@ import DashboardOrderForm from '@/components/dashboard/DashboardOrderForm';
 import DashboardOrders from '@/components/dashboard/DashboardOrders';
 import PromotionBanner from '@/components/dashboard/PromotionBanner';
 import ClaimRewardModal from '@/components/dashboard/ClaimRewardModal';
-import ForcedNotificationPopup from '@/components/dashboard/ForcedNotificationPopup';
+import PremiumNotificationPopup from '@/components/notifications/PremiumNotificationPopup';
 
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { usePaymentMethods } from '@/hooks/usePaymentMethods';
@@ -3306,7 +3306,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       />
 
       {/* Targeted Service Notifications - Forced Popup */}
-      <ForcedNotificationPopup userId={user?.id} />
+      <PremiumNotificationPopup user={user} />
     </div>
   );
 };
