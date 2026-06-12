@@ -316,11 +316,21 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
         formatName(user.name),
         user.phone_number || 'N/A'
       ]);
-    } else {
+    } else if (exportFormat === 'name-email') {
       headers = ['Name', 'Email'];
       rows = filteredUsers.map(user => [
         formatName(user.name),
         user.email || 'N/A'
+      ]);
+    } else {
+      headers = ['Name', 'Email', 'Phone Number', 'Role', 'Balance', 'Joined Date'];
+      rows = filteredUsers.map(user => [
+        formatName(user.name),
+        user.email || 'N/A',
+        user.phone_number || 'N/A',
+        user.role || 'N/A',
+        user.balance?.toFixed(2) || '0.00',
+        user.created_at ? new Date(user.created_at).toLocaleString() : 'N/A'
       ]);
     }
 
@@ -333,7 +343,7 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    const formatLabel = exportFormat === 'name-phone' ? 'name-phone' : 'name-email';
+    const formatLabel = exportFormat === 'name-phone' ? 'name-phone' : exportFormat === 'name-email' ? 'name-email' : 'all-data';
     link.setAttribute('download', `users_${formatLabel}_${new Date().toISOString().split('T')[0]}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
@@ -583,6 +593,7 @@ const AdminUsers = memo(({ onRefresh, refreshing = false }) => {
                 <SelectContent>
                   <SelectItem value="name-phone">Name & Phone</SelectItem>
                   <SelectItem value="name-email">Name & Email</SelectItem>
+                  <SelectItem value="all">All Data</SelectItem>
                 </SelectContent>
               </Select>
               <Input
