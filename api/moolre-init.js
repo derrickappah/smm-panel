@@ -65,10 +65,18 @@ export default async function handler(req, res) {
       });
     }
 
+    // Map numeric channel codes (from UI) to Moolre's expected string values
+    const channelMap = {
+      '13': 'MTN',
+      '14': 'Vodafone',
+      '15': 'AT'  // AirtelTigo
+    };
+    const resolvedChannel = channelMap[channel] || channel; // Fall back to raw value if already a string
+
     // Prepare the request to Moolre API
     const moolreRequest = {
       type: 1,
-      channel: channel, // MTN, AT (AirtelTigo), or Vodafone
+      channel: resolvedChannel, // MTN, AT (AirtelTigo), or Vodafone
       currency: currency,
       payer: payer, // Mobile Money number (e.g., 0209151872)
       amount: amount.toString(), // Amount as string
