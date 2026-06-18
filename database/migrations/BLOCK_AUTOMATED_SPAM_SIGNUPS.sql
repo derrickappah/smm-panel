@@ -54,10 +54,15 @@ BEGIN
            JOIN auth.users u ON p.id = u.id
            WHERE p.phone_number = user_phone AND u.banned_until IS NOT NULL
        ))
-       -- Block phone numbers reused more than twice to prevent registration floods
+       -- Block phone number series used by spambots
        OR (user_phone IS NOT NULL AND (
-           SELECT COALESCE(count(*), 0) FROM public.profiles WHERE phone_number = user_phone
-       ) >= 2)
+           user_phone LIKE '05924545%' 
+           OR user_phone LIKE '05824545%'
+       ))
+       -- Block phone numbers already in use to prevent multi-accounting flood
+       OR (user_phone IS NOT NULL AND EXISTS (
+           SELECT 1 FROM public.profiles WHERE phone_number = user_phone
+       ))
     THEN
         RAISE EXCEPTION 'Registration blocked due to suspicious activity';
     END IF;
