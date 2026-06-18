@@ -78,6 +78,17 @@ export async function verifyAuth(req) {
     throw new Error('Invalid or expired token (and cookie fallback failed)');
   }
 
+  // Verify that the user is not banned in the database
+  const { data: isBanned, error: banError } = await supabase.rpc('is_user_banned', {
+    p_user_id: user.id
+  });
+
+  if (banError) {
+    console.error('Error checking ban status:', banError);
+  } else if (isBanned) {
+    throw new Error('Invalid or expired token (user is banned)');
+  }
+
   return { user, supabase };
 }
 
