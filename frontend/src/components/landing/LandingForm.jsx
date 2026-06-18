@@ -98,6 +98,20 @@ export const LandingForm = () => {
                 if (data.user) {
                     await logLoginAttempt({ success: true, email });
                     toast.success('Welcome back!');
+                    
+                    // Update device fingerprint in profile on successful login
+                    try {
+                        const currentFingerprint = getDeviceFingerprint();
+                        if (currentFingerprint) {
+                            await supabase
+                                .from('profiles')
+                                .update({ device_fingerprint: currentFingerprint })
+                                .eq('id', data.user.id);
+                        }
+                    } catch (err) {
+                        console.warn('Failed to update fingerprint on login:', err);
+                    }
+
                     navigate('/dashboard');
                 }
             } else {

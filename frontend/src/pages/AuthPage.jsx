@@ -261,6 +261,19 @@ const AuthPage = () => {
 
           toast.success('Welcome back!');
 
+          // Update device fingerprint in profile on successful login
+          try {
+            const currentFingerprint = getDeviceFingerprint();
+            if (currentFingerprint) {
+              await supabase
+                .from('profiles')
+                .update({ device_fingerprint: currentFingerprint })
+                .eq('id', data.user.id);
+            }
+          } catch (err) {
+            console.warn('Failed to update fingerprint on login:', err);
+          }
+
           // Create profile if it doesn't exist (non-blocking)
           try {
             const { error: profileError } = await supabase.from('profiles').insert({

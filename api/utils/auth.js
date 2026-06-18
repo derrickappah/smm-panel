@@ -89,16 +89,49 @@ export async function verifyAuth(req) {
     throw new Error('Invalid or expired token (user is banned)');
   }
 
+  // Get fingerprint from headers
+  const fingerprint = req.headers['x-device-fingerprint'];
+  const cleanFingerprint = fingerprint ? fingerprint.trim() : null;
+
+  if (!cleanFingerprint) {
+    throw new Error('Access denied: Device fingerprint header is missing. Direct API access is not permitted.');
+  }
+
+  // Get user profile to check / lock device fingerprint
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('device_fingerprint')
+    .eq('id', user.id)
+    .single();
+
+  if (profileError || !profile) {
+    console.error('Error fetching user profile in verifyAuth:', profileError);
+    throw new Error('Access denied: Failed to verify user profile');
+  }
+
+  if (!profile.device_fingerprint) {
+    // Lock profile to current fingerprint
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ device_fingerprint: cleanFingerprint })
+      .eq('id', user.id);
+    
+    if (updateError) {
+      console.error('Failed to lock device fingerprint to profile:', updateError);
+    }
+  } else if (profile.device_fingerprint !== cleanFingerprint) {
+    throw new Error('Access denied: Device fingerprint mismatch. Access is only permitted via the official web interface.');
+  }
+
   // Check if client IP or Device Fingerprint is banned
   const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() || 
              req.headers['cf-connecting-ip'] || 
              req.headers['x-real-ip'] || 
              req.socket?.remoteAddress;
-  const fingerprint = req.headers['x-device-fingerprint'];
 
   const valuesToCheck = [];
   if (ip && ip !== '127.0.0.1' && ip !== '::1') valuesToCheck.push(ip.trim());
-  if (fingerprint) valuesToCheck.push(fingerprint.trim());
+  valuesToCheck.push(cleanFingerprint);
 
   if (valuesToCheck.length > 0) {
     const { data: bannedItems, error: checkError } = await supabase
