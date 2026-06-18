@@ -10,6 +10,7 @@ import { supabase, isConfigured } from '@/lib/supabase';
 import { logLoginAttempt } from '@/lib/activityLogger';
 import SEO from '@/components/SEO';
 import TermsDialog from '@/components/TermsDialog';
+import { getDeviceFingerprint } from '@/utils/fingerprint';
 
 // Email validation function with TLD validation
 const isValidEmail = (email) => {
@@ -291,6 +292,7 @@ const AuthPage = () => {
             name: formData.name.trim(),
             phone_number: normalizedPhone,
             terms_accepted_at: new Date().toISOString(),
+            fingerprint: getDeviceFingerprint(),
           };
 
           // Add referral code to metadata if provided (manual input takes precedence)

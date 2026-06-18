@@ -89,6 +89,35 @@ export async function verifyAuth(req) {
     throw new Error('Invalid or expired token (user is banned)');
   }
 
+  // Check if client IP or Device Fingerprint is banned
+  const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() || 
+             req.headers['cf-connecting-ip'] || 
+             req.headers['x-real-ip'] || 
+             req.socket?.remoteAddress;
+  const fingerprint = req.headers['x-device-fingerprint'];
+
+  const valuesToCheck = [];
+  if (ip && ip !== '127.0.0.1' && ip !== '::1') valuesToCheck.push(ip.trim());
+  if (fingerprint) valuesToCheck.push(fingerprint.trim());
+
+  if (valuesToCheck.length > 0) {
+    const { data: bannedItems, error: checkError } = await supabase
+      .from('banned_identifiers')
+      .select('type, value')
+      .in('value', valuesToCheck);
+
+    if (checkError) {
+      console.error('Error checking banned identifiers:', checkError);
+    } else if (bannedItems && bannedItems.length > 0) {
+      const hasBannedIp = bannedItems.some(item => item.type === 'ip');
+      if (hasBannedIp) {
+        throw new Error('Access denied: Network or IP is blocked due to suspicious activity');
+      } else {
+        throw new Error('Access denied: Device is blocked due to suspicious activity');
+      }
+    }
+  }
+
   return { user, supabase };
 }
 

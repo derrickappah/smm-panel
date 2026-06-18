@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { supabase, isConfigured } from '@/lib/supabase';
 import { logLoginAttempt } from '@/lib/activityLogger';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { getDeviceFingerprint } from '@/utils/fingerprint';
 
 const isValidEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -104,6 +105,7 @@ export const LandingForm = () => {
                     name: formData.name.trim(),
                     phone_number: formData.phone_number.trim(),
                     terms_accepted_at: new Date().toISOString(),
+                    fingerprint: getDeviceFingerprint(),
                 };
 
                 if (formData.referral_code.trim()) {

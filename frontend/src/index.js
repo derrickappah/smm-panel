@@ -4,6 +4,7 @@ import "@/index.css";
 import App from "@/App";
 
 import { supabase } from "@/lib/supabase";
+import { getDeviceFingerprint } from "@/utils/fingerprint";
 
 // GLOBAL FETCH INTERCEPTOR
 // Automatically inject Authorization: Bearer token for all internal API requests
@@ -13,11 +14,14 @@ window.fetch = async function (url, options = {}) {
   if (typeof url === 'string' && url.startsWith('/api/')) {
     // Inject Authorization header if we have a session
     const { data: { session } } = await supabase.auth.getSession();
+    
+    options.headers = {
+      ...options.headers,
+      'x-device-fingerprint': getDeviceFingerprint()
+    };
+
     if (session?.access_token) {
-      options.headers = {
-        ...options.headers,
-        'Authorization': `Bearer ${session.access_token}`
-      };
+      options.headers['Authorization'] = `Bearer ${session.access_token}`;
     }
 
     // Explicitly remove credentials to migrate away from cookies
