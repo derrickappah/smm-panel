@@ -1,4 +1,4 @@
--- Migration: Block Automated Spam Signups (with proper exception propagation using SQLERRM)
+-- Migration: Block Automated Spam Signups (Upgraded regex + name filter)
 -- This updates the public.handle_new_user trigger function to reject accounts
 -- matching the name and email patterns of the recent signup spambot.
 
@@ -23,7 +23,9 @@ BEGIN
     );
     
     -- Spam blocklist checks
-    IF LOWER(user_name) IN ('saviour peprah', 'patrick akom', 'isaac amo', 'oboy sikaba')
+    IF LOWER(user_name) IN ('saviour peprah', 'patrick akom', 'isaac amo', 'oboy sikaba', 'makidonia yhung lord', 'obviously')
+       OR LOWER(user_name) LIKE '%makidonia%'
+       OR LOWER(user_name) LIKE '%yhung%'
        OR NEW.email LIKE '%saviouv%kdgdrpeprah%'
        OR NEW.email LIKE '%saviourpeprah%'
        OR NEW.email LIKE '%akompat%'
@@ -32,6 +34,14 @@ BEGIN
        OR NEW.email LIKE '%oboysikab%'
        OR NEW.email LIKE '%@gmil.com'
        OR NEW.email LIKE '%qwertycvbbbnn%'
+       OR NEW.email LIKE '%makidonia%'
+       OR NEW.email LIKE '%yhung%'
+       -- Block names with no vowels (consonant mash, e.g., Jsjsh, fsgs, Ghhh)
+       OR NOT (LOWER(user_name) ~ '[aeiouy]')
+       -- Block emails with no vowels in prefix (consonant mash, e.g., gfjbmv, fsgst)
+       OR NOT (LOWER(SPLIT_PART(NEW.email, '@', 1)) ~ '[aeiouy]')
+       -- Block emails with 5+ consecutive consonants (consonant mash, e.g., obottttrty, qwertycvbbbnn)
+       OR LOWER(SPLIT_PART(NEW.email, '@', 1)) ~ '[bcdfghjklmnpqrstvwxyz]{5,}'
     THEN
         RAISE EXCEPTION 'Registration blocked due to suspicious activity';
     END IF;
