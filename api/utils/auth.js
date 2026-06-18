@@ -8,6 +8,35 @@
 import { createClient } from '@supabase/supabase-js';
 
 /**
+ * Auto-ban one or more identifiers (ip / fingerprint) using the service role client.
+ * Silently swallows errors so it never blocks the response path.
+ * @param {Array<{type: string, value: string, reason: string}>} items
+ */
+async function autoBanIdentifiers(items) {
+  try {
+    const svc = getServiceRoleClient();
+    const rows = items
+      .filter(i => i.value && i.value.trim())
+      .map(i => ({
+        type: i.type,
+        value: i.value.trim(),
+        reason: i.reason || 'Automated ban: suspicious direct API access'
+      }));
+
+    if (rows.length === 0) return;
+
+    // upsert so duplicate bans don't cause errors
+    await svc
+      .from('banned_identifiers')
+      .upsert(rows, { onConflict: 'value,type', ignoreDuplicates: true });
+
+    console.warn('[Security] Auto-banned identifiers:', rows.map(r => `${r.type}=${r.value}`).join(', '));
+  } catch (err) {
+    console.error('[Security] Failed to auto-ban identifier:', err.message);
+  }
+}
+
+/**
  * Verify Supabase JWT token from request and return authenticated user
  * @param {Object} req - Request object
  * @returns {Object} - { user, supabase } or throws error
@@ -93,7 +122,21 @@ export async function verifyAuth(req) {
   const fingerprint = req.headers['x-device-fingerprint'];
   const cleanFingerprint = fingerprint ? fingerprint.trim() : null;
 
+  // Resolve client IP for potential auto-banning
+  const clientIp = req.headers['x-forwarded-for']?.split(',')[0].trim() ||
+                   req.headers['cf-connecting-ip'] ||
+                   req.headers['x-real-ip'] ||
+                   req.socket?.remoteAddress;
+
   if (!cleanFingerprint) {
+    // No fingerprint = definitely a script/bot — auto-ban the IP
+    if (clientIp && clientIp !== '127.0.0.1' && clientIp !== '::1') {
+      await autoBanIdentifiers([{
+        type: 'ip',
+        value: clientIp,
+        reason: 'Automated ban: API request with no device fingerprint (direct script access)'
+      }]);
+    }
     throw new Error('Access denied: Device fingerprint header is missing. Direct API access is not permitted.');
   }
 
@@ -120,14 +163,27 @@ export async function verifyAuth(req) {
       console.error('Failed to lock device fingerprint to profile:', updateError);
     }
   } else if (profile.device_fingerprint !== cleanFingerprint) {
+    // Fingerprint mismatch = someone is spoofing or scripting — auto-ban IP + rogue fingerprint
+    const banItems = [];
+    if (clientIp && clientIp !== '127.0.0.1' && clientIp !== '::1') {
+      banItems.push({
+        type: 'ip',
+        value: clientIp,
+        reason: 'Automated ban: device fingerprint mismatch (possible spoofing or direct script access)'
+      });
+    }
+    banItems.push({
+      type: 'fingerprint',
+      value: cleanFingerprint,
+      reason: 'Automated ban: fingerprint does not match account\'s registered device'
+    });
+    await autoBanIdentifiers(banItems);
     throw new Error('Access denied: Device fingerprint mismatch. Access is only permitted via the official web interface.');
   }
 
   // Check if client IP or Device Fingerprint is banned
-  const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() || 
-             req.headers['cf-connecting-ip'] || 
-             req.headers['x-real-ip'] || 
-             req.socket?.remoteAddress;
+  // Re-use clientIp resolved above for ban checks
+  const ip = clientIp;
 
   const valuesToCheck = [];
   if (ip && ip !== '127.0.0.1' && ip !== '::1') valuesToCheck.push(ip.trim());
