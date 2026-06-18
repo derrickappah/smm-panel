@@ -299,9 +299,9 @@ export default async function handler(req, res) {
 
   } catch (error) {
     // Handle authentication/authorization errors that weren't caught earlier
-    if (error.message === 'Missing or invalid authorization header' ||
-      error.message === 'Missing authentication token' ||
-      error.message === 'Invalid or expired token') {
+    if (error.message.toLowerCase().includes('authentication') ||
+      error.message.toLowerCase().includes('authorization') ||
+      error.message.toLowerCase().includes('token')) {
       return res.status(401).json({
         error: 'Authentication required',
         message: error.message,
