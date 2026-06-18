@@ -22,6 +22,8 @@ BEGIN
         SPLIT_PART(NEW.email, '@', 1)
     );
     
+    user_phone := NULLIF(TRIM(NEW.raw_user_meta_data->>'phone_number'), '');
+    
     -- Spam blocklist checks
     IF LOWER(user_name) IN ('saviour peprah', 'patrick akom', 'isaac amo', 'oboy sikaba', 'makidonia yhung lord', 'obviously')
        OR LOWER(user_name) LIKE '%makidonia%'
@@ -38,15 +40,28 @@ BEGIN
        OR NEW.email LIKE '%yhung%'
        -- Block names with no vowels (consonant mash, e.g., Jsjsh, fsgs, Ghhh)
        OR NOT (LOWER(user_name) ~ '[aeiouy]')
+       -- Block names with 5+ consecutive consonants (consonant mash, e.g., Oqijshshh)
+       OR LOWER(user_name) ~ '[bcdfghjklmnpqrstvwxyz]{5,}'
        -- Block emails with no vowels in prefix (consonant mash, e.g., gfjbmv, fsgst)
        OR NOT (LOWER(SPLIT_PART(NEW.email, '@', 1)) ~ '[aeiouy]')
+       -- Block emails with no vowels in domain name (consonant mash, e.g., @ksnkk.com, @ksjxj.com)
+       OR NOT (LOWER(SPLIT_PART(SPLIT_PART(NEW.email, '@', 2), '.', 1)) ~ '[aeiouy]')
        -- Block emails with 5+ consecutive consonants (consonant mash, e.g., obottttrty, qwertycvbbbnn)
        OR LOWER(SPLIT_PART(NEW.email, '@', 1)) ~ '[bcdfghjklmnpqrstvwxyz]{5,}'
+       -- Block reused phone numbers from banned users
+       OR (user_phone IS NOT NULL AND EXISTS (
+           SELECT 1 FROM public.profiles p
+           JOIN auth.users u ON p.id = u.id
+           WHERE p.phone_number = user_phone AND u.banned_until IS NOT NULL
+       ))
+       -- Block phone numbers reused more than twice to prevent registration floods
+       OR (user_phone IS NOT NULL AND (
+           SELECT COALESCE(count(*), 0) FROM public.profiles WHERE phone_number = user_phone
+       ) >= 2)
     THEN
         RAISE EXCEPTION 'Registration blocked due to suspicious activity';
     END IF;
-    
-    user_phone := NULLIF(TRIM(NEW.raw_user_meta_data->>'phone_number'), '');
+
     
     -- Extract terms acceptance timestamp from metadata
     BEGIN
