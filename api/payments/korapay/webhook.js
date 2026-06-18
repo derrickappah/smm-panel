@@ -28,20 +28,20 @@ export default async function handler(req, res) {
         }
 
         const signature = req.headers['x-korapay-signature'];
-        if (signature) {
-            const rawBody = JSON.stringify(req.body);
-            const expectedSignature = crypto
-                .createHmac('sha256', korapaySecretKey)
-                .update(rawBody)
-                .digest('hex');
+        if (!signature) {
+            console.error('KoraPay webhook received without signature header');
+            return res.status(401).json({ error: 'Missing webhook signature' });
+        }
 
-            if (signature !== expectedSignature) {
-                console.error('KoraPay webhook signature mismatch');
-                return res.status(401).json({ error: 'Invalid webhook signature' });
-            }
-        } else {
-            // KoraPay may not always send a signature in test mode; log but continue
-            console.warn('KoraPay webhook received without signature header');
+        const rawBody = JSON.stringify(req.body);
+        const expectedSignature = crypto
+            .createHmac('sha256', korapaySecretKey)
+            .update(rawBody)
+            .digest('hex');
+
+        if (signature !== expectedSignature) {
+            console.error('KoraPay webhook signature mismatch');
+            return res.status(401).json({ error: 'Invalid webhook signature' });
         }
 
         const payload = req.body;

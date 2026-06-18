@@ -132,6 +132,97 @@ export default async function handler(req, res) {
     // Get service role client for RPC call
     const supabase = getServiceRoleClient();
 
+    // Verify the payment if the caller is not an admin
+    if (!isAdmin) {
+      const activeRef = reference || transaction.paystack_reference;
+      if (!activeRef) {
+        return res.status(400).json({
+          error: 'Missing payment reference. Verification is required.',
+          transaction_id: transaction_id,
+          reference: null
+        });
+      }
+
+      const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
+      if (!PAYSTACK_SECRET_KEY) {
+        return res.status(500).json({
+          error: 'Paystack integration is misconfigured: missing API key.',
+          transaction_id: transaction_id,
+          reference: activeRef
+        });
+      }
+
+      try {
+        // Fetch payment verification from Paystack API
+        const verifyRes = await fetch(`https://api.paystack.co/transaction/verify/${activeRef}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${PAYSTACK_SECRET_KEY}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!verifyRes.ok) {
+          const errBody = await verifyRes.json().catch(() => ({}));
+          return res.status(400).json({
+            error: 'Failed to verify transaction with Paystack.',
+            message: errBody.message || 'Verification endpoint returned an error.',
+            transaction_id: transaction_id,
+            reference: activeRef
+          });
+        }
+
+        const paystackData = await verifyRes.json();
+        const isSuccessful = paystackData.status && paystackData.data && paystackData.data.status === 'success';
+        const gatewayAmount = paystackData.data?.amount ? paystackData.data.amount / 100 : null;
+
+        if (!isSuccessful) {
+          return res.status(400).json({
+            error: 'Paystack payment is not successful',
+            paystack_status: paystackData.data?.status || 'failed',
+            transaction_id: transaction_id,
+            reference: activeRef
+          });
+        }
+
+        // Validate amount
+        const expectedAmount = parseFloat(transaction.amount || 0);
+        const tolerance = 0.01;
+        if (!gatewayAmount || Math.abs(gatewayAmount - expectedAmount) > tolerance) {
+          console.error(`SECURITY WARNING: Amount mismatch in deposit approval for ${transaction_id}. Paid: ${gatewayAmount}, Expected: ${expectedAmount}`);
+          return res.status(400).json({
+            error: 'Payment verification failed: Amount mismatch.',
+            transaction_id: transaction_id,
+            reference: activeRef
+          });
+        }
+
+        // Prevent duplicate reference replay
+        const { data: dupCheck, error: dupCheckError } = await supabase
+          .from('transactions')
+          .select('id')
+          .eq('paystack_reference', activeRef)
+          .neq('id', transaction_id)
+          .maybeSingle();
+
+        if (dupCheck) {
+          return res.status(400).json({
+            error: 'Security block: This payment reference has already been credited to another transaction.',
+            transaction_id: transaction_id,
+            reference: activeRef
+          });
+        }
+
+      } catch (verifyError) {
+        console.error('Error during Paystack verification request:', verifyError);
+        return res.status(500).json({
+          error: 'Internal error during payment verification: ' + verifyError.message,
+          transaction_id: transaction_id,
+          reference: activeRef
+        });
+      }
+    }
+
     // First, ensure reference is stored if provided
     if (reference) {
       try {

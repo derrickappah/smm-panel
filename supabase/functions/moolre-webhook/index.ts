@@ -5,7 +5,7 @@ Deno.serve(async (req) => {
   const MOOLRE_WEBHOOK_SECRET = Deno.env.get("MOOLRE_WEBHOOK_SECRET");
   const payload = await req.json();
   const data = payload?.data ?? payload;
-  if (MOOLRE_WEBHOOK_SECRET && data.secret !== MOOLRE_WEBHOOK_SECRET) return new Response("Forbidden", { status: 403 });
+  if (!MOOLRE_WEBHOOK_SECRET || data.secret !== MOOLRE_WEBHOOK_SECRET) return new Response("Forbidden", { status: 403 });
 
   const supabase = createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "");
   if (Number(data.txstatus) === 1) {

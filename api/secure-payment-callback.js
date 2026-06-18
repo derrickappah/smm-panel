@@ -187,30 +187,7 @@ async function findTransactionByReference(supabase, provider, reference, amount 
     return transactions[0];
   }
 
-  // If no exact reference match and amount provided, try amount + time window fallback
-  // But ONLY if amount is provided and within reasonable time window
-  if (amount && provider === 'paystack') {
-    console.warn(`No exact reference match for ${reference}, trying amount fallback`);
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
-
-    const { data: amountMatches, error: amountError } = await supabase
-      .from('transactions')
-      .select('id, user_id, amount, status, type, deposit_method, created_at')
-      .eq('type', 'deposit')
-      .eq('status', 'pending')
-      .eq('deposit_method', provider)
-      .eq('amount', amount)
-      .gte('created_at', twoHoursAgo.toISOString())
-      .order('created_at', { ascending: false })
-      .limit(1);
-
-    if (amountError) {
-      console.error('Amount fallback query error:', amountError);
-    } else if (amountMatches && amountMatches.length > 0) {
-      console.warn(`Found transaction by amount fallback: ${amountMatches[0].id}`);
-      return amountMatches[0];
-    }
-  }
+  // Amount-only fallback matching removed for security to prevent transaction hijacking.
 
   return null;
 }
