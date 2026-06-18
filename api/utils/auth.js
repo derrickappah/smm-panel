@@ -128,6 +128,34 @@ export async function verifyAuth(req) {
                    req.headers['x-real-ip'] ||
                    req.socket?.remoteAddress;
 
+  // Enforce origin and referer check: only accept requests originating from the official website
+  const reqOrigin = req.headers.origin;
+  const reqReferer = req.headers.referer;
+
+  const allowedOrigins = [
+    'https://boostupgh.com',
+    'https://www.boostupgh.com'
+  ];
+
+  const isLocalHost = (url) => {
+    if (!url) return false;
+    return url.includes('localhost') || url.includes('127.0.0.1') || url.includes('::1');
+  };
+
+  const hasValidOrigin = reqOrigin && (allowedOrigins.includes(reqOrigin) || isLocalHost(reqOrigin));
+  const hasValidReferer = reqReferer && (allowedOrigins.some(ao => reqReferer.startsWith(ao)) || isLocalHost(reqReferer));
+
+  if (!hasValidOrigin && !hasValidReferer) {
+    if (clientIp && clientIp !== '127.0.0.1' && clientIp !== '::1') {
+      await autoBanIdentifiers([{
+        type: 'ip',
+        value: clientIp,
+        reason: 'Automated ban: API request with invalid or missing Origin/Referer header (direct script access)'
+      }]);
+    }
+    throw new Error('Access denied: Invalid request origin. Access is only permitted from the official web interface.');
+  }
+
   if (!cleanFingerprint) {
     // No fingerprint = definitely a script/bot — auto-ban the IP
     if (clientIp && clientIp !== '127.0.0.1' && clientIp !== '::1') {
@@ -138,6 +166,29 @@ export async function verifyAuth(req) {
       }]);
     }
     throw new Error('Access denied: Device fingerprint header is missing. Direct API access is not permitted.');
+  }
+
+  // Check if client IP or Device Fingerprint is banned BEFORE checking user profiles
+  const valuesToCheck = [];
+  if (clientIp && clientIp !== '127.0.0.1' && clientIp !== '::1') valuesToCheck.push(clientIp.trim());
+  if (cleanFingerprint) valuesToCheck.push(cleanFingerprint);
+
+  if (valuesToCheck.length > 0) {
+    const { data: bannedItems, error: checkError } = await supabase
+      .from('banned_identifiers')
+      .select('type, value')
+      .in('value', valuesToCheck);
+
+    if (checkError) {
+      console.error('Error checking banned identifiers:', checkError);
+    } else if (bannedItems && bannedItems.length > 0) {
+      const hasBannedIp = bannedItems.some(item => item.type === 'ip');
+      if (hasBannedIp) {
+        throw new Error('Access denied: Network or IP is blocked due to suspicious activity');
+      } else {
+        throw new Error('Access denied: Device is blocked due to suspicious activity');
+      }
+    }
   }
 
   // Get user profile to check / lock device fingerprint
@@ -181,31 +232,6 @@ export async function verifyAuth(req) {
     throw new Error('Access denied: Device fingerprint mismatch. Access is only permitted via the official web interface.');
   }
 
-  // Check if client IP or Device Fingerprint is banned
-  // Re-use clientIp resolved above for ban checks
-  const ip = clientIp;
-
-  const valuesToCheck = [];
-  if (ip && ip !== '127.0.0.1' && ip !== '::1') valuesToCheck.push(ip.trim());
-  valuesToCheck.push(cleanFingerprint);
-
-  if (valuesToCheck.length > 0) {
-    const { data: bannedItems, error: checkError } = await supabase
-      .from('banned_identifiers')
-      .select('type, value')
-      .in('value', valuesToCheck);
-
-    if (checkError) {
-      console.error('Error checking banned identifiers:', checkError);
-    } else if (bannedItems && bannedItems.length > 0) {
-      const hasBannedIp = bannedItems.some(item => item.type === 'ip');
-      if (hasBannedIp) {
-        throw new Error('Access denied: Network or IP is blocked due to suspicious activity');
-      } else {
-        throw new Error('Access denied: Device is blocked due to suspicious activity');
-      }
-    }
-  }
 
   return { user, supabase };
 }

@@ -52,7 +52,8 @@ async function runTests() {
     headers: {
       authorization: `Bearer ${token}`,
       'x-device-fingerprint': 'fp_clean_fingerprint_abc123',
-      'x-forwarded-for': '1.1.1.1'
+      'x-forwarded-for': '1.1.1.1',
+      origin: 'https://boostupgh.com'
     }
   };
 
@@ -75,7 +76,8 @@ async function runTests() {
     headers: {
       authorization: `Bearer ${token}`,
       'x-device-fingerprint': 'fp_clean_fingerprint_abc123',
-      'x-forwarded-for': '192.168.1.100'
+      'x-forwarded-for': '192.168.1.100',
+      origin: 'https://boostupgh.com'
     }
   };
 
@@ -96,7 +98,8 @@ async function runTests() {
     headers: {
       authorization: `Bearer ${token}`,
       'x-device-fingerprint': 'fp_testfingerprint123',
-      'x-forwarded-for': '1.1.1.1'
+      'x-forwarded-for': '1.1.1.1',
+      origin: 'https://boostupgh.com'
     }
   };
 
@@ -105,6 +108,49 @@ async function runTests() {
     console.log('❌ FAILURE: Banned fingerprint was allowed to execute the request!');
   } catch (err) {
     if (err.message.includes('Device is blocked')) {
+      console.log('✅ SUCCESS: Correctly blocked with error:', err.message);
+    } else {
+      console.log('❌ FAILURE: Request failed with incorrect error:', err.message);
+    }
+  }
+
+  // Test 4: Request with invalid Origin
+  console.log('\nTest 4: Request with invalid Origin (https://suspiciousdomain.com)');
+  const reqInvalidOrigin = {
+    headers: {
+      authorization: `Bearer ${token}`,
+      'x-device-fingerprint': 'fp_clean_fingerprint_abc123',
+      'x-forwarded-for': '1.1.1.1',
+      origin: 'https://suspiciousdomain.com'
+    }
+  };
+
+  try {
+    await verifyAuth(reqInvalidOrigin);
+    console.log('❌ FAILURE: Invalid origin was allowed!');
+  } catch (err) {
+    if (err.message.includes('Invalid request origin')) {
+      console.log('✅ SUCCESS: Correctly blocked with error:', err.message);
+    } else {
+      console.log('❌ FAILURE: Request failed with incorrect error:', err.message);
+    }
+  }
+
+  // Test 5: Request with missing Origin/Referer
+  console.log('\nTest 5: Request with missing Origin and Referer headers');
+  const reqMissingOrigin = {
+    headers: {
+      authorization: `Bearer ${token}`,
+      'x-device-fingerprint': 'fp_clean_fingerprint_abc123',
+      'x-forwarded-for': '1.1.1.1'
+    }
+  };
+
+  try {
+    await verifyAuth(reqMissingOrigin);
+    console.log('❌ FAILURE: Request missing origin/referer was allowed!');
+  } catch (err) {
+    if (err.message.includes('Invalid request origin')) {
       console.log('✅ SUCCESS: Correctly blocked with error:', err.message);
     } else {
       console.log('❌ FAILURE: Request failed with incorrect error:', err.message);
