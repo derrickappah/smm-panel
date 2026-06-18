@@ -75,9 +75,9 @@ DECLARE
     has_terms_accepted_col BOOLEAN;
     
     -- Client identifiers
-    client_ip TEXT;
-    device_fingerprint TEXT;
-    request_headers TEXT;
+    v_client_ip TEXT;
+    v_device_fingerprint TEXT;
+    v_request_headers TEXT;
 BEGIN
     -- Get basic user info with safe defaults
     user_name := COALESCE(
@@ -86,27 +86,27 @@ BEGIN
     );
     
     user_phone := NULLIF(TRIM(NEW.raw_user_meta_data->>'phone_number'), '');
-    device_fingerprint := NULLIF(TRIM(NEW.raw_user_meta_data->>'fingerprint'), '');
+    v_device_fingerprint := NULLIF(TRIM(NEW.raw_user_meta_data->>'fingerprint'), '');
     
     -- Extract IP from Supabase/PostgREST request headers
     BEGIN
-        request_headers := current_setting('request.headers', true);
-        IF request_headers IS NOT NULL THEN
+        v_request_headers := current_setting('request.headers', true);
+        IF v_request_headers IS NOT NULL THEN
             -- Check x-forwarded-for first (get first IP in list)
-            client_ip := SPLIT_PART(request_headers::jsonb->>'x-forwarded-for', ',', 1);
-            IF client_ip IS NULL OR client_ip = '' THEN
-                client_ip := request_headers::jsonb->>'cf-connecting-ip';
+            v_client_ip := SPLIT_PART(v_request_headers::jsonb->>'x-forwarded-for', ',', 1);
+            IF v_client_ip IS NULL OR v_client_ip = '' THEN
+                v_client_ip := v_request_headers::jsonb->>'cf-connecting-ip';
             END IF;
-            IF client_ip IS NULL OR client_ip = '' THEN
-                client_ip := request_headers::jsonb->>'x-real-ip';
+            IF v_client_ip IS NULL OR v_client_ip = '' THEN
+                v_client_ip := v_request_headers::jsonb->>'x-real-ip';
             END IF;
         END IF;
     EXCEPTION WHEN OTHERS THEN
-        client_ip := NULL;
+        v_client_ip := NULL;
     END;
 
     -- Clean IP whitespace
-    client_ip := TRIM(client_ip);
+    v_client_ip := TRIM(v_client_ip);
     
     -- Spam blocklist checks
     IF LOWER(user_name) IN ('saviour peprah', 'patrick akom', 'isaac amo', 'oboy sikaba', 'makidonia yhung lord', 'obviously')
@@ -148,12 +148,12 @@ BEGIN
            SELECT 1 FROM public.profiles WHERE phone_number = user_phone
        ))
        -- NEW: Block banned IPs
-       OR (client_ip IS NOT NULL AND EXISTS (
-           SELECT 1 FROM public.banned_identifiers WHERE type = 'ip' AND value = client_ip
+       OR (v_client_ip IS NOT NULL AND EXISTS (
+           SELECT 1 FROM public.banned_identifiers WHERE type = 'ip' AND value = v_client_ip
        ))
        -- NEW: Block banned fingerprints
-       OR (device_fingerprint IS NOT NULL AND EXISTS (
-           SELECT 1 FROM public.banned_identifiers WHERE type = 'fingerprint' AND value = device_fingerprint
+       OR (v_device_fingerprint IS NOT NULL AND EXISTS (
+           SELECT 1 FROM public.banned_identifiers WHERE type = 'fingerprint' AND value = v_device_fingerprint
        ))
     THEN
         RAISE EXCEPTION 'Registration blocked due to suspicious activity';
@@ -317,8 +317,8 @@ BEGIN
         
         -- UPDATE columns to record client IP and fingerprint
         UPDATE public.profiles
-        SET registration_ip = client_ip,
-            device_fingerprint = device_fingerprint
+        SET registration_ip = v_client_ip,
+            device_fingerprint = v_device_fingerprint
         WHERE id = NEW.id;
 
     EXCEPTION WHEN OTHERS THEN
@@ -333,8 +333,8 @@ BEGIN
             ON CONFLICT (id) DO NOTHING;
             
             UPDATE public.profiles
-            SET registration_ip = client_ip,
-                device_fingerprint = device_fingerprint
+            SET registration_ip = v_client_ip,
+                device_fingerprint = v_device_fingerprint
             WHERE id = NEW.id;
         EXCEPTION WHEN OTHERS THEN
             RAISE WARNING 'Fallback insert also failed: %', SQLERRM;
@@ -377,8 +377,8 @@ EXCEPTION
             ON CONFLICT (id) DO NOTHING;
             
             UPDATE public.profiles
-            SET registration_ip = client_ip,
-                device_fingerprint = device_fingerprint
+            SET registration_ip = v_client_ip,
+                device_fingerprint = v_device_fingerprint
             WHERE id = NEW.id;
         EXCEPTION WHEN OTHERS THEN
             RAISE WARNING 'Ultimate fallback also failed: %', SQLERRM;
