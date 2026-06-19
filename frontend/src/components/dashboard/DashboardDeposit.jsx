@@ -215,7 +215,7 @@ const DashboardDeposit = React.memo(({
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
             >
-              Hubtel
+              Hubtel/MoMo
             </button>
           )}
           {paymentMethodSettings.korapay_enabled && (
@@ -427,10 +427,10 @@ const DashboardDeposit = React.memo(({
             disabled={loading || !depositAmount}
             className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? 'Processing...' : 'Pay with Hubtel'}
+            {loading ? 'Processing...' : 'Pay with Hubtel/MoMo'}
           </Button>
           <p className="text-xs sm:text-sm text-gray-600 text-center">
-            Secure payment via Hubtel. Funds are added instantly after successful payment.
+            Secure payment via Hubtel/MoMo. Funds are added instantly after successful payment.
           </p>
           <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
             <p className="text-xs sm:text-sm text-blue-800 text-center">

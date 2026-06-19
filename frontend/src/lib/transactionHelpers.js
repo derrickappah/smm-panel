@@ -130,7 +130,7 @@ export const autoClassifyTransaction = async (context) => {
       'korapay': 'Korapay',
       'moolre': 'Moolre',
       'moolre_web': 'Moolre Web',
-      'hubtel': 'Hubtel',
+      'hubtel': 'Hubtel/MoMo',
       'manual': 'Manual Deposit',
       'momo': 'Mobile Money'
     };

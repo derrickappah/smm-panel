@@ -529,7 +529,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
       'paystack': 'Paystack',
       'manual': 'Mobile Money',
       'momo': 'Mobile Money',
-      'hubtel': 'Hubtel',
+      'hubtel': 'Hubtel/MoMo',
       'korapay': 'Korapay',
       'moolre': 'Moolre',
       'moolre_web': 'Moolre Web',
