@@ -28,7 +28,7 @@ async function autoBanIdentifiers(items) {
     // upsert so duplicate bans don't cause errors
     await svc
       .from('banned_identifiers')
-      .upsert(rows, { onConflict: 'value,type', ignoreDuplicates: true });
+      .upsert(rows, { onConflict: 'value', ignoreDuplicates: true });
 
     console.warn('[Security] Auto-banned identifiers:', rows.map(r => `${r.type}=${r.value}`).join(', '));
   } catch (err) {
