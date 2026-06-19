@@ -11,6 +11,7 @@ import { logLoginAttempt } from '@/lib/activityLogger';
 import SEO from '@/components/SEO';
 import TermsDialog from '@/components/TermsDialog';
 import { getDeviceFingerprint } from '@/utils/fingerprint';
+import { Turnstile } from '@/components/ui/turnstile';
 
 // Email validation function with TLD validation
 const isValidEmail = (email) => {
@@ -104,6 +105,7 @@ const AuthPage = () => {
   const [showReferralCode, setShowReferralCode] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [termsDialogOpen, setTermsDialogOpen] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState('');
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -288,6 +290,7 @@ const AuthPage = () => {
             password: formData.password,
             options: {
               data: signupMetadata,
+              captchaToken: captchaToken || undefined,
             },
           });
 
@@ -683,9 +686,13 @@ const AuthPage = () => {
               </div>
             )}
 
+            {!isLogin && (
+              <Turnstile onSuccess={setCaptchaToken} />
+            )}
+
             <Button
               type="submit"
-              disabled={loading}
+              disabled={loading || (!isLogin && !captchaToken)}
               className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-base font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
             >
               {loading ? 'Processing...' : isLogin ? 'Login' : 'Create Account'}
