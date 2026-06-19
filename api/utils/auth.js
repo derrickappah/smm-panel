@@ -146,25 +146,10 @@ export async function verifyAuth(req) {
   const hasValidReferer = reqReferer && (allowedOrigins.some(ao => reqReferer.startsWith(ao)) || isLocalHost(reqReferer));
 
   if (!hasValidOrigin && !hasValidReferer) {
-    if (clientIp && clientIp !== '127.0.0.1' && clientIp !== '::1') {
-      await autoBanIdentifiers([{
-        type: 'ip',
-        value: clientIp,
-        reason: 'Automated ban: API request with invalid or missing Origin/Referer header (direct script access)'
-      }]);
-    }
     throw new Error('Access denied: Invalid request origin. Access is only permitted from the official web interface.');
   }
 
   if (!cleanFingerprint) {
-    // No fingerprint = definitely a script/bot — auto-ban the IP
-    if (clientIp && clientIp !== '127.0.0.1' && clientIp !== '::1') {
-      await autoBanIdentifiers([{
-        type: 'ip',
-        value: clientIp,
-        reason: 'Automated ban: API request with no device fingerprint (direct script access)'
-      }]);
-    }
     throw new Error('Access denied: Device fingerprint header is missing. Direct API access is not permitted.');
   }
 
@@ -214,22 +199,8 @@ export async function verifyAuth(req) {
       console.error('Failed to lock device fingerprint to profile:', updateError);
     }
   } else if (profile.device_fingerprint !== cleanFingerprint) {
-    // Fingerprint mismatch = someone is spoofing or scripting — auto-ban IP + rogue fingerprint
-    const banItems = [];
-    if (clientIp && clientIp !== '127.0.0.1' && clientIp !== '::1') {
-      banItems.push({
-        type: 'ip',
-        value: clientIp,
-        reason: 'Automated ban: device fingerprint mismatch (possible spoofing or direct script access)'
-      });
-    }
-    banItems.push({
-      type: 'fingerprint',
-      value: cleanFingerprint,
-      reason: 'Automated ban: fingerprint does not match account\'s registered device'
-    });
-    await autoBanIdentifiers(banItems);
-    throw new Error('Access denied: Device fingerprint mismatch. Access is only permitted via the official web interface.');
+    // Do not permanently ban on mismatch; reject and ask to log in again to register the new device
+    throw new Error('Access denied: Device mismatch. Please log in again to authorize this device.');
   }
 
 

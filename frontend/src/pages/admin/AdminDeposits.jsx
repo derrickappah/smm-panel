@@ -1,6 +1,6 @@
 import React, { memo, useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useAdminDeposits, useApproveDeposit, useRejectDeposit } from '@/hooks/useAdminDeposits';
+import { useAdminDeposits, useApproveDeposit, useRejectDeposit, useBanUser } from '@/hooks/useAdminDeposits';
 import { useDebounce } from '@/hooks/useDebounce';
 import VirtualizedList from '@/components/VirtualizedList';
 import ResponsiveTable from '@/components/admin/ResponsiveTable';
@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Search, RefreshCw, Filter, CheckCircle, XCircle, AlertCircle, Image as ImageIcon, Info } from 'lucide-react';
+import { Search, RefreshCw, Filter, CheckCircle, XCircle, AlertCircle, Image as ImageIcon, Info, ShieldAlert } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
@@ -26,6 +26,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
   const [manualRefDialog, setManualRefDialog] = useState({ open: false, deposit: null, error: null, paymentMethod: null });
   const [manualReference, setManualReference] = useState('');
   const [paymentProofDialog, setPaymentProofDialog] = useState({ open: false, imageUrl: null, deposit: null });
+  const [banUserDialog, setBanUserDialog] = useState({ open: false, deposit: null, reason: 'Deposit exploit', rejectPending: true, isBanning: false });
   const isSubscribedRef = useRef(false);
 
   const debouncedSearch = useDebounce(searchTerm, 300);
@@ -70,81 +71,40 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
   const {
     data,
     isLoading,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
     refetch
   } = useAdminDeposits({
     enabled: true,
-    useInfinite: true
+    page: page,
+    limit: ITEMS_PER_PAGE,
+    search: debouncedSearch,
+    status: statusFilter,
+    date: dateFilter
   });
 
   const approveDepositMutation = useApproveDeposit();
   const rejectDepositMutation = useRejectDeposit();
+  const banUserMutation = useBanUser();
 
   const allDeposits = useMemo(() => {
-    if (!data?.pages) return [];
-    return data.pages.flatMap(page => page.data || []);
+    return data?.data || [];
   }, [data]);
 
-  // Get total count from first page
+  // Get total count from server response
   const totalCount = useMemo(() => {
-    return data?.pages?.[0]?.total || allDeposits.length;
-  }, [data, allDeposits.length]);
+    return data?.total || 0;
+  }, [data]);
 
-  // Load all pages immediately after initial load
+  // Reset page to 1 when filters change
   useEffect(() => {
-    if (!isLoading && hasNextPage && !isFetchingNextPage) {
-      fetchNextPage();
-    }
-  }, [isLoading, hasNextPage, isFetchingNextPage, fetchNextPage]);
+    setPage(1);
+  }, [debouncedSearch, statusFilter, dateFilter]);
 
-  // Real-time updates are now handled by the useAdminDeposits hook
-
-  const filteredDeposits = useMemo(() => {
-    let filtered = [...allDeposits];
-
-    if (debouncedSearch) {
-      const searchLower = debouncedSearch.toLowerCase();
-      filtered = filtered.filter(deposit => {
-        const userName = (deposit.profiles?.name || '').toLowerCase();
-        const userEmail = (deposit.profiles?.email || '').toLowerCase();
-        const userPhone = (deposit.profiles?.phone_number || '').toLowerCase();
-        const transactionId = (deposit.id || '').toLowerCase();
-        return userName.includes(searchLower) ||
-          userEmail.includes(searchLower) ||
-          userPhone.includes(searchLower) ||
-          transactionId.includes(searchLower);
-      });
-    }
-
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(deposit => deposit.status === statusFilter);
-    }
-
-    if (dateFilter) {
-      const filterDate = new Date(dateFilter);
-      filterDate.setHours(0, 0, 0, 0);
-      const filterDateEnd = new Date(filterDate);
-      filterDateEnd.setHours(23, 59, 59, 999);
-
-      filtered = filtered.filter(deposit => {
-        const depositDate = new Date(deposit.created_at);
-        return depositDate >= filterDate && depositDate <= filterDateEnd;
-      });
-    }
-
-    return filtered;
-  }, [allDeposits, debouncedSearch, statusFilter, dateFilter]);
-
-  const paginatedDeposits = useMemo(() => {
-    const startIndex = (page - 1) * ITEMS_PER_PAGE;
-    return filteredDeposits.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredDeposits, page]);
+  const filteredDeposits = allDeposits;
+  const paginatedDeposits = allDeposits;
 
   // Use total count for pagination, but show filtered count in display
-  const totalPages = Math.ceil(filteredDeposits.length / ITEMS_PER_PAGE);
-  const displayTotal = filteredDeposits.length;
+  const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
+  const displayTotal = totalCount;
 
   const handleApproveDeposit = useCallback(async (deposit) => {
     setApprovingDeposit(deposit.id);
@@ -530,6 +490,38 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
     }
   }, [manualRefDialog.deposit, manualRefDialog.paymentMethod, manualReference, handleVerifyPaystackDeposit, handleVerifyMoolreDeposit, handleVerifyMoolreWebDeposit]);
 
+  const handleBanUserClick = useCallback((deposit) => {
+    setBanUserDialog({
+      open: true,
+      deposit,
+      reason: 'Deposit exploit',
+      rejectPending: true,
+      isBanning: false
+    });
+  }, []);
+
+  const handleBanUserSubmit = useCallback(async () => {
+    const { deposit, reason, rejectPending } = banUserDialog;
+    if (!deposit) return;
+
+    setBanUserDialog(prev => ({ ...prev, isBanning: true }));
+    try {
+      await banUserMutation.mutateAsync({
+        userId: deposit.user_id,
+        reason,
+        rejectPending
+      });
+      setBanUserDialog({ open: false, deposit: null, reason: 'Deposit exploit', rejectPending: true, isBanning: false });
+      
+      refetch();
+      if (onRefresh) onRefresh();
+    } catch (error) {
+      // Mutation handles error toasts, so we just swallow the exception
+    } finally {
+      setBanUserDialog(prev => ({ ...prev, isBanning: false }));
+    }
+  }, [banUserDialog, banUserMutation, onRefresh, refetch]);
+
   // Helper function to format payment method name
   const formatPaymentMethod = useCallback((method) => {
     if (!method) return 'N/A';
@@ -585,12 +577,21 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
 
     return (
       <div className="grid grid-cols-12 gap-4 p-4 items-center bg-white hover:bg-gray-50 transition-colors border-b border-gray-200 min-w-[1200px]">
-        <div className="col-span-2">
-          <p className="font-medium text-gray-900 break-words">{deposit.profiles?.name || 'Unknown'}</p>
-          <p className="text-xs text-gray-600 break-all">{deposit.profiles?.email || deposit.user_id?.slice(0, 8)}</p>
-          {deposit.profiles?.phone_number && (
-            <p className="text-xs text-gray-500">📱 {deposit.profiles.phone_number}</p>
-          )}
+        <div className="col-span-2 flex items-start justify-between gap-1">
+          <div className="min-w-0 flex-1">
+            <p className="font-medium text-gray-900 break-words">{deposit.profiles?.name || 'Unknown'}</p>
+            <p className="text-xs text-gray-600 break-all">{deposit.profiles?.email || deposit.user_id?.slice(0, 8)}</p>
+            {deposit.profiles?.phone_number && (
+              <p className="text-xs text-gray-500">📱 {deposit.profiles.phone_number}</p>
+            )}
+          </div>
+          <button
+            onClick={() => handleBanUserClick(deposit)}
+            title="Ban User"
+            className="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded transition-colors shrink-0"
+          >
+            <ShieldAlert className="w-4.5 h-4.5" />
+          </button>
         </div>
         <div className="col-span-1.5">
           <p className="font-semibold text-gray-900">₵{deposit.amount?.toFixed(2) || '0.00'}</p>
@@ -718,7 +719,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
         </div>
       </div>
     );
-  }, [handleApproveDeposit, handleRejectDeposit, handleApproveManualDeposit, handleVerifyPaystackDeposit, handleVerifyMoolreDeposit, handleVerifyMoolreWebDeposit, approvingDeposit, verifyingDeposit, formatPaymentMethod, getPaymentMethodColors]);
+  }, [handleApproveDeposit, handleRejectDeposit, handleApproveManualDeposit, handleVerifyPaystackDeposit, handleVerifyMoolreDeposit, handleVerifyMoolreWebDeposit, handleBanUserClick, approvingDeposit, verifyingDeposit, formatPaymentMethod, getPaymentMethodColors]);
 
   const renderMobileCard = useCallback((deposit, index) => {
     const depositMethod = deposit.deposit_method || deposit.payment_method;
@@ -732,8 +733,17 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
     return (
       <div className="bg-white p-4 space-y-3">
         <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <p className="font-semibold text-gray-900 text-base">{deposit.profiles?.name || 'Unknown'}</p>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-1">
+              <p className="font-semibold text-gray-900 text-base truncate">{deposit.profiles?.name || 'Unknown'}</p>
+              <button
+                onClick={() => handleBanUserClick(deposit)}
+                title="Ban User"
+                className="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded transition-colors shrink-0"
+              >
+                <ShieldAlert className="w-4.5 h-4.5" />
+              </button>
+            </div>
             <p className="text-sm text-gray-600 mt-1 break-all">{deposit.profiles?.email || deposit.user_id?.slice(0, 8)}</p>
             {deposit.profiles?.phone_number && (
               <p className="text-sm text-gray-500 mt-1">📱 {deposit.profiles.phone_number}</p>
@@ -858,7 +868,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
         )}
       </div>
     );
-  }, [handleApproveDeposit, handleRejectDeposit, handleApproveManualDeposit, handleVerifyPaystackDeposit, handleVerifyMoolreDeposit, handleVerifyMoolreWebDeposit, approvingDeposit, verifyingDeposit, formatPaymentMethod, getPaymentMethodColors]);
+  }, [handleApproveDeposit, handleRejectDeposit, handleApproveManualDeposit, handleVerifyPaystackDeposit, handleVerifyMoolreDeposit, handleVerifyMoolreWebDeposit, handleBanUserClick, approvingDeposit, verifyingDeposit, formatPaymentMethod, getPaymentMethodColors]);
 
   if (isLoading) {
     return (
@@ -955,10 +965,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
 
           <div className="flex items-center justify-between mt-4">
             <div className="text-sm text-gray-600">
-              Showing {(page - 1) * ITEMS_PER_PAGE + 1} to {Math.min(page * ITEMS_PER_PAGE, displayTotal)} of {displayTotal} deposits
-              {hasNextPage && !isFetchingNextPage && (
-                <span className="ml-2 text-xs text-gray-500">(Loading more...)</span>
-              )}
+              Showing {displayTotal > 0 ? (page - 1) * ITEMS_PER_PAGE + 1 : 0} to {Math.min(page * ITEMS_PER_PAGE, displayTotal)} of {displayTotal} deposits
             </div>
             <div className="flex items-center gap-2">
               <Button
@@ -1182,6 +1189,79 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
               </div>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Ban User Dialog */}
+      <Dialog open={banUserDialog.open} onOpenChange={(open) => {
+        if (!open && !banUserDialog.isBanning) {
+          setBanUserDialog({ open: false, deposit: null, reason: 'Deposit exploit', rejectPending: true, isBanning: false });
+        }
+      }}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <ShieldAlert className="w-5 h-5" />
+              Ban User & Reject Transactions
+            </DialogTitle>
+            <DialogDescription>
+              This will permanently ban the user, prevent them from logging in, block their IP and device fingerprint, and reject their pending deposits.
+            </DialogDescription>
+          </DialogHeader>
+
+          {banUserDialog.deposit && (
+            <div className="space-y-4 py-4">
+              <div className="bg-red-50 border border-red-100 p-3 rounded-md space-y-1 text-sm text-red-950">
+                <p><span className="font-semibold">User:</span> {banUserDialog.deposit.profiles?.name || 'Unknown'}</p>
+                <p><span className="font-semibold">Email:</span> {banUserDialog.deposit.profiles?.email || 'N/A'}</p>
+                <p><span className="font-semibold">Phone:</span> {banUserDialog.deposit.profiles?.phone_number || 'N/A'}</p>
+                <p><span className="font-semibold">IP Address:</span> {banUserDialog.deposit.profiles?.registration_ip || 'N/A'}</p>
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="ban-reason" className="text-sm font-medium text-gray-700">
+                  Ban Reason
+                </label>
+                <Input
+                  id="ban-reason"
+                  placeholder="e.g. Deposit exploit / fake screenshots"
+                  value={banUserDialog.reason}
+                  onChange={(e) => setBanUserDialog(prev => ({ ...prev, reason: e.target.value }))}
+                  className="h-12 text-base"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="reject-pending"
+                  checked={banUserDialog.rejectPending}
+                  onChange={(e) => setBanUserDialog(prev => ({ ...prev, rejectPending: e.target.checked }))}
+                  className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+                />
+                <label htmlFor="reject-pending" className="text-sm font-medium text-gray-700">
+                  Reject all pending deposits for this user
+                </label>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setBanUserDialog({ open: false, deposit: null, reason: 'Deposit exploit', rejectPending: true, isBanning: false })}
+              disabled={banUserDialog.isBanning}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleBanUserSubmit}
+              disabled={banUserDialog.isBanning}
+              variant="destructive"
+            >
+              {banUserDialog.isBanning ? 'Banning...' : 'Confirm Ban'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
