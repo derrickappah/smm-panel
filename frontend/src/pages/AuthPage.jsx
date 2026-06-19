@@ -79,39 +79,15 @@ const isValidEmail = (email) => {
   return validTlds.includes(tld);
 };
 
-// Phone number validation - only accepts 0XXXXXXXXX format (10 digits starting with 0)
+// Phone number validation - accepts any standard format (8-15 digits)
 const isValidGhanaPhone = (phone) => {
-  // Remove all non-digit characters for validation
   const cleaned = phone.replace(/\D/g, '');
-
-  // Only accept exactly 10 digits starting with 0
-  return /^0\d{9}$/.test(cleaned);
+  return cleaned.length >= 8 && cleaned.length <= 15;
 };
 
 const formatGhanaPhone = (value) => {
-  // Remove all non-digit characters
-  let cleaned = value.replace(/\D/g, '');
-
-  // Only allow digits, must start with 0
-  if (cleaned.length === 0) {
-    return '';
-  }
-
-  // If first digit is not 0, add 0 at the start
-  if (!cleaned.startsWith('0')) {
-    // If user typed digits without 0, add 0
-    if (cleaned.length <= 9) {
-      cleaned = '0' + cleaned;
-    } else {
-      // If more than 9 digits without 0, only take first 9 and add 0
-      cleaned = '0' + cleaned.substring(0, 9);
-    }
-  }
-
-  // Limit to 10 digits maximum
-  cleaned = cleaned.substring(0, 10);
-
-  return cleaned;
+  // Allow digits, spaces, plus signs, dashes, parentheses
+  return value.replace(/[^\d+\s().-]/g, '');
 };
 
 const AuthPage = () => {
@@ -202,16 +178,9 @@ const AuthPage = () => {
         return;
       }
 
-      if (!isLogin && !formData.phone_number.trim()) {
-        toast.error('Please enter your WhatsApp number');
-        setPhoneError('Please enter your WhatsApp number');
-        setLoading(false);
-        return;
-      }
-
-      if (!isLogin && !isValidGhanaPhone(formData.phone_number.trim())) {
-        toast.error('Please enter a valid phone number in the format: 0559272762');
-        setPhoneError('Phone number must be 10 digits starting with 0 (e.g., 0559272762)');
+      if (!isLogin && formData.phone_number.trim() && !isValidGhanaPhone(formData.phone_number.trim())) {
+        toast.error('Please enter a valid phone number');
+        setPhoneError('Phone number must be between 8 and 15 digits');
         setLoading(false);
         return;
       }
@@ -548,12 +517,12 @@ const AuthPage = () => {
                 </div>
                 <div>
                   <Label htmlFor="phone_number" className="text-sm font-medium text-gray-700 mb-2 block">
-                    WhatsApp Number
+                    WhatsApp Number (Optional)
                   </Label>
                   <Input
                     id="phone_number"
                     type="tel"
-                    placeholder="0559272762"
+                    placeholder="e.g. 0559272762 or +233..."
                     value={formData.phone_number}
                     onChange={(e) => {
                       const formatted = formatGhanaPhone(e.target.value);
@@ -567,12 +536,12 @@ const AuthPage = () => {
                       // Validate phone when user leaves the field
                       const phoneValue = e.target.value.trim();
                       if (phoneValue && !isValidGhanaPhone(phoneValue)) {
-                        setPhoneError('Phone number must be 10 digits starting with 0 (e.g., 0559272762)');
+                        setPhoneError('Phone number must be between 8 and 15 digits');
                       } else {
                         setPhoneError('');
                       }
                     }}
-                    required={!isLogin}
+                    required={false}
                     className={`w-full h-11 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${phoneError
                       ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
                       : 'border-gray-300'
@@ -581,7 +550,7 @@ const AuthPage = () => {
                   {phoneError && (
                     <p className="mt-1 text-sm text-red-600">{phoneError}</p>
                   )}
-                  <p className="mt-1 text-xs text-gray-500">Format: 0559272762 (10 digits starting with 0)</p>
+                  <p className="mt-1 text-xs text-gray-500">Optional. Accepts any standard phone number format.</p>
                 </div>
               </>
             )}

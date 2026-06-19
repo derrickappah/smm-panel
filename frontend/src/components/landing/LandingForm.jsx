@@ -18,16 +18,12 @@ const isValidEmail = (email) => {
 
 const isValidGhanaPhone = (phone) => {
     const cleaned = phone.replace(/\D/g, '');
-    return /^0\d{9}$/.test(cleaned);
+    return cleaned.length >= 8 && cleaned.length <= 15;
 };
 
 const formatGhanaPhone = (value) => {
-    let cleaned = value.replace(/\D/g, '');
-    if (cleaned.length === 0) return '';
-    if (!cleaned.startsWith('0')) {
-        cleaned = '0' + cleaned.substring(0, 9);
-    }
-    return cleaned.substring(0, 10);
+    // Allow digits, spaces, plus signs, dashes, parentheses
+    return value.replace(/[^\d+\s().-]/g, '');
 };
 
 export const LandingForm = () => {
@@ -73,8 +69,8 @@ export const LandingForm = () => {
                     toast.error('Please enter your full name');
                     return;
                 }
-                if (!isValidGhanaPhone(formData.phone_number)) {
-                    toast.error('Please enter a valid WhatsApp number (10 digits starting with 0)');
+                if (formData.phone_number.trim() && !isValidGhanaPhone(formData.phone_number)) {
+                    toast.error('Please enter a valid WhatsApp number (8-15 digits)');
                     return;
                 }
                 if (!termsAccepted) {
@@ -187,15 +183,15 @@ export const LandingForm = () => {
                                     required
                                 />
                             </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-white/70 text-xs font-bold uppercase tracking-widest ml-1">WhatsApp Number</Label>
+                             <div className="space-y-1.5">
+                                <Label className="text-white/70 text-xs font-bold uppercase tracking-widest ml-1">WhatsApp Number (Optional)</Label>
                                 <Input
                                     type="tel"
-                                    placeholder="0559272762"
+                                    placeholder="e.g. 0559272762 or +233..."
                                     className="bg-white/5 border-white/10 text-white placeholder:text-white/20 h-12 rounded-xl focus:ring-indigo-500/50"
                                     value={formData.phone_number}
                                     onChange={(e) => setFormData({ ...formData, phone_number: formatGhanaPhone(e.target.value) })}
-                                    required
+                                    required={false}
                                 />
                             </div>
                         </div>
