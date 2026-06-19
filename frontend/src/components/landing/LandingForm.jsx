@@ -66,6 +66,11 @@ export const LandingForm = () => {
                 return;
             }
 
+            if (!captchaToken) {
+                toast.error('Please complete the CAPTCHA verification');
+                return;
+            }
+
             if (!isLogin) {
                 if (!formData.name.trim()) {
                     toast.error('Please enter your full name');
@@ -79,19 +84,25 @@ export const LandingForm = () => {
                     toast.error('Please accept the Terms and Conditions');
                     return;
                 }
-                if (!captchaToken) {
-                    toast.error('Please complete the CAPTCHA verification');
-                    return;
-                }
             }
 
             if (isLogin) {
                 const { data, error } = await supabase.auth.signInWithPassword({
                     email,
                     password,
+                    options: {
+                        captchaToken: captchaToken || undefined,
+                        captcha_token: captchaToken || undefined,
+                    }
                 });
 
                 if (error) {
+                    if (window.turnstile) {
+                        try {
+                            window.turnstile.reset();
+                        } catch (e) {}
+                    }
+                    setCaptchaToken('');
                     await logLoginAttempt({ success: false, email, error: error.message });
                     toast.error(error.message || 'Login failed');
                     return;
@@ -268,13 +279,11 @@ export const LandingForm = () => {
                         </div>
                     )}
 
-                    {!isLogin && (
-                        <Turnstile onSuccess={setCaptchaToken} />
-                    )}
+                    <Turnstile onSuccess={setCaptchaToken} />
 
                     <Button
                         type="submit"
-                        disabled={loading || (!isLogin && !captchaToken)}
+                        disabled={loading || !captchaToken}
                         className="w-full h-12 mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(79,70,229,0.4)] transition-all duration-300 hover:scale-[1.02] disabled:opacity-70 disabled:hover:scale-100"
                     >
                         {loading ? <Loader2 className="animate-spin mr-2" /> : (isLogin ? 'Sign In Now' : 'Create Account')}

@@ -193,7 +193,7 @@ const AuthPage = () => {
         return;
       }
 
-      if (!isLogin && !captchaToken) {
+      if (!captchaToken) {
         toast.error('Please complete the CAPTCHA verification');
         setLoading(false);
         return;
@@ -204,9 +204,19 @@ const AuthPage = () => {
         const { data, error } = await supabase.auth.signInWithPassword({
           email: formData.email.trim(),
           password: formData.password,
+          options: {
+            captchaToken: captchaToken || undefined,
+            captcha_token: captchaToken || undefined,
+          }
         });
 
         if (error) {
+          if (window.turnstile) {
+            try {
+              window.turnstile.reset();
+            } catch (e) {}
+          }
+          setCaptchaToken('');
           let errorMsg = 'Login failed';
 
           if (error.message?.includes('Invalid login credentials') || error.message?.includes('invalid_credentials')) {
@@ -701,13 +711,11 @@ const AuthPage = () => {
               </div>
             )}
 
-            {!isLogin && (
-              <Turnstile onSuccess={setCaptchaToken} />
-            )}
+            <Turnstile onSuccess={setCaptchaToken} />
 
             <Button
               type="submit"
-              disabled={loading || (!isLogin && !captchaToken)}
+              disabled={loading || !captchaToken}
               className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-base font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
             >
               {loading ? 'Processing...' : isLogin ? 'Login' : 'Create Account'}
