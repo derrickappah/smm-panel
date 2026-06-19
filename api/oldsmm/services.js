@@ -19,8 +19,8 @@ export default async function handler(req, res) {
         const OLDSMM_API_URL = process.env.OLDSMM_API_URL || 'https://oldsmm.com/api/v2';
         const OLDSMM_API_KEY = process.env.OLDSMM_API_KEY;
 
-        if (!OLDSMM_API_KEY) {
-            return res.status(500).json({ error: 'OldSMM API key not configured' });
+        if (!OLDSMM_API_KEY || OLDSMM_API_KEY.includes('PLACEHOLDER')) {
+            return res.status(400).json({ error: 'OldSMM API key not configured' });
         }
 
         const formData = new URLSearchParams({
