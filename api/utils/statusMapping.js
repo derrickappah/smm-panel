@@ -142,3 +142,26 @@ export const mapG1618Status = (g1618Status) => {
 
     return null;
 };
+
+/**
+ * Map OldSMM status to our status format
+ * @param {string} oldsmmStatus - Status from OldSMM API
+ * @returns {string|null} Mapped status or null if unknown
+ */
+export const mapOldSMMStatus = (oldsmmStatus) => {
+    if (!oldsmmStatus) return null;
+
+    const statusString = String(oldsmmStatus).trim();
+    const statusLower = statusString.toLowerCase();
+
+    if (statusLower === 'pending' || statusLower.includes('pending')) return 'pending';
+    if (statusLower === 'in progress' || statusLower.includes('in progress')) return 'in progress';
+    if (statusLower === 'completed' || statusLower.includes('completed')) return 'completed';
+    if (statusLower === 'partial' || statusLower.includes('partial')) return 'partial';
+    if (statusLower === 'processing' || statusLower.includes('processing')) return 'processing';
+    if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower.includes('cancel')) return 'canceled';
+    if (statusLower === 'refunds' || statusLower.includes('refund')) return 'refunds';
+
+    return null;
+};
+

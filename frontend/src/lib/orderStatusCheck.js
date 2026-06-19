@@ -97,6 +97,28 @@ const mapG1618Status = (g1618Status) => {
 };
 
 /**
+ * Map OldSMM status to our status format
+ * @param {string} oldsmmStatus - Status from OldSMM API
+ * @returns {string|null} Mapped status or null if unknown
+ */
+const mapOldSMMStatus = (oldsmmStatus) => {
+  if (!oldsmmStatus) return null;
+
+  const statusString = String(oldsmmStatus).trim();
+  const statusLower = statusString.toLowerCase();
+
+  if (statusLower === 'pending' || statusLower.includes('pending')) return 'pending';
+  if (statusLower === 'in progress' || statusLower.includes('in progress')) return 'in progress';
+  if (statusLower === 'completed' || statusLower.includes('completed')) return 'completed';
+  if (statusLower === 'partial' || statusLower.includes('partial')) return 'partial';
+  if (statusLower === 'processing' || statusLower.includes('processing')) return 'processing';
+  if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower.includes('cancel')) return 'canceled';
+  if (statusLower === 'refunds' || statusLower.includes('refund')) return 'refunds';
+
+  return null;
+};
+
+/**
  * Map JB SMM Panel status to our status format
  * Handles both numeric codes and string status values
  * @param {string|number} jbsmmpanelStatus - Status from JB SMM Panel API
@@ -170,6 +192,7 @@ export const shouldCheckOrder = (order, minIntervalMinutes = 5) => {
     Number(jbsmmpanelId) > 0;
   const hasWorldofsmmId = order.worldofsmm_order_id && String(order.worldofsmm_order_id).toLowerCase() !== "order not placed at worldofsmm";
   const hasG1618Id = order.g1618_order_id && String(order.g1618_order_id).toLowerCase() !== "order not placed at g1618";
+  const hasOldSmmId = order.oldsmm_order_id && String(order.oldsmm_order_id).toLowerCase() !== "order not placed at oldsmm";
 
   // Debug logging for JB SMM Panel orders
   if (jbsmmpanelId) {
@@ -192,7 +215,7 @@ export const shouldCheckOrder = (order, minIntervalMinutes = 5) => {
   }
 
   // Skip if no valid order ID from any panel
-  if (!hasSmmgenId && !hasSmmcostId && !hasJbsmmpanelId && !hasWorldofsmmId && !hasG1618Id) {
+  if (!hasSmmgenId && !hasSmmcostId && !hasJbsmmpanelId && !hasWorldofsmmId && !hasG1618Id && !hasOldSmmId) {
     if (jbsmmpanelId) {
       console.log('[orderStatusCheck] shouldCheckOrder - Skipping JB SMM Panel order (no valid ID):', {
         orderId: order.id,
@@ -313,8 +336,10 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
       String(jbsmmpanelId).toLowerCase() !== "order not placed at jbsmmpanel" &&
       Number(jbsmmpanelId) > 0;
     const hasWorldofsmmId = order.worldofsmm_order_id && String(order.worldofsmm_order_id).toLowerCase() !== "order not placed at worldofsmm";
+    const hasG1618Id = order.g1618_order_id && String(order.g1618_order_id).toLowerCase() !== "order not placed at g1618";
+    const hasOldSmmId = order.oldsmm_order_id && String(order.oldsmm_order_id).toLowerCase() !== "order not placed at oldsmm";
 
-    // Prioritize: WorldOfSMM > SMMCost > JB SMM Panel > SMMGen
+    // Prioritize: WorldOfSMM > SMMCost > JB SMM Panel > G1618 > OldSMM > SMMGen
     if (hasWorldofsmmId) {
       // Get status from World of SMM
       statusData = await getWorldOfSMMOrderStatus(order.worldofsmm_order_id);
@@ -488,6 +513,13 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
       const g1618Status = statusData?.status || statusData?.Status;
       mappedStatus = mapG1618Status(g1618Status);
       panelSource = 'g1618';
+    } else if (hasOldSmmId) {
+      // Get status from OldSMM
+      const { getOldSMMStatus } = await import('./oldsmm');
+      statusData = await getOldSMMStatus(order.oldsmm_order_id);
+      const oldsmmStatus = statusData?.status || statusData?.Status;
+      mappedStatus = mapOldSMMStatus(oldsmmStatus);
+      panelSource = 'oldsmm';
     } else if (hasSmmgenId) {
       // Get status from SMMGen
       statusData = await getSMMGenOrderStatus(order.smmgen_order_id);
@@ -594,6 +626,8 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
       smmcostOrderId: order.smmcost_order_id,
       jbsmmpanelOrderId: order.jbsmmpanel_order_id,
       worldofsmmOrderId: order.worldofsmm_order_id,
+      g1618OrderId: order.g1618_order_id,
+      oldsmmOrderId: order.oldsmm_order_id,
       panelSource: panelSource || 'unknown'
     });
     result.error = error.message;
@@ -710,7 +744,9 @@ export const checkOrdersStatusBatch = async (orders, options = {}) => {
           String(jbsmmpanelId).toLowerCase() !== "order not placed at jbsmmpanel" &&
           Number(jbsmmpanelId) > 0;
         const hasWorldofsmmId = order.worldofsmm_order_id && String(order.worldofsmm_order_id).toLowerCase() !== "order not placed at worldofsmm";
-        const hasValidId = hasSmmgenId || hasSmmcostId || hasJbsmmpanelId || hasWorldofsmmId;
+        const hasG1618Id = order.g1618_order_id && String(order.g1618_order_id).toLowerCase() !== "order not placed at g1618";
+        const hasOldSmmId = order.oldsmm_order_id && String(order.oldsmm_order_id).toLowerCase() !== "order not placed at oldsmm";
+        const hasValidId = hasSmmgenId || hasSmmcostId || hasJbsmmpanelId || hasWorldofsmmId || hasG1618Id || hasOldSmmId;
         const isCompleted = order.status === 'completed' || order.status === 'refunded';
         const recentlyChecked = minIntervalMinutes > 0 && order.last_status_check &&
           (new Date() - new Date(order.last_status_check)) / (1000 * 60) < minIntervalMinutes;
@@ -722,8 +758,12 @@ export const checkOrdersStatusBatch = async (orders, options = {}) => {
           hasSmmcostId,
           hasJbsmmpanelId,
           hasWorldofsmmId,
+          hasG1618Id,
+          hasOldSmmId,
           jbsmmpanel_order_id: order.jbsmmpanel_order_id,
           worldofsmm_order_id: order.worldofsmm_order_id,
+          g1618_order_id: order.g1618_order_id,
+          oldsmm_order_id: order.oldsmm_order_id,
           isCompleted,
           recentlyChecked,
           status: order.status,
@@ -866,8 +906,9 @@ export const checkOrdersStatusBatch = async (orders, options = {}) => {
       Number(jbsmmpanelId) > 0;
     const hasWorldofsmmId = order.worldofsmm_order_id && String(order.worldofsmm_order_id).toLowerCase() !== "order not placed at worldofsmm";
     const hasG1618Id = order.g1618_order_id && String(order.g1618_order_id).toLowerCase() !== "order not placed at g1618";
+    const hasOldSmmId = order.oldsmm_order_id && String(order.oldsmm_order_id).toLowerCase() !== "order not placed at oldsmm";
     return !shouldCheckOrder(order, minIntervalMinutes) &&
-      (hasSmmgenId || hasSmmcostId || hasJbsmmpanelId || hasWorldofsmmId || hasG1618Id) &&
+      (hasSmmgenId || hasSmmcostId || hasJbsmmpanelId || hasWorldofsmmId || hasG1618Id || hasOldSmmId) &&
       order.status !== 'completed' &&
       order.status !== 'refunded';
   });

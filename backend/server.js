@@ -13,7 +13,10 @@ const PORT = process.env.PORT || 5000;
 const {
   mapSMMGenStatus,
   mapSMMCostStatus,
-  mapJBSMMPanelStatus
+  mapJBSMMPanelStatus,
+  mapWorldOfSMMStatus,
+  mapG1618Status,
+  mapOldSMMStatus
 } = require('./utils/statusMapping');
 
 // Response cache for SMMGen API calls
@@ -519,7 +522,7 @@ app.post('/api/check-orders-status', async (req, res) => {
     // Fetch orders from database to get provider IDs and verify ownership
     let query = dbClient
       .from('orders')
-      .select('id, user_id, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id')
+      .select('id, user_id, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id')
       .in('id', orderIds.slice(0, 50));
 
     // If not admin, RLS will naturally restrict to own orders when using authSupabase
@@ -544,6 +547,12 @@ app.post('/api/check-orders-status', async (req, res) => {
     const smmCostKey = process.env.SMMCOST_API_KEY;
     const jbSmmUrl = process.env.JBSMMPANEL_API_URL;
     const jbSmmKey = process.env.JBSMMPANEL_API_KEY;
+    const worldOfSmmUrl = process.env.WORLDOFSMM_API_URL || 'https://worldofsmm.com/api/v2';
+    const worldOfSmmKey = process.env.WORLDOFSMM_API_KEY;
+    const g1618Url = process.env.G1618_API_URL || 'https://g1618.com/api/v2';
+    const g1618Key = process.env.G1618_API_KEY;
+    const oldSmmUrl = process.env.OLDSMM_API_URL || 'https://oldsmm.com/api/v2';
+    const oldSmmKey = process.env.OLDSMM_API_KEY;
 
     // Process orders one by one (simplified for robustness)
     for (const order of orders) {
@@ -593,6 +602,30 @@ app.post('/api/check-orders-status', async (req, res) => {
                 }), { timeout: 10000 });
                 rawStatus = response.data?.status || response.data?.Status;
                 compStatus = mapJBSMMPanelStatus(rawStatus);
+              } else if (component.provider === 'worldofsmm' && worldOfSmmUrl && worldOfSmmKey) {
+                const response = await axios.post(worldOfSmmUrl, new URLSearchParams({
+                  key: worldOfSmmKey,
+                  action: 'status',
+                  order: component.provider_order_id
+                }), { timeout: 10000 });
+                rawStatus = response.data?.status || response.data?.Status;
+                compStatus = mapWorldOfSMMStatus(rawStatus);
+              } else if (component.provider === 'g1618' && g1618Url && g1618Key) {
+                const response = await axios.post(g1618Url, new URLSearchParams({
+                  key: g1618Key,
+                  action: 'status',
+                  order: component.provider_order_id
+                }), { timeout: 10000 });
+                rawStatus = response.data?.status || response.data?.Status;
+                compStatus = mapG1618Status(rawStatus);
+              } else if (component.provider === 'oldsmm' && oldSmmUrl && oldSmmKey) {
+                const response = await axios.post(oldSmmUrl, new URLSearchParams({
+                  key: oldSmmKey,
+                  action: 'status',
+                  order: component.provider_order_id
+                }), { timeout: 10000 });
+                rawStatus = response.data?.status || response.data?.Status;
+                compStatus = mapOldSMMStatus(rawStatus);
               }
 
               if (compStatus !== component.status) {
@@ -657,6 +690,42 @@ app.post('/api/check-orders-status', async (req, res) => {
               }), { timeout: 10000 });
               rawStatusResponse = response.data?.status || response.data?.Status;
               newStatus = mapJBSMMPanelStatus(rawStatusResponse);
+            }
+          }
+          else if (order.worldofsmm_order_id && String(order.worldofsmm_order_id).toLowerCase() !== "order not placed at worldofsmm") {
+            provider = 'worldofsmm';
+            if (worldOfSmmUrl && worldOfSmmKey) {
+              const response = await axios.post(worldOfSmmUrl, new URLSearchParams({
+                key: worldOfSmmKey,
+                action: 'status',
+                order: order.worldofsmm_order_id
+              }), { timeout: 10000 });
+              rawStatusResponse = response.data?.status || response.data?.Status;
+              newStatus = mapWorldOfSMMStatus(rawStatusResponse);
+            }
+          }
+          else if (order.g1618_order_id && String(order.g1618_order_id).toLowerCase() !== "order not placed at g1618") {
+            provider = 'g1618';
+            if (g1618Url && g1618Key) {
+              const response = await axios.post(g1618Url, new URLSearchParams({
+                key: g1618Key,
+                action: 'status',
+                order: order.g1618_order_id
+              }), { timeout: 10000 });
+              rawStatusResponse = response.data?.status || response.data?.Status;
+              newStatus = mapG1618Status(rawStatusResponse);
+            }
+          }
+          else if (order.oldsmm_order_id && String(order.oldsmm_order_id).toLowerCase() !== "order not placed at oldsmm") {
+            provider = 'oldsmm';
+            if (oldSmmUrl && oldSmmKey) {
+              const response = await axios.post(oldSmmUrl, new URLSearchParams({
+                key: oldSmmKey,
+                action: 'status',
+                order: order.oldsmm_order_id
+              }), { timeout: 10000 });
+              rawStatusResponse = response.data?.status || response.data?.Status;
+              newStatus = mapOldSMMStatus(rawStatusResponse);
             }
           }
 

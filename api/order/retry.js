@@ -60,8 +60,8 @@ export default async function handler(req, res) {
             .from('orders')
             .select(`
                 *,
-                services(smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id),
-                promotion_packages(smmgen_service_id)
+                services(smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id),
+                promotion_packages(smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id)
             `)
             .eq('id', order_id)
             .single();
@@ -72,12 +72,21 @@ export default async function handler(req, res) {
         if (orderDetails.services?.smmgen_service_id || orderDetails.promotion_packages?.smmgen_service_id) {
             provider = 'smmgen';
             provider_service_id = orderDetails.services?.smmgen_service_id || orderDetails.promotion_packages?.smmgen_service_id;
-        } else if (orderDetails.services?.smmcost_service_id) {
+        } else if (orderDetails.services?.smmcost_service_id || orderDetails.promotion_packages?.smmcost_service_id) {
             provider = 'smmcost';
-            provider_service_id = orderDetails.services.smmcost_service_id;
-        } else if (orderDetails.services?.jbsmmpanel_service_id) {
+            provider_service_id = orderDetails.services?.smmcost_service_id || orderDetails.promotion_packages?.smmcost_service_id;
+        } else if (orderDetails.services?.jbsmmpanel_service_id || orderDetails.promotion_packages?.jbsmmpanel_service_id) {
             provider = 'jbsmmpanel';
-            provider_service_id = orderDetails.services.jbsmmpanel_service_id;
+            provider_service_id = orderDetails.services?.jbsmmpanel_service_id || orderDetails.promotion_packages?.jbsmmpanel_service_id;
+        } else if (orderDetails.services?.worldofsmm_service_id || orderDetails.promotion_packages?.worldofsmm_service_id) {
+            provider = 'worldofsmm';
+            provider_service_id = orderDetails.services?.worldofsmm_service_id || orderDetails.promotion_packages?.worldofsmm_service_id;
+        } else if (orderDetails.services?.g1618_service_id || orderDetails.promotion_packages?.g1618_service_id) {
+            provider = 'g1618';
+            provider_service_id = orderDetails.services?.g1618_service_id || orderDetails.promotion_packages?.g1618_service_id;
+        } else if (orderDetails.services?.oldsmm_service_id || orderDetails.promotion_packages?.oldsmm_service_id) {
+            provider = 'oldsmm';
+            provider_service_id = orderDetails.services?.oldsmm_service_id || orderDetails.promotion_packages?.oldsmm_service_id;
         }
 
         if (!provider || !provider_service_id) {
@@ -111,6 +120,9 @@ export default async function handler(req, res) {
             if (provider === 'smmgen') updateData.smmgen_order_id = String(matchingOrder.id);
             if (provider === 'smmcost') updateData.smmcost_order_id = String(matchingOrder.id);
             if (provider === 'jbsmmpanel') updateData.jbsmmpanel_order_id = parseInt(matchingOrder.id);
+            if (provider === 'worldofsmm') updateData.worldofsmm_order_id = String(matchingOrder.id);
+            if (provider === 'g1618') updateData.g1618_order_id = String(matchingOrder.id);
+            if (provider === 'oldsmm') updateData.oldsmm_order_id = String(matchingOrder.id);
 
             await supabase.from('orders').update(updateData).eq('id', order_id);
 
@@ -142,6 +154,9 @@ export default async function handler(req, res) {
                 if (provider === 'smmgen') updateData.smmgen_order_id = String(providerOrderId);
                 if (provider === 'smmcost') updateData.smmcost_order_id = String(providerOrderId);
                 if (provider === 'jbsmmpanel') updateData.jbsmmpanel_order_id = parseInt(providerOrderId);
+                if (provider === 'worldofsmm') updateData.worldofsmm_order_id = String(providerOrderId);
+                if (provider === 'g1618') updateData.g1618_order_id = String(providerOrderId);
+                if (provider === 'oldsmm') updateData.oldsmm_order_id = String(providerOrderId);
 
                 await supabase.from('orders').update(updateData).eq('id', order_id);
 

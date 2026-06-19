@@ -21,7 +21,10 @@ export default async function handler(req, res) {
                 submitted_at,
                 smmgen_order_id, 
                 smmcost_order_id, 
-                jbsmmpanel_order_id
+                jbsmmpanel_order_id,
+                worldofsmm_order_id,
+                g1618_order_id,
+                oldsmm_order_id
             `)
             .or(`status.neq.completed,created_at.gt.${new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()}`)
             .limit(50); // Batch limit for performance
@@ -45,9 +48,18 @@ export default async function handler(req, res) {
             } else if (order.jbsmmpanel_order_id) {
                 provider = 'jbsmmpanel';
                 providerId = order.jbsmmpanel_order_id;
+            } else if (order.worldofsmm_order_id) {
+                provider = 'worldofsmm';
+                providerId = order.worldofsmm_order_id;
+            } else if (order.g1618_order_id) {
+                provider = 'g1618';
+                providerId = order.g1618_order_id;
+            } else if (order.oldsmm_order_id) {
+                provider = 'oldsmm';
+                providerId = order.oldsmm_order_id;
             }
 
-            if (!provider || !providerId || providerId === "order not placed at smm gen") {
+            if (!provider || !providerId || String(providerId).toLowerCase().startsWith("order not placed")) {
                 return { order_id: order.id, status: 'MISSING_PROVIDER_ID', classification: 'STUCK_ORDER' };
             }
 
