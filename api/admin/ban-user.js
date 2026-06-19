@@ -93,15 +93,6 @@ export default async function handler(req, res) {
     // 4. Manually harvest and insert identifiers into banned_identifiers to be absolutely sure
     const bannedItems = [];
 
-    // Add registration IP
-    if (profile.registration_ip && profile.registration_ip.trim() && profile.registration_ip !== '127.0.0.1' && profile.registration_ip !== '::1') {
-      bannedItems.push({
-        type: 'ip',
-        value: profile.registration_ip.trim(),
-        reason: `Linked to banned user ${profile.email || userId}. Reason: ${banReason}`
-      });
-    }
-
     // Add device fingerprint
     if (profile.device_fingerprint && profile.device_fingerprint.trim()) {
       bannedItems.push({
@@ -109,29 +100,6 @@ export default async function handler(req, res) {
         value: profile.device_fingerprint.trim(),
         reason: `Linked to banned user ${profile.email || userId}. Reason: ${banReason}`
       });
-    }
-
-    // Fetch and ban additional IPs from activity logs for this user
-    try {
-      const { data: logs } = await supabase
-        .from('activity_logs')
-        .select('ip_address')
-        .eq('user_id', userId);
-
-      if (logs && logs.length > 0) {
-        const uniqueIps = [...new Set(logs.map(l => l.ip_address).filter(ip => ip && ip.trim() && ip !== '127.0.0.1' && ip !== '::1'))];
-        uniqueIps.forEach(ip => {
-          if (ip !== profile.registration_ip) {
-            bannedItems.push({
-              type: 'ip',
-              value: ip.trim(),
-              reason: `Linked to banned user ${profile.email || userId} (from activity logs). Reason: ${banReason}`
-            });
-          }
-        });
-      }
-    } catch (logErr) {
-      console.warn('Failed to retrieve IPs from activity logs:', logErr.message);
     }
 
     // Upsert banned identifiers
