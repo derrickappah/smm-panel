@@ -79,6 +79,10 @@ export const LandingForm = () => {
                     toast.error('Please accept the Terms and Conditions');
                     return;
                 }
+                if (!captchaToken) {
+                    toast.error('Please complete the CAPTCHA verification');
+                    return;
+                }
             }
 
             if (isLogin) {
@@ -129,11 +133,18 @@ export const LandingForm = () => {
                     password,
                     options: { 
                         data: signupMetadata,
-                        captchaToken: captchaToken || undefined
+                        captchaToken: captchaToken || undefined,
+                        captcha_token: captchaToken || undefined,
                     },
                 });
 
                 if (error) {
+                    if (window.turnstile) {
+                        try {
+                            window.turnstile.reset();
+                        } catch (e) {}
+                    }
+                    setCaptchaToken('');
                     toast.error(error.message || 'Registration failed');
                     return;
                 }
@@ -159,14 +170,20 @@ export const LandingForm = () => {
             <div className="backdrop-blur-2xl bg-indigo-950/90 p-6 sm:p-8 rounded-[32px] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.3)]">
                 <div className="flex p-1.5 bg-black/20 rounded-2xl mb-8 border border-white/5">
                     <button
-                        onClick={() => setIsLogin(true)}
+                        onClick={() => {
+                            setIsLogin(true);
+                            setCaptchaToken('');
+                        }}
                         className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-all duration-300 ${isLogin ? 'bg-white text-indigo-600 shadow-xl scale-[1.02]' : 'text-white/40 hover:text-white/70'
                             }`}
                     >
                         Login
                     </button>
                     <button
-                        onClick={() => setIsLogin(false)}
+                        onClick={() => {
+                            setIsLogin(false);
+                            setCaptchaToken('');
+                        }}
                         className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-all duration-300 ${!isLogin ? 'bg-white text-indigo-600 shadow-xl scale-[1.02]' : 'text-white/40 hover:text-white/70'
                             }`}
                     >

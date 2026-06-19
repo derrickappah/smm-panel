@@ -193,6 +193,12 @@ const AuthPage = () => {
         return;
       }
 
+      if (!isLogin && !captchaToken) {
+        toast.error('Please complete the CAPTCHA verification');
+        setLoading(false);
+        return;
+      }
+
       if (isLogin) {
         // LOGIN
         const { data, error } = await supabase.auth.signInWithPassword({
@@ -291,11 +297,18 @@ const AuthPage = () => {
             options: {
               data: signupMetadata,
               captchaToken: captchaToken || undefined,
+              captcha_token: captchaToken || undefined,
             },
           });
 
           if (error) {
             console.error('Supabase signup error:', error);
+            if (window.turnstile) {
+              try {
+                window.turnstile.reset();
+              } catch (e) {}
+            }
+            setCaptchaToken('');
             let errorMsg = 'Signup failed';
 
             // Handle specific error cases
@@ -478,6 +491,7 @@ const AuthPage = () => {
               onClick={() => {
                 setIsLogin(true);
                 setEmailError('');
+                setCaptchaToken('');
               }}
               className={`flex-1 h-10 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${isLogin
                 ? 'bg-indigo-600 text-white hover:bg-indigo-700'
@@ -491,6 +505,7 @@ const AuthPage = () => {
               onClick={() => {
                 setIsLogin(false);
                 setEmailError('');
+                setCaptchaToken('');
               }}
               className={`flex-1 h-10 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${!isLogin
                 ? 'bg-indigo-600 text-white hover:bg-indigo-700'
