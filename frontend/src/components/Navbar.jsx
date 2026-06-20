@@ -193,7 +193,7 @@ const Navbar = ({ user, onLogout }) => {
                 <Button
                   data-testid="logout-btn"
                   onClick={() => {
-                    onLogout();
+                    onLogout(true);
                     setMobileMenuOpen(false);
                   }}
                   variant="ghost"

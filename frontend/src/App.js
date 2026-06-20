@@ -172,9 +172,15 @@ function App() {
     }
   };
 
-  const logout = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
+  const logout = async (isManualOrEvent) => {
+    const isManual = isManualOrEvent === true || (isManualOrEvent && (isManualOrEvent.target || isManualOrEvent.nativeEvent || isManualOrEvent.preventDefault));
+    if (isManual) {
+      console.log('User initiated manual logout, performing signOut...');
+      await supabase.auth.signOut();
+      setUser(null);
+    } else {
+      console.warn('Programmatic/automatic logout request blocked to keep session active.');
+    }
   };
 
   if (loading) {

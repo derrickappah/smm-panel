@@ -188,19 +188,15 @@ export async function verifyAuth(req) {
     throw new Error('Access denied: Failed to verify user profile');
   }
 
-  if (!profile.device_fingerprint) {
-    // Lock profile to current fingerprint
+  if (profile.device_fingerprint !== cleanFingerprint) {
     const { error: updateError } = await supabase
       .from('profiles')
       .update({ device_fingerprint: cleanFingerprint })
       .eq('id', user.id);
     
     if (updateError) {
-      console.error('Failed to lock device fingerprint to profile:', updateError);
+      console.error('Failed to update device fingerprint in profile:', updateError);
     }
-  } else if (profile.device_fingerprint !== cleanFingerprint) {
-    // Do not permanently ban on mismatch; reject and ask to log in again to register the new device
-    throw new Error('Access denied: Device mismatch. Please log in again to authorize this device.');
   }
 
 

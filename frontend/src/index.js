@@ -32,11 +32,9 @@ window.fetch = async function (url, options = {}) {
 
   const response = await originalFetch(url, options);
 
-  // Auto-logout on 401/403
+  // Warning only - do not force log out on 401/403
   if ((response.status === 401 || response.status === 403) && typeof url === 'string' && url.startsWith('/api/')) {
-    console.warn('Auth token expired or invalid (401/403). Logging out...');
-    await supabase.auth.signOut();
-    // Force a reload to clear application state if needed, or let React handle user change
+    console.warn('Auth token expired or invalid (401/403). Session remains active as per configuration.');
   }
 
   return response;
