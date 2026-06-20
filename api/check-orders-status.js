@@ -113,8 +113,17 @@ export default async function handler(req, res) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
     try {
-        // 1. Authentication & Role Detection
-        const { user, supabase: userClient } = await verifyAuth(req);
+        let user, userClient;
+        try {
+            const authResult = await verifyAuth(req);
+            user = authResult.user;
+            userClient = authResult.supabase;
+        } catch (authError) {
+            return res.status(401).json({
+                error: 'Authentication required',
+                message: authError.message
+            });
+        }
         const { orderIds } = req.body;
 
         if (!orderIds || !Array.isArray(orderIds)) {

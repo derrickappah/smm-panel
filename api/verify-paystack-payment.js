@@ -53,9 +53,17 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  try {
-    // Authenticate user
-    const { user, supabase: userSupabase } = await verifyAuth(req);
+    let user, userSupabase;
+    try {
+      const authResult = await verifyAuth(req);
+      user = authResult.user;
+      userSupabase = authResult.supabase;
+    } catch (authError) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: authError.message
+      });
+    }
 
     const { reference } = req.body;
 

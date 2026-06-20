@@ -16,7 +16,17 @@ export default async function handler(req, res) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
     try {
-        const { user, supabase: userSupabase } = await verifyAuth(req);
+        let user, userSupabase;
+        try {
+            const authResult = await verifyAuth(req);
+            user = authResult.user;
+            userSupabase = authResult.supabase;
+        } catch (authError) {
+            return res.status(401).json({
+                error: 'Authentication required',
+                message: authError.message
+            });
+        }
         const { order_id } = req.body;
 
         if (!order_id) return res.status(400).json({ error: 'order_id is required' });

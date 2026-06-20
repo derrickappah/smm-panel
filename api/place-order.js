@@ -64,9 +64,17 @@ export default async function handler(req, res) {
     return res.status(429).json({ error: rateLimitResult.message });
   }
 
-  try {
-    // Authenticate user
-    const { user, supabase: userSupabase } = await verifyAuth(req);
+    let user, userSupabase;
+    try {
+      const authResult = await verifyAuth(req);
+      user = authResult.user;
+      userSupabase = authResult.supabase;
+    } catch (authError) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: authError.message
+      });
+    }
 
     // Get request body
     const { service_id, package_id, link, quantity, total_cost, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, comments } = req.body;

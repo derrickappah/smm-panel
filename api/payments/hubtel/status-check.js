@@ -38,8 +38,16 @@ export default async function handler(req, res) {
     }
 
     try {
-        // Authenticate user
-        const { user } = await verifyAuth(req);
+        let user;
+        try {
+            const authResult = await verifyAuth(req);
+            user = authResult.user;
+        } catch (authError) {
+            return res.status(401).json({
+                error: 'Authentication required',
+                message: authError.message
+            });
+        }
         const { clientReference } = req.body;
 
         if (!clientReference) {

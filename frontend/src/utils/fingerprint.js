@@ -14,7 +14,7 @@ export function getDeviceFingerprint() {
     navigator.userAgent,
     navigator.language,
     screen.colorDepth,
-    screen.width + 'x' + screen.height,
+    Math.min(screen.width, screen.height) + 'x' + Math.max(screen.width, screen.height),
     new Date().getTimezoneOffset(),
     navigator.platform || 'unknown',
     navigator.hardwareConcurrency || 'unknown',

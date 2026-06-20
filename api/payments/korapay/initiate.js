@@ -39,8 +39,16 @@ export default async function handler(req, res) {
     }
 
     try {
-        // 1. Authenticate user
-        const { user } = await verifyAuth(req);
+        let user;
+        try {
+            const authResult = await verifyAuth(req);
+            user = authResult.user;
+        } catch (authError) {
+            return res.status(401).json({
+                error: 'Authentication required',
+                message: authError.message
+            });
+        }
         const { amount, description } = req.body;
 
         const totalAmount = parseFloat(amount);
