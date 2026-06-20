@@ -34,6 +34,29 @@ if (isConfigured) {
     }
   });
 
+  // Monkey-patch getSession to automatically refresh if expired or expiring soon (within 2 minutes)
+  const originalGetSession = supabase.auth.getSession.bind(supabase.auth);
+  supabase.auth.getSession = async function() {
+    const result = await originalGetSession();
+    let session = result?.data?.session;
+    
+    // Check if session exists and is expiring in less than 120 seconds or is already expired
+    const isExpired = !session || (session.expires_at && (Date.now() / 1000 >= session.expires_at - 120));
+    if (isExpired) {
+      try {
+        console.log('[Auth] Session is missing or expiring soon, attempting explicit refresh...');
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        if (!refreshError && refreshData?.session) {
+          console.log('[Auth] Session refreshed successfully');
+          return { data: { session: refreshData.session }, error: null };
+        }
+      } catch (err) {
+        console.warn('[Auth] Failed to refresh session explicitly:', err);
+      }
+    }
+    return result;
+  };
+
   console.log('✅ Supabase client initialized');
 } else {
   console.error('❌ Supabase configuration error: Missing keys.');
