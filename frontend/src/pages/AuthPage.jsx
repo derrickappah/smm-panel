@@ -80,10 +80,10 @@ const isValidEmail = (email) => {
   return validTlds.includes(tld);
 };
 
-// Phone number validation - accepts any standard format (8-15 digits)
+// Phone number validation - accepts exactly 10 digits
 const isValidGhanaPhone = (phone) => {
   const cleaned = phone.replace(/\D/g, '');
-  return cleaned.length >= 8 && cleaned.length <= 15;
+  return cleaned.length === 10;
 };
 
 const formatGhanaPhone = (value) => {
@@ -180,9 +180,15 @@ const AuthPage = () => {
         return;
       }
 
-      if (!isLogin && formData.phone_number.trim() && !isValidGhanaPhone(formData.phone_number.trim())) {
-        toast.error('Please enter a valid phone number');
-        setPhoneError('Phone number must be between 8 and 15 digits');
+      if (!isLogin && !formData.phone_number.trim()) {
+        toast.error('Please enter your WhatsApp number');
+        setLoading(false);
+        return;
+      }
+
+      if (!isLogin && !isValidGhanaPhone(formData.phone_number.trim())) {
+        toast.error('WhatsApp number must be exactly 10 digits');
+        setPhoneError('WhatsApp number must be exactly 10 digits');
         setLoading(false);
         return;
       }
@@ -533,16 +539,16 @@ const AuthPage = () => {
                 </div>
                 <div>
                   <Label htmlFor="phone_number" className="text-sm font-medium text-gray-700 mb-2 block">
-                    WhatsApp Number (Optional)
+                    WhatsApp Number
                   </Label>
                   <Input
                     id="phone_number"
                     type="tel"
-                    placeholder="e.g. 0559272762 or +233..."
+                    placeholder="e.g. 0559272762"
                     value={formData.phone_number}
                     onChange={(e) => {
-                      const formatted = formatGhanaPhone(e.target.value);
-                      setFormData({ ...formData, phone_number: formatted });
+                      const cleaned = e.target.value.replace(/\D/g, '').slice(0, 10);
+                      setFormData({ ...formData, phone_number: cleaned });
                       // Clear error when user starts typing
                       if (phoneError) {
                         setPhoneError('');
@@ -551,13 +557,15 @@ const AuthPage = () => {
                     onBlur={(e) => {
                       // Validate phone when user leaves the field
                       const phoneValue = e.target.value.trim();
-                      if (phoneValue && !isValidGhanaPhone(phoneValue)) {
-                        setPhoneError('Phone number must be between 8 and 15 digits');
+                      if (!phoneValue) {
+                        setPhoneError('WhatsApp number is required');
+                      } else if (!isValidGhanaPhone(phoneValue)) {
+                        setPhoneError('WhatsApp number must be exactly 10 digits');
                       } else {
                         setPhoneError('');
                       }
                     }}
-                    required={false}
+                    required={!isLogin}
                     className={`w-full h-11 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${phoneError
                       ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
                       : 'border-gray-300'
@@ -566,7 +574,7 @@ const AuthPage = () => {
                   {phoneError && (
                     <p className="mt-1 text-sm text-red-600">{phoneError}</p>
                   )}
-                  <p className="mt-1 text-xs text-gray-500">Optional. Accepts any standard phone number format.</p>
+                  <p className="mt-1 text-xs text-gray-500">Compulsory. Must be exactly 10 digits.</p>
                 </div>
               </>
             )}

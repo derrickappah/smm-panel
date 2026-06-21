@@ -19,7 +19,7 @@ const isValidEmail = (email) => {
 
 const isValidGhanaPhone = (phone) => {
     const cleaned = phone.replace(/\D/g, '');
-    return cleaned.length >= 8 && cleaned.length <= 15;
+    return cleaned.length === 10;
 };
 
 const formatGhanaPhone = (value) => {
@@ -76,8 +76,12 @@ export const LandingForm = () => {
                     toast.error('Please enter your full name');
                     return;
                 }
-                if (formData.phone_number.trim() && !isValidGhanaPhone(formData.phone_number)) {
-                    toast.error('Please enter a valid WhatsApp number (8-15 digits)');
+                if (!formData.phone_number.trim()) {
+                    toast.error('Please enter your WhatsApp number');
+                    return;
+                }
+                if (!isValidGhanaPhone(formData.phone_number)) {
+                    toast.error('WhatsApp number must be exactly 10 digits');
                     return;
                 }
                 if (!termsAccepted) {
@@ -205,15 +209,16 @@ export const LandingForm = () => {
                                 />
                             </div>
                              <div className="space-y-1.5">
-                                <Label className="text-white/70 text-xs font-bold uppercase tracking-widest ml-1">WhatsApp Number (Optional)</Label>
+                                <Label className="text-white/70 text-xs font-bold uppercase tracking-widest ml-1">WhatsApp Number</Label>
                                 <Input
                                     type="tel"
-                                    placeholder="e.g. 0559272762 or +233..."
+                                    placeholder="e.g. 0559272762"
                                     className="bg-white/5 border-white/10 text-white placeholder:text-white/20 h-12 rounded-xl focus:ring-indigo-500/50"
                                     value={formData.phone_number}
-                                    onChange={(e) => setFormData({ ...formData, phone_number: formatGhanaPhone(e.target.value) })}
-                                    required={false}
+                                    onChange={(e) => setFormData({ ...formData, phone_number: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                                    required
                                 />
+                                <p className="mt-1 text-xs text-white/50">Compulsory. Must be exactly 10 digits.</p>
                             </div>
                         </div>
                     )}
