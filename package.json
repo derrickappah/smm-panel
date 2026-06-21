@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "description": "React app - NOT Next.js. API serverless functions for BoostUp GH",
   "scripts": {
-    "build": "cd frontend && npm install --legacy-peer-deps && npm run build",
-    "pages:build": "cd frontend && npm install --legacy-peer-deps && npm run build"
+    "build": "cd frontend && npm install --legacy-peer-deps && GENERATE_SOURCEMAP=false npm run build",
+    "pages:build": "cd frontend && npm install --legacy-peer-deps && GENERATE_SOURCEMAP=false npm run build"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.84.0",
