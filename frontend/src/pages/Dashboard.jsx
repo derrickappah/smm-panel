@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Gift } from 'lucide-react';
+// import { Gift } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { placeSMMGenOrder, extractSMMGenOrderId, isDuplicateOrderError, getDuplicateOrderErrorMessage } from '@/lib/smmgen';
@@ -10,7 +10,7 @@ import { saveOrderStatusHistory } from '@/lib/orderStatusHistory';
 import { normalizePhoneNumber } from '@/utils/phoneUtils';
 import Navbar from '@/components/Navbar';
 import SEO from '@/components/SEO';
-import ReferralPromoCard from '@/components/dashboard/ReferralPromoCard';
+// import ReferralPromoCard from '@/components/dashboard/ReferralPromoCard';
 import DashboardStats from '@/components/dashboard/DashboardStats';
 import DashboardDeposit from '@/components/dashboard/DashboardDeposit';
 import DashboardOrderForm from '@/components/dashboard/DashboardOrderForm';
@@ -3198,7 +3198,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
 
         {/* Claim Reward Button */}
-        <div className="mb-6 sm:mb-8 animate-slideUp">
+        {/* <div className="mb-6 sm:mb-8 animate-slideUp">
           <button
             onClick={() => setShowRewardModal(true)}
             className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-2 group border-none"
@@ -3206,7 +3206,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
             <Gift className="w-5 h-5 group-hover:scale-110 transition-transform" />
             Claim Daily Reward
           </button>
-        </div>
+        </div> */}
 
         {/* Promotion Packages Section */}
         {promotionPackages.length > 0 && (
@@ -3294,9 +3294,9 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         <DashboardOrders orders={recentOrders} services={services} />
 
         {/* Referral Section */}
-        <div className="mt-6 sm:mt-8 animate-slideUp">
+        {/* <div className="mt-6 sm:mt-8 animate-slideUp">
           <ReferralPromoCard onAction={() => navigate('/referrals')} />
-        </div>
+        </div> */}
       </div>
 
       {/* Claim Reward Modal */}
