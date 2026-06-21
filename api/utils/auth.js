@@ -7,34 +7,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-/**
- * Auto-ban one or more identifiers (ip / fingerprint) using the service role client.
- * Silently swallows errors so it never blocks the response path.
- * @param {Array<{type: string, value: string, reason: string}>} items
- */
-async function autoBanIdentifiers(items) {
-  try {
-    const svc = getServiceRoleClient();
-    const rows = items
-      .filter(i => i.value && i.value.trim())
-      .map(i => ({
-        type: i.type,
-        value: i.value.trim(),
-        reason: i.reason || 'Automated ban: suspicious direct API access'
-      }));
 
-    if (rows.length === 0) return;
-
-    // upsert so duplicate bans don't cause errors
-    await svc
-      .from('banned_identifiers')
-      .upsert(rows, { onConflict: 'value', ignoreDuplicates: true });
-
-    console.warn('[Security] Auto-banned identifiers:', rows.map(r => `${r.type}=${r.value}`).join(', '));
-  } catch (err) {
-    console.error('[Security] Failed to auto-ban identifier:', err.message);
-  }
-}
 
 /**
  * Verify Supabase JWT token from request and return authenticated user
@@ -107,27 +80,6 @@ export async function verifyAuth(req) {
     throw new Error('Invalid or expired token (and cookie fallback failed)');
   }
 
-  // Verify that the user is not banned in the database
-  const { data: isBanned, error: banError } = await supabase.rpc('is_user_banned', {
-    p_user_id: user.id
-  });
-
-  if (banError) {
-    console.error('Error checking ban status:', banError);
-  } else if (isBanned) {
-    throw new Error('Invalid or expired token (user is banned)');
-  }
-
-  // Get fingerprint from headers
-  const fingerprint = req.headers['x-device-fingerprint'];
-  const cleanFingerprint = fingerprint ? fingerprint.trim() : null;
-
-  // Resolve client IP for potential auto-banning
-  const clientIp = req.headers['x-forwarded-for']?.split(',')[0].trim() ||
-                   req.headers['cf-connecting-ip'] ||
-                   req.headers['x-real-ip'] ||
-                   req.socket?.remoteAddress;
-
   // Enforce origin and referer check: only accept requests originating from the official website
   const reqOrigin = req.headers.origin;
   const reqReferer = req.headers.referer;
@@ -148,57 +100,6 @@ export async function verifyAuth(req) {
   if (!hasValidOrigin && !hasValidReferer) {
     throw new Error('Access denied: Invalid request origin. Access is only permitted from the official web interface.');
   }
-
-  if (!cleanFingerprint) {
-    throw new Error('Access denied: Device fingerprint header is missing. Direct API access is not permitted.');
-  }
-
-  // Check if client IP or Device Fingerprint is banned BEFORE checking user profiles
-  const valuesToCheck = [];
-  if (clientIp && clientIp !== '127.0.0.1' && clientIp !== '::1') valuesToCheck.push(clientIp.trim());
-  if (cleanFingerprint) valuesToCheck.push(cleanFingerprint);
-
-  if (valuesToCheck.length > 0) {
-    const { data: bannedItems, error: checkError } = await supabase
-      .from('banned_identifiers')
-      .select('type, value')
-      .in('value', valuesToCheck);
-
-    if (checkError) {
-      console.error('Error checking banned identifiers:', checkError);
-    } else if (bannedItems && bannedItems.length > 0) {
-      const hasBannedIp = bannedItems.some(item => item.type === 'ip');
-      if (hasBannedIp) {
-        throw new Error('Access denied: Network or IP is blocked due to suspicious activity');
-      } else {
-        throw new Error('Access denied: Device is blocked due to suspicious activity');
-      }
-    }
-  }
-
-  // Get user profile to check / lock device fingerprint
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('device_fingerprint')
-    .eq('id', user.id)
-    .single();
-
-  if (profileError || !profile) {
-    console.error('Error fetching user profile in verifyAuth:', profileError);
-    throw new Error('Access denied: Failed to verify user profile');
-  }
-
-  if (profile.device_fingerprint !== cleanFingerprint) {
-    const { error: updateError } = await supabase
-      .from('profiles')
-      .update({ device_fingerprint: cleanFingerprint })
-      .eq('id', user.id);
-    
-    if (updateError) {
-      console.error('Failed to update device fingerprint in profile:', updateError);
-    }
-  }
-
 
   return { user, supabase };
 }

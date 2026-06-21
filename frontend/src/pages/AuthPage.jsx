@@ -10,7 +10,7 @@ import { supabase, isConfigured } from '@/lib/supabase';
 import { logLoginAttempt } from '@/lib/activityLogger';
 import SEO from '@/components/SEO';
 import TermsDialog from '@/components/TermsDialog';
-import { getDeviceFingerprint } from '@/utils/fingerprint';
+
 import { Turnstile } from '@/components/ui/turnstile';
 
 // Email validation function with TLD validation
@@ -248,18 +248,7 @@ const AuthPage = () => {
 
           toast.success('Welcome back!');
 
-          // Update device fingerprint in profile on successful login
-          try {
-            const currentFingerprint = getDeviceFingerprint();
-            if (currentFingerprint) {
-              await supabase
-                .from('profiles')
-                .update({ device_fingerprint: currentFingerprint })
-                .eq('id', data.user.id);
-            }
-          } catch (err) {
-            console.warn('Failed to update fingerprint on login:', err);
-          }
+
 
           // Create profile if it doesn't exist (non-blocking)
           try {
@@ -292,7 +281,6 @@ const AuthPage = () => {
             name: formData.name.trim(),
             phone_number: normalizedPhone,
             terms_accepted_at: new Date().toISOString(),
-            fingerprint: getDeviceFingerprint(),
           };
 
           // Add referral code to metadata if provided (manual input takes precedence)

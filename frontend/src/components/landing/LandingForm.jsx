@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import { supabase, isConfigured } from '@/lib/supabase';
 import { logLoginAttempt } from '@/lib/activityLogger';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
-import { getDeviceFingerprint } from '@/utils/fingerprint';
+
 import { Turnstile } from '@/components/ui/turnstile';
 
 const isValidEmail = (email) => {
@@ -112,18 +112,7 @@ export const LandingForm = () => {
                     await logLoginAttempt({ success: true, email });
                     toast.success('Welcome back!');
                     
-                    // Update device fingerprint in profile on successful login
-                    try {
-                        const currentFingerprint = getDeviceFingerprint();
-                        if (currentFingerprint) {
-                            await supabase
-                                .from('profiles')
-                                .update({ device_fingerprint: currentFingerprint })
-                                .eq('id', data.user.id);
-                        }
-                    } catch (err) {
-                        console.warn('Failed to update fingerprint on login:', err);
-                    }
+
 
                     navigate('/dashboard');
                 }
@@ -132,7 +121,6 @@ export const LandingForm = () => {
                     name: formData.name.trim(),
                     phone_number: formData.phone_number.trim(),
                     terms_accepted_at: new Date().toISOString(),
-                    fingerprint: getDeviceFingerprint(),
                 };
 
                 if (formData.referral_code.trim()) {

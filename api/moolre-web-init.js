@@ -1,5 +1,5 @@
 import { verifyAuth } from './utils/auth.js';
-import { checkDepositRateLimit } from './utils/depositRateLimit.js';
+
 
 export default async function handler(req, res) {
   // Enable CORS
@@ -30,11 +30,7 @@ export default async function handler(req, res) {
       });
     }
 
-    // Check Rate Limit (5 rejected deposits per hour)
-    const rateLimit = await checkDepositRateLimit(user.id, req);
-    if (rateLimit.blocked) {
-      return res.status(429).json({ error: rateLimit.message });
-    }
+
 
     const {
       amount,

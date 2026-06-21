@@ -51,10 +51,10 @@ export default async function handler(req, res) {
 
     const supabase = getServiceRoleClient();
 
-    // 2. Fetch the target user profile to get email, IP, and fingerprint for harvesting/logging
+    // 2. Fetch the target user profile to get email and name for logging
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('email, name, registration_ip, device_fingerprint')
+      .select('email, name')
       .eq('id', userId)
       .single();
 
@@ -90,28 +90,7 @@ export default async function handler(req, res) {
       });
     }
 
-    // 4. Manually harvest and insert identifiers into banned_identifiers to be absolutely sure
-    const bannedItems = [];
 
-    // Add device fingerprint
-    if (profile.device_fingerprint && profile.device_fingerprint.trim()) {
-      bannedItems.push({
-        type: 'fingerprint',
-        value: profile.device_fingerprint.trim(),
-        reason: `Linked to banned user ${profile.email || userId}. Reason: ${banReason}`
-      });
-    }
-
-    // Upsert banned identifiers
-    if (bannedItems.length > 0) {
-      const { error: upsertError } = await supabase
-        .from('banned_identifiers')
-        .upsert(bannedItems, { onConflict: 'value' });
-
-      if (upsertError) {
-        console.error('Error inserting banned identifiers:', upsertError);
-      }
-    }
 
     // 5. Reject pending transactions if requested
     let rejectedCount = 0;
@@ -158,8 +137,7 @@ export default async function handler(req, res) {
         banned_user_id: userId,
         banned_user_email: profile.email,
         reason: banReason,
-        rejected_transactions_count: rejectedCount,
-        harvested_identifiers_count: bannedItems.length
+        rejected_transactions_count: rejectedCount
       },
       req
     });
@@ -167,7 +145,6 @@ export default async function handler(req, res) {
     return res.status(200).json({
       success: true,
       message: `Successfully banned user and rejected ${rejectedCount} pending deposit(s).`,
-      banned_identifiers_count: bannedItems.length,
       rejected_transactions_count: rejectedCount
     });
 

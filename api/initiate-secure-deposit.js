@@ -18,7 +18,7 @@
 
 import { verifyAuth, getServiceRoleClient } from './utils/auth.js';
 import { logUserAction } from './utils/activityLogger.js';
-import { checkDepositRateLimit } from './utils/depositRateLimit.js';
+
 
 // Deposit limits by payment method
 const DEPOSIT_LIMITS = {
@@ -118,11 +118,7 @@ export default async function handler(req, res) {
       });
     }
 
-    // Rate limiting check (5 rejected deposits per hour)
-    const rateLimit = await checkDepositRateLimit(user.id, req);
-    if (rateLimit.blocked) {
-      return res.status(429).json({ error: rateLimit.message });
-    }
+
 
     const supabase = getServiceRoleClient();
 
@@ -193,8 +189,7 @@ export default async function handler(req, res) {
         method: method,
         reference: finalReference,
         transaction_id: transaction.id,
-        validated_server_side: true,
-        rate_limit_check_passed: true
+        validated_server_side: true
       },
       req
     });

@@ -4,7 +4,6 @@ import "@/index.css";
 import App from "@/App";
 
 import { supabase } from "@/lib/supabase";
-import { getDeviceFingerprint } from "@/utils/fingerprint";
 
 // GLOBAL FETCH INTERCEPTOR
 // Automatically inject Authorization: Bearer token for all internal API requests
@@ -15,10 +14,7 @@ window.fetch = async function (url, options = {}) {
     // Inject Authorization header if we have a session
     const { data: { session } } = await supabase.auth.getSession();
     
-    options.headers = {
-      ...options.headers,
-      'x-device-fingerprint': getDeviceFingerprint()
-    };
+    options.headers = options.headers || {};
 
     if (session?.access_token) {
       options.headers['Authorization'] = `Bearer ${session.access_token}`;
