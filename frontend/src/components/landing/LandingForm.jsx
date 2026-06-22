@@ -276,7 +276,7 @@ export const LandingForm = () => {
 
                     <Button
                         type="submit"
-                        disabled={loading || !captchaToken}
+                        disabled={loading}
                         className="w-full h-12 mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(79,70,229,0.4)] transition-all duration-300 hover:scale-[1.02] disabled:opacity-70 disabled:hover:scale-100"
                     >
                         {loading ? <Loader2 className="animate-spin mr-2" /> : (isLogin ? 'Sign In Now' : 'Create Account')}

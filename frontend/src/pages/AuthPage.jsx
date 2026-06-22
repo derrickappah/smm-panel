@@ -711,7 +711,7 @@ const AuthPage = () => {
 
             <Button
               type="submit"
-              disabled={loading || !captchaToken}
+              disabled={loading}
               className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-base font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
             >
               {loading ? 'Processing...' : isLogin ? 'Login' : 'Create Account'}

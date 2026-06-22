@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 /**
  * Cloudflare Turnstile CAPTCHA component.
@@ -7,6 +7,7 @@ import React, { useEffect, useRef } from 'react';
 export const Turnstile = ({ onSuccess, siteKey }) => {
   const containerRef = useRef(null);
   const widgetIdRef = useRef(null);
+  const [scriptFailed, setScriptFailed] = useState(false);
 
   useEffect(() => {
     // Default to the Cloudflare always-pass testing key if none is configured
@@ -18,6 +19,7 @@ export const Turnstile = ({ onSuccess, siteKey }) => {
     const renderWidget = () => {
       if (window.turnstile && containerRef.current) {
         clearInterval(intervalId);
+        setScriptFailed(false);
         try {
           // If a widget was previously rendered, clean it up first
           if (widgetIdRef.current !== null) {
@@ -46,6 +48,7 @@ export const Turnstile = ({ onSuccess, siteKey }) => {
         attempts++;
         if (attempts > 50) {
           console.warn('Turnstile script failed to load after 10 seconds');
+          setScriptFailed(true);
           clearInterval(intervalId);
         }
       }
@@ -67,8 +70,13 @@ export const Turnstile = ({ onSuccess, siteKey }) => {
   }, [siteKey, onSuccess]);
 
   return (
-    <div className="flex justify-center my-4">
+    <div className="flex flex-col items-center justify-center my-4">
       <div ref={containerRef} />
+      {scriptFailed && (
+        <p className="text-xs text-red-500 text-center font-medium mt-2 max-w-[280px]">
+          Security check failed to load. If you are using an adblocker, privacy browser (e.g. Brave), or VPN, please disable it or whitelist this site to complete registration.
+        </p>
+      )}
     </div>
   );
 };
