@@ -314,7 +314,7 @@ const OrderHistory = ({ user, onLogout }) => {
   // Filter orders based on search and status
   const filteredOrders = orders.filter(o => {
     const searchLower = orderSearch.toLowerCase();
-    const service = services.find(s => s.id === o.service_id);
+    const service = services.find(s => s.id === o.service_id) || o.services;
     const serviceName = service?.name || '';
     const matchesSearch =
       !orderSearch ||
@@ -422,7 +422,7 @@ const OrderHistory = ({ user, onLogout }) => {
                     {/* Orders List */}
                     <div className="divide-y divide-gray-200">
                       {paginatedOrders.map((order) => {
-                        const service = services.find(s => s.id === order.service_id);
+                        const service = services.find(s => s.id === order.service_id) || order.services;
                         const isPackageOrder = !!order.promotion_package_id;
                         const serviceName = isPackageOrder
                           ? order.promotion_packages?.name || 'Package'
