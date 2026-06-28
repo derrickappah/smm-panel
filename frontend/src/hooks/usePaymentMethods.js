@@ -204,10 +204,11 @@ export const usePaymentMethods = () => {
     minDepositSettings: data?.minDepositSettings || DEFAULT_PAYMENT_SETTINGS.minDepositSettings,
     manualDepositDetails: data?.manualDepositDetails || DEFAULT_PAYMENT_SETTINGS.manualDepositDetails,
     whatsappNumber: data?.whatsappNumber || DEFAULT_PAYMENT_SETTINGS.whatsappNumber,
+    requireCaptcha: data?.requireCaptcha ?? DEFAULT_PAYMENT_SETTINGS.requireCaptcha,
     isLoading,
     refetch: () => {
       queryClient.invalidateQueries({ queryKey: PAYMENT_SETTINGS_QUERY_KEY });
+      refetch();
     }
   };
 };
-
