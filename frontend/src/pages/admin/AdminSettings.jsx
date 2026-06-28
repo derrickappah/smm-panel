@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
-import { RefreshCw, Save, CreditCard, Banknote, Smartphone, Globe, MessageCircle } from 'lucide-react';
+import { RefreshCw, Save, CreditCard, Banknote, Smartphone, Globe, MessageCircle, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { logUserActivity } from '@/lib/activityLogger';
 import { usePaymentMethods } from '@/hooks/usePaymentMethods';
@@ -22,6 +22,7 @@ const AdminSettings = memo(() => {
     minDepositSettings: remoteMinDepositSettings,
     manualDepositDetails: remoteManualDepositDetails,
     whatsappNumber: remoteWhatsappNumber,
+    requireCaptcha: remoteRequireCaptcha,
     isLoading,
     refetch
   } = usePaymentMethods();
@@ -30,6 +31,7 @@ const AdminSettings = memo(() => {
   const [minDepositSettings, setMinDepositSettings] = useState(remoteMinDepositSettings);
   const [manualDepositDetails, setManualDepositDetails] = useState(remoteManualDepositDetails);
   const [whatsappNumber, setWhatsappNumber] = useState(remoteWhatsappNumber);
+  const [requireCaptcha, setRequireCaptcha] = useState(remoteRequireCaptcha);
 
   useEffect(() => {
     if (!isLoading) {
@@ -37,8 +39,9 @@ const AdminSettings = memo(() => {
       setMinDepositSettings(remoteMinDepositSettings);
       setManualDepositDetails(remoteManualDepositDetails);
       setWhatsappNumber(remoteWhatsappNumber);
+      setRequireCaptcha(remoteRequireCaptcha);
     }
-  }, [remotePaymentSettings, remoteMinDepositSettings, remoteManualDepositDetails, remoteWhatsappNumber, isLoading]);
+  }, [remotePaymentSettings, remoteMinDepositSettings, remoteManualDepositDetails, remoteWhatsappNumber, remoteRequireCaptcha, isLoading]);
 
   const togglePaymentMethod = useMutation({
     mutationFn: async ({ method, enabled }) => {
@@ -324,6 +327,57 @@ const AdminSettings = memo(() => {
     updateWhatsappNumber.mutate(whatsappNumber);
   }, [updateWhatsappNumber, whatsappNumber]);
 
+  const updateRequireCaptcha = useMutation({
+    mutationFn: async (enabled) => {
+      const { error } = await supabase
+        .from('app_settings')
+        .upsert({
+          key: 'require_captcha',
+          value: enabled ? 'true' : 'false',
+          description: 'Require CAPTCHA verification for registration and login'
+        }, {
+          onConflict: 'key'
+        });
+
+      if (error) throw error;
+      return enabled;
+    },
+    onSuccess: async (enabled) => {
+      setRequireCaptcha(enabled);
+      queryClient.invalidateQueries({ queryKey: ['admin', 'payment-settings'] });
+      queryClient.invalidateQueries({ queryKey: ['payment-settings'] });
+
+      // Log settings change
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await logUserActivity({
+            action_type: 'settings_changed',
+            entity_type: 'settings',
+            description: `CAPTCHA verification ${enabled ? 'enabled' : 'disabled'}`,
+            metadata: {
+              setting_key: 'require_captcha',
+              old_value: !enabled,
+              new_value: enabled
+            },
+            severity: 'security'
+          });
+        }
+      } catch (error) {
+        console.warn('Failed to log settings change:', error);
+      }
+
+      toast.success(`CAPTCHA verification ${enabled ? 'enabled' : 'disabled'} successfully`);
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to update CAPTCHA setting');
+    },
+  });
+
+  const handleToggleRequireCaptcha = useCallback((checked) => {
+    updateRequireCaptcha.mutate(checked);
+  }, [updateRequireCaptcha]);
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -533,8 +587,8 @@ const AdminSettings = memo(() => {
           </Card>
         </div>
 
-        <div className="lg:col-span-1">
-          <Card className="border-2 border-green-100 shadow-md h-full">
+        <div className="lg:col-span-1 space-y-6">
+          <Card className="border-2 border-green-100 shadow-md">
             <CardHeader>
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-green-100 text-green-700 rounded-lg">
@@ -564,7 +618,7 @@ const AdminSettings = memo(() => {
                 </p>
               </div>
             </CardContent>
-            <CardFooter className="bg-green-50/50 justify-end rounded-b-xl border-t p-4 mt-auto">
+            <CardFooter className="bg-green-50/50 justify-end rounded-b-xl border-t p-4">
               <Button
                 onClick={handleSaveWhatsappNumber}
                 disabled={updateWhatsappNumber.isPending}
@@ -575,6 +629,38 @@ const AdminSettings = memo(() => {
                 Update Number
               </Button>
             </CardFooter>
+          </Card>
+
+          <Card className="border-2 border-indigo-100 shadow-md">
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-100 text-indigo-700 rounded-lg">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <CardTitle>Security Settings</CardTitle>
+                  <CardDescription>Configure spam and bot protection settings.</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between p-3 bg-indigo-50/30 rounded-xl border border-indigo-50">
+                <div className="space-y-0.5">
+                  <Label htmlFor="captcha-protection" className="font-semibold text-gray-850">
+                    CAPTCHA Protection
+                  </Label>
+                  <p className="text-xs text-muted-foreground max-w-[200px]">
+                    Require Turnstile verification for login and sign up.
+                  </p>
+                </div>
+                <Switch
+                  id="captcha-protection"
+                  checked={requireCaptcha}
+                  onCheckedChange={handleToggleRequireCaptcha}
+                  disabled={updateRequireCaptcha.isPending}
+                />
+              </div>
+            </CardContent>
           </Card>
         </div>
       </div>

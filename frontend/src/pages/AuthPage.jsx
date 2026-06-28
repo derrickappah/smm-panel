@@ -12,6 +12,7 @@ import SEO from '@/components/SEO';
 import TermsDialog from '@/components/TermsDialog';
 
 import { Turnstile } from '@/components/ui/turnstile';
+import { usePaymentMethods } from '@/hooks/usePaymentMethods';
 
 // Email validation function with TLD validation
 const isValidEmail = (email) => {
@@ -106,6 +107,7 @@ const AuthPage = () => {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [termsDialogOpen, setTermsDialogOpen] = useState(false);
   const [captchaToken, setCaptchaToken] = useState('');
+  const { requireCaptcha } = usePaymentMethods();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -199,7 +201,7 @@ const AuthPage = () => {
         return;
       }
 
-      if (!captchaToken) {
+      if (requireCaptcha && !captchaToken) {
         toast.error('Please complete the CAPTCHA verification');
         setLoading(false);
         return;
@@ -211,8 +213,8 @@ const AuthPage = () => {
           email: formData.email.trim(),
           password: formData.password,
           options: {
-            captchaToken: captchaToken || undefined,
-            captcha_token: captchaToken || undefined,
+            captchaToken: requireCaptcha ? (captchaToken || undefined) : undefined,
+            captcha_token: requireCaptcha ? (captchaToken || undefined) : undefined,
           }
         });
 
@@ -300,8 +302,8 @@ const AuthPage = () => {
             password: formData.password,
             options: {
               data: signupMetadata,
-              captchaToken: captchaToken || undefined,
-              captcha_token: captchaToken || undefined,
+              captchaToken: requireCaptcha ? (captchaToken || undefined) : undefined,
+              captcha_token: requireCaptcha ? (captchaToken || undefined) : undefined,
             },
           });
 
@@ -707,7 +709,7 @@ const AuthPage = () => {
               </div>
             )}
 
-            <Turnstile onSuccess={setCaptchaToken} />
+            {requireCaptcha && <Turnstile onSuccess={setCaptchaToken} />}
 
             <Button
               type="submit"

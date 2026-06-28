@@ -28,6 +28,7 @@ export const DEFAULT_PAYMENT_SETTINGS = {
     instructions: ''
   },
   whatsappNumber: '',
+  requireCaptcha: true, // Default to true
   depositMethod: 'moolre_web' // Default method
 };
 
@@ -52,7 +53,8 @@ export const fetchPaymentSettingsFn = async () => {
       'manual_deposit_phone_number',
       'manual_deposit_account_name',
       'manual_deposit_instructions',
-      'whatsapp_number'
+      'whatsapp_number',
+      'require_captcha'
     ]);
 
   if (error) {
@@ -115,6 +117,9 @@ export const fetchPaymentSettingsFn = async () => {
 
   // Parse WhatsApp
   settings.whatsappNumber = getString('whatsapp_number', DEFAULT_PAYMENT_SETTINGS.whatsappNumber);
+
+  // Parse CAPTCHA
+  settings.requireCaptcha = getEnabled('require_captcha', DEFAULT_PAYMENT_SETTINGS.requireCaptcha);
 
   // Determine Deposit Method
   let depositMethod = null;

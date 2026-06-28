@@ -11,6 +11,7 @@ import { logLoginAttempt } from '@/lib/activityLogger';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 
 import { Turnstile } from '@/components/ui/turnstile';
+import { usePaymentMethods } from '@/hooks/usePaymentMethods';
 
 const isValidEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -34,6 +35,7 @@ export const LandingForm = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [termsAccepted, setTermsAccepted] = useState(false);
     const [captchaToken, setCaptchaToken] = useState('');
+    const { requireCaptcha } = usePaymentMethods();
     const [formData, setFormData] = useState({
         email: '',
         password: '',
@@ -66,7 +68,7 @@ export const LandingForm = () => {
                 return;
             }
 
-            if (!captchaToken) {
+            if (requireCaptcha && !captchaToken) {
                 toast.error('Please complete the CAPTCHA verification');
                 return;
             }
@@ -95,8 +97,8 @@ export const LandingForm = () => {
                     email,
                     password,
                     options: {
-                        captchaToken: captchaToken || undefined,
-                        captcha_token: captchaToken || undefined,
+                        captchaToken: requireCaptcha ? (captchaToken || undefined) : undefined,
+                        captcha_token: requireCaptcha ? (captchaToken || undefined) : undefined,
                     }
                 });
 
@@ -136,8 +138,8 @@ export const LandingForm = () => {
                     password,
                     options: { 
                         data: signupMetadata,
-                        captchaToken: captchaToken || undefined,
-                        captcha_token: captchaToken || undefined,
+                        captchaToken: requireCaptcha ? (captchaToken || undefined) : undefined,
+                        captcha_token: requireCaptcha ? (captchaToken || undefined) : undefined,
                     },
                 });
 
@@ -272,7 +274,7 @@ export const LandingForm = () => {
                         </div>
                     )}
 
-                    <Turnstile onSuccess={setCaptchaToken} />
+                    {requireCaptcha && <Turnstile onSuccess={setCaptchaToken} />}
 
                     <Button
                         type="submit"
