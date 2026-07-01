@@ -21,8 +21,8 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
     worldofsmm_service_id: service.worldofsmm_service_id || '',
     g1618_service_id: service.g1618_service_id || '',
     oldsmm_service_id: service.oldsmm_service_id || '',
+    url_type: service.url_type || '',          // 'post' | 'profile' | '' (no validation)
     is_combo: service.is_combo || false,
-    combo_service_ids: service.combo_service_ids || [],
     combo_service_ids: service.combo_service_ids || [],
     combo_smmgen_service_ids: service.combo_smmgen_service_ids || [],
     seller_only: service.seller_only || false,
@@ -64,6 +64,7 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
       worldofsmm_service_id: formData.worldofsmm_service_id || null,
       g1618_service_id: formData.g1618_service_id || null,
       oldsmm_service_id: formData.oldsmm_service_id || null,
+      url_type: formData.url_type || null,    // null = skip URL type validation
       is_combo: Boolean(formData.is_combo),
       combo_service_ids: formData.is_combo && formData.combo_service_ids.length > 0
         ? formData.combo_service_ids
@@ -224,6 +225,43 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
           <p className="text-xs text-gray-500 mt-1">Enter the OldSMM API service ID for integration</p>
         </div>
       </div>
+
+      {/* URL Type Validation */}
+      <div className="p-4 border border-blue-200 rounded-lg bg-blue-50 space-y-2">
+        <Label className="text-sm font-semibold text-blue-900">URL Type Validation</Label>
+        <p className="text-xs text-blue-700">
+          Set the link type customers must provide. The system will automatically validate the URL before placing the order.
+        </p>
+        <Select
+          value={formData.url_type || 'none'}
+          onValueChange={(value) => setFormData({ ...formData, url_type: value === 'none' ? '' : value })}
+        >
+          <SelectTrigger className="bg-white">
+            <SelectValue placeholder="Select URL type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">No Validation (accept any URL)</SelectItem>
+            <SelectItem value="post">Post / Content URL — e.g. Likes, Views, Comments</SelectItem>
+            <SelectItem value="profile">Profile / Page URL — e.g. Followers, Subscribers</SelectItem>
+          </SelectContent>
+        </Select>
+        {formData.url_type === 'post' && (
+          <p className="text-xs text-green-700 font-medium">
+            ✓ Customers must enter a post/video/reel/content URL. Profile URLs will be rejected.
+          </p>
+        )}
+        {formData.url_type === 'profile' && (
+          <p className="text-xs text-green-700 font-medium">
+            ✓ Customers must enter a profile/page/channel URL. Post URLs will be rejected.
+          </p>
+        )}
+        {!formData.url_type && (
+          <p className="text-xs text-gray-500">
+            No URL type check. Any valid URL will be accepted.
+          </p>
+        )}
+      </div>
+
       <div className="flex items-center space-x-2 p-3 border border-gray-200 rounded-lg bg-yellow-50">
         <input
           type="checkbox"
