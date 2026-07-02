@@ -31,6 +31,7 @@ const AdminPromotionPackages = memo(() => {
     jbsmmpanel_service_id: '',
     worldofsmm_service_id: '',
     g1618_service_id: '',
+    oldsmm_service_id: '',
     url_type: '',
     enabled: true,
     display_order: '0',
@@ -66,6 +67,7 @@ const AdminPromotionPackages = memo(() => {
         jbsmmpanel_service_id: packageForm.jbsmmpanel_service_id ? parseInt(packageForm.jbsmmpanel_service_id) : null,
         worldofsmm_service_id: packageForm.worldofsmm_service_id || null,
         g1618_service_id: packageForm.g1618_service_id || null,
+        oldsmm_service_id: packageForm.oldsmm_service_id || null,
         url_type: packageForm.url_type || null,
         enabled: Boolean(packageForm.enabled !== false),
         display_order: parseInt(packageForm.display_order) || 0,
@@ -90,6 +92,7 @@ const AdminPromotionPackages = memo(() => {
         jbsmmpanel_service_id: '',
         worldofsmm_service_id: '',
         g1618_service_id: '',
+        oldsmm_service_id: '',
         url_type: '',
         enabled: true,
         display_order: '0',
@@ -376,7 +379,7 @@ const AdminPromotionPackages = memo(() => {
             )}
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-4">
             <div>
               <Label>SMMCost ID</Label>
               <Input
@@ -408,6 +411,14 @@ const AdminPromotionPackages = memo(() => {
                 placeholder="G1618 ID"
                 value={packageForm.g1618_service_id}
                 onChange={(e) => setPackageForm({ ...packageForm, g1618_service_id: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>OldSMM ID</Label>
+              <Input
+                placeholder="OldSMM ID"
+                value={packageForm.oldsmm_service_id}
+                onChange={(e) => setPackageForm({ ...packageForm, oldsmm_service_id: e.target.value })}
               />
             </div>
           </div>
@@ -590,6 +601,7 @@ const AdminPromotionPackages = memo(() => {
                         {pkg.jbsmmpanel_service_id && <p><span className="font-medium">JB SMM ID:</span> {pkg.jbsmmpanel_service_id}</p>}
                         {pkg.worldofsmm_service_id && <p><span className="font-medium">WorldOfSMM ID:</span> {pkg.worldofsmm_service_id}</p>}
                         {pkg.g1618_service_id && <p><span className="font-medium">G1618 ID:</span> {pkg.g1618_service_id}</p>}
+                        {pkg.oldsmm_service_id && <p><span className="font-medium">OldSMM ID:</span> {pkg.oldsmm_service_id}</p>}
                         {pkg.url_type && (
                           <p>
                             <span className="font-medium">URL Type:</span>{' '}
@@ -657,6 +669,7 @@ const PackageEditForm = ({ pkg, onSave, onCancel, packages = [] }) => {
     jbsmmpanel_service_id: pkg.jbsmmpanel_service_id || '',
     worldofsmm_service_id: pkg.worldofsmm_service_id || '',
     g1618_service_id: pkg.g1618_service_id || '',
+    oldsmm_service_id: pkg.oldsmm_service_id || '',
     url_type: pkg.url_type || '',
     enabled: pkg.enabled === true,
     display_order: pkg.display_order || 0,
@@ -679,6 +692,7 @@ const PackageEditForm = ({ pkg, onSave, onCancel, packages = [] }) => {
       jbsmmpanel_service_id: formData.jbsmmpanel_service_id ? parseInt(formData.jbsmmpanel_service_id) : null,
       worldofsmm_service_id: formData.worldofsmm_service_id || null,
       g1618_service_id: formData.g1618_service_id || null,
+      oldsmm_service_id: formData.oldsmm_service_id || null,
       url_type: formData.url_type || null,
       enabled: Boolean(formData.enabled !== false),
       display_order: parseInt(formData.display_order) || 0,
@@ -809,7 +823,7 @@ const PackageEditForm = ({ pkg, onSave, onCancel, packages = [] }) => {
         )}
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 pb-2">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 pb-2">
         <div>
           <Label className="text-xs">SMMCost ID</Label>
           <Input
@@ -841,6 +855,14 @@ const PackageEditForm = ({ pkg, onSave, onCancel, packages = [] }) => {
             className="h-8 text-xs"
             value={formData.g1618_service_id}
             onChange={(e) => setFormData({ ...formData, g1618_service_id: e.target.value })}
+          />
+        </div>
+        <div>
+          <Label className="text-xs">OldSMM ID</Label>
+          <Input
+            className="h-8 text-xs"
+            value={formData.oldsmm_service_id}
+            onChange={(e) => setFormData({ ...formData, oldsmm_service_id: e.target.value })}
           />
         </div>
       </div>
