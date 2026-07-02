@@ -31,6 +31,7 @@ const AdminPromotionPackages = memo(() => {
     jbsmmpanel_service_id: '',
     worldofsmm_service_id: '',
     g1618_service_id: '',
+    url_type: '',
     enabled: true,
     display_order: '0',
     is_combo: false,
@@ -65,6 +66,7 @@ const AdminPromotionPackages = memo(() => {
         jbsmmpanel_service_id: packageForm.jbsmmpanel_service_id ? parseInt(packageForm.jbsmmpanel_service_id) : null,
         worldofsmm_service_id: packageForm.worldofsmm_service_id || null,
         g1618_service_id: packageForm.g1618_service_id || null,
+        url_type: packageForm.url_type || null,
         enabled: Boolean(packageForm.enabled !== false),
         display_order: parseInt(packageForm.display_order) || 0,
         is_combo: packageForm.is_combo || false,
@@ -88,6 +90,7 @@ const AdminPromotionPackages = memo(() => {
         jbsmmpanel_service_id: '',
         worldofsmm_service_id: '',
         g1618_service_id: '',
+        url_type: '',
         enabled: true,
         display_order: '0',
         is_combo: false,
@@ -337,6 +340,42 @@ const AdminPromotionPackages = memo(() => {
             <p className="text-xs text-gray-500 mt-1">Enter the SMMGen API service ID for integration</p>
           </div>
 
+          {/* URL Type Validation */}
+          <div className="p-4 border border-blue-200 rounded-lg bg-blue-50 space-y-2">
+            <Label className="text-sm font-semibold text-blue-900">URL Type Validation</Label>
+            <p className="text-xs text-blue-700">
+              Set the link type customers must provide. The system will automatically validate the URL before placing the order.
+            </p>
+            <Select
+              value={packageForm.url_type || 'none'}
+              onValueChange={(value) => setPackageForm({ ...packageForm, url_type: value === 'none' ? '' : value })}
+            >
+              <SelectTrigger className="bg-white">
+                <SelectValue placeholder="Select URL type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No Validation (accept any URL)</SelectItem>
+                <SelectItem value="post">Post / Content URL — e.g. Likes, Views, Comments</SelectItem>
+                <SelectItem value="profile">Profile / Page URL — e.g. Followers, Subscribers</SelectItem>
+              </SelectContent>
+            </Select>
+            {packageForm.url_type === 'post' && (
+              <p className="text-xs text-green-700 font-medium">
+                ✓ Customers must enter a post/video/reel/content URL. Profile URLs will be rejected.
+              </p>
+            )}
+            {packageForm.url_type === 'profile' && (
+              <p className="text-xs text-green-700 font-medium">
+                ✓ Customers must enter a profile/page/channel URL. Post URLs will be rejected.
+              </p>
+            )}
+            {!packageForm.url_type && (
+              <p className="text-xs text-gray-500">
+                No URL type check. Any valid URL will be accepted.
+              </p>
+            )}
+          </div>
+
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
               <Label>SMMCost ID</Label>
@@ -551,6 +590,14 @@ const AdminPromotionPackages = memo(() => {
                         {pkg.jbsmmpanel_service_id && <p><span className="font-medium">JB SMM ID:</span> {pkg.jbsmmpanel_service_id}</p>}
                         {pkg.worldofsmm_service_id && <p><span className="font-medium">WorldOfSMM ID:</span> {pkg.worldofsmm_service_id}</p>}
                         {pkg.g1618_service_id && <p><span className="font-medium">G1618 ID:</span> {pkg.g1618_service_id}</p>}
+                        {pkg.url_type && (
+                          <p>
+                            <span className="font-medium">URL Type:</span>{' '}
+                            <span className="px-2 py-0.5 text-xs font-semibold rounded bg-blue-100 text-blue-800 uppercase">
+                              {pkg.url_type}
+                            </span>
+                          </p>
+                        )}
                         <p><span className="font-medium">Display Order:</span> {pkg.display_order}</p>
                       </div>
                     </div>
@@ -610,6 +657,7 @@ const PackageEditForm = ({ pkg, onSave, onCancel, packages = [] }) => {
     jbsmmpanel_service_id: pkg.jbsmmpanel_service_id || '',
     worldofsmm_service_id: pkg.worldofsmm_service_id || '',
     g1618_service_id: pkg.g1618_service_id || '',
+    url_type: pkg.url_type || '',
     enabled: pkg.enabled === true,
     display_order: pkg.display_order || 0,
     is_combo: pkg.is_combo || false,
@@ -631,6 +679,7 @@ const PackageEditForm = ({ pkg, onSave, onCancel, packages = [] }) => {
       jbsmmpanel_service_id: formData.jbsmmpanel_service_id ? parseInt(formData.jbsmmpanel_service_id) : null,
       worldofsmm_service_id: formData.worldofsmm_service_id || null,
       g1618_service_id: formData.g1618_service_id || null,
+      url_type: formData.url_type || null,
       enabled: Boolean(formData.enabled !== false),
       display_order: parseInt(formData.display_order) || 0,
       is_combo: formData.is_combo || false,
@@ -722,6 +771,42 @@ const PackageEditForm = ({ pkg, onSave, onCancel, packages = [] }) => {
           value={formData.smmgen_service_id}
           onChange={(e) => setFormData({ ...formData, smmgen_service_id: e.target.value })}
         />
+      </div>
+
+      {/* URL Type Validation */}
+      <div className="p-4 border border-blue-200 rounded-lg bg-blue-50 space-y-2">
+        <Label className="text-sm font-semibold text-blue-900">URL Type Validation</Label>
+        <p className="text-xs text-blue-700">
+          Set the link type customers must provide. The system will automatically validate the URL before placing the order.
+        </p>
+        <Select
+          value={formData.url_type || 'none'}
+          onValueChange={(value) => setFormData({ ...formData, url_type: value === 'none' ? '' : value })}
+        >
+          <SelectTrigger className="bg-white">
+            <SelectValue placeholder="Select URL type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">No Validation (accept any URL)</SelectItem>
+            <SelectItem value="post">Post / Content URL — e.g. Likes, Views, Comments</SelectItem>
+            <SelectItem value="profile">Profile / Page URL — e.g. Followers, Subscribers</SelectItem>
+          </SelectContent>
+        </Select>
+        {formData.url_type === 'post' && (
+          <p className="text-xs text-green-700 font-medium">
+            ✓ Customers must enter a post/video/reel/content URL. Profile URLs will be rejected.
+          </p>
+        )}
+        {formData.url_type === 'profile' && (
+          <p className="text-xs text-green-700 font-medium">
+            ✓ Customers must enter a profile/page/channel URL. Post URLs will be rejected.
+          </p>
+        )}
+        {!formData.url_type && (
+          <p className="text-xs text-gray-500">
+            No URL type check. Any valid URL will be accepted.
+          </p>
+        )}
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 pb-2">
