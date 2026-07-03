@@ -22,22 +22,39 @@ const fetchServices = async () => {
     }
   }
 
+  // Determine if the user can see seller-only services
+  const canSeeSelerOnly = userRole === 'seller' || userRole === 'admin';
+
   // Fetch services from Supabase
   // Try with rate_unit first, fallback to without it if column doesn't exist
-  let { data, error } = await supabase
+  let primaryQuery = supabase
     .from('services')
     .select('id, name, description, rate, rate_unit, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only')
-    .eq('enabled', true)
+    .eq('enabled', true);
+
+  // Filter out seller-only services for regular users
+  if (!canSeeSelerOnly) {
+    primaryQuery = primaryQuery.eq('seller_only', false);
+  }
+
+  let { data, error } = await primaryQuery
     .order('display_order', { ascending: true })
     .order('created_at', { ascending: false });
 
   // If rate_unit column doesn't exist, try without it
   if (error && (error.message?.includes('rate_unit') || error.code === '42703')) {
     console.warn('rate_unit column not found, fetching without it:', error.message);
-    const fallbackResult = await supabase
+    let fallbackQuery = supabase
       .from('services')
       .select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only')
-      .eq('enabled', true)
+      .eq('enabled', true);
+
+    // Filter out seller-only services for regular users
+    if (!canSeeSelerOnly) {
+      fallbackQuery = fallbackQuery.eq('seller_only', false);
+    }
+
+    const fallbackResult = await fallbackQuery
       .order('display_order', { ascending: true })
       .order('created_at', { ascending: false });
 

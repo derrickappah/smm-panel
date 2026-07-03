@@ -49,10 +49,28 @@ const ServicesPage = ({ user, onLogout }) => {
   const fetchServices = async () => {
     setLoading(true);
     try {
+      // Fetch the current user's role to determine visibility of seller-only services
+      let canSeeSellerOnly = false;
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', authUser.id)
+          .single();
+        const role = profile?.role || 'user';
+        canSeeSellerOnly = role === 'seller' || role === 'admin';
+      }
+
       // Fetch services from Supabase only
       // Only fetch enabled services for users
       // Try with rate_unit first, fallback to without it if column doesn't exist
       let query = supabase.from('services').select('id, name, description, rate, rate_unit, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only').eq('enabled', true);
+
+      // Filter out seller-only services for regular/non-authenticated users
+      if (!canSeeSellerOnly) {
+        query = query.eq('seller_only', false);
+      }
 
       if (selectedPlatform !== 'all') {
         query = query.eq('platform', selectedPlatform);
@@ -66,6 +84,11 @@ const ServicesPage = ({ user, onLogout }) => {
       if (error && (error.message?.includes('rate_unit') || error.code === '42703')) {
         console.warn('rate_unit column not found, fetching without it:', error.message);
         let fallbackQuery = supabase.from('services').select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only').eq('enabled', true);
+
+        // Filter out seller-only services for regular/non-authenticated users
+        if (!canSeeSellerOnly) {
+          fallbackQuery = fallbackQuery.eq('seller_only', false);
+        }
 
         if (selectedPlatform !== 'all') {
           fallbackQuery = fallbackQuery.eq('platform', selectedPlatform);
