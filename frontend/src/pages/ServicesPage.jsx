@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from '@/lib/supabase';
 // SMMGen import removed - only using Supabase services
 import Navbar from '@/components/Navbar';
-import { Instagram, Youtube, Facebook, Twitter, ArrowRight, Tag, MessageCircle, Send, Music } from 'lucide-react';
+import { Instagram, Youtube, Facebook, Twitter, ArrowRight, Tag, MessageCircle, Send, Music, Search, X } from 'lucide-react';
 import SEO from '@/components/SEO';
 import { generateServiceListSchema } from '@/utils/schema';
 import { generatePlatformMetaTags } from '@/utils/metaTags';
@@ -18,6 +19,7 @@ const ServicesPage = ({ user, onLogout }) => {
   const [services, setServices] = useState([]);
   const { data: promotionPackages = [] } = usePromotionPackages();
   const [selectedPlatform, setSelectedPlatform] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
 
   // Get platform from URL query if present
@@ -115,13 +117,37 @@ const ServicesPage = ({ user, onLogout }) => {
     }
   };
 
-  const filteredServices = selectedPlatform === 'all'
-    ? services
-    : services.filter(s => s.platform === selectedPlatform);
+  const filteredServices = useMemo(() => {
+    let result = selectedPlatform === 'all'
+      ? services
+      : services.filter(s => s.platform === selectedPlatform);
 
-  const filteredPackages = selectedPlatform === 'all'
-    ? promotionPackages
-    : promotionPackages.filter(p => p.platform === selectedPlatform);
+    if (searchQuery.trim() !== '') {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(
+        s => (s.name || '').toLowerCase().includes(query) || 
+             (s.description || '').toLowerCase().includes(query) ||
+             (s.platform || '').toLowerCase().includes(query)
+      );
+    }
+    return result;
+  }, [services, selectedPlatform, searchQuery]);
+
+  const filteredPackages = useMemo(() => {
+    let result = selectedPlatform === 'all'
+      ? promotionPackages
+      : promotionPackages.filter(p => p.platform === selectedPlatform);
+
+    if (searchQuery.trim() !== '') {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(
+        p => (p.name || '').toLowerCase().includes(query) || 
+             (p.description || '').toLowerCase().includes(query) ||
+             (p.platform || '').toLowerCase().includes(query)
+      );
+    }
+    return result;
+  }, [promotionPackages, selectedPlatform, searchQuery]);
 
   const scrollContainerRef = useRef(null);
   const isScrollingRef = useRef(false);
@@ -262,9 +288,29 @@ const ServicesPage = ({ user, onLogout }) => {
       <Navbar user={user} onLogout={onLogout} />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 md:pt-6 pb-6 sm:pb-8">
-        <div className="mb-6 sm:mb-8 animate-fadeIn">
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">Our Services</h1>
-          <p className="text-sm sm:text-base text-gray-600">Browse all available services across platforms</p>
+        <div className="mb-6 sm:mb-8 animate-fadeIn flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">Our Services</h1>
+            <p className="text-sm sm:text-base text-gray-600">Browse all available services across platforms</p>
+          </div>
+          <div className="relative w-full md:w-80 lg:w-96">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Input
+              type="text"
+              placeholder="Search services or platforms..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 pr-10 w-full bg-white border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 rounded-lg shadow-sm"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none animate-fadeIn"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Platform Filter */}
@@ -378,8 +424,22 @@ const ServicesPage = ({ user, onLogout }) => {
             <p className="text-sm text-gray-600 mt-4">Loading services...</p>
           </div>
         ) : filteredServices.length === 0 && filteredPackages.length === 0 ? (
-          <div className="bg-white border border-gray-200 rounded-lg p-12 text-center shadow-sm">
-            <p className="text-gray-600 text-base sm:text-lg">No services available for this platform yet.</p>
+          <div className="bg-white border border-gray-200 rounded-lg p-12 text-center shadow-sm animate-fadeIn">
+            {searchQuery.trim() ? (
+              <>
+                <p className="text-gray-600 text-base sm:text-lg mb-4">
+                  No matching services or packages found for "{searchQuery}".
+                </p>
+                <Button 
+                  onClick={() => setSearchQuery('')}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-6"
+                >
+                  Clear Search
+                </Button>
+              </>
+            ) : (
+              <p className="text-gray-600 text-base sm:text-lg">No services available for this platform yet.</p>
+            )}
           </div>
         ) : (
           <>
