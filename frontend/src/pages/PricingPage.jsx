@@ -18,11 +18,29 @@ const PricingPage = ({ user, onLogout }) => {
 
   const fetchSampleServices = async () => {
     try {
+      let canSeeSellerOnly = false;
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', authUser.id)
+          .single();
+        const role = profile?.role || 'user';
+        canSeeSellerOnly = role === 'seller' || role === 'admin';
+      }
+
       // Try with rate_unit first, fallback to without it if column doesn't exist
-      let { data, error } = await supabase
+      let query = supabase
         .from('services')
-        .select('id, platform, service_type, name, rate, rate_unit, min_quantity, max_quantity')
-        .eq('enabled', true)
+        .select('id, platform, service_type, name, rate, rate_unit, min_quantity, max_quantity, seller_only')
+        .eq('enabled', true);
+
+      if (!canSeeSellerOnly) {
+        query = query.eq('seller_only', false);
+      }
+
+      let { data, error } = await query
         .order('platform', { ascending: true })
         .order('rate', { ascending: true })
         .limit(20);
@@ -30,10 +48,16 @@ const PricingPage = ({ user, onLogout }) => {
       // If rate_unit column doesn't exist, try without it
       if (error && (error.message?.includes('rate_unit') || error.code === '42703')) {
         console.warn('rate_unit column not found, fetching without it:', error.message);
-        const fallbackResult = await supabase
+        let fallbackQuery = supabase
           .from('services')
-          .select('id, platform, service_type, name, rate, min_quantity, max_quantity')
-          .eq('enabled', true)
+          .select('id, platform, service_type, name, rate, min_quantity, max_quantity, seller_only')
+          .eq('enabled', true);
+
+        if (!canSeeSellerOnly) {
+          fallbackQuery = fallbackQuery.eq('seller_only', false);
+        }
+
+        const fallbackResult = await fallbackQuery
           .order('platform', { ascending: true })
           .order('rate', { ascending: true })
           .limit(20);

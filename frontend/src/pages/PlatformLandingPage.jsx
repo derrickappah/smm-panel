@@ -40,12 +40,29 @@ const PlatformLandingPage = ({ user, onLogout }) => {
   const fetchServices = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      let canSeeSellerOnly = false;
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', authUser.id)
+          .single();
+        const role = profile?.role || 'user';
+        canSeeSellerOnly = role === 'seller' || role === 'admin';
+      }
+
+      let query = supabase
         .from('services')
         .select('*')
         .eq('platform', platformName)
-        .eq('enabled', true)
-        .order('service_type', { ascending: true });
+        .eq('enabled', true);
+
+      if (!canSeeSellerOnly) {
+        query = query.eq('seller_only', false);
+      }
+
+      const { data, error } = await query.order('service_type', { ascending: true });
 
       if (error) throw error;
       

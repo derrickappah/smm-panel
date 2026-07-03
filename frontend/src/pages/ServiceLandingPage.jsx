@@ -24,13 +24,30 @@ const ServiceLandingPage = ({ user, onLogout }) => {
     setLoading(true);
     setError(null);
     try {
-      const { data, error: fetchError } = await supabase
+      let canSeeSellerOnly = false;
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', authUser.id)
+          .single();
+        const role = profile?.role || 'user';
+        canSeeSellerOnly = role === 'seller' || role === 'admin';
+      }
+
+      let query = supabase
         .from('services')
         .select('*')
         .eq('platform', platform?.toLowerCase())
         .eq('service_type', serviceType?.toLowerCase())
-        .eq('enabled', true)
-        .order('rate', { ascending: true });
+        .eq('enabled', true);
+
+      if (!canSeeSellerOnly) {
+        query = query.eq('seller_only', false);
+      }
+
+      const { data, error: fetchError } = await query.order('rate', { ascending: true });
 
       if (fetchError) throw fetchError;
       setServices(data || []);

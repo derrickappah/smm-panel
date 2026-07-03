@@ -126,24 +126,60 @@ const PricingPreview = () => {
     return () => container.removeEventListener('scroll', handleScroll);
   }, [displayPackages.length]);
 
+  const [currentUserRole, setCurrentUserRole] = useState(null);
+
+  useEffect(() => {
+    const checkRole = async () => {
+      try {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (authUser) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', authUser.id)
+            .single();
+          setCurrentUserRole(profile?.role || 'user');
+        } else {
+          setCurrentUserRole('anonymous');
+        }
+      } catch (err) {
+        setCurrentUserRole('anonymous');
+      }
+    };
+    checkRole();
+  }, []);
+
+  const canSeeSellerOnly = currentUserRole === 'seller' || currentUserRole === 'admin';
+
   // Fetch all enabled services using React Query for caching
   const { data: services, isLoading } = useQuery({
-    queryKey: ['landing-pricing-services'],
+    queryKey: ['landing-pricing-services', currentUserRole],
     queryFn: async () => {
       // Try with rate_unit first, fallback to without it if column doesn't exist
-      let { data, error } = await supabase
+      let query = supabase
         .from('services')
-        .select('id, name, rate, rate_unit, platform, service_type, min_quantity, max_quantity')
-        .eq('enabled', true)
-        .order('rate', { ascending: true }); // Order by price ascending
+        .select('id, name, rate, rate_unit, platform, service_type, min_quantity, max_quantity, seller_only')
+        .eq('enabled', true);
+
+      if (!canSeeSellerOnly) {
+        query = query.eq('seller_only', false);
+      }
+
+      let { data, error } = await query.order('rate', { ascending: true }); // Order by price ascending
 
       // If rate_unit column doesn't exist, try without it
       if (error && (error.message?.includes('rate_unit') || error.code === '42703')) {
         console.warn('rate_unit column not found, fetching without it:', error.message);
-        const fallbackResult = await supabase
+        let fallbackQuery = supabase
           .from('services')
-          .select('id, name, rate, platform, service_type, min_quantity, max_quantity')
-          .eq('enabled', true)
+          .select('id, name, rate, platform, service_type, min_quantity, max_quantity, seller_only')
+          .eq('enabled', true);
+
+        if (!canSeeSellerOnly) {
+          fallbackQuery = fallbackQuery.eq('seller_only', false);
+        }
+
+        const fallbackResult = await fallbackQuery
           .order('rate', { ascending: true });
 
         if (fallbackResult.error) throw fallbackResult.error;
@@ -155,6 +191,7 @@ const PricingPreview = () => {
       if (error) throw error;
       return data || [];
     },
+    enabled: currentUserRole !== null,
     staleTime: 0, // 5 minutes
     gcTime: 0, // 10 minutes
     retry: 1
