@@ -10,6 +10,19 @@ import { Search, RefreshCw, Edit, Trash2, Power, PowerOff, Tag } from 'lucide-re
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 
+const normalizeComboPackages = (comboPackageIds) => {
+  if (!Array.isArray(comboPackageIds)) return [];
+  return comboPackageIds.map(item => {
+    if (typeof item === 'string') {
+      return { id: item, combo_price: null };
+    }
+    if (item && typeof item === 'object' && item.id) {
+      return { id: item.id, combo_price: item.combo_price ?? null };
+    }
+    return null;
+  }).filter(Boolean);
+};
+
 const AdminPromotionPackages = memo(() => {
   const queryClient = useQueryClient();
   const { data: packages = [], isLoading, error, refetch } = useAdminPromotionPackages();
@@ -443,35 +456,95 @@ const AdminPromotionPackages = memo(() => {
                 <div>
                   <Label className="text-sm font-medium">Component Packages</Label>
                   <p className="text-xs text-gray-500 mb-2">Select the packages to include in this combo</p>
-                  <div className="max-h-40 overflow-y-auto border border-gray-200 rounded p-2 bg-white">
-                    {packages.filter(p => !p.is_combo).map((pkg) => (
-                      <div key={pkg.id} className="flex items-center space-x-2 py-1">
-                        <input
-                          type="checkbox"
-                          checked={packageForm.combo_package_ids?.includes(pkg.id)}
-                          onChange={(e) => {
-                            const currentIds = packageForm.combo_package_ids || [];
-                            if (e.target.checked) {
-                              setPackageForm({
-                                ...packageForm,
-                                combo_package_ids: [...currentIds, pkg.id]
-                              });
-                            } else {
-                              setPackageForm({
-                                ...packageForm,
-                                combo_package_ids: currentIds.filter(id => id !== pkg.id)
-                              });
-                            }
-                          }}
-                          className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                        />
-                        <Label className="text-sm text-gray-700">
-                          {pkg.name} ({pkg.platform} - {pkg.price} GHS)
-                        </Label>
-                      </div>
-                    ))}
+                  <div className="max-h-60 overflow-y-auto border border-gray-200 rounded p-2 bg-white space-y-2">
+                    {packages.filter(p => !p.is_combo).map((pkg) => {
+                      const normalizedIds = normalizeComboPackages(packageForm.combo_package_ids);
+                      const isSelected = normalizedIds.some(item => item.id === pkg.id);
+                      const componentItem = normalizedIds.find(item => item.id === pkg.id);
+                      const customPrice = componentItem ? componentItem.combo_price : null;
+
+                      return (
+                        <div key={pkg.id} className="flex flex-col md:flex-row md:items-center justify-between py-2 border-b border-gray-100 last:border-0 gap-2">
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                let updated;
+                                if (e.target.checked) {
+                                  updated = [...normalizedIds, { id: pkg.id, combo_price: pkg.price }];
+                                } else {
+                                  updated = normalizedIds.filter(item => item.id !== pkg.id);
+                                }
+                                setPackageForm({
+                                  ...packageForm,
+                                  combo_package_ids: updated
+                                });
+                              }}
+                              className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                            />
+                            <Label className="text-sm text-gray-700">
+                              {pkg.name} ({pkg.platform} - {pkg.price} GHS)
+                            </Label>
+                          </div>
+                          {isSelected && (
+                            <div className="flex items-center space-x-2 pl-6 md:pl-0">
+                              <span className="text-xs text-gray-500">Combo price:</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={customPrice !== null && customPrice !== undefined ? customPrice : ''}
+                                placeholder={pkg.price}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  const updated = normalizedIds.map(item => 
+                                    item.id === pkg.id 
+                                      ? { ...item, combo_price: val === '' ? null : parseFloat(val) } 
+                                      : item
+                                  );
+                                  setPackageForm({
+                                    ...packageForm,
+                                    combo_package_ids: updated
+                                  });
+                                }}
+                                className="w-24 px-2 py-1 text-xs border border-gray-300 rounded focus:ring-indigo-500"
+                              />
+                              <span className="text-xs text-gray-500">GHS</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
+
+                {packageForm.is_combo && packageForm.combo_package_ids && packageForm.combo_package_ids.length > 0 && (
+                  <div className="flex items-center justify-between p-2 bg-indigo-50 rounded border border-indigo-100 text-xs">
+                    <span className="text-indigo-700 font-medium">
+                      Sum of combo components: {
+                        normalizeComboPackages(packageForm.combo_package_ids).reduce((sum, item) => {
+                          const val = item.combo_price !== null && item.combo_price !== undefined ? parseFloat(item.combo_price) : 0;
+                          return sum + (isNaN(val) ? 0 : val);
+                        }, 0).toFixed(2)
+                      } GHS
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const sum = normalizeComboPackages(packageForm.combo_package_ids).reduce((sum, item) => {
+                          const val = item.combo_price !== null && item.combo_price !== undefined ? parseFloat(item.combo_price) : 0;
+                          return sum + (isNaN(val) ? 0 : val);
+                        }, 0);
+                        setPackageForm({ ...packageForm, price: sum.toFixed(2) });
+                      }}
+                      className="text-xs h-7 py-1 px-2 border-indigo-200 text-indigo-700 hover:bg-indigo-100"
+                    >
+                      Apply to Total Price
+                    </Button>
+                  </div>
+                )}
 
                 <div>
                   <Label className="text-sm font-medium">SMMGen Service IDs (comma-separated)</Label>
@@ -674,7 +747,7 @@ const PackageEditForm = ({ pkg, onSave, onCancel, packages = [] }) => {
     enabled: pkg.enabled === true,
     display_order: pkg.display_order || 0,
     is_combo: pkg.is_combo || false,
-    combo_package_ids: pkg.combo_package_ids || [],
+    combo_package_ids: normalizeComboPackages(pkg.combo_package_ids),
     combo_smmgen_service_ids: pkg.combo_smmgen_service_ids || []
   });
 
@@ -887,35 +960,95 @@ const PackageEditForm = ({ pkg, onSave, onCancel, packages = [] }) => {
             <div>
               <Label className="text-sm font-medium">Component Packages</Label>
               <p className="text-xs text-gray-500 mb-2">Select the packages to include in this combo</p>
-              <div className="max-h-40 overflow-y-auto border border-gray-200 rounded p-2 bg-white">
-                {packages.filter(p => !p.is_combo && p.id !== pkg.id).map((pkgItem) => (
-                  <div key={pkgItem.id} className="flex items-center space-x-2 py-1">
-                    <input
-                      type="checkbox"
-                      checked={formData.combo_package_ids?.includes(pkgItem.id)}
-                      onChange={(e) => {
-                        const currentIds = formData.combo_package_ids || [];
-                        if (e.target.checked) {
-                          setFormData({
-                            ...formData,
-                            combo_package_ids: [...currentIds, pkgItem.id]
-                          });
-                        } else {
-                          setFormData({
-                            ...formData,
-                            combo_package_ids: currentIds.filter(id => id !== pkgItem.id)
-                          });
-                        }
-                      }}
-                      className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                    />
-                    <Label className="text-sm text-gray-700">
-                      {pkgItem.name} ({pkgItem.platform} - {pkgItem.price} GHS)
-                    </Label>
-                  </div>
-                ))}
+              <div className="max-h-60 overflow-y-auto border border-gray-200 rounded p-2 bg-white space-y-2">
+                {packages.filter(p => !p.is_combo && p.id !== pkg.id).map((pkgItem) => {
+                  const normalizedIds = normalizeComboPackages(formData.combo_package_ids);
+                  const isSelected = normalizedIds.some(item => item.id === pkgItem.id);
+                  const componentItem = normalizedIds.find(item => item.id === pkgItem.id);
+                  const customPrice = componentItem ? componentItem.combo_price : null;
+
+                  return (
+                    <div key={pkgItem.id} className="flex flex-col md:flex-row md:items-center justify-between py-2 border-b border-gray-100 last:border-0 gap-2">
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            let updated;
+                            if (e.target.checked) {
+                              updated = [...normalizedIds, { id: pkgItem.id, combo_price: pkgItem.price }];
+                            } else {
+                              updated = normalizedIds.filter(item => item.id !== pkgItem.id);
+                            }
+                            setFormData({
+                              ...formData,
+                              combo_package_ids: updated
+                            });
+                          }}
+                          className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                        />
+                        <Label className="text-sm text-gray-700">
+                          {pkgItem.name} ({pkgItem.platform} - {pkgItem.price} GHS)
+                        </Label>
+                      </div>
+                      {isSelected && (
+                        <div className="flex items-center space-x-2 pl-6 md:pl-0">
+                          <span className="text-xs text-gray-500">Combo price:</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={customPrice !== null && customPrice !== undefined ? customPrice : ''}
+                            placeholder={pkgItem.price}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const updated = normalizedIds.map(item => 
+                                item.id === pkgItem.id 
+                                  ? { ...item, combo_price: val === '' ? null : parseFloat(val) } 
+                                  : item
+                              );
+                              setFormData({
+                                ...formData,
+                                combo_package_ids: updated
+                              });
+                            }}
+                            className="w-24 px-2 py-1 text-xs border border-gray-300 rounded focus:ring-indigo-500"
+                          />
+                          <span className="text-xs text-gray-500">GHS</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
+
+            {formData.is_combo && formData.combo_package_ids && formData.combo_package_ids.length > 0 && (
+              <div className="flex items-center justify-between p-2 bg-indigo-50 rounded border border-indigo-100 text-xs">
+                <span className="text-indigo-700 font-medium">
+                  Sum of combo components: {
+                    normalizeComboPackages(formData.combo_package_ids).reduce((sum, item) => {
+                      const val = item.combo_price !== null && item.combo_price !== undefined ? parseFloat(item.combo_price) : 0;
+                      return sum + (isNaN(val) ? 0 : val);
+                    }, 0).toFixed(2)
+                      } GHS
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const sum = normalizeComboPackages(formData.combo_package_ids).reduce((sum, item) => {
+                      const val = item.combo_price !== null && item.combo_price !== undefined ? parseFloat(item.combo_price) : 0;
+                      return sum + (isNaN(val) ? 0 : val);
+                    }, 0);
+                    setFormData({ ...formData, price: sum.toFixed(2) });
+                  }}
+                  className="text-xs h-7 py-1 px-2 border-indigo-200 text-indigo-700 hover:bg-indigo-100"
+                >
+                  Apply to Total Price
+                </Button>
+              </div>
+            )}
 
             <div>
               <Label className="text-sm font-medium">SMMGen Service IDs (comma-separated)</Label>
