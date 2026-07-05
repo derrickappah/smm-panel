@@ -445,6 +445,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
   ), []);
 
   const renderTableRow = useCallback((order, index) => {
+    const isComboOrder = !!(order.services?.is_combo || order.promotion_packages?.is_combo || (order.component_provider_order_ids && order.component_provider_order_ids.length > 1));
     return (
       <div className="grid grid-cols-12 gap-4 p-4 items-start bg-white hover:bg-gray-50 transition-colors min-h-[100px]">
         <div className="col-span-1.5 flex flex-col gap-1">
@@ -465,7 +466,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
         </div>
         <div className="col-span-1">
           {(() => {
-            if (order.component_provider_order_ids && Array.isArray(order.component_provider_order_ids) && order.component_provider_order_ids.length > 0) {
+            if (isComboOrder && order.component_provider_order_ids && Array.isArray(order.component_provider_order_ids)) {
               const failedCount = order.component_provider_order_ids.filter(c => !c.provider_order_id || ['failed', 'error'].includes(c.status)).length;
               if (failedCount > 0) {
                 return (
@@ -585,7 +586,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
         </div>
         <div className="col-span-1">
           <div className="flex flex-col gap-1">
-            {order.component_provider_order_ids && Array.isArray(order.component_provider_order_ids) && order.component_provider_order_ids.length > 0 ? (
+            {isComboOrder && order.component_provider_order_ids && Array.isArray(order.component_provider_order_ids) ? (
               <div className="space-y-1 p-1 bg-yellow-50/50 rounded border border-yellow-100/50 w-full">
                 <p className="text-[9px] font-bold text-yellow-800 uppercase tracking-wider">Components:</p>
                 {order.component_provider_order_ids.map((comp, idx) => (
@@ -716,7 +717,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                 </span>
               )}
             </div>
-            {(order.services?.is_combo || order.promotion_packages?.is_combo || (order.component_provider_order_ids && order.component_provider_order_ids.length > 0)) && (
+            {isComboOrder && (
               <div className="text-[10px] bg-yellow-50 text-yellow-850 border border-yellow-200 rounded px-1.5 py-0.5 font-medium w-max">
                 Combo Order
               </div>
@@ -818,6 +819,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
   }, [handleOrderStatusUpdate, handleRefundOrder, handleReorderToSMMGen, reorderMutation.isPending]);
 
   const renderMobileCard = useCallback((order, index) => {
+    const isComboOrder = !!(order.services?.is_combo || order.promotion_packages?.is_combo || (order.component_provider_order_ids && order.component_provider_order_ids.length > 1));
     return (
       <div className="bg-white p-4 space-y-3">
         <div className="flex items-start justify-between">
@@ -839,7 +841,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               )}
             </div>
             {(() => {
-              if (order.component_provider_order_ids && Array.isArray(order.component_provider_order_ids) && order.component_provider_order_ids.length > 0) {
+              if (isComboOrder && order.component_provider_order_ids && Array.isArray(order.component_provider_order_ids)) {
                 const failedCount = order.component_provider_order_ids.filter(c => !c.provider_order_id || ['failed', 'error'].includes(c.status)).length;
                 if (failedCount > 0) {
                   return (
@@ -1006,7 +1008,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
           <div className="text-right">
             <p className="font-semibold text-gray-900 text-lg">₵{order.total_cost?.toFixed(2) || '0.00'}</p>
             <div className="flex flex-col gap-1">
-              {order.component_provider_order_ids && Array.isArray(order.component_provider_order_ids) && order.component_provider_order_ids.length > 0 ? (
+              {isComboOrder && order.component_provider_order_ids && Array.isArray(order.component_provider_order_ids) ? (
                 <div className="space-y-1 p-1 bg-yellow-50/50 rounded border border-yellow-100/50 text-left w-full mt-1">
                   <p className="text-[9px] font-bold text-yellow-800 uppercase tracking-wider">Components:</p>
                   {order.component_provider_order_ids.map((comp, idx) => (
@@ -1129,7 +1131,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                   </span>
                 )}
               </div>
-              {(order.services?.is_combo || order.promotion_packages?.is_combo || (order.component_provider_order_ids && order.component_provider_order_ids.length > 0)) && (
+              {isComboOrder && (
                 <div className="text-[10px] bg-yellow-50 text-yellow-800 border border-yellow-250 rounded px-1.5 py-0.5 font-medium w-max">
                   Combo Order
                 </div>
