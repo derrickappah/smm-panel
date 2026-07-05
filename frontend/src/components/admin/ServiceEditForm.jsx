@@ -5,6 +5,19 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
+const normalizeComboServices = (comboServiceIds) => {
+  if (!Array.isArray(comboServiceIds)) return [];
+  return comboServiceIds.map(item => {
+    if (typeof item === 'string') {
+      return { id: item, combo_rate: null };
+    }
+    if (item && typeof item === 'object' && item.id) {
+      return { id: item.id, combo_rate: item.combo_rate ?? null };
+    }
+    return null;
+  }).filter(Boolean);
+};
+
 const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
   const [formData, setFormData] = useState({
     platform: service.platform,
@@ -23,7 +36,7 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
     oldsmm_service_id: service.oldsmm_service_id || '',
     url_type: service.url_type || '',          // 'post' | 'profile' | '' (no validation)
     is_combo: service.is_combo || false,
-    combo_service_ids: service.combo_service_ids || [],
+    combo_service_ids: normalizeComboServices(service.combo_service_ids),
     combo_smmgen_service_ids: service.combo_smmgen_service_ids || [],
     seller_only: service.seller_only || false,
     enabled: service.enabled === true // Explicitly check for true, default to false if null/undefined
@@ -40,11 +53,15 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
 
     // Validation: Circular dependency check
     if (formData.is_combo && formData.combo_service_ids.length > 0) {
-      for (const selectedServiceId of formData.combo_service_ids) {
-        const selectedService = services.find(s => s.id === selectedServiceId);
-        if (selectedService && selectedService.combo_service_ids && selectedService.combo_service_ids.includes(service.id)) {
-          alert(`Circular dependency detected: The selected service "${selectedService.name}" already includes this service in its combo. Please remove it to prevent circular references.`);
-          return;
+      const normalizedIds = normalizeComboServices(formData.combo_service_ids);
+      for (const item of normalizedIds) {
+        const selectedService = services.find(s => s.id === item.id);
+        if (selectedService && selectedService.combo_service_ids) {
+          const compServiceIds = normalizeComboServices(selectedService.combo_service_ids).map(x => x.id);
+          if (compServiceIds.includes(service.id)) {
+            alert(`Circular dependency detected: The selected service "${selectedService.name}" already includes this service in its combo. Please remove it to prevent circular references.`);
+            return;
+          }
         }
       }
     }
@@ -311,37 +328,97 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
             <div>
               <Label className="text-sm font-medium">Component Services</Label>
               <p className="text-xs text-gray-500 mb-2">Select the services to include in this combo</p>
-              <div className="max-h-40 overflow-y-auto border border-gray-200 rounded p-2 bg-white">
+              <div className="max-h-60 overflow-y-auto border border-gray-200 rounded p-2 bg-white space-y-2">
                 {services
                   .filter(s => !s.is_combo && s.id !== service.id)
-                  .map((serviceItem) => (
-                    <div key={serviceItem.id} className="flex items-center space-x-2 py-1">
-                      <input
-                        type="checkbox"
-                        checked={formData.combo_service_ids?.includes(serviceItem.id)}
-                        onChange={(e) => {
-                          const currentIds = formData.combo_service_ids || [];
-                          if (e.target.checked) {
-                            setFormData({
-                              ...formData,
-                              combo_service_ids: [...currentIds, serviceItem.id]
-                            });
-                          } else {
-                            setFormData({
-                              ...formData,
-                              combo_service_ids: currentIds.filter(id => id !== serviceItem.id)
-                            });
-                          }
-                        }}
-                        className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                      />
-                      <Label className="text-sm text-gray-700">
-                        {serviceItem.name} ({serviceItem.platform} - ₵{serviceItem.rate}/{serviceItem.rate_unit || 1000})
-                      </Label>
-                    </div>
-                  ))}
+                  .map((serviceItem) => {
+                    const normalizedIds = normalizeComboServices(formData.combo_service_ids);
+                    const isSelected = normalizedIds.some(item => item.id === serviceItem.id);
+                    const componentItem = normalizedIds.find(item => item.id === serviceItem.id);
+                    const customRate = componentItem ? componentItem.combo_rate : null;
+
+                    return (
+                      <div key={serviceItem.id} className="flex flex-col md:flex-row md:items-center justify-between py-2 border-b border-gray-100 last:border-0 gap-2">
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              let updated;
+                              if (e.target.checked) {
+                                updated = [...normalizedIds, { id: serviceItem.id, combo_rate: serviceItem.rate }];
+                              } else {
+                                updated = normalizedIds.filter(item => item.id !== serviceItem.id);
+                              }
+                              setFormData({
+                                ...formData,
+                                combo_service_ids: updated
+                              });
+                            }}
+                            className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                          />
+                          <Label className="text-sm text-gray-700">
+                            {serviceItem.name} ({serviceItem.platform} - ₵{serviceItem.rate}/{serviceItem.rate_unit || 1000})
+                          </Label>
+                        </div>
+                        {isSelected && (
+                          <div className="flex items-center space-x-2 pl-6 md:pl-0">
+                            <span className="text-xs text-gray-500">Combo rate:</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={customRate !== null && customRate !== undefined ? customRate : ''}
+                              placeholder={serviceItem.rate}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const updated = normalizedIds.map(item => 
+                                  item.id === serviceItem.id 
+                                    ? { ...item, combo_rate: val === '' ? null : parseFloat(val) } 
+                                    : item
+                                );
+                                setFormData({
+                                  ...formData,
+                                  combo_service_ids: updated
+                                });
+                              }}
+                              className="w-24 px-2 py-1 text-xs border border-gray-300 rounded focus:ring-indigo-500"
+                            />
+                            <span className="text-xs text-gray-500">GHS</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
               </div>
             </div>
+
+            {formData.is_combo && formData.combo_service_ids && formData.combo_service_ids.length > 0 && (
+              <div className="flex items-center justify-between p-2 bg-indigo-50 rounded border border-indigo-100 text-xs">
+                <span className="text-indigo-700 font-medium">
+                  Sum of combo components: {
+                    normalizeComboServices(formData.combo_service_ids).reduce((sum, item) => {
+                      const val = item.combo_rate !== null && item.combo_rate !== undefined ? parseFloat(item.combo_rate) : 0;
+                      return sum + (isNaN(val) ? 0 : val);
+                    }, 0).toFixed(2)
+                  } GHS
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const sum = normalizeComboServices(formData.combo_service_ids).reduce((sum, item) => {
+                      const val = item.combo_rate !== null && item.combo_rate !== undefined ? parseFloat(item.combo_rate) : 0;
+                      return sum + (isNaN(val) ? 0 : val);
+                    }, 0);
+                    setFormData({ ...formData, rate: sum.toFixed(2) });
+                  }}
+                  className="text-xs h-7 py-1 px-2 border-indigo-200 text-indigo-700 hover:bg-indigo-100"
+                >
+                  Apply to Total Rate
+                </Button>
+              </div>
+            )}
 
             <div>
               <Label className="text-sm font-medium">SMMGen Service IDs (comma-separated)</Label>

@@ -27,6 +27,19 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
+const normalizeComboServices = (comboServiceIds) => {
+  if (!Array.isArray(comboServiceIds)) return [];
+  return comboServiceIds.map(item => {
+    if (typeof item === 'string') {
+      return { id: item, combo_rate: null };
+    }
+    if (item && typeof item === 'object' && item.id) {
+      return { id: item.id, combo_rate: item.combo_rate ?? null };
+    }
+    return null;
+  }).filter(Boolean);
+};
+
 // Sortable Service Item Component
 const SortableServiceItem = memo(({ service, editingService, onEdit, onToggle, onDelete, updateServicePending, deleteServicePending, onSave, onCancel, services }) => {
   const {
@@ -599,35 +612,95 @@ const AdminServices = memo(() => {
                 <div>
                   <Label className="text-sm font-medium">Component Services</Label>
                   <p className="text-xs text-gray-500 mb-2">Select the services to include in this combo</p>
-                  <div className="max-h-40 overflow-y-auto border border-gray-200 rounded p-2 bg-white">
-                    {services.filter(s => !s.is_combo).map((service) => (
-                      <div key={service.id} className="flex items-center space-x-2 py-1">
-                        <input
-                          type="checkbox"
-                          checked={serviceForm.combo_service_ids?.includes(service.id)}
-                          onChange={(e) => {
-                            const currentIds = serviceForm.combo_service_ids || [];
-                            if (e.target.checked) {
-                              setServiceForm({
-                                ...serviceForm,
-                                combo_service_ids: [...currentIds, service.id]
-                              });
-                            } else {
-                              setServiceForm({
-                                ...serviceForm,
-                                combo_service_ids: currentIds.filter(id => id !== service.id)
-                              });
-                            }
-                          }}
-                          className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                        />
-                        <Label className="text-sm text-gray-700">
-                          {service.name} ({service.platform})
-                        </Label>
-                      </div>
-                    ))}
+                  <div className="max-h-60 overflow-y-auto border border-gray-200 rounded p-2 bg-white space-y-2">
+                    {services.filter(s => !s.is_combo).map((sItem) => {
+                      const normalizedIds = normalizeComboServices(serviceForm.combo_service_ids);
+                      const isSelected = normalizedIds.some(item => item.id === sItem.id);
+                      const componentItem = normalizedIds.find(item => item.id === sItem.id);
+                      const customRate = componentItem ? componentItem.combo_rate : null;
+
+                      return (
+                        <div key={sItem.id} className="flex flex-col md:flex-row md:items-center justify-between py-2 border-b border-gray-100 last:border-0 gap-2">
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                let updated;
+                                if (e.target.checked) {
+                                  updated = [...normalizedIds, { id: sItem.id, combo_rate: sItem.rate }];
+                                } else {
+                                  updated = normalizedIds.filter(item => item.id !== sItem.id);
+                                }
+                                setServiceForm({
+                                  ...serviceForm,
+                                  combo_service_ids: updated
+                                });
+                              }}
+                              className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                            />
+                            <Label className="text-sm text-gray-700">
+                              {sItem.name} ({sItem.platform} - ₵{sItem.rate}/{sItem.rate_unit || 1000})
+                            </Label>
+                          </div>
+                          {isSelected && (
+                            <div className="flex items-center space-x-2 pl-6 md:pl-0">
+                              <span className="text-xs text-gray-500">Combo rate:</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={customRate !== null && customRate !== undefined ? customRate : ''}
+                                placeholder={sItem.rate}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  const updated = normalizedIds.map(item => 
+                                    item.id === sItem.id 
+                                      ? { ...item, combo_rate: val === '' ? null : parseFloat(val) } 
+                                      : item
+                                  );
+                                  setServiceForm({
+                                    ...serviceForm,
+                                    combo_service_ids: updated
+                                  });
+                                }}
+                                className="w-24 px-2 py-1 text-xs border border-gray-300 rounded focus:ring-indigo-500"
+                              />
+                              <span className="text-xs text-gray-500">GHS</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
+
+                {serviceForm.is_combo && serviceForm.combo_service_ids && serviceForm.combo_service_ids.length > 0 && (
+                  <div className="flex items-center justify-between p-2 bg-indigo-50 rounded border border-indigo-100 text-xs">
+                    <span className="text-indigo-700 font-medium">
+                      Sum of combo components: {
+                        normalizeComboServices(serviceForm.combo_service_ids).reduce((sum, item) => {
+                          const val = item.combo_rate !== null && item.combo_rate !== undefined ? parseFloat(item.combo_rate) : 0;
+                          return sum + (isNaN(val) ? 0 : val);
+                        }, 0).toFixed(2)
+                      } GHS
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const sum = normalizeComboServices(serviceForm.combo_service_ids).reduce((sum, item) => {
+                          const val = item.combo_rate !== null && item.combo_rate !== undefined ? parseFloat(item.combo_rate) : 0;
+                          return sum + (isNaN(val) ? 0 : val);
+                        }, 0);
+                        setServiceForm({ ...serviceForm, rate: sum.toFixed(2) });
+                      }}
+                      className="text-xs h-7 py-1 px-2 border-indigo-200 text-indigo-700 hover:bg-indigo-100"
+                    >
+                      Apply to Total Rate
+                    </Button>
+                  </div>
+                )}
 
                 <div>
                   <Label className="text-sm font-medium">SMMGen Service IDs (comma-separated)</Label>

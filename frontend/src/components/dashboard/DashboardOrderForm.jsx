@@ -5,6 +5,19 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, Layers, Tag } from 'lucide-react';
 
+const normalizeComboServices = (comboServiceIds) => {
+  if (!Array.isArray(comboServiceIds)) return [];
+  return comboServiceIds.map(item => {
+    if (typeof item === 'string') {
+      return { id: item, combo_rate: null };
+    }
+    if (item && typeof item === 'object' && item.id) {
+      return { id: item.id, combo_rate: item.combo_rate ?? null };
+    }
+    return null;
+  }).filter(Boolean);
+};
+
 const DashboardOrderForm = React.memo(({
   services = [],
   packages = [],
@@ -74,8 +87,9 @@ const DashboardOrderForm = React.memo(({
     if (isNaN(quantity) || quantity <= 0) return '0.00';
 
     if (selectedService.is_combo && selectedService.combo_service_ids?.length > 0) {
-      const componentServices = selectedService.combo_service_ids
-        .map(serviceId => sortedServices.find(s => s.id === serviceId))
+      const normalizedCombo = normalizeComboServices(selectedService.combo_service_ids);
+      const componentServices = normalizedCombo
+        .map(item => sortedServices.find(s => s.id === item.id))
         .filter(s => s !== undefined);
 
       if (componentServices.length === 0) {
@@ -85,7 +99,11 @@ const DashboardOrderForm = React.memo(({
 
       const totalCost = componentServices.reduce((sum, componentService) => {
         const rateUnit = componentService.rate_unit || 1000;
-        return sum + ((quantity / rateUnit) * componentService.rate);
+        const customItem = normalizedCombo.find(x => x.id === componentService.id);
+        const rateToUse = (customItem && customItem.combo_rate !== null && customItem.combo_rate !== undefined)
+          ? parseFloat(customItem.combo_rate)
+          : parseFloat(componentService.rate);
+        return sum + ((quantity / rateUnit) * rateToUse);
       }, 0);
 
       return totalCost.toFixed(2);
@@ -463,14 +481,18 @@ const DashboardOrderForm = React.memo(({
                     Combo includes:
                   </p>
                   <ul className="text-xs text-purple-700 space-y-0.5">
-                    {selectedService.combo_service_ids.map((serviceId) => {
-                      const componentService = sortedServices.find(s => s.id === serviceId);
-                      return componentService ? (
-                        <li key={serviceId} className="flex items-center gap-1.5">
+                    {normalizeComboServices(selectedService.combo_service_ids).map((item) => {
+                      const componentService = sortedServices.find(s => s.id === item.id);
+                      if (!componentService) return null;
+                      const rateToUse = (item.combo_rate !== null && item.combo_rate !== undefined)
+                        ? item.combo_rate
+                        : componentService.rate;
+                      return (
+                        <li key={item.id} className="flex items-center gap-1.5">
                           <span className="w-1 h-1 bg-purple-500 rounded-full"></span>
-                          {componentService.name} (₵{componentService.rate}/{componentService.rate_unit || 1000})
+                          {componentService.name} (₵{rateToUse}/{componentService.rate_unit || 1000})
                         </li>
-                      ) : null;
+                      );
                     })}
                   </ul>
                 </div>
