@@ -82,6 +82,7 @@ export default function AdminAnalytics() {
     });
     const [signupTrend, setSignupTrend] = useState([]);
     const [statsLoading, setStatsLoading] = useState(true);
+    const [chartType, setChartType] = useState('donut'); // 'donut' | 'bar'
 
     // List State
     const [activeSegment, setActiveSegment] = useState('all');
@@ -487,21 +488,45 @@ export default function AdminAnalytics() {
 
                     {/* Chart Visualizations */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {/* Donut Chart: Segment Distribution */}
+                        {/* Cohort Distribution Card (Donut / Bar) */}
                         <Card className="shadow-sm">
-                            <CardHeader>
-                                <CardTitle className="text-base font-bold flex items-center gap-2">
-                                    <Activity className="w-4 h-4 text-indigo-500" />
-                                    Segment Cohorts Ratio
-                                </CardTitle>
-                                <CardDescription>Percentage breakdown of all profiles based on lifecycle stage (hover to inspect)</CardDescription>
+                            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                                <div>
+                                    <CardTitle className="text-base font-bold flex items-center gap-2">
+                                        <Activity className="w-4 h-4 text-indigo-500" />
+                                        Cohort Distribution
+                                    </CardTitle>
+                                    <CardDescription>Visualizing user proportions by lifecycle segment</CardDescription>
+                                </div>
+                                <div className="flex bg-gray-100 p-0.5 rounded-lg border border-gray-200">
+                                    <button
+                                        onClick={() => setChartType('donut')}
+                                        className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                                            chartType === 'donut' 
+                                                ? 'bg-white text-gray-900 shadow-sm border border-gray-200/50' 
+                                                : 'text-gray-500 hover:text-gray-700'
+                                        }`}
+                                    >
+                                        Donut
+                                    </button>
+                                    <button
+                                        onClick={() => setChartType('bar')}
+                                        className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                                            chartType === 'bar' 
+                                                ? 'bg-white text-gray-900 shadow-sm border border-gray-200/50' 
+                                                : 'text-gray-500 hover:text-gray-700'
+                                        }`}
+                                    >
+                                        Bar
+                                    </button>
+                                </div>
                             </CardHeader>
                             <CardContent className="h-72 relative flex items-center justify-center">
                                 {statsLoading ? (
                                     <div className="flex items-center gap-2 text-sm text-gray-500">
                                         <RefreshCw className="w-4 h-4 animate-spin" /> Loading chart data...
                                     </div>
-                                ) : (
+                                ) : chartType === 'donut' ? (
                                     <div className="w-full h-full relative">
                                         {/* Center Content Overlay */}
                                         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
@@ -568,30 +593,9 @@ export default function AdminAnalytics() {
                                             </PieChart>
                                         </ResponsiveContainer>
                                     </div>
-                                )}
-                            </CardContent>
-                        </Card>
-
-                        {/* Bar Chart: User Count Comparisons */}
-                        <Card className="shadow-sm">
-                            <CardHeader>
-                                <CardTitle className="text-base font-bold flex items-center gap-2">
-                                    <Users className="w-4 h-4 text-indigo-500" />
-                                    Cohort Comparisons
-                                </CardTitle>
-                                <CardDescription>Comparison scale displaying active volumes across user categories</CardDescription>
-                            </CardHeader>
-                            <CardContent className="h-72">
-                                {statsLoading ? (
-                                    <div className="flex items-center justify-center h-full gap-2 text-sm text-gray-500">
-                                        <RefreshCw className="w-4 h-4 animate-spin" /> Loading chart data...
-                                    </div>
                                 ) : (
                                     <ResponsiveContainer width="100%" height="100%">
                                         <BarChart data={chartData} margin={{ top: 20, right: 10, left: 0, bottom: 5 }}>
-                                            <defs>
-                                                {/* Re-use pie gradients */}
-                                            </defs>
                                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                                             <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6b7280' }} axisLine={false} tickLine={false} />
                                             <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} axisLine={false} tickLine={false} />
@@ -606,49 +610,49 @@ export default function AdminAnalytics() {
                                 )}
                             </CardContent>
                         </Card>
-                    </div>
 
-                    {/* signup trend area chart */}
-                    <Card className="shadow-sm">
-                        <CardHeader>
-                            <CardTitle className="text-base font-bold flex items-center gap-2">
-                                <TrendingUp className="w-5 h-5 text-indigo-500" />
-                                User Signup Growth Trend
-                            </CardTitle>
-                            <CardDescription>Daily registration count for the last 14 days</CardDescription>
-                        </CardHeader>
-                        <CardContent className="h-64">
-                            {statsLoading ? (
-                                <div className="flex items-center justify-center h-full gap-2 text-sm text-gray-500">
-                                    <RefreshCw className="w-4 h-4 animate-spin" /> Loading trend data...
-                                </div>
-                            ) : (
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <AreaChart data={signupTrend} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                                        <defs>
-                                            <linearGradient id="indigoGrad" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                                                <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0} />
-                                            </linearGradient>
-                                        </defs>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                                        <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={false} tickLine={false} />
-                                        <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={false} tickLine={false} />
-                                        <Tooltip content={<CustomTooltip />} />
-                                        <Area 
-                                            type="monotone" 
-                                            dataKey="count" 
-                                            name="Signups"
-                                            stroke="#6366f1" 
-                                            strokeWidth={3}
-                                            fillOpacity={1} 
-                                            fill="url(#indigoGrad)" 
-                                        />
-                                    </AreaChart>
-                                </ResponsiveContainer>
-                            )}
-                        </CardContent>
-                    </Card>
+                        {/* User Signup Growth Trend (Area Chart) */}
+                        <Card className="shadow-sm">
+                            <CardHeader>
+                                <CardTitle className="text-base font-bold flex items-center gap-2">
+                                    <TrendingUp className="w-5 h-5 text-indigo-500" />
+                                    User Signup Growth Trend
+                                </CardTitle>
+                                <CardDescription>Daily registration count for the last 14 days</CardDescription>
+                            </CardHeader>
+                            <CardContent className="h-72">
+                                {statsLoading ? (
+                                    <div className="flex items-center justify-center h-full gap-2 text-sm text-gray-500">
+                                        <RefreshCw className="w-4 h-4 animate-spin" /> Loading trend data...
+                                    </div>
+                                ) : (
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <AreaChart data={signupTrend} margin={{ top: 20, right: 10, left: -20, bottom: 5 }}>
+                                            <defs>
+                                                <linearGradient id="indigoGrad" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                                                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0} />
+                                                </linearGradient>
+                                            </defs>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                                            <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={false} tickLine={false} />
+                                            <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={false} tickLine={false} />
+                                            <Tooltip content={<CustomTooltip />} />
+                                            <Area 
+                                                type="monotone" 
+                                                dataKey="count" 
+                                                name="Signups"
+                                                stroke="#6366f1" 
+                                                strokeWidth={3}
+                                                fillOpacity={1} 
+                                                fill="url(#indigoGrad)" 
+                                            />
+                                        </AreaChart>
+                                    </ResponsiveContainer>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </div>
 
                     {/* Segment Cohort Users Directory Table */}
                     <Card className="shadow-sm">
