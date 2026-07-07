@@ -1,7 +1,7 @@
 -- Database Migration: Admin User Segmentation RPCs
 -- This script creates the RPC functions for retrieving user segmentation stats and paginated lists.
 
--- 1. Function to retrieve summary counts and 14-day signup trend for the user segments
+-- 1. Function to retrieve summary counts and 14-day signup/depositor trends for the user segments
 CREATE OR REPLACE FUNCTION public.get_admin_user_segmentation_stats()
 RETURNS JSON
 SECURITY DEFINER
@@ -59,11 +59,12 @@ BEGIN
   ) INTO v_segments
   FROM user_metrics;
 
-  -- 2. Aggregate 14-day signup trend
+  -- 2. Aggregate 14-day signup and active depositor trend
   SELECT json_agg(t) INTO v_trend FROM (
     SELECT 
       to_char(d.day, 'Mon DD') as date,
-      COUNT(p.id) as count
+      (SELECT COUNT(*) FROM public.profiles p WHERE p.created_at::date = d.day) as count,
+      (SELECT COUNT(DISTINCT tx.user_id) FROM public.transactions tx WHERE tx.type = 'deposit' AND tx.status = 'approved' AND tx.created_at::date = d.day) as depositors
     FROM (
       SELECT generate_series(
         current_date - interval '13 days', 
@@ -71,8 +72,6 @@ BEGIN
         '1 day'::interval
       )::date as day
     ) d
-    LEFT JOIN public.profiles p ON p.created_at::date = d.day
-    GROUP BY d.day
     ORDER BY d.day
   ) t;
 

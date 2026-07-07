@@ -47,18 +47,24 @@ const getFlagEmoji = (countryCode) => {
     }
 };
 
-// Premium Custom Tooltip Component
+// Premium Custom Tooltip Component (supporting single or multi-series payload)
 const CustomTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {
-        const data = payload[0].payload;
+        const date = payload[0].payload.date || payload[0].payload.name;
         return (
-            <div className="bg-white/95 backdrop-blur-md border border-gray-200 p-3 rounded-lg shadow-xl text-xs space-y-1.5 min-w-[150px]">
-                <p className="font-bold text-gray-900">{payload[0].name || data.date || data.name}</p>
-                <div className="flex items-center gap-1.5 font-semibold text-indigo-600">
-                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: payload[0].color || '#6366f1' }} />
-                    <span>Users: <span className="font-extrabold text-gray-900">{payload[0].value.toLocaleString()}</span></span>
+            <div className="bg-white/95 backdrop-blur-md border border-gray-200 p-3 rounded-lg shadow-xl text-xs space-y-2 min-w-[170px]">
+                <p className="font-bold text-gray-900 border-b border-gray-100 pb-1">{date}</p>
+                <div className="space-y-1.5">
+                    {payload.map((item, idx) => (
+                        <div key={idx} className="flex items-center justify-between gap-4 font-semibold">
+                            <div className="flex items-center gap-1.5" style={{ color: item.color || item.fill }}>
+                                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color || item.fill }} />
+                                <span>{item.name}</span>
+                            </div>
+                            <span className="font-extrabold text-gray-900">{item.value.toLocaleString()}</span>
+                        </div>
+                    ))}
                 </div>
-                {data.desc && <p className="text-gray-500 text-[10px] italic">{data.desc}</p>}
             </div>
         );
     }
@@ -633,11 +639,16 @@ export default function AdminAnalytics() {
                                                     <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
                                                     <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0} />
                                                 </linearGradient>
+                                                <linearGradient id="emeraldGradArea" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                                                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
+                                                </linearGradient>
                                             </defs>
                                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                                             <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={false} tickLine={false} />
                                             <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={false} tickLine={false} />
                                             <Tooltip content={<CustomTooltip />} />
+                                            <Legend verticalAlign="top" height={36} iconType="circle" />
                                             <Area 
                                                 type="monotone" 
                                                 dataKey="count" 
@@ -646,6 +657,15 @@ export default function AdminAnalytics() {
                                                 strokeWidth={3}
                                                 fillOpacity={1} 
                                                 fill="url(#indigoGrad)" 
+                                            />
+                                            <Area 
+                                                type="monotone" 
+                                                dataKey="depositors" 
+                                                name="Active Depositors"
+                                                stroke="#10b981" 
+                                                strokeWidth={3}
+                                                fillOpacity={1} 
+                                                fill="url(#emeraldGradArea)" 
                                             />
                                         </AreaChart>
                                     </ResponsiveContainer>
