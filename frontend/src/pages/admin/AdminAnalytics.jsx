@@ -106,12 +106,14 @@ export default function AdminAnalytics() {
     useEffect(() => {
         if (activeTab !== 'live') return;
 
+        console.log('[Admin Analytics] Connecting to online-users presence channel...');
         // Connect to presence channel
         const channel = supabase.channel('online-users');
 
         channel
             .on('presence', { event: 'sync' }, () => {
                 const state = channel.presenceState();
+                console.log('[Admin Analytics] Presence sync received. Current state:', state);
                 const flattened = [];
                 
                 Object.keys(state).forEach(key => {
@@ -125,11 +127,15 @@ export default function AdminAnalytics() {
                     }
                 });
 
+                console.log('[Admin Analytics] Flattened online users count:', flattened.length);
                 setOnlineUsers(flattened);
             })
-            .subscribe();
+            .subscribe((status) => {
+                console.log('[Admin Analytics] Channel subscription status update:', status);
+            });
 
         return () => {
+            console.log('[Admin Analytics] Cleaning up presence channel subscription');
             supabase.removeChannel(channel);
         };
     }, [activeTab]);
