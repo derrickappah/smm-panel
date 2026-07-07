@@ -23,6 +23,54 @@ const AdminRateCatcher = () => {
   // Conversion Settings (default GHS to USD values)
   const [exchangeRate, setExchangeRate] = useState(15.0);
   const [markupPercent, setMarkupPercent] = useState(50.0);
+  const [savingConfig, setSavingConfig] = useState(false);
+
+  // Fetch settings from database on mount
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('app_settings')
+          .select('key, value')
+          .in('key', ['rate_catcher_exchange_rate', 'rate_catcher_markup_percent']);
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          data.forEach(item => {
+            if (item.key === 'rate_catcher_exchange_rate') {
+              setExchangeRate(parseFloat(item.value) || 15.0);
+            } else if (item.key === 'rate_catcher_markup_percent') {
+              setMarkupPercent(parseFloat(item.value) || 50.0);
+            }
+          });
+        }
+      } catch (err) {
+        console.error('Failed to load settings:', err);
+      }
+    };
+    fetchConfig();
+  }, []);
+
+  // Save configuration settings
+  const saveConfig = async () => {
+    setSavingConfig(true);
+    try {
+      const { error } = await supabase
+        .from('app_settings')
+        .upsert([
+          { key: 'rate_catcher_exchange_rate', value: String(exchangeRate), description: 'Exchange rate used in Rate Change Catcher (USD to GHS)' },
+          { key: 'rate_catcher_markup_percent', value: String(markupPercent), description: 'Default markup percentage used in Rate Change Catcher' }
+        ], { onConflict: 'key' });
+
+      if (error) throw error;
+      toast.success('Configuration saved successfully');
+    } catch (err) {
+      toast.error(`Failed to save configuration: ${err.message}`);
+    } finally {
+      setSavingConfig(false);
+    }
+  };
   
   // Stats
   const [scanStats, setScanStats] = useState({
@@ -183,15 +231,29 @@ const AdminRateCatcher = () => {
 
       {/* Configuration Settings */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="shadow-sm border-gray-200">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2 text-gray-700">
-              <Coins className="w-4 h-4 text-indigo-500" />
-              Exchange Configuration
-            </CardTitle>
+        <Card className="md:col-span-2 shadow-sm border-gray-200">
+          <CardHeader className="pb-3 flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-base font-semibold flex items-center gap-2 text-gray-700">
+                <Coins className="w-5 h-5 text-indigo-500" />
+                Audit Configuration
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Configure conversion parameters from provider rates (USD) to local rates (GHS).
+              </CardDescription>
+            </div>
+            <Button 
+              size="sm"
+              onClick={saveConfig} 
+              disabled={savingConfig}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-8 flex items-center gap-1.5"
+            >
+              {savingConfig ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
+              Save Configuration
+            </Button>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="exRate" className="text-xs text-gray-600">USD to GHS Exchange Rate</Label>
                 <div className="relative mt-1">
@@ -200,7 +262,7 @@ const AdminRateCatcher = () => {
                     type="number" 
                     step="0.01"
                     value={exchangeRate} 
-                    onChange={(e) => setExchangeRate(parseFloat(e.target.value) || 1)}
+                    onChange={(e) => setExchangeRate(parseFloat(e.target.value) || 0)}
                     className="w-full text-sm pr-12"
                   />
                   <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-xs text-gray-400">
@@ -208,19 +270,6 @@ const AdminRateCatcher = () => {
                   </div>
                 </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-sm border-gray-200">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2 text-gray-700">
-              <Percent className="w-4 h-4 text-indigo-500" />
-              Target Markup
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
               <div>
                 <Label htmlFor="markup" className="text-xs text-gray-600">Default Profit Markup (%)</Label>
                 <div className="relative mt-1">
