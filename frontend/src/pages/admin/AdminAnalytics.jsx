@@ -106,31 +106,39 @@ export default function AdminAnalytics() {
     useEffect(() => {
         if (activeTab !== 'live') return;
 
-        // Connect to presence channel
+        // Connect to shared presence channel
         const channel = supabase.channel('online-users');
 
-        channel
-            .on('presence', { event: 'sync' }, () => {
-                const state = channel.presenceState();
-                const flattened = [];
-                
-                Object.keys(state).forEach(key => {
-                    const presences = state[key];
-                    if (presences && presences.length > 0) {
-                        // In case of multiple tabs for same user, take the latest active
-                        const latest = presences.reduce((prev, current) => {
-                            return new Date(current.last_active) > new Date(prev.last_active) ? current : prev;
-                        });
-                        flattened.push(latest);
-                    }
-                });
+        const handlePresenceSync = () => {
+            const state = channel.presenceState();
+            const flattened = [];
+            
+            Object.keys(state).forEach(key => {
+                const presences = state[key];
+                if (presences && presences.length > 0) {
+                    // In case of multiple tabs for same user, take the latest active
+                    const latest = presences.reduce((prev, current) => {
+                        return new Date(current.last_active) > new Date(prev.last_active) ? current : prev;
+                    });
+                    flattened.push(latest);
+                }
+            });
 
-                setOnlineUsers(flattened);
-            })
-            .subscribe();
+            setOnlineUsers(flattened);
+        };
+
+        channel.on('presence', { event: 'sync' }, handlePresenceSync);
+        
+        // Subscribe to channel status and trigger sync immediately if already subscribed
+        channel.subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+                handlePresenceSync();
+            }
+        });
 
         return () => {
-            supabase.removeChannel(channel);
+            // Remove sync listener only to avoid disconnecting the global UserPresenceTracker subscription
+            channel.off('presence', { event: 'sync' });
         };
     }, [activeTab]);
 
