@@ -5,8 +5,9 @@ import { Button } from '@/components/ui/button';
 import { 
   Users, ShoppingCart, DollarSign, Package, CheckCircle, Clock, AlertCircle,
   MessageSquare, UserPlus, Receipt, BarChart3, XCircle, CreditCard, Heart,
-  Eye, MessageCircle, Share2, UserCheck, Activity, Bell, Tag
+  Eye, MessageCircle, Share2, UserCheck, Activity, Bell, Tag, AlertTriangle, Loader2
 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 const AdminStats = memo(({ 
   dateRangeStart, 
@@ -28,6 +29,68 @@ const AdminStats = memo(({
   }, [stats]);
 
   const previousStats = previousStatsRef.current;
+
+  // Profit Risks Catcher logic for Dashboard metric card
+  const [profitRisksCount, setProfitRisksCount] = React.useState(null);
+  const [loadingRisks, setLoadingRisks] = React.useState(false);
+
+  useEffect(() => {
+    const fetchProfitRisks = async () => {
+      setLoadingRisks(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        // Fetch config
+        const { data: appSettings } = await supabase
+          .from('app_settings')
+          .select('key, value')
+          .in('key', ['rate_catcher_exchange_rate', 'rate_catcher_markup_percent']);
+
+        let exchangeRate = 15.0;
+        let markupPercent = 50.0;
+
+        if (appSettings) {
+          appSettings.forEach(item => {
+            if (item.key === 'rate_catcher_exchange_rate') {
+              exchangeRate = parseFloat(item.value) || 15.0;
+            } else if (item.key === 'rate_catcher_markup_percent') {
+              markupPercent = parseFloat(item.value) || 50.0;
+            }
+          });
+        }
+
+        const response = await fetch('/api/admin/rate-catcher', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({ action: 'catalog' })
+        });
+
+        if (!response.ok) throw new Error('API failed');
+        const resData = await response.json();
+        
+        const items = resData.discrepancies || [];
+        let count = 0;
+        items.forEach(item => {
+          const expectedRate = item.live_rate * exchangeRate * (1 + markupPercent / 100);
+          if (expectedRate > item.local_rate) {
+            count++;
+          }
+        });
+        setProfitRisksCount(count);
+      } catch (err) {
+        console.error('Failed to fetch profit risks:', err);
+        setProfitRisksCount(0);
+      } finally {
+        setLoadingRisks(false);
+      }
+    };
+
+    fetchProfitRisks();
+  }, []);
 
   const activePaymentMethods = useMemo(() => {
     return Object.values(paymentMethodSettings).filter(enabled => enabled === true).length;
@@ -328,6 +391,41 @@ const AdminStats = memo(({
           </div>
           <p className="text-xs sm:text-[10px] font-medium text-gray-600">Payment Methods</p>
           <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">Active</p>
+        </div>
+
+        {/* Profit Risks */}
+        <div 
+          className={`border rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer touch-manipulation ${
+            profitRisksCount > 0 
+              ? 'bg-red-50/70 border-red-200 animate-pulse' 
+              : 'bg-white border-gray-200'
+          }`} 
+          onClick={() => handleSectionClick('rate-catcher')}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+              profitRisksCount > 0 ? 'bg-red-100' : 'bg-gray-100'
+            }`}>
+              <AlertTriangle className={`w-4 h-4 ${
+                profitRisksCount > 0 ? 'text-red-600' : 'text-gray-500'
+              }`} />
+            </div>
+            <span className={`text-base sm:text-lg font-bold ${
+              profitRisksCount > 0 ? 'text-red-700' : 'text-gray-900'
+            }`}>
+              {loadingRisks ? (
+                <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+              ) : (
+                profitRisksCount ?? 0
+              )}
+            </span>
+          </div>
+          <p className={`text-xs sm:text-[10px] font-medium ${
+            profitRisksCount > 0 ? 'text-red-800' : 'text-gray-600'
+          }`}>Profit Risks</p>
+          <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">
+            {profitRisksCount > 0 ? 'Sync needed' : 'Rates in sync'}
+          </p>
         </div>
       </div>
 
