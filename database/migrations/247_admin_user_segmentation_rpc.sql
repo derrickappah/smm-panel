@@ -1,13 +1,15 @@
 -- Database Migration: Admin User Segmentation RPCs
 -- This script creates the RPC functions for retrieving user segmentation stats and paginated lists.
 
--- 1. Function to retrieve summary counts for each user segment
+-- 1. Function to retrieve summary counts and 14-day signup trend for the user segments
 CREATE OR REPLACE FUNCTION public.get_admin_user_segmentation_stats()
 RETURNS JSON
 SECURITY DEFINER
 AS $$
 DECLARE
   v_result JSON;
+  v_segments JSON;
+  v_trend JSON;
 BEGIN
   -- Verify caller is admin
   IF NOT EXISTS (
@@ -17,6 +19,7 @@ BEGIN
     RAISE EXCEPTION 'Unauthorized: Admin access required.';
   END IF;
 
+  -- 1. Aggregate segment counts
   WITH user_metrics AS (
     SELECT 
       p.id,
@@ -53,8 +56,31 @@ BEGIN
     'never_deposited_or_ordered', COUNT(*) FILTER (WHERE approved_deposits_count = 0 AND total_orders_count = 0),
     'browsers', COUNT(*) FILTER (WHERE approved_deposits_count = 0 AND last_active >= NOW() - INTERVAL '30 days'),
     'frequent_buyers', COUNT(*) FILTER (WHERE total_orders_count >= 10)
-  ) INTO v_result
+  ) INTO v_segments
   FROM user_metrics;
+
+  -- 2. Aggregate 14-day signup trend
+  SELECT json_agg(t) INTO v_trend FROM (
+    SELECT 
+      to_char(d.day, 'Mon DD') as date,
+      COUNT(p.id) as count
+    FROM (
+      SELECT generate_series(
+        current_date - interval '13 days', 
+        current_date, 
+        '1 day'::interval
+      )::date as day
+    ) d
+    LEFT JOIN public.profiles p ON p.created_at::date = d.day
+    GROUP BY d.day
+    ORDER BY d.day
+  ) t;
+
+  -- 3. Combine into a single result
+  v_result := json_build_object(
+    'counts', v_segments,
+    'trend', v_trend
+  );
 
   RETURN v_result;
 END;

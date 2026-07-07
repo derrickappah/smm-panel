@@ -5,11 +5,11 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
     Users, DollarSign, ShoppingCart, Activity, RefreshCw, Download, 
-    Search, ArrowUpDown, ArrowUp, ArrowDown, ExternalLink, Globe, Monitor, Compass
+    Search, ArrowUpDown, ArrowUp, ArrowDown, ExternalLink, Globe, Monitor, Compass, TrendingUp
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { 
-    ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend 
+    ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid, AreaChart, Area
 } from 'recharts';
 
 // Segment constants
@@ -21,6 +21,15 @@ const SEGMENTS = {
     browsers: { label: 'Browsers', desc: 'Active in last 30 days but never deposited', color: '#06b6d4' },
     frequent_buyers: { label: 'Frequent Buyers', desc: 'Customers with 10+ orders', color: '#8b5cf6' }
 };
+
+// Gradient reference mapping
+const GRADIENTS = [
+    'url(#emeraldGrad)',
+    'url(#amberGrad)',
+    'url(#roseGrad)',
+    'url(#cyanGrad)',
+    'url(#purpleGrad)'
+];
 
 const COLORS = ['#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#8b5cf6'];
 
@@ -38,6 +47,24 @@ const getFlagEmoji = (countryCode) => {
     }
 };
 
+// Premium Custom Tooltip Component
+const CustomTooltip = ({ active, payload }) => {
+    if (active && payload && payload.length) {
+        const data = payload[0].payload;
+        return (
+            <div className="bg-white/95 backdrop-blur-md border border-gray-200 p-3 rounded-lg shadow-xl text-xs space-y-1.5 min-w-[150px]">
+                <p className="font-bold text-gray-900">{payload[0].name || data.date || data.name}</p>
+                <div className="flex items-center gap-1.5 font-semibold text-indigo-600">
+                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: payload[0].color || '#6366f1' }} />
+                    <span>Users: <span className="font-extrabold text-gray-900">{payload[0].value.toLocaleString()}</span></span>
+                </div>
+                {data.desc && <p className="text-gray-500 text-[10px] italic">{data.desc}</p>}
+            </div>
+        );
+    }
+    return null;
+};
+
 export default function AdminAnalytics() {
     const [activeTab, setActiveTab] = useState('segmentation'); // 'segmentation' | 'live'
     
@@ -53,6 +80,7 @@ export default function AdminAnalytics() {
         browsers: 0,
         frequent_buyers: 0
     });
+    const [signupTrend, setSignupTrend] = useState([]);
     const [statsLoading, setStatsLoading] = useState(true);
 
     // List State
@@ -64,6 +92,7 @@ export default function AdminAnalytics() {
     const [searchTerm, setSearchTerm] = useState('');
     const [sortField, setSortField] = useState('created_at');
     const [sortOrder, setSortOrder] = useState('desc');
+    const [activePieIndex, setActivePieIndex] = useState(-1);
     const limit = 50;
 
     // --- LIVE PRESENCE LOGIC ---
@@ -116,8 +145,9 @@ export default function AdminAnalytics() {
 
             if (!res.ok) throw new Error('Failed to fetch statistics');
             const data = await res.json();
-            if (data.success) {
-                setSegmentStats(data.stats);
+            if (data.success && data.stats) {
+                setSegmentStats(data.stats.counts || {});
+                setSignupTrend(data.stats.trend || []);
             }
         } catch (err) {
             console.error('Stats fetch error:', err);
@@ -264,11 +294,11 @@ export default function AdminAnalytics() {
     // Recharts Formatting
     const chartData = useMemo(() => {
         return [
-            { name: 'Active Depositors', value: segmentStats.deposited_and_used || 0 },
-            { name: 'Idle Depositors', value: segmentStats.deposited_unused || 0 },
-            { name: 'Dead Signups', value: segmentStats.never_deposited_or_ordered || 0 },
-            { name: 'Browsers', value: segmentStats.browsers || 0 },
-            { name: 'Frequent Buyers', value: segmentStats.frequent_buyers || 0 }
+            { name: 'Active Depositors', value: segmentStats.deposited_and_used || 0, desc: 'Deposited & placed orders' },
+            { name: 'Idle Depositors', value: segmentStats.deposited_unused || 0, desc: 'Left balance unused, 0 orders' },
+            { name: 'Dead Signups', value: segmentStats.never_deposited_or_ordered || 0, desc: 'Never deposited or ordered' },
+            { name: 'Browsers', value: segmentStats.browsers || 0, desc: 'Active last 30d, 0 deposits' },
+            { name: 'Frequent Buyers', value: segmentStats.frequent_buyers || 0, desc: 'Placed 10+ orders' }
         ];
     }, [segmentStats]);
 
@@ -279,6 +309,15 @@ export default function AdminAnalytics() {
         const guests = total - members;
         return { total, members, guests };
     }, [onlineUsers]);
+
+    // Track active pie slide hover
+    const onPieEnter = useCallback((_, index) => {
+        setActivePieIndex(index);
+    }, []);
+
+    const onPieLeave = useCallback(() => {
+        setActivePieIndex(-1);
+    }, []);
 
     return (
         <div className="space-y-6">
@@ -455,33 +494,80 @@ export default function AdminAnalytics() {
                                     <Activity className="w-4 h-4 text-indigo-500" />
                                     Segment Cohorts Ratio
                                 </CardTitle>
-                                <CardDescription>Percentage breakdown of all profiles based on lifecycle stage</CardDescription>
+                                <CardDescription>Percentage breakdown of all profiles based on lifecycle stage (hover to inspect)</CardDescription>
                             </CardHeader>
-                            <CardContent className="h-72 flex items-center justify-center">
+                            <CardContent className="h-72 relative flex items-center justify-center">
                                 {statsLoading ? (
                                     <div className="flex items-center gap-2 text-sm text-gray-500">
                                         <RefreshCw className="w-4 h-4 animate-spin" /> Loading chart data...
                                     </div>
                                 ) : (
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <PieChart>
-                                            <Pie
-                                                data={chartData.filter(d => d.value > 0)}
-                                                cx="50%"
-                                                cy="50%"
-                                                innerRadius={60}
-                                                outerRadius={90}
-                                                paddingAngle={4}
-                                                dataKey="value"
-                                            >
-                                                {chartData.filter(d => d.value > 0).map((entry, index) => (
-                                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                                ))}
-                                            </Pie>
-                                            <Tooltip formatter={(value) => [`${value} Users`]} />
-                                            <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                                        </PieChart>
-                                    </ResponsiveContainer>
+                                    <div className="w-full h-full relative">
+                                        {/* Center Content Overlay */}
+                                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
+                                            {activePieIndex === -1 ? (
+                                                <>
+                                                    <span className="text-3xl font-extrabold text-gray-950">
+                                                        {segmentStats.total_users?.toLocaleString()}
+                                                    </span>
+                                                    <span className="text-xs font-bold text-gray-400 mt-0.5 uppercase tracking-wider">Total Users</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <span className="text-3xl font-extrabold" style={{ color: COLORS[activePieIndex % COLORS.length] }}>
+                                                        {chartData.filter(d => d.value > 0)[activePieIndex]?.value.toLocaleString()}
+                                                    </span>
+                                                    <span className="text-xs font-bold text-gray-500 mt-0.5 max-w-[130px] text-center truncate">
+                                                        {chartData.filter(d => d.value > 0)[activePieIndex]?.name}
+                                                    </span>
+                                                </>
+                                            )}
+                                        </div>
+
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <PieChart>
+                                                <defs>
+                                                    <linearGradient id="emeraldGrad" x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="0%" stopColor="#34d399" />
+                                                        <stop offset="100%" stopColor="#059669" />
+                                                    </linearGradient>
+                                                    <linearGradient id="amberGrad" x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="0%" stopColor="#fbbf24" />
+                                                        <stop offset="100%" stopColor="#d97706" />
+                                                    </linearGradient>
+                                                    <linearGradient id="roseGrad" x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="0%" stopColor="#fb7185" />
+                                                        <stop offset="100%" stopColor="#e11d48" />
+                                                    </linearGradient>
+                                                    <linearGradient id="cyanGrad" x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="0%" stopColor="#22d3ee" />
+                                                        <stop offset="100%" stopColor="#0891b2" />
+                                                    </linearGradient>
+                                                    <linearGradient id="purpleGrad" x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="0%" stopColor="#c084fc" />
+                                                        <stop offset="100%" stopColor="#7c3aed" />
+                                                    </linearGradient>
+                                                </defs>
+                                                <Pie
+                                                    data={chartData.filter(d => d.value > 0)}
+                                                    cx="50%"
+                                                    cy="50%"
+                                                    innerRadius={70}
+                                                    outerRadius={95}
+                                                    paddingAngle={3}
+                                                    dataKey="value"
+                                                    onMouseEnter={onPieEnter}
+                                                    onMouseLeave={onPieLeave}
+                                                    cursor="pointer"
+                                                >
+                                                    {chartData.filter(d => d.value > 0).map((entry, index) => (
+                                                        <Cell key={`cell-${index}`} fill={GRADIENTS[index % GRADIENTS.length]} stroke="#fff" strokeWidth={2} />
+                                                    ))}
+                                                </Pie>
+                                                <Tooltip content={<CustomTooltip />} />
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                    </div>
                                 )}
                             </CardContent>
                         </Card>
@@ -493,7 +579,7 @@ export default function AdminAnalytics() {
                                     <Users className="w-4 h-4 text-indigo-500" />
                                     Cohort Comparisons
                                 </CardTitle>
-                                <CardDescription>Volume sizes across the segments (excluding "All Users")</CardDescription>
+                                <CardDescription>Comparison scale displaying active volumes across user categories</CardDescription>
                             </CardHeader>
                             <CardContent className="h-72">
                                 {statsLoading ? (
@@ -502,13 +588,17 @@ export default function AdminAnalytics() {
                                     </div>
                                 ) : (
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={chartData} margin={{ top: 20, right: 30, left: 10, bottom: 5 }}>
-                                            <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                                            <YAxis />
-                                            <Tooltip formatter={(v) => [`${v} Users`, 'Total']} />
-                                            <Bar dataKey="value" fill="#6366f1" radius={[4, 4, 0, 0]}>
+                                        <BarChart data={chartData} margin={{ top: 20, right: 10, left: 0, bottom: 5 }}>
+                                            <defs>
+                                                {/* Re-use pie gradients */}
+                                            </defs>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                                            <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6b7280' }} axisLine={false} tickLine={false} />
+                                            <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} axisLine={false} tickLine={false} />
+                                            <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f9fafb' }} />
+                                            <Bar dataKey="value" fill="#6366f1" radius={[6, 6, 0, 0]}>
                                                 {chartData.map((entry, index) => (
-                                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                                    <Cell key={`cell-${index}`} fill={GRADIENTS[index % GRADIENTS.length]} />
                                                 ))}
                                             </Bar>
                                         </BarChart>
@@ -517,6 +607,48 @@ export default function AdminAnalytics() {
                             </CardContent>
                         </Card>
                     </div>
+
+                    {/* signup trend area chart */}
+                    <Card className="shadow-sm">
+                        <CardHeader>
+                            <CardTitle className="text-base font-bold flex items-center gap-2">
+                                <TrendingUp className="w-5 h-5 text-indigo-500" />
+                                User Signup Growth Trend
+                            </CardTitle>
+                            <CardDescription>Daily registration count for the last 14 days</CardDescription>
+                        </CardHeader>
+                        <CardContent className="h-64">
+                            {statsLoading ? (
+                                <div className="flex items-center justify-center h-full gap-2 text-sm text-gray-500">
+                                    <RefreshCw className="w-4 h-4 animate-spin" /> Loading trend data...
+                                </div>
+                            ) : (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={signupTrend} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                        <defs>
+                                            <linearGradient id="indigoGrad" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                                                <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0} />
+                                            </linearGradient>
+                                        </defs>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                                        <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={false} tickLine={false} />
+                                        <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={false} tickLine={false} />
+                                        <Tooltip content={<CustomTooltip />} />
+                                        <Area 
+                                            type="monotone" 
+                                            dataKey="count" 
+                                            name="Signups"
+                                            stroke="#6366f1" 
+                                            strokeWidth={3}
+                                            fillOpacity={1} 
+                                            fill="url(#indigoGrad)" 
+                                        />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            )}
+                        </CardContent>
+                    </Card>
 
                     {/* Segment Cohort Users Directory Table */}
                     <Card className="shadow-sm">
