@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { supabase, isConfigured } from '@/lib/supabase';
 
-// Geolocation helper with browser defaults & 2-second fetch timeout
+// Geolocation helper with browser timezone fallback
 const getUserLocation = async () => {
   const cacheKey = 'boostup_presence_geo';
   const cached = sessionStorage.getItem(cacheKey);
@@ -12,12 +12,8 @@ const getUserLocation = async () => {
     } catch (e) {}
   }
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 2000);
-
   try {
-    const res = await fetch('https://ipapi.co/json/', { signal: controller.signal });
-    clearTimeout(timeoutId);
+    const res = await fetch('https://ipapi.co/json/');
     if (res.ok) {
       const data = await res.json();
       const locationData = {
@@ -31,11 +27,10 @@ const getUserLocation = async () => {
       return locationData;
     }
   } catch (err) {
-    clearTimeout(timeoutId);
-    console.warn('[Presence Tracker] Geolocation API lookup failed or timed out. Falling back to timezone:', err.message);
+    console.warn('[Presence Tracker] Geolocation API lookup failed, using browser defaults:', err.message);
   }
 
-  // Fallback using system timezone
+  // Fallback to local browser details
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   const parts = tz.split('/');
   const country = parts[0] || 'Unknown';
@@ -50,6 +45,7 @@ const getUserLocation = async () => {
   };
 };
 
+// Unique Guest session generator
 const getGuestId = () => {
   const storageKey = 'boostup_guest_id';
   let guestId = localStorage.getItem(storageKey);
@@ -60,6 +56,7 @@ const getGuestId = () => {
   return guestId;
 };
 
+// Device metadata extractor
 const getDeviceDetails = () => {
   const ua = navigator.userAgent;
   let device = 'Desktop';
@@ -78,21 +75,21 @@ const getDeviceDetails = () => {
 export default function UserPresenceTracker() {
   const location = useLocation();
   const channelRef = useRef(null);
-  const isSubscribedRef = useRef(false);
-  const payloadRef = useRef(null);
 
-  // 1. Initialize channel subscription ONCE on mount
   useEffect(() => {
     if (!isConfigured) return;
 
     let active = true;
     let channel = null;
 
-    const initTracker = async () => {
+    const setupPresence = async () => {
+      // 1. Fetch user location and details
       const geo = await getUserLocation();
       if (!active) return;
 
       const device = getDeviceDetails();
+
+      // 2. Fetch auth user
       const { data: { session } } = await supabase.auth.getSession();
       if (!active) return;
 
@@ -100,9 +97,11 @@ export default function UserPresenceTracker() {
       let trackerPayload = {};
 
       if (session?.user) {
+        // Logged in user
         const userId = session.user.id;
         const email = session.user.email;
         
+        // Try to fetch profile name
         const { data: profile } = await supabase
           .from('profiles')
           .select('name, role')
@@ -116,7 +115,7 @@ export default function UserPresenceTracker() {
           name: profile?.name || email.split('@')[0],
           role: profile?.role || 'user',
           is_guest: false,
-          current_page: window.location.pathname,
+          current_page: location.pathname,
           city: geo.city,
           country: geo.country,
           country_code: geo.country_code,
@@ -125,6 +124,7 @@ export default function UserPresenceTracker() {
           last_active: new Date().toISOString()
         };
       } else {
+        // Guest user
         const guestId = getGuestId();
         trackerKey = guestId;
         trackerPayload = {
@@ -133,7 +133,7 @@ export default function UserPresenceTracker() {
           name: 'Guest',
           role: 'guest',
           is_guest: true,
-          current_page: window.location.pathname,
+          current_page: location.pathname,
           city: geo.city,
           country: geo.country,
           country_code: geo.country_code,
@@ -143,9 +143,12 @@ export default function UserPresenceTracker() {
         };
       }
 
-      payloadRef.current = trackerPayload;
+      // 3. Connect to Presence Channel
+      // We clean up any existing subscription first
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+      }
 
-      // Create subscription channel
       channel = supabase.channel('online-users', {
         config: {
           presence: {
@@ -157,43 +160,21 @@ export default function UserPresenceTracker() {
       channelRef.current = channel;
 
       channel.subscribe(async (status) => {
-        console.log('[Presence Tracker] Channel Subscription status:', status);
-        if (status === 'SUBSCRIBED' && active) {
-          isSubscribedRef.current = true;
-          try {
-            await channel.track(payloadRef.current);
-            console.log('[Presence Tracker] Tracked initial presence:', payloadRef.current.current_page);
-          } catch (e) {
-            console.error('[Presence Tracker] Failed to track presence:', e);
-          }
+        if (status === 'SUBSCRIBED') {
+          await channel.track(trackerPayload);
         }
       });
     };
 
-    initTracker();
+    setupPresence();
 
     return () => {
       active = false;
-      isSubscribedRef.current = false;
       if (channel) {
         supabase.removeChannel(channel);
-        console.log('[Presence Tracker] Unsubscribed from channel');
       }
     };
-  }, []);
+  }, [location.pathname]); // Re-track whenever path changes
 
-  // 2. Track path updates dynamically without reconnecting
-  useEffect(() => {
-    if (!channelRef.current || !isSubscribedRef.current || !payloadRef.current) return;
-
-    payloadRef.current.current_page = location.pathname;
-    payloadRef.current.last_active = new Date().toISOString();
-
-    console.log('[Presence Tracker] Path changed, updating payload:', location.pathname);
-    channelRef.current.track(payloadRef.current).catch(err => {
-      console.warn('[Presence Tracker] Failed to track path update:', err);
-    });
-  }, [location.pathname]);
-
-  return null;
+  return null; // Pure functional component, does not render anything
 }
