@@ -5,12 +5,19 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
     Users, DollarSign, ShoppingCart, Activity, RefreshCw, Download, 
-    Search, ArrowUpDown, ArrowUp, ArrowDown, ExternalLink, Globe, Monitor, Compass, TrendingUp
+    Search, ArrowUpDown, ArrowUp, ArrowDown, ExternalLink, Globe, Monitor, Compass, TrendingUp,
+    ChevronDown
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { 
     ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid, AreaChart, Area
 } from 'recharts';
+import { 
+    DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger 
+} from "@/components/ui/dropdown-menu";
+import { 
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue 
+} from '@/components/ui/select';
 
 // Segment constants
 const SEGMENTS = {
@@ -236,7 +243,7 @@ export default function AdminAnalytics() {
     };
 
     // Export CSV
-    const handleExportCSV = async () => {
+    const handleExportCSV = async (exportSegment = activeSegment) => {
         try {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) return;
@@ -250,7 +257,7 @@ export default function AdminAnalytics() {
                 },
                 body: JSON.stringify({
                     action: 'list',
-                    segment: activeSegment,
+                    segment: exportSegment,
                     search: searchTerm,
                     limit: 10000,
                     offset: 0,
@@ -286,7 +293,7 @@ export default function AdminAnalytics() {
             const link = document.createElement('a');
             const url = URL.createObjectURL(blob);
             link.setAttribute('href', url);
-            link.setAttribute('download', `segment_${activeSegment}_${new Date().toISOString().split('T')[0]}.csv`);
+            link.setAttribute('download', `segment_${exportSegment}_${new Date().toISOString().split('T')[0]}.csv`);
             link.style.visibility = 'hidden';
             document.body.appendChild(link);
             link.click();
@@ -683,8 +690,24 @@ export default function AdminAnalytics() {
                                 </CardTitle>
                                 <CardDescription>{SEGMENTS[activeSegment].desc}</CardDescription>
                             </div>
-                            <div className="flex items-center gap-3 w-full sm:w-auto">
-                                <div className="relative flex-1 sm:w-64">
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+                                {/* Segment Selector */}
+                                <Select value={activeSegment} onValueChange={handleSegmentChange}>
+                                    <SelectTrigger className="w-full sm:w-48 h-10 bg-white border-gray-200">
+                                        <SelectValue placeholder="Select segment" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-white/95 backdrop-blur-md">
+                                        <SelectItem value="all">Total Profiles</SelectItem>
+                                        <SelectItem value="deposited_and_used">Active Depositors</SelectItem>
+                                        <SelectItem value="deposited_unused">Idle Depositors</SelectItem>
+                                        <SelectItem value="never_deposited_or_ordered">Dead Signups</SelectItem>
+                                        <SelectItem value="browsers">Active Browsers</SelectItem>
+                                        <SelectItem value="frequent_buyers">Frequent Buyers</SelectItem>
+                                    </SelectContent>
+                                </Select>
+
+                                {/* Search Input */}
+                                <div className="relative flex-1 sm:w-64 w-full">
                                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                                     <Input
                                         placeholder="Search segment..."
@@ -693,19 +716,40 @@ export default function AdminAnalytics() {
                                             setSearchTerm(e.target.value);
                                             setPage(1);
                                         }}
-                                        className="pl-9 h-10 w-full"
+                                        className="pl-9 h-10 w-full bg-white"
                                     />
                                 </div>
-                                <Button 
-                                    onClick={handleExportCSV} 
-                                    variant="outline" 
-                                    size="sm" 
-                                    className="h-10 shrink-0"
-                                    disabled={usersList.length === 0}
-                                >
-                                    <Download className="w-4 h-4 mr-2" />
-                                    Export CSV
-                                </Button>
+
+                                {/* Export Segment Dropdown */}
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="outline" size="sm" className="h-10 shrink-0 select-none bg-white">
+                                            <Download className="w-4 h-4 mr-2" />
+                                            Export Segment
+                                            <ChevronDown className="w-3 h-3 ml-2 text-gray-400" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-56 bg-white/95 backdrop-blur-md">
+                                        <DropdownMenuItem onClick={() => handleExportCSV('all')} className="cursor-pointer">
+                                            Export Total Profiles
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleExportCSV('deposited_and_used')} className="cursor-pointer">
+                                            Export Active Depositors
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleExportCSV('deposited_unused')} className="cursor-pointer">
+                                            Export Idle Depositors
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleExportCSV('never_deposited_or_ordered')} className="cursor-pointer">
+                                            Export Dead Signups
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleExportCSV('browsers')} className="cursor-pointer">
+                                            Export Active Browsers
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleExportCSV('frequent_buyers')} className="cursor-pointer">
+                                            Export Frequent Buyers
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                             </div>
                         </CardHeader>
                         <CardContent className="p-0 overflow-x-auto">
