@@ -11,11 +11,10 @@ export default async function handler(req, res) {
 
     try {
         // 1. Verify Admin access
-        const { isAdmin } = await verifyAdmin(req);
+        const { supabase, isAdmin } = await verifyAdmin(req);
         if (!isAdmin) return res.status(403).json({ error: 'Unauthorized' });
 
         const { action } = req.body;
-        const supabase = getServiceRoleClient();
 
         if (action === 'stats') {
             // Get user segmentation dashboard counts
