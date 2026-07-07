@@ -86,10 +86,10 @@ RETURNS TABLE (
 SECURITY DEFINER
 AS $$
 BEGIN
-  -- Verify caller is admin
+  -- Verify caller is admin (use table alias p to avoid variable name collision with returns table)
   IF NOT EXISTS (
-    SELECT 1 FROM public.profiles 
-    WHERE id = auth.uid() AND role = 'admin'
+    SELECT 1 FROM public.profiles p
+    WHERE p.id = auth.uid() AND p.role = 'admin'
   ) THEN
     RAISE EXCEPTION 'Unauthorized: Admin access required.';
   END IF;
@@ -97,40 +97,40 @@ BEGIN
   RETURN QUERY
   WITH user_metrics AS (
     SELECT 
-      p.id as u_id,
-      p.name as u_name,
-      p.email as u_email,
-      p.phone_number as u_phone,
-      p.role as u_role,
-      p.balance::NUMERIC as u_balance,
-      p.created_at as u_created_at,
+      prof.id as u_id,
+      prof.name as u_name,
+      prof.email as u_email,
+      prof.phone_number as u_phone,
+      prof.role as u_role,
+      prof.balance::NUMERIC as u_balance,
+      prof.created_at as u_created_at,
       COALESCE(d.approved_deposits_count, 0) as u_approved_deposits_count,
       COALESCE(o.total_orders_count, 0) as u_total_orders_count,
       COALESCE(o.total_spend, 0)::NUMERIC as u_total_spend,
       (
         SELECT al.created_at 
         FROM public.activity_logs al 
-        WHERE al.user_id = p.id
+        WHERE al.user_id = prof.id
         ORDER BY al.created_at DESC
         LIMIT 1
       ) as u_last_active
-    FROM public.profiles p
+    FROM public.profiles prof
     LEFT JOIN (
       SELECT 
-        user_id, 
-        COUNT(id) as approved_deposits_count
-      FROM public.transactions 
-      WHERE type = 'deposit' AND status = 'approved'
-      GROUP BY user_id
-    ) d ON d.user_id = p.id
+        tx.user_id, 
+        COUNT(*) as approved_deposits_count
+      FROM public.transactions tx
+      WHERE tx.type = 'deposit' AND tx.status = 'approved'
+      GROUP BY tx.user_id
+    ) d ON d.user_id = prof.id
     LEFT JOIN (
       SELECT 
-        user_id, 
-        COUNT(id) as total_orders_count,
-        SUM(total_cost) as total_spend
-      FROM public.orders
-      GROUP BY user_id
-    ) o ON o.user_id = p.id
+        ord.user_id, 
+        COUNT(*) as total_orders_count,
+        SUM(ord.total_cost) as total_spend
+      FROM public.orders ord
+      GROUP BY ord.user_id
+    ) o ON o.user_id = prof.id
   ),
   filtered_metrics AS (
     SELECT * FROM user_metrics
@@ -156,18 +156,18 @@ BEGIN
     SELECT COUNT(*) as t_count FROM filtered_metrics
   )
   SELECT 
-    fm.u_id,
-    fm.u_name,
-    fm.u_email,
-    fm.u_phone,
-    fm.u_role,
-    fm.u_balance,
-    fm.u_created_at,
-    fm.u_approved_deposits_count,
-    fm.u_total_orders_count,
-    fm.u_total_spend,
-    fm.u_last_active,
-    tc.t_count
+    fm.u_id as id,
+    fm.u_name as name,
+    fm.u_email as email,
+    fm.u_phone as phone_number,
+    fm.u_role as role,
+    fm.u_balance as balance,
+    fm.u_created_at as created_at,
+    fm.u_approved_deposits_count as approved_deposits_count,
+    fm.u_total_orders_count as total_orders_count,
+    fm.u_total_spend as total_spend,
+    fm.u_last_active as last_active,
+    tc.t_count as total_count
   FROM filtered_metrics fm
   CROSS JOIN total_count_cte tc
   ORDER BY 
