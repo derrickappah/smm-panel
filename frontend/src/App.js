@@ -15,6 +15,7 @@ import { queryClient } from "@/lib/queryClient";
 import { prefetchPaymentSettings } from "@/hooks/usePaymentMethods";
 import * as serviceWorkerRegistration from "./serviceWorkerRegistration";
 import ReferralTracker from "@/components/ReferralTracker";
+import UserPresenceTracker from "@/components/UserPresenceTracker";
 
 
 // Lazy load all page components for code splitting
@@ -195,6 +196,7 @@ function App() {
 
             <div className="min-h-screen bg-background">
               <ReferralTracker />
+              <UserPresenceTracker />
               {!isConfigured && <SupabaseSetup />}
 
               <Suspense fallback={<PageLoader />}>

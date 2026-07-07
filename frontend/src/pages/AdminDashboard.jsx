@@ -17,6 +17,7 @@ import { supabase } from '@/lib/supabase';
 
 // Lazy load all admin components
 const AdminStats = lazy(() => import('@/pages/admin/AdminStats'));
+const AdminAnalytics = lazy(() => import('@/pages/admin/AdminAnalytics'));
 const AdminUsers = lazy(() => import('@/pages/admin/AdminUsers'));
 const AdminOrders = lazy(() => import('@/pages/admin/AdminOrders'));
 const AdminDeposits = lazy(() => import('@/pages/admin/AdminDeposits'));
@@ -71,6 +72,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
       // Map URL paths to section IDs
       const sectionMap = {
         'dashboard': 'dashboard',
+        'analytics': 'analytics',
         'deposits': 'deposits',
         'orders': 'orders',
         'services': 'services',
@@ -309,6 +311,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
   // Section titles mapping
   const sectionTitles = {
     dashboard: 'Dashboard',
+    analytics: 'Analytics & Segmentation',
     deposits: 'Deposits',
     orders: 'Orders',
     services: 'Services',
@@ -337,7 +340,8 @@ const AdminDashboard = memo(({ user, onLogout }) => {
 
   // Navigation items configuration
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'deposits', label: 'Deposits', icon: DollarSign, badge: stats.pending_deposits },
     { id: 'orders', label: 'Orders', icon: ShoppingCart },
     { id: 'services', label: 'Services', icon: Package },
@@ -678,6 +682,13 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                       onSectionChange={handleSectionChange}
                       paymentMethodSettings={paymentMethodSettings}
                     />
+                  </Suspense>
+                </TabsContent>
+
+                {/* Analytics Section */}
+                <TabsContent value="analytics" className="lg:mt-0 w-full max-w-full">
+                  <Suspense fallback={<ComponentLoader />}>
+                    <AdminAnalytics />
                   </Suspense>
                 </TabsContent>
 
