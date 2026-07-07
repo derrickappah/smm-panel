@@ -37,9 +37,9 @@ const getUserLocation = async () => {
   const city = parts[1] ? parts[1].replace('_', ' ') : 'Unknown';
 
   return {
-    country,
+    country: country,
     country_code: 'UN',
-    city,
+    city: city,
     region: '',
     timezone: tz
   };
@@ -75,10 +75,7 @@ const getDeviceDetails = () => {
 export default function UserPresenceTracker() {
   const location = useLocation();
   const channelRef = useRef(null);
-  const isSubscribedRef = useRef(false);
-  const payloadRef = useRef(null);
 
-  // 1. Initialize channel subscription ONCE on mount
   useEffect(() => {
     if (!isConfigured) return;
 
@@ -96,6 +93,7 @@ export default function UserPresenceTracker() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!active) return;
 
+      let trackerKey = '';
       let trackerPayload = {};
 
       if (session?.user) {
@@ -109,16 +107,15 @@ export default function UserPresenceTracker() {
           .select('name, role')
           .eq('id', userId)
           .single();
-        
-        if (!active) return;
 
+        trackerKey = userId;
         trackerPayload = {
           user_id: userId,
           email: email,
           name: profile?.name || email.split('@')[0],
           role: profile?.role || 'user',
           is_guest: false,
-          current_page: window.location.pathname,
+          current_page: location.pathname,
           city: geo.city,
           country: geo.country,
           country_code: geo.country_code,
@@ -129,13 +126,14 @@ export default function UserPresenceTracker() {
       } else {
         // Guest user
         const guestId = getGuestId();
+        trackerKey = guestId;
         trackerPayload = {
           user_id: guestId,
           email: 'Anonymous Guest',
           name: 'Guest',
           role: 'guest',
           is_guest: true,
-          current_page: window.location.pathname,
+          current_page: location.pathname,
           city: geo.city,
           country: geo.country,
           country_code: geo.country_code,
@@ -145,21 +143,25 @@ export default function UserPresenceTracker() {
         };
       }
 
-      payloadRef.current = trackerPayload;
+      // 3. Connect to Presence Channel
+      // We clean up any existing subscription first
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+      }
 
-      // 3. Connect to Shared Presence Channel
-      // We do not use the custom key parameter so it doesn't clash with other subscribers
-      channel = supabase.channel('online-users');
+      channel = supabase.channel('online-users', {
+        config: {
+          presence: {
+            key: trackerKey,
+          },
+        },
+      });
+
       channelRef.current = channel;
 
       channel.subscribe(async (status) => {
-        if (status === 'SUBSCRIBED' && active) {
-          isSubscribedRef.current = true;
-          try {
-            await channel.track(payloadRef.current);
-          } catch (e) {
-            console.error('[Presence Tracker] Failed to track presence:', e);
-          }
+        if (status === 'SUBSCRIBED') {
+          await channel.track(trackerPayload);
         }
       });
     };
@@ -168,24 +170,11 @@ export default function UserPresenceTracker() {
 
     return () => {
       active = false;
-      isSubscribedRef.current = false;
       if (channel) {
         supabase.removeChannel(channel);
       }
     };
-  }, []);
-
-  // 2. Track path updates dynamically on route changes
-  useEffect(() => {
-    if (!channelRef.current || !isSubscribedRef.current || !payloadRef.current) return;
-
-    payloadRef.current.current_page = location.pathname;
-    payloadRef.current.last_active = new Date().toISOString();
-
-    channelRef.current.track(payloadRef.current).catch(err => {
-      console.warn('[Presence Tracker] Failed to track path update:', err);
-    });
-  }, [location.pathname]);
+  }, [location.pathname]); // Re-track whenever path changes
 
   return null; // Pure functional component, does not render anything
 }
