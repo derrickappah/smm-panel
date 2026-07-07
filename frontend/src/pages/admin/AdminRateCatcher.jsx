@@ -24,6 +24,7 @@ const AdminRateCatcher = () => {
   const [exchangeRate, setExchangeRate] = useState(15.0);
   const [markupPercent, setMarkupPercent] = useState(50.0);
   const [savingConfig, setSavingConfig] = useState(false);
+  const [configLoaded, setConfigLoaded] = useState(false);
 
   // Fetch settings from database on mount
   useEffect(() => {
@@ -47,6 +48,8 @@ const AdminRateCatcher = () => {
         }
       } catch (err) {
         console.error('Failed to load settings:', err);
+      } finally {
+        setConfigLoaded(true);
       }
     };
     fetchConfig();
@@ -72,12 +75,27 @@ const AdminRateCatcher = () => {
     }
   };
   
-  // Stats
-  const [scanStats, setScanStats] = useState({
-    checked: 0,
-    mismatches: 0,
-    profitRisks: 0,
-  });
+  // Dynamic stats calculation using useMemo to avoid race conditions and handle input updates instantly
+  const scanStats = React.useMemo(() => {
+    let mismatches = 0;
+    let profitRisks = 0;
+    
+    catalogItems.forEach(item => {
+      const expectedRate = item.live_rate * exchangeRate * (1 + markupPercent / 100);
+      if (Math.abs(item.local_rate - expectedRate) > 0.05) {
+        mismatches++;
+      }
+      if (expectedRate > item.local_rate) {
+        profitRisks++;
+      }
+    });
+
+    return {
+      checked: catalogItems.length,
+      mismatches,
+      profitRisks,
+    };
+  }, [catalogItems, exchangeRate, markupPercent]);
 
   // Fetch token and trigger scan
   const runCatalogScan = useCallback(async () => {
@@ -101,27 +119,6 @@ const AdminRateCatcher = () => {
 
       const items = resData.discrepancies || [];
       setCatalogItems(items);
-      
-      // Calculate catalog stats
-      let mismatches = 0;
-      let profitRisks = 0;
-      
-      items.forEach(item => {
-        const expectedRate = item.live_rate * exchangeRate * (1 + markupPercent / 100);
-        if (Math.abs(item.local_rate - expectedRate) > 0.05) {
-          mismatches++;
-        }
-        if (expectedRate > item.local_rate) {
-          profitRisks++;
-        }
-      });
-
-      setScanStats({
-        checked: items.length,
-        mismatches,
-        profitRisks,
-      });
-
       toast.success(`Catalog scan complete. Analyzed ${items.length} services.`);
     } catch (error) {
       console.error(error);
@@ -129,7 +126,7 @@ const AdminRateCatcher = () => {
     } finally {
       setLoading(false);
     }
-  }, [exchangeRate, markupPercent]);
+  }, []);
 
   const runOrderScan = useCallback(async () => {
     setLoading(true);
@@ -161,13 +158,15 @@ const AdminRateCatcher = () => {
     }
   }, []);
 
+  // Trigger scan only after configuration is fully loaded from database
   useEffect(() => {
+    if (!configLoaded) return;
     if (activeTab === 'catalog') {
       runCatalogScan();
     } else {
       runOrderScan();
     }
-  }, [activeTab]);
+  }, [activeTab, configLoaded]);
 
   // Quick Action to update the service rate in Supabase
   const updateServiceRate = async (serviceId, newRate, serviceName) => {
@@ -187,12 +186,6 @@ const AdminRateCatcher = () => {
             : item
         )
       );
-
-      // Recalculate stats
-      setScanStats(prev => ({
-        ...prev,
-        mismatches: Math.max(0, prev.mismatches - 1)
-      }));
 
       toast.success(`Successfully updated rate for "${serviceName}" to ${newRate.toFixed(2)} GHS`);
     } catch (error) {
