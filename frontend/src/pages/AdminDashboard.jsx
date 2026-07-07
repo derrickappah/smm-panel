@@ -40,6 +40,7 @@ const AdminTerms = lazy(() => import('@/pages/admin/AdminTerms'));
 const AdminUpdates = lazy(() => import('@/pages/admin/AdminUpdates'));
 const AdminVideoTutorials = lazy(() => import('@/pages/admin/AdminVideoTutorials'));
 const AdminServiceNotifications = lazy(() => import('@/pages/admin/AdminServiceNotifications'));
+const AdminRateCatcher = lazy(() => import('@/pages/admin/AdminRateCatcher'));
 import AdminRewards from '@/pages/admin/AdminRewards';
 import AdminRewardSettings from '@/pages/admin/AdminRewardSettings';
 
@@ -95,7 +96,8 @@ const AdminDashboard = memo(({ user, onLogout }) => {
         'video-tutorials': 'video-tutorials',
         'notifications': 'notifications',
         'rewards': 'rewards',
-        'rewards-settings': 'rewards-settings'
+        'rewards-settings': 'rewards-settings',
+        'rate-catcher': 'rate-catcher'
       };
       return sectionMap[section] || 'dashboard';
     }
@@ -329,7 +331,8 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     oldsmm: 'OldSMM Integration',
     moolre: 'Moolre Transactions',
     rewards: 'Reward Claims',
-    'rewards-settings': 'Reward Settings'
+    'rewards-settings': 'Reward Settings',
+    'rate-catcher': 'Rate Catcher'
   };
 
   // Navigation items configuration
@@ -360,6 +363,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     { id: 'moolre', label: 'Moolre', icon: CreditCard },
     { id: 'rewards', label: 'Rewards', icon: Gift },
     { id: 'rewards-settings', label: 'Reward Settings', icon: Settings },
+    { id: 'rate-catcher', label: 'Rate Catcher', icon: Scale },
   ];
 
   // Show skeleton loader while initial data is loading
@@ -833,6 +837,13 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                 <TabsContent value="updates" className="lg:mt-0 w-full max-w-full">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminUpdates />
+                  </Suspense>
+                </TabsContent>
+
+                {/* Rate Catcher Section */}
+                <TabsContent value="rate-catcher" className="lg:mt-0 w-full max-w-full">
+                  <Suspense fallback={<ComponentLoader />}>
+                    <AdminRateCatcher />
                   </Suspense>
                 </TabsContent>
 
