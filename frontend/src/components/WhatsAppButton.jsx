@@ -9,7 +9,8 @@ const WhatsAppButton = ({ message, className = "" }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [position, setPosition] = useState(() => {
     // Always start in bottom-left corner (ignore saved position for now)
-    return { x: 20, y: window.innerHeight - 80 };
+    // Shifted higher up to avoid phone button being off-screen initially
+    return { x: 20, y: window.innerHeight - 160 };
   });
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [hasDragged, setHasDragged] = useState(false);
@@ -34,15 +35,16 @@ const WhatsAppButton = ({ message, className = "" }) => {
   // Update position when window resizes
   useEffect(() => {
     const handleResize = () => {
+      const maxY = window.innerHeight - (supportPhoneNumber ? 150 : 80);
       setPosition(prev => ({
         x: Math.min(prev.x, window.innerWidth - 80),
-        y: Math.min(prev.y, window.innerHeight - 80)
+        y: Math.min(prev.y, maxY)
       }));
     };
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [supportPhoneNumber]);
 
   const handleMouseDown = (e) => {
     // Start dragging when clicking anywhere on the container (but not on the image or svg)
@@ -83,7 +85,7 @@ const WhatsAppButton = ({ message, className = "" }) => {
 
       // Keep button within viewport bounds
       const maxX = window.innerWidth - 80;
-      const maxY = window.innerHeight - 80;
+      const maxY = window.innerHeight - (supportPhoneNumber ? 150 : 80);
 
       setPosition({
         x: Math.max(0, Math.min(newX, maxX)),
@@ -101,7 +103,7 @@ const WhatsAppButton = ({ message, className = "" }) => {
 
       // Keep button within viewport bounds
       const maxX = window.innerWidth - 80;
-      const maxY = window.innerHeight - 80;
+      const maxY = window.innerHeight - (supportPhoneNumber ? 150 : 80);
 
       setPosition({
         x: Math.max(0, Math.min(newX, maxX)),
