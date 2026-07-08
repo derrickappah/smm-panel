@@ -5,6 +5,7 @@ import { X, MessageCircle, Phone } from 'lucide-react';
 import HelpMenuOverlay from './HelpMenuOverlay';
 
 const WhatsAppButton = ({ message, className = "" }) => {
+  const { whatsappNumber, supportPhoneNumber } = usePaymentMethods();
   const buttonRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   const [position, setPosition] = useState(() => {
@@ -121,7 +122,6 @@ const WhatsAppButton = ({ message, className = "" }) => {
     setIsDragging(false);
   };
 
-  const { whatsappNumber, supportPhoneNumber } = usePaymentMethods();
   const [isTikTok, setIsTikTok] = useState(false);
 
   useEffect(() => {
