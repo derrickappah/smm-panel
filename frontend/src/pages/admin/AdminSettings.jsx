@@ -22,6 +22,7 @@ const AdminSettings = memo(() => {
     minDepositSettings: remoteMinDepositSettings,
     manualDepositDetails: remoteManualDepositDetails,
     whatsappNumber: remoteWhatsappNumber,
+    supportPhoneNumber: remoteSupportPhoneNumber,
     requireCaptcha: remoteRequireCaptcha,
     isLoading,
     refetch
@@ -31,6 +32,7 @@ const AdminSettings = memo(() => {
   const [minDepositSettings, setMinDepositSettings] = useState(remoteMinDepositSettings);
   const [manualDepositDetails, setManualDepositDetails] = useState(remoteManualDepositDetails);
   const [whatsappNumber, setWhatsappNumber] = useState(remoteWhatsappNumber);
+  const [supportPhoneNumber, setSupportPhoneNumber] = useState(remoteSupportPhoneNumber);
   const [requireCaptcha, setRequireCaptcha] = useState(remoteRequireCaptcha);
 
   useEffect(() => {
@@ -39,9 +41,10 @@ const AdminSettings = memo(() => {
       setMinDepositSettings(remoteMinDepositSettings);
       setManualDepositDetails(remoteManualDepositDetails);
       setWhatsappNumber(remoteWhatsappNumber);
+      setSupportPhoneNumber(remoteSupportPhoneNumber);
       setRequireCaptcha(remoteRequireCaptcha);
     }
-  }, [remotePaymentSettings, remoteMinDepositSettings, remoteManualDepositDetails, remoteWhatsappNumber, remoteRequireCaptcha, isLoading]);
+  }, [remotePaymentSettings, remoteMinDepositSettings, remoteManualDepositDetails, remoteWhatsappNumber, remoteSupportPhoneNumber, remoteRequireCaptcha, isLoading]);
 
   const togglePaymentMethod = useMutation({
     mutationFn: async ({ method, enabled }) => {
@@ -327,6 +330,41 @@ const AdminSettings = memo(() => {
     updateWhatsappNumber.mutate(whatsappNumber);
   }, [updateWhatsappNumber, whatsappNumber]);
 
+  const updateSupportPhoneNumber = useMutation({
+    mutationFn: async (number) => {
+      if (!number || !number.trim()) {
+        throw new Error('Support phone number is required');
+      }
+
+      const { error } = await supabase
+        .from('app_settings')
+        .upsert({
+          key: 'support_phone_number',
+          value: number.trim(),
+          description: 'Phone number for support voice calls'
+        }, {
+          onConflict: 'key'
+        });
+
+      if (error) throw error;
+      return number.trim();
+    },
+    onSuccess: (number) => {
+      setSupportPhoneNumber(number);
+      queryClient.invalidateQueries({ queryKey: ['admin', 'payment-settings'] });
+      queryClient.invalidateQueries({ queryKey: ['payment-methods'] });
+      queryClient.invalidateQueries({ queryKey: ['payment-settings'] });
+      toast.success('Support phone number updated successfully');
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to update support phone number');
+    },
+  });
+
+  const handleSaveSupportPhoneNumber = useCallback(() => {
+    updateSupportPhoneNumber.mutate(supportPhoneNumber);
+  }, [updateSupportPhoneNumber, supportPhoneNumber]);
+
   const updateRequireCaptcha = useMutation({
     mutationFn: async (enabled) => {
       const { error } = await supabase
@@ -595,8 +633,8 @@ const AdminSettings = memo(() => {
                   <MessageCircle className="w-5 h-5" />
                 </div>
                 <div>
-                  <CardTitle>Support Contact</CardTitle>
-                  <CardDescription>WhatsApp number for user support.</CardDescription>
+                  <CardTitle>Support Contacts</CardTitle>
+                  <CardDescription>WhatsApp and phone support numbers.</CardDescription>
                 </div>
               </div>
             </CardHeader>
@@ -617,8 +655,25 @@ const AdminSettings = memo(() => {
                   Format: 233... (No +)
                 </p>
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="support-phone-number">Support Phone Number</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-gray-400 text-sm">Now</span>
+                  <Input
+                    id="support-phone-number"
+                    value={supportPhoneNumber}
+                    onChange={(e) => setSupportPhoneNumber(e.target.value)}
+                    placeholder="233xxxxxxxxx"
+                    className="pl-12"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Format: 233... (No +)
+                </p>
+              </div>
             </CardContent>
-            <CardFooter className="bg-green-50/50 justify-end rounded-b-xl border-t p-4">
+            <CardFooter className="bg-green-50/50 flex flex-col gap-2 rounded-b-xl border-t p-4">
               <Button
                 onClick={handleSaveWhatsappNumber}
                 disabled={updateWhatsappNumber.isPending}
@@ -626,7 +681,16 @@ const AdminSettings = memo(() => {
                 className="w-full hover:bg-green-50 hover:text-green-700 border-green-200"
               >
                 <Save className="w-4 h-4 mr-2" />
-                Update Number
+                {updateWhatsappNumber.isPending ? 'Updating WhatsApp...' : 'Update WhatsApp Number'}
+              </Button>
+              <Button
+                onClick={handleSaveSupportPhoneNumber}
+                disabled={updateSupportPhoneNumber.isPending}
+                variant="outline"
+                className="w-full hover:bg-green-50 hover:text-green-700 border-green-200"
+              >
+                <Save className="w-4 h-4 mr-2" />
+                {updateSupportPhoneNumber.isPending ? 'Updating Phone...' : 'Update Phone Number'}
               </Button>
             </CardFooter>
           </Card>

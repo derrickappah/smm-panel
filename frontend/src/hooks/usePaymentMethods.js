@@ -28,6 +28,7 @@ export const DEFAULT_PAYMENT_SETTINGS = {
     instructions: ''
   },
   whatsappNumber: '',
+  supportPhoneNumber: '',
   requireCaptcha: true, // Default to true
   depositMethod: 'moolre_web' // Default method
 };
@@ -54,7 +55,8 @@ export const fetchPaymentSettingsFn = async () => {
       'manual_deposit_account_name',
       'manual_deposit_instructions',
       'whatsapp_number',
-      'require_captcha'
+      'require_captcha',
+      'support_phone_number'
     ]);
 
   if (error) {
@@ -117,6 +119,9 @@ export const fetchPaymentSettingsFn = async () => {
 
   // Parse WhatsApp
   settings.whatsappNumber = getString('whatsapp_number', DEFAULT_PAYMENT_SETTINGS.whatsappNumber);
+
+  // Parse Support Phone Number
+  settings.supportPhoneNumber = getString('support_phone_number', DEFAULT_PAYMENT_SETTINGS.supportPhoneNumber);
 
   // Parse CAPTCHA
   settings.requireCaptcha = getEnabled('require_captcha', DEFAULT_PAYMENT_SETTINGS.requireCaptcha);
@@ -204,6 +209,7 @@ export const usePaymentMethods = () => {
     minDepositSettings: data?.minDepositSettings || DEFAULT_PAYMENT_SETTINGS.minDepositSettings,
     manualDepositDetails: data?.manualDepositDetails || DEFAULT_PAYMENT_SETTINGS.manualDepositDetails,
     whatsappNumber: data?.whatsappNumber || DEFAULT_PAYMENT_SETTINGS.whatsappNumber,
+    supportPhoneNumber: data?.supportPhoneNumber || DEFAULT_PAYMENT_SETTINGS.supportPhoneNumber,
     requireCaptcha: data?.requireCaptcha ?? DEFAULT_PAYMENT_SETTINGS.requireCaptcha,
     isLoading,
     refetch: () => {

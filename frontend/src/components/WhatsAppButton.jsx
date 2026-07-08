@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePaymentMethods } from '@/hooks/usePaymentMethods';
-import { X, MessageCircle } from 'lucide-react';
+import { X, MessageCircle, Phone } from 'lucide-react';
 import HelpMenuOverlay from './HelpMenuOverlay';
 
 const WhatsAppButton = ({ message, className = "" }) => {
@@ -45,8 +45,8 @@ const WhatsAppButton = ({ message, className = "" }) => {
   }, []);
 
   const handleMouseDown = (e) => {
-    // Start dragging when clicking anywhere on the container (but not on the image)
-    if (!e.target.closest('img')) {
+    // Start dragging when clicking anywhere on the container (but not on the image or svg)
+    if (!e.target.closest('img') && !e.target.closest('svg')) {
       setIsDragging(true);
       setHasDragged(false);
       setHasBeenTapped(true); // Stop pulsing when dragged
@@ -60,8 +60,8 @@ const WhatsAppButton = ({ message, className = "" }) => {
   };
 
   const handleTouchStart = (e) => {
-    // Start dragging when touching anywhere on the container (but not on the image)
-    if (!e.target.closest('img')) {
+    // Start dragging when touching anywhere on the container (but not on the image or svg)
+    if (!e.target.closest('img') && !e.target.closest('svg')) {
       setIsDragging(true);
       setHasDragged(false);
       setHasBeenTapped(true); // Stop pulsing when dragged
@@ -119,7 +119,7 @@ const WhatsAppButton = ({ message, className = "" }) => {
     setIsDragging(false);
   };
 
-  const { whatsappNumber } = usePaymentMethods();
+  const { whatsappNumber, supportPhoneNumber } = usePaymentMethods();
   const [isTikTok, setIsTikTok] = useState(false);
 
   useEffect(() => {
@@ -133,6 +133,12 @@ const WhatsAppButton = ({ message, className = "" }) => {
     const cleanNumber = number.replace(/\D/g, '');
     const finalNumber = cleanNumber.startsWith('0') ? cleanNumber.substring(1) : cleanNumber;
     return `https://wa.me/233${finalNumber}`;
+  };
+
+  const getCallUrl = () => {
+    const number = supportPhoneNumber || "";
+    const cleanNumber = number.replace(/\D/g, '');
+    return `tel:${cleanNumber}`;
   };
 
   // Add global mouse and touch event listeners when dragging
@@ -196,7 +202,6 @@ const WhatsAppButton = ({ message, className = "" }) => {
 
       <div
         ref={buttonRef}
-        className={!hasBeenTapped ? 'animate-pulse' : ''}
         style={{
           position: 'fixed',
           left: `${position.x}px`,
@@ -204,8 +209,6 @@ const WhatsAppButton = ({ message, className = "" }) => {
           zIndex: 100,
           cursor: isDragging ? 'grabbing' : 'grab',
           touchAction: 'none',
-          animation: !hasBeenTapped ? 'pulse-glow 2s ease-in-out infinite' : 'none',
-          borderRadius: '50%',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -249,7 +252,8 @@ const WhatsAppButton = ({ message, className = "" }) => {
           style={{
             cursor: isDragging ? 'grabbing' : 'pointer',
             width: '56px',
-            height: '56px'
+            height: '56px',
+            animation: !hasBeenTapped ? 'pulse-glow 2s ease-in-out infinite' : 'none'
           }}
         >
           <img
@@ -264,6 +268,27 @@ const WhatsAppButton = ({ message, className = "" }) => {
             <span className="text-[10px] leading-none">!</span>
           </div>
         </button>
+
+        {supportPhoneNumber && (
+          <button
+            onClick={(e) => {
+              if (!hasDragged) {
+                setHasBeenTapped(true);
+                window.open(getCallUrl(), '_self');
+              }
+            }}
+            className="bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 relative flex items-center justify-center"
+            aria-label="Call Support"
+            title="Call Support"
+            style={{
+              cursor: isDragging ? 'grabbing' : 'pointer',
+              width: '56px',
+              height: '56px'
+            }}
+          >
+            <Phone className="w-5 h-5 select-none pointer-events-none" />
+          </button>
+        )}
       </div>
     </>
   );
