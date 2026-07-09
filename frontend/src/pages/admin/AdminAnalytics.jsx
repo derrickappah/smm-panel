@@ -242,66 +242,50 @@ export default function AdminAnalytics() {
         setPage(1);
     };
 
-    // Export CSV
+    // Export CSV (Server-side action)
     const handleExportCSV = async (exportSegment = activeSegment) => {
+        const toastId = toast.loading(`Preparing export for ${SEGMENTS[exportSegment]?.label || 'segment'}...`);
         try {
             const { data: { session } } = await supabase.auth.getSession();
-            if (!session) return;
+            if (!session) {
+                toast.dismiss(toastId);
+                return;
+            }
 
-            // Fetch ALL matching users in this segment (limit 10000 for csv export)
-            const res = await fetch('/api/admin/user-segmentation', {
+            // Fetch gzipped CSV directly from server action endpoint
+            const res = await fetch('/api/admin/export-users', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${session.access_token}`
                 },
                 body: JSON.stringify({
-                    action: 'list',
                     segment: exportSegment,
-                    search: searchTerm,
-                    limit: 10000,
-                    offset: 0,
-                    sortField,
-                    sortOrder
+                    search: searchTerm
                 })
             });
 
-            if (!res.ok) throw new Error('Failed to fetch export data');
-            const data = await res.json();
-            if (!data.success) throw new Error(data.error);
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.error || 'Server error occurred during export');
+            }
 
-            const headers = ['Name', 'Email', 'Phone', 'Role', 'Balance (₵)', 'Spend (₵)', 'Deposits', 'Orders', 'Joined Date', 'Last Active'];
-            const rows = data.users.map(u => [
-                u.name || 'N/A',
-                u.email || 'N/A',
-                u.phone_number || 'N/A',
-                u.role || 'user',
-                u.balance?.toFixed(2) || '0.00',
-                u.total_spend?.toFixed(2) || '0.00',
-                u.approved_deposits_count || 0,
-                u.total_orders_count || 0,
-                u.created_at ? new Date(u.created_at).toLocaleDateString() : 'N/A',
-                u.last_active ? new Date(u.last_active).toLocaleString() : 'Never'
-            ]);
-
-            const csvContent = [
-                headers.join(','),
-                ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-            ].join('\n');
-
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            // Receive the gzipped CSV blob (transparently decompressed by the browser)
+            const blob = await res.blob();
             const link = document.createElement('a');
             const url = URL.createObjectURL(blob);
             link.setAttribute('href', url);
-            link.setAttribute('download', `segment_${exportSegment}_${new Date().toISOString().split('T')[0]}.csv`);
+            link.setAttribute('download', `users_${exportSegment}_export_${new Date().toISOString().split('T')[0]}.csv`);
             link.style.visibility = 'hidden';
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            toast.success('Segment exported successfully');
+            URL.revokeObjectURL(url);
+            
+            toast.success('Export completed successfully', { id: toastId });
         } catch (err) {
             console.error('CSV export failed:', err);
-            toast.error('Failed to export segment data');
+            toast.error(err.message || 'Failed to export segment data', { id: toastId });
         }
     };
 
