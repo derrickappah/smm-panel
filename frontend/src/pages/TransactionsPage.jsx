@@ -477,12 +477,6 @@ const TransactionsPage = ({ user, onLogout }) => {
           color: 'bg-red-100 text-red-700 border-red-200',
           icon: XCircle
         };
-      case 'expired':
-        return {
-          label: 'Expired',
-          color: 'bg-orange-100 text-orange-700 border-orange-200',
-          icon: Clock
-        };
       default:
         return {
           label: status || 'Unknown',

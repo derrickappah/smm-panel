@@ -100,22 +100,22 @@ export default async function handler(req, res) {
     const { error: updateError } = await serviceClient
       .from('transactions')
       .update({
-        status: 'expired'
+        status: 'rejected'
       })
       .eq('id', transactionId)
       .eq('status', 'pending'); // Final guard clause
 
     if (updateError) {
-      console.error('Error securely expiring transaction:', updateError);
+      console.error('Error securely rejecting transaction:', updateError);
       return res.status(500).json({ error: 'Failed to update transaction status safely' });
     }
 
     // Log the event
     await serviceClient.rpc('log_system_event', {
-      p_type: 'deposit_timeout_expired',
+      p_type: 'deposit_timeout_rejected',
       p_severity: 'info',
       p_source: 'api/reject-pending-deposit',
-      p_description: `Deposit ${transactionId} expired due to timeout. Reason: ${reason || 'Unknown'}`,
+      p_description: `Deposit ${transactionId} rejected due to timeout. Reason: ${reason || 'Unknown'}`,
       p_metadata: {
         transaction_id: transactionId,
         user_id: user.id,
@@ -123,12 +123,11 @@ export default async function handler(req, res) {
       },
       p_entity_type: 'transaction',
       p_entity_id: transactionId
-    }).catch(e => console.warn('Failed to log deposit_timeout_expired event', e));
+    }).catch(e => console.warn('Failed to log deposit_timeout_rejected event', e));
 
     return res.status(200).json({
       success: true,
-      message: 'Transaction successfully marked as expired',
-      new_status: 'expired'
+      message: 'Transaction successfully marked as rejected'
     });
 
   } catch (error) {

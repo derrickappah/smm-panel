@@ -470,84 +470,25 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
     }
   }, [onRefresh, manualRefDialog.open, queryClient, refetch]);
 
-  const handleVerifyExpiredMoolreDeposit = useCallback(async (deposit, manualRef = null) => {
-    setVerifyingDeposit(deposit.id);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        throw new Error('No session token available. Please log in again.');
-      }
-
-      // If we don't have manualRef and there's no stored moolre_id, open dialog
-      if (!manualRef && !deposit.moolre_id) {
-        setManualRefDialog({
-          open: true,
-          deposit,
-          error: 'Moolre ID is required to verify an expired deposit.',
-          paymentMethod: 'moolre_expired'
-        });
-        setVerifyingDeposit(null);
-        return;
-      }
-
-      const moolreIdToUse = manualRef || deposit.moolre_id;
-
-      const response = await fetch('/api/admin/approve-expired-deposit', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({
-          transactionId: deposit.id,
-          moolreId: moolreIdToUse
-        })
-      });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed to verify and approve expired deposit');
-
-      toast.success(data.message || 'Deposit verified and approved successfully');
-
-      // Close dialog if open
-      setManualRefDialog({ open: false, deposit: null, error: null, paymentMethod: null });
-      setManualReference('');
-
-      // Invalidate and refetch to ensure data is in sync
-      queryClient.invalidateQueries({ queryKey: ['admin', 'deposits'] });
-      queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
-      refetch();
-      if (onRefresh) onRefresh();
-    } catch (error) {
-      console.error('Failed to verify expired deposit:', error);
-      toast.error(error.message || 'Failed to verify deposit');
-    } finally {
-      setVerifyingDeposit(null);
-    }
-  }, [onRefresh, queryClient, refetch]);
-
   const handleManualReferenceSubmit = useCallback(async () => {
     if (!manualRefDialog.deposit || !manualReference.trim()) {
-      const isMoolreMethod = manualRefDialog.paymentMethod === 'moolre' || manualRefDialog.paymentMethod === 'moolre_expired';
-      const methodName = isMoolreMethod ? 'Moolre' :
+      const methodName = manualRefDialog.paymentMethod === 'moolre' ? 'Moolre' :
         manualRefDialog.paymentMethod === 'moolre_web' ? 'Moolre Web' : 'Paystack';
-      const fieldName = (isMoolreMethod || manualRefDialog.paymentMethod === 'moolre_web')
+      const fieldName = (manualRefDialog.paymentMethod === 'moolre' || manualRefDialog.paymentMethod === 'moolre_web')
         ? 'Moolre ID' : 'reference';
       toast.error(`Please enter a ${methodName} ${fieldName}`);
       return;
     }
 
     const paymentMethod = manualRefDialog.paymentMethod || 'paystack';
-    if (paymentMethod === 'moolre_expired') {
-      await handleVerifyExpiredMoolreDeposit(manualRefDialog.deposit, manualReference.trim());
-    } else if (paymentMethod === 'moolre') {
+    if (paymentMethod === 'moolre') {
       await handleVerifyMoolreDeposit(manualRefDialog.deposit, manualReference.trim());
     } else if (paymentMethod === 'moolre_web') {
       await handleVerifyMoolreWebDeposit(manualRefDialog.deposit, manualReference.trim());
     } else {
       await handleVerifyPaystackDeposit(manualRefDialog.deposit, manualReference.trim());
     }
-  }, [manualRefDialog.deposit, manualRefDialog.paymentMethod, manualReference, handleVerifyPaystackDeposit, handleVerifyMoolreDeposit, handleVerifyMoolreWebDeposit, handleVerifyExpiredMoolreDeposit]);
+  }, [manualRefDialog.deposit, manualRefDialog.paymentMethod, manualReference, handleVerifyPaystackDeposit, handleVerifyMoolreDeposit, handleVerifyMoolreWebDeposit]);
 
   const handleBanUserClick = useCallback((deposit) => {
     setBanUserDialog({
@@ -658,8 +599,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
         <div className="col-span-1.5">
           <span className={`px-3 py-1.5 rounded-full text-xs font-medium ${deposit.status === 'approved' ? 'bg-green-100 text-green-700' :
             deposit.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-              deposit.status === 'expired' ? 'bg-orange-100 text-orange-700' :
-                'bg-red-100 text-red-700'
+              'bg-red-100 text-red-700'
             }`}>
             {deposit.status}
           </span>
@@ -755,25 +695,6 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
                 </Button>
               </div>
             </div>
-          ) : deposit.status === 'expired' ? (
-            <div className="flex flex-col gap-2">
-              {(isMoolre || isMoolreWeb) ? (
-                <Button
-                  onClick={() => handleVerifyExpiredMoolreDeposit(deposit)}
-                  disabled={verifyingDeposit === deposit.id}
-                  variant="outline"
-                  size="sm"
-                  className="text-xs min-h-[36px] border-orange-500 text-orange-600 hover:bg-orange-50"
-                >
-                  {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify & Approve'}
-                </Button>
-              ) : (
-                <span className="text-xs text-orange-600 flex items-center gap-1">
-                  <XCircle className="w-4 h-4" />
-                  Expired
-                </span>
-              )}
-            </div>
           ) : isManual && deposit.payment_proof_url ? (
             <Button
               onClick={() => setPaymentProofDialog({ open: true, imageUrl: deposit.payment_proof_url, deposit })}
@@ -832,8 +753,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
             <p className="font-semibold text-gray-900 text-lg">₵{deposit.amount?.toFixed(2) || '0.00'}</p>
             <span className={`inline-block mt-1 px-2.5 py-1 rounded-full text-xs font-medium ${deposit.status === 'approved' ? 'bg-green-100 text-green-700' :
               deposit.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                deposit.status === 'expired' ? 'bg-orange-100 text-orange-700' :
-                  'bg-red-100 text-red-700'
+                'bg-red-100 text-red-700'
               }`}>
               {deposit.status}
             </span>
@@ -933,27 +853,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
             </div>
           </div>
         )}
-        {deposit.status === 'expired' && (
-          <div className="pt-3 border-t border-gray-200 space-y-2">
-            {(isMoolre || isMoolreWeb) ? (
-              <Button
-                onClick={() => handleVerifyExpiredMoolreDeposit(deposit)}
-                disabled={verifyingDeposit === deposit.id}
-                variant="outline"
-                size="sm"
-                className="w-full border-orange-500 text-orange-600 hover:bg-orange-50 min-h-[44px]"
-              >
-                {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify & Approve'}
-              </Button>
-            ) : (
-              <span className="text-xs text-orange-600 flex items-center gap-1">
-                <XCircle className="w-4 h-4" />
-                Expired
-              </span>
-            )}
-          </div>
-        )}
-        {isManual && deposit.payment_proof_url && deposit.status !== 'pending' && deposit.status !== 'expired' && (
+        {isManual && deposit.payment_proof_url && deposit.status !== 'pending' && (
           <div className="pt-3 border-t border-gray-200">
             <Button
               onClick={() => setPaymentProofDialog({ open: true, imageUrl: deposit.payment_proof_url, deposit })}
@@ -968,7 +868,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
         )}
       </div>
     );
-  }, [handleApproveDeposit, handleRejectDeposit, handleApproveManualDeposit, handleVerifyPaystackDeposit, handleVerifyMoolreDeposit, handleVerifyMoolreWebDeposit, handleVerifyExpiredMoolreDeposit, handleBanUserClick, approvingDeposit, verifyingDeposit, formatPaymentMethod, getPaymentMethodColors]);
+  }, [handleApproveDeposit, handleRejectDeposit, handleApproveManualDeposit, handleVerifyPaystackDeposit, handleVerifyMoolreDeposit, handleVerifyMoolreWebDeposit, handleBanUserClick, approvingDeposit, verifyingDeposit, formatPaymentMethod, getPaymentMethodColors]);
 
   if (isLoading) {
     return (
@@ -1042,7 +942,6 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
                 <SelectItem value="pending">Pending</SelectItem>
                 <SelectItem value="approved">Approved</SelectItem>
                 <SelectItem value="rejected">Rejected</SelectItem>
-                <SelectItem value="expired">Expired</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -1128,7 +1027,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
               <AlertCircle className="w-5 h-5 text-yellow-600" />
               Manual {(() => {
                 const method = manualRefDialog.paymentMethod || 'paystack';
-                if (method === 'moolre' || method === 'moolre_expired') return 'Moolre';
+                if (method === 'moolre') return 'Moolre';
                 if (method === 'moolre_web') return 'Moolre Web';
                 return 'Paystack';
               })()} Reference Required
@@ -1136,13 +1035,13 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
             <DialogDescription>
               The system couldn't automatically find the {(() => {
                 const method = manualRefDialog.paymentMethod || 'paystack';
-                if (method === 'moolre' || method === 'moolre_expired') return 'Moolre';
+                if (method === 'moolre') return 'Moolre';
                 if (method === 'moolre_web') return 'Moolre Web';
                 return 'Paystack';
               })()} reference for this transaction.
               Please enter the {(() => {
                 const method = manualRefDialog.paymentMethod || 'paystack';
-                if (method === 'moolre' || method === 'moolre_expired') return 'Moolre';
+                if (method === 'moolre') return 'Moolre';
                 if (method === 'moolre_web') return 'Moolre Web';
                 return 'Paystack';
               })()} reference manually to verify the deposit.
@@ -1161,7 +1060,8 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
                 <label htmlFor="manual-ref" className="text-sm font-medium">
                   {(() => {
                     const method = manualRefDialog.paymentMethod || 'paystack';
-                    if (method === 'moolre' || method === 'moolre_expired') return 'Moolre ID';
+                    if (method === 'moolre') return 'Moolre ID';
+                    if (method === 'moolre_web') return 'Moolre ID';
                     if (method === 'moolre_web') return 'Moolre Web Reference';
                     return 'Paystack Reference';
                   })()}
@@ -1170,7 +1070,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
                   id="manual-ref"
                   placeholder={(() => {
                     const method = manualRefDialog.paymentMethod || 'paystack';
-                    if (method === 'moolre' || method === 'moolre_expired' || method === 'moolre_web') return 'e.g., MOOLRE_WEB_abc123_1234567890';
+                    if (method === 'moolre' || method === 'moolre_web') return 'e.g., MOOLRE_WEB_abc123_1234567890';
                     return 'e.g., ref_abc123xyz';
                   })()}
                   value={manualReference}
