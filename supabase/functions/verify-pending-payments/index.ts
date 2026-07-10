@@ -14,16 +14,16 @@ Deno.serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
 
   try {
-    const { data: transactions, error: fetchErr } = await supabase.from("transactions").select("*").eq("status", "pending").in("deposit_method", ["paystack", "korapay", "moolre"]).order("created_at", { ascending: false });
+    const { data: transactions, error: fetchErr } = await supabase.from("transactions").select("*").eq("status", "pending").in("deposit_method", ["paystack", "korapay", "moolre", "moolre_web"]).order("created_at", { ascending: false });
     if (fetchErr) throw fetchErr;
 
-    const results = { processed: 0, approved: 0, rejected: 0, errors: [] };
+    const results = { processed: 0, approved: 0, rejected: 0, expired: 0, errors: [] };
     for (const tx of transactions || []) {
       results.processed++;
       try {
         if (tx.deposit_method === "paystack") await verifyPaystack(tx, supabase, results);
         else if (tx.deposit_method === "korapay") await verifyKorapay(tx, supabase, results);
-        else if (tx.deposit_method === "moolre") await verifyMoolre(tx, supabase, results);
+        else if (tx.deposit_method === "moolre" || tx.deposit_method === "moolre_web") await verifyMoolre(tx, supabase, results);
       } catch (e) {
         results.errors.push({ tx_id: tx.id, error: e.message });
       }
@@ -60,13 +60,19 @@ async function verifyKorapay(tx, supabase, results) {
 }
 
 async function verifyMoolre(tx, supabase, results) {
-  const ref = tx.moolre_reference;
-  if (!ref) return;
-  const params = new URLSearchParams({ endpoint: "transaction-status", apiuser: Deno.env.get("MOOLRE_API_USER") ?? "", apipubkey: Deno.env.get("MOOLRE_API_PUBKEY") ?? "", externalref: ref });
-  const resp = await fetch(`https://api.moolre.com/v1/ext/request?${params.toString()}`);
-  const data = resp.ok ? await resp.json() : null;
-  if (data?.txstatus == "1") {
-    const { data: res } = await supabase.rpc("approve_deposit_transaction_universal_v2", { p_transaction_id: tx.id, p_payment_method: "moolre", p_payment_status: "success", p_payment_reference: ref, p_actual_amount: data.amount });
-    if (res?.[0]?.success) results.approved++;
+  const createdAt = new Date(tx.created_at);
+  const ageInMinutes = (Date.now() - createdAt.getTime()) / (1000 * 60);
+  
+  if (ageInMinutes > 15) {
+    const { error } = await supabase
+      .from("transactions")
+      .update({ status: "expired" })
+      .eq("id", tx.id)
+      .eq("status", "pending");
+    if (!error) {
+      results.expired++;
+    } else {
+      throw error;
+    }
   }
 }
