@@ -212,3 +212,41 @@ BEGIN
   OFFSET p_offset;
 END;
 $$ LANGUAGE plpgsql;
+
+-- 3. Function wrapper to retrieve users for a segment as a single JSON block (bypasses PostgREST 1000-row limit)
+CREATE OR REPLACE FUNCTION public.get_users_by_segment_json(
+  p_segment TEXT,
+  p_search TEXT DEFAULT '',
+  p_limit INT DEFAULT 200000,
+  p_offset INT DEFAULT 0,
+  p_sort_field TEXT DEFAULT 'created_at',
+  p_sort_order TEXT DEFAULT 'desc'
+)
+RETURNS JSON
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_result JSON;
+BEGIN
+  -- Verify caller is admin
+  IF NOT EXISTS (
+    SELECT 1 FROM public.profiles p
+    WHERE p.id = auth.uid() AND p.role = 'admin'
+  ) THEN
+    RAISE EXCEPTION 'Unauthorized: Admin access required.';
+  END IF;
+
+  SELECT json_agg(t) INTO v_result FROM (
+    SELECT * FROM public.get_users_by_segment(
+      p_segment,
+      p_search,
+      p_limit,
+      p_offset,
+      p_sort_field,
+      p_sort_order
+    )
+  ) t;
+
+  RETURN COALESCE(v_result, '[]'::json);
+END;
+$$ LANGUAGE plpgsql;

@@ -18,7 +18,7 @@ export default async function handler(req, res) {
         const { segment = 'all', search = '' } = req.body;
 
         // Fetch ALL users in this segment (limit 200,000 for full export)
-        const { data, error } = await supabase.rpc('get_users_by_segment', {
+        const { data, error } = await supabase.rpc('get_users_by_segment_json', {
             p_segment: segment,
             p_search: search,
             p_limit: 200000,
