@@ -164,3 +164,7 @@ code {
         animation: float 6s ease-in-out infinite;
     }
 }
+
+.cache-buster-rule-force-new-hash-v1 {
+    color: rgb(249, 115, 22);
+}
