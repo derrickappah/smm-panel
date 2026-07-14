@@ -258,15 +258,15 @@ export default async function handler(req, res) {
       });
     }
 
-    // Check transaction time (strict: within 15 minutes to prevent matching wrong transactions)
+    // Check transaction time (strict: within 35 minutes to prevent matching wrong transactions)
     const moolreTimestamp = moolreData.data?.timestamp || moolreData.data?.created_at || moolreData.data?.date;
     if (moolreTimestamp) {
       const moolreDate = new Date(moolreTimestamp);
       const transactionDate = new Date(transaction.created_at);
       const timeDiffMinutes = Math.abs(moolreDate - transactionDate) / (1000 * 60);
       
-      // Strict: Only allow 15 minutes difference to prevent matching wrong transactions
-      if (timeDiffMinutes > 15) {
+      // Strict: Only allow 35 minutes difference to prevent matching wrong transactions
+      if (timeDiffMinutes > 35) {
         console.error('[MANUAL-VERIFY-MOOLRE] Time mismatch:', {
           transactionId: transaction.id,
           transactionTime: transactionDate.toISOString(),
@@ -276,7 +276,7 @@ export default async function handler(req, res) {
         });
         return res.status(400).json({
           success: false,
-          error: `Transaction time mismatch: Moolre transaction time does not match deposit creation time (difference: ${timeDiffMinutes.toFixed(2)} minutes, maximum allowed: 15 minutes)`,
+          error: `Transaction time mismatch: Moolre transaction time does not match deposit creation time (difference: ${timeDiffMinutes.toFixed(2)} minutes, maximum allowed: 35 minutes)`,
           transactionTime: transactionDate.toISOString(),
           moolreTime: moolreDate.toISOString(),
           timeDiffMinutes: timeDiffMinutes.toFixed(2),
@@ -322,9 +322,9 @@ export default async function handler(req, res) {
         });
       }
     } else if (!transaction.moolre_reference && !moolreData.data?.externalref) {
-      // Both references missing - rely on amount and strict time validation (15 minutes)
-      // This is acceptable if amount matches exactly and time is within 15 minutes
-      console.warn('[MANUAL-VERIFY-MOOLRE] Both transaction and Moolre response missing reference - relying on amount and strict time validation (15 minutes)');
+      // Both references missing - rely on amount and strict time validation (35 minutes)
+      // This is acceptable if amount matches exactly and time is within 35 minutes
+      console.warn('[MANUAL-VERIFY-MOOLRE] Both transaction and Moolre response missing reference - relying on amount and strict time validation (35 minutes)');
       // Time validation already done above, so if we reach here, time is valid
     } else if (!transaction.moolre_reference && moolreData.data?.externalref) {
       // Transaction missing reference but Moolre has it - store it for future use

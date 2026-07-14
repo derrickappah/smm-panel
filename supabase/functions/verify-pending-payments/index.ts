@@ -63,7 +63,7 @@ async function verifyMoolre(tx, supabase, results) {
   const createdAt = new Date(tx.created_at);
   const ageInMinutes = (Date.now() - createdAt.getTime()) / (1000 * 60);
   
-  if (ageInMinutes > 15) {
+  if (ageInMinutes > 30) {
     const { error } = await supabase
       .from("transactions")
       .update({ status: "expired" })
