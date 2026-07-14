@@ -478,8 +478,21 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
         throw new Error('No session token available. Please log in again.');
       }
 
-      // If we don't have manualRef and there is neither a stored moolre_id nor a moolre_reference, open dialog
+      // Fetch fresh transaction details from DB to bypass any cached state or missing fields in UI
+      let currentDeposit = deposit;
       if (!manualRef && !deposit.moolre_id && !deposit.moolre_reference) {
+        const { data: freshTx } = await supabase
+          .from('transactions')
+          .select('moolre_id, moolre_reference')
+          .eq('id', deposit.id)
+          .maybeSingle();
+        if (freshTx) {
+          currentDeposit = { ...deposit, ...freshTx };
+        }
+      }
+
+      // If we don't have manualRef and there is neither a stored moolre_id nor a moolre_reference, open dialog
+      if (!manualRef && !currentDeposit.moolre_id && !currentDeposit.moolre_reference) {
         setManualRefDialog({
           open: true,
           deposit,
@@ -490,7 +503,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
         return;
       }
 
-      const moolreIdToUse = manualRef || deposit.moolre_id || deposit.moolre_reference;
+      const moolreIdToUse = manualRef || currentDeposit.moolre_id || currentDeposit.moolre_reference;
 
       const response = await fetch('/api/admin/approve-expired-deposit', {
         method: 'POST',
