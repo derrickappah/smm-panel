@@ -372,11 +372,14 @@ export default async function handler(req, res) {
       } else {
         // Use atomic function to approve transaction and update balance atomically
         console.log('[MANUAL-VERIFY-MOOLRE-WEB] Using atomic function to approve transaction and update balance');
-        const { data: rpcResult, error: rpcError } = await supabase.rpc('approve_deposit_transaction_universal', {
+        const { data: rpcResult, error: rpcError } = await supabase.rpc('approve_deposit_transaction_universal_v2', {
           p_transaction_id: transaction.id,
           p_payment_method: 'moolre_web',
           p_payment_status: 'success',
-          p_payment_reference: moolreId
+          p_payment_reference: moolreId,
+          p_actual_amount: moolreAmount,
+          p_provider_event_id: moolreId,
+          p_admin_id: adminUser.id
         });
 
         if (rpcError) {

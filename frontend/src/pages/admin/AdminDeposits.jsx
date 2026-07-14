@@ -478,19 +478,19 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
         throw new Error('No session token available. Please log in again.');
       }
 
-      // If we don't have manualRef and there's no stored moolre_id, open dialog
-      if (!manualRef && !deposit.moolre_id) {
+      // If we don't have manualRef and there's no stored moolre_id or moolre_reference, open dialog
+      if (!manualRef && !deposit.moolre_id && !deposit.moolre_reference) {
         setManualRefDialog({
           open: true,
           deposit,
-          error: 'Moolre ID is required to verify an expired deposit.',
+          error: 'Moolre ID or reference is required to verify an expired deposit.',
           paymentMethod: 'moolre_expired'
         });
         setVerifyingDeposit(null);
         return;
       }
 
-      const moolreIdToUse = manualRef || deposit.moolre_id;
+      const moolreIdToUse = manualRef || deposit.moolre_id || deposit.moolre_reference;
 
       const response = await fetch('/api/admin/approve-expired-deposit', {
         method: 'POST',

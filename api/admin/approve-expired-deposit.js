@@ -62,6 +62,14 @@ export default async function handler(req, res) {
       });
     }
 
+    // Resolve Moolre ID and ID type (1 = external reference, 2 = Moolre generated ID)
+    let idType = 2; // Default to Moolre Generated ID
+    let moolreIdValue = moolreId;
+
+    if (moolreId.startsWith('MOOLRE_') || moolreId.startsWith('MOOLRE_WEB_')) {
+      idType = 1;
+    }
+
     // 3. Verify Moolre API credentials
     const MOOLRE_API_USER = process.env.MOOLRE_API_USER;
     const MOOLRE_API_PUBKEY = process.env.MOOLRE_API_PUBKEY;
@@ -71,7 +79,7 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Moolre credentials not configured on the server' });
     }
 
-    console.log(`[APPROVE-EXPIRED-DEPOSIT] Verifying transaction ${transactionId} against Moolre ID: ${moolreId}`);
+    console.log(`[APPROVE-EXPIRED-DEPOSIT] Verifying transaction ${transactionId} against Moolre ID/Ref: ${moolreIdValue} (idtype: ${idType})`);
 
     // 4. Verify transaction exists in Moolre merchant statement/API
     const moolreResponse = await fetch('https://api.moolre.com/open/transact/status', {
@@ -83,8 +91,8 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         type: 1,
-        idtype: 2, // 2 = Moolre Generated ID
-        id: moolreId,
+        idtype: idType,
+        id: moolreIdValue,
         accountnumber: MOOLRE_ACCOUNT_NUMBER
       })
     });
@@ -105,9 +113,15 @@ export default async function handler(req, res) {
 
     // 5. Verify the Tx ID matches
     const moolreTxId = String(verifiedTx.id || verifiedTx.transactionid || verifiedTx.transaction_id || '');
-    if (moolreTxId !== String(moolreId)) {
+    const finalMoolreId = idType === 2 ? moolreIdValue : moolreTxId;
+
+    if (!finalMoolreId) {
+      return res.status(400).json({ error: 'Could not resolve Moolre ID from response' });
+    }
+
+    if (idType === 2 && moolreTxId && moolreTxId !== String(moolreIdValue)) {
       return res.status(400).json({
-        error: `Security verification failed: Moolre transaction ID mismatch. Expected ${moolreId}, got ${moolreTxId}`
+        error: `Security verification failed: Moolre transaction ID mismatch. Expected ${moolreIdValue}, got ${moolreTxId}`
       });
     }
 
@@ -149,7 +163,7 @@ export default async function handler(req, res) {
       .from('transactions')
       .select('id, user_id, amount, status')
       .eq('status', 'approved')
-      .or(`moolre_id.eq.${moolreId},provider_event_id.eq.${moolreId}`);
+      .or(`moolre_id.eq.${finalMoolreId},provider_event_id.eq.${finalMoolreId}`);
 
     if (dupError) {
       console.error('[APPROVE-EXPIRED-DEPOSIT] Duplicate check error:', dupError);
@@ -168,9 +182,9 @@ export default async function handler(req, res) {
       p_transaction_id: transactionId,
       p_payment_method: method,
       p_payment_status: 'success',
-      p_payment_reference: verifiedTx.externalref || transaction.moolre_reference || moolreId,
+      p_payment_reference: verifiedTx.externalref || transaction.moolre_reference || finalMoolreId,
       p_actual_amount: moolreAmount,
-      p_provider_event_id: moolreId,
+      p_provider_event_id: finalMoolreId,
       p_admin_id: adminUser.id
     });
 
@@ -189,16 +203,24 @@ export default async function handler(req, res) {
       });
     }
 
+    // Save the actual Moolre ID to the transaction in the database
+    if (finalMoolreId) {
+      await supabase
+        .from('transactions')
+        .update({ moolre_id: finalMoolreId })
+        .eq('id', transactionId);
+    }
+
     // 10. Log the admin action
     await logAdminAction({
       user_id: adminUser.id,
       action_type: 'admin_approved_expired_deposit',
       entity_type: 'transaction',
       entity_id: transactionId,
-      description: `Admin approved expired deposit transaction ${transactionId} after verifying Moolre payment ${moolreId} for ₵${moolreAmount.toFixed(2)}.`,
+      description: `Admin approved expired deposit transaction ${transactionId} after verifying Moolre payment ${finalMoolreId} for ₵${moolreAmount.toFixed(2)}.`,
       metadata: {
         transaction_id: transactionId,
-        moolre_id: moolreId,
+        moolre_id: finalMoolreId,
         amount: moolreAmount,
         old_status: approvalResult.old_status,
         new_status: approvalResult.new_status,
