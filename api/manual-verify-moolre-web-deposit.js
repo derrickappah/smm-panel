@@ -164,24 +164,17 @@ export default async function handler(req, res) {
       });
     }
 
-    // Security: Require moolre_id to be stored in transaction, or if manual reference provided,
-    // it must match the transaction's moolre_reference
-    if (!transaction.moolre_id && !reference) {
-      return res.status(400).json({
-        error: 'No Moolre ID found for this transaction. The transaction must have a stored Moolre ID or you must provide a valid Moolre ID.',
-        transactionId: transaction.id
-      });
-    }
-
-    // If transaction has moolre_id stored, ONLY use that (most secure)
-    // If not, allow manual reference but we'll validate it strictly
-    let moolreId;
+    // Determine which ID type and value to use for verification
+    let idType = 2; // 2 = Moolre Generated ID
+    let moolreIdValue = null;
     let isManualReference = false;
-    
+
     if (transaction.moolre_id) {
-      // Use stored Moolre ID - most secure
-      moolreId = transaction.moolre_id;
-      // If a reference was also provided, verify it matches
+      // 1. Use stored Moolre ID (idtype 2) - most secure
+      idType = 2;
+      moolreIdValue = transaction.moolre_id;
+      
+      // If a reference was also manually provided, verify it matches
       if (reference && reference !== transaction.moolre_id) {
         return res.status(400).json({
           error: 'The provided Moolre ID does not match the stored Moolre ID for this transaction.',
@@ -190,18 +183,30 @@ export default async function handler(req, res) {
           providedMoolreId: reference
         });
       }
-    } else {
-      // Manual reference provided - will validate after API call
-      moolreId = reference;
+    } else if (reference) {
+      // 2. Manual reference was provided by admin - check with idtype 2
+      idType = 2;
+      moolreIdValue = reference;
       isManualReference = true;
+    } else if (transaction.moolre_reference) {
+      // 3. No stored moolre_id or manual reference, but we have the stored external reference - use idtype 1
+      idType = 1;
+      moolreIdValue = transaction.moolre_reference;
+    } else {
+      // 4. None of the above - return error
+      return res.status(400).json({
+        error: 'No Moolre ID or Moolre Reference found for this transaction. Cannot verify automatically.',
+        transactionId: transaction.id
+      });
     }
 
     console.log(`[MANUAL-VERIFY-MOOLRE-WEB] Verifying Moolre Web payment:`, {
       transactionId: transaction.id,
-      moolreId: moolreId
+      idtype: idType,
+      id: moolreIdValue
     });
 
-    // Verify payment with Moolre API using Moolre ID
+    // Verify payment with Moolre API using Moolre ID or Reference
     const moolreResponse = await fetch('https://api.moolre.com/open/transact/status', {
       method: 'POST',
       headers: {
@@ -211,8 +216,8 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         type: 1,
-        idtype: 2, // 2 = Moolre Generated ID
-        id: moolreId,
+        idtype: idType,
+        id: moolreIdValue,
         accountnumber: MOOLRE_ACCOUNT_NUMBER
       })
     });
@@ -228,6 +233,9 @@ export default async function handler(req, res) {
         details: moolreData
       });
     }
+
+    // Define moolreId for compatibility with the rest of the script
+    const moolreId = idType === 2 ? moolreIdValue : String(moolreData.data?.id || moolreIdValue);
 
     // Validate that the Moolre transaction matches this deposit
     const moolreAmount = parseFloat(moolreData.data?.amount || 0);
