@@ -33,8 +33,8 @@ export default async function handler(req, res) {
 
     const { transactionId, moolreId } = req.body;
 
-    if (!transactionId || !moolreId) {
-      return res.status(400).json({ error: 'Missing required parameters: transactionId and moolreId' });
+    if (!transactionId) {
+      return res.status(400).json({ error: 'Missing required parameter: transactionId' });
     }
 
     const supabase = getServiceRoleClient();
@@ -62,6 +62,27 @@ export default async function handler(req, res) {
       });
     }
 
+    // Resolve Moolre ID and ID type (1 = external reference, 2 = Moolre generated ID)
+    let idType = 2; // Default to Moolre Generated ID
+    let moolreIdValue = null;
+
+    if (moolreId) {
+      moolreIdValue = moolreId;
+      if (moolreId.startsWith('MOOLRE_') || moolreId.startsWith('MOOLRE_WEB_')) {
+        idType = 1;
+      }
+    } else if (transaction.moolre_id) {
+      idType = 2;
+      moolreIdValue = transaction.moolre_id;
+    } else if (transaction.moolre_reference) {
+      idType = 1;
+      moolreIdValue = transaction.moolre_reference;
+    } else {
+      return res.status(400).json({
+        error: 'No Moolre ID or Moolre Reference found for this transaction. Please provide one.'
+      });
+    }
+
     // 3. Verify Moolre API credentials
     const MOOLRE_API_USER = process.env.MOOLRE_API_USER;
     const MOOLRE_API_PUBKEY = process.env.MOOLRE_API_PUBKEY;
@@ -71,7 +92,7 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Moolre credentials not configured on the server' });
     }
 
-    console.log(`[APPROVE-EXPIRED-DEPOSIT] Verifying transaction ${transactionId} against Moolre ID: ${moolreId}`);
+    console.log(`[APPROVE-EXPIRED-DEPOSIT] Verifying transaction ${transactionId} against Moolre Lookup: ${moolreIdValue} (idtype: ${idType})`);
 
     // 4. Verify transaction exists in Moolre merchant statement/API
     const moolreResponse = await fetch('https://api.moolre.com/open/transact/status', {
@@ -83,8 +104,8 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         type: 1,
-        idtype: 2, // 2 = Moolre Generated ID
-        id: moolreId,
+        idtype: idType,
+        id: moolreIdValue,
         accountnumber: MOOLRE_ACCOUNT_NUMBER
       })
     });
@@ -105,9 +126,10 @@ export default async function handler(req, res) {
 
     // 5. Verify the Tx ID matches
     const moolreTxId = String(verifiedTx.id || verifiedTx.transactionid || verifiedTx.transaction_id || '');
-    if (moolreTxId !== String(moolreId)) {
+    const expectedMoolreId = idType === 2 ? moolreIdValue : moolreTxId;
+    if (moolreTxId && expectedMoolreId && moolreTxId !== String(expectedMoolreId)) {
       return res.status(400).json({
-        error: `Security verification failed: Moolre transaction ID mismatch. Expected ${moolreId}, got ${moolreTxId}`
+        error: `Security verification failed: Moolre transaction ID mismatch. Expected ${expectedMoolreId}, got ${moolreTxId}`
       });
     }
 
@@ -145,11 +167,12 @@ export default async function handler(req, res) {
     }
 
     // 8. Verify the transaction has not already been credited to another deposit
+    const duplicateCheckId = moolreTxId || moolreIdValue;
     const { data: duplicateTx, error: dupError } = await supabase
       .from('transactions')
       .select('id, user_id, amount, status')
       .eq('status', 'approved')
-      .or(`moolre_id.eq.${moolreId},provider_event_id.eq.${moolreId}`);
+      .or(`moolre_id.eq.${duplicateCheckId},provider_event_id.eq.${duplicateCheckId}`);
 
     if (dupError) {
       console.error('[APPROVE-EXPIRED-DEPOSIT] Duplicate check error:', dupError);
@@ -168,9 +191,9 @@ export default async function handler(req, res) {
       p_transaction_id: transactionId,
       p_payment_method: method,
       p_payment_status: 'success',
-      p_payment_reference: verifiedTx.externalref || transaction.moolre_reference || moolreId,
+      p_payment_reference: verifiedTx.externalref || transaction.moolre_reference || moolreIdValue,
       p_actual_amount: moolreAmount,
-      p_provider_event_id: moolreId,
+      p_provider_event_id: duplicateCheckId,
       p_admin_id: adminUser.id
     });
 
@@ -189,16 +212,24 @@ export default async function handler(req, res) {
       });
     }
 
+    // Save the actual Moolre ID to the transaction in the database
+    if (moolreTxId) {
+      await supabase
+        .from('transactions')
+        .update({ moolre_id: moolreTxId })
+        .eq('id', transactionId);
+    }
+
     // 10. Log the admin action
     await logAdminAction({
       user_id: adminUser.id,
       action_type: 'admin_approved_expired_deposit',
       entity_type: 'transaction',
       entity_id: transactionId,
-      description: `Admin approved expired deposit transaction ${transactionId} after verifying Moolre payment ${moolreId} for ₵${moolreAmount.toFixed(2)}.`,
+      description: `Admin approved expired deposit transaction ${transactionId} after verifying Moolre payment ${duplicateCheckId} for ₵${moolreAmount.toFixed(2)}.`,
       metadata: {
         transaction_id: transactionId,
-        moolre_id: moolreId,
+        moolre_id: duplicateCheckId,
         amount: moolreAmount,
         old_status: approvalResult.old_status,
         new_status: approvalResult.new_status,
