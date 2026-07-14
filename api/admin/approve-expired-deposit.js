@@ -33,8 +33,8 @@ export default async function handler(req, res) {
 
     const { transactionId, moolreId } = req.body;
 
-    if (!transactionId) {
-      return res.status(400).json({ error: 'Missing required parameter: transactionId' });
+    if (!transactionId || !moolreId) {
+      return res.status(400).json({ error: 'Missing required parameters: transactionId and moolreId' });
     }
 
     const supabase = getServiceRoleClient();
@@ -62,27 +62,6 @@ export default async function handler(req, res) {
       });
     }
 
-    // Resolve Moolre ID and ID type (1 = external reference, 2 = Moolre generated ID)
-    let idType = 2;
-    let moolreIdValue = null;
-
-    if (moolreId) {
-      moolreIdValue = moolreId;
-      if (moolreId.startsWith('MOOLRE_')) {
-        idType = 1;
-      }
-    } else if (transaction.moolre_id) {
-      idType = 2;
-      moolreIdValue = transaction.moolre_id;
-    } else if (transaction.moolre_reference) {
-      idType = 1;
-      moolreIdValue = transaction.moolre_reference;
-    } else {
-      return res.status(400).json({
-        error: 'No Moolre ID or Moolre Reference found for this transaction. Please provide one.'
-      });
-    }
-
     // 3. Verify Moolre API credentials
     const MOOLRE_API_USER = process.env.MOOLRE_API_USER;
     const MOOLRE_API_PUBKEY = process.env.MOOLRE_API_PUBKEY;
@@ -92,7 +71,7 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Moolre credentials not configured on the server' });
     }
 
-    console.log(`[APPROVE-EXPIRED-DEPOSIT] Verifying transaction ${transactionId} against Moolre ID/Ref: ${moolreIdValue} (idtype: ${idType})`);
+    console.log(`[APPROVE-EXPIRED-DEPOSIT] Verifying transaction ${transactionId} against Moolre ID: ${moolreId}`);
 
     // 4. Verify transaction exists in Moolre merchant statement/API
     const moolreResponse = await fetch('https://api.moolre.com/open/transact/status', {
@@ -104,8 +83,8 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         type: 1,
-        idtype: idType,
-        id: moolreIdValue,
+        idtype: 2, // 2 = Moolre Generated ID
+        id: moolreId,
         accountnumber: MOOLRE_ACCOUNT_NUMBER
       })
     });
@@ -126,10 +105,9 @@ export default async function handler(req, res) {
 
     // 5. Verify the Tx ID matches
     const moolreTxId = String(verifiedTx.id || verifiedTx.transactionid || verifiedTx.transaction_id || '');
-    const resolvedMoolreId = idType === 2 ? moolreIdValue : moolreTxId;
-    if (moolreTxId !== String(resolvedMoolreId)) {
+    if (moolreTxId !== String(moolreId)) {
       return res.status(400).json({
-        error: `Security verification failed: Moolre transaction ID mismatch. Expected ${resolvedMoolreId}, got ${moolreTxId}`
+        error: `Security verification failed: Moolre transaction ID mismatch. Expected ${moolreId}, got ${moolreTxId}`
       });
     }
 
@@ -171,7 +149,7 @@ export default async function handler(req, res) {
       .from('transactions')
       .select('id, user_id, amount, status')
       .eq('status', 'approved')
-      .or(`moolre_id.eq.${resolvedMoolreId},provider_event_id.eq.${resolvedMoolreId}`);
+      .or(`moolre_id.eq.${moolreId},provider_event_id.eq.${moolreId}`);
 
     if (dupError) {
       console.error('[APPROVE-EXPIRED-DEPOSIT] Duplicate check error:', dupError);
@@ -190,9 +168,9 @@ export default async function handler(req, res) {
       p_transaction_id: transactionId,
       p_payment_method: method,
       p_payment_status: 'success',
-      p_payment_reference: verifiedTx.externalref || transaction.moolre_reference || resolvedMoolreId,
+      p_payment_reference: verifiedTx.externalref || transaction.moolre_reference || moolreId,
       p_actual_amount: moolreAmount,
-      p_provider_event_id: resolvedMoolreId,
+      p_provider_event_id: moolreId,
       p_admin_id: adminUser.id
     });
 
@@ -217,10 +195,10 @@ export default async function handler(req, res) {
       action_type: 'admin_approved_expired_deposit',
       entity_type: 'transaction',
       entity_id: transactionId,
-      description: `Admin approved expired deposit transaction ${transactionId} after verifying Moolre payment ${resolvedMoolreId} for ₵${moolreAmount.toFixed(2)}.`,
+      description: `Admin approved expired deposit transaction ${transactionId} after verifying Moolre payment ${moolreId} for ₵${moolreAmount.toFixed(2)}.`,
       metadata: {
         transaction_id: transactionId,
-        moolre_id: resolvedMoolreId,
+        moolre_id: moolreId,
         amount: moolreAmount,
         old_status: approvalResult.old_status,
         new_status: approvalResult.new_status,
