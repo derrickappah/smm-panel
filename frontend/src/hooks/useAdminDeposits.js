@@ -68,7 +68,7 @@ export const useAdminDeposits = (options = {}) => {
 
       let query = supabase
         .from('transactions')
-        .select('id, user_id, amount, type, status, created_at, paystack_status, paystack_reference, manual_reference, korapay_reference, deposit_method, payment_proof_url, profiles!transactions_user_id_fkey(email, name, phone_number)', { count: 'exact' })
+        .select('id, user_id, amount, type, status, created_at, paystack_status, paystack_reference, manual_reference, korapay_reference, moolre_id, moolre_reference, deposit_method, payment_proof_url, profiles!transactions_user_id_fkey(email, name, phone_number)', { count: 'exact' })
         .eq('type', 'deposit')
         .order('created_at', { ascending: false });
 
