@@ -241,12 +241,26 @@ const DashboardOrderForm = React.memo(({
         }
 
         if (nextMarker !== -1) {
-          parts.push(
-            <span key={`part-${lineIndex}-${keyCounter++}`}>
-              {line.substring(currentIndex, nextMarker)}
-            </span>
-          );
-          currentIndex = nextMarker;
+          if (nextMarker > currentIndex) {
+            parts.push(
+              <span key={`part-${lineIndex}-${keyCounter++}`}>
+                {line.substring(currentIndex, nextMarker)}
+              </span>
+            );
+            currentIndex = nextMarker;
+          } else {
+            // nextMarker === currentIndex. This means a marker is present here but
+            // failed to match the formatting regex (e.g. it is unmatched).
+            // We must consume the marker character(s) as plain text to prevent an infinite loop.
+            const isBoldMarker = line.substring(currentIndex, currentIndex + 2) === '**';
+            const consumeLength = isBoldMarker ? 2 : 1;
+            parts.push(
+              <span key={`part-${lineIndex}-${keyCounter++}`}>
+                {line.substring(currentIndex, currentIndex + consumeLength)}
+              </span>
+            );
+            currentIndex += consumeLength;
+          }
         } else {
           // No more formatting, add the rest of the line
           parts.push(
