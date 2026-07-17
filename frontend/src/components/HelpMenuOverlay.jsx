@@ -82,9 +82,9 @@ const HelpMenuOverlay = ({ onClose, whatsappUrl }) => {
            <img src="/rYZqPCBaG70.png" alt="WA" className="w-7 h-7 object-contain drop-shadow-md" />
         </div>
       ),
-      title: 'I paid but it\'s not\nin my account',
+      title: 'Payment not\nreceived',
       subtitle: 'Contact a WhatsApp agent',
-      highlightWord: 'not\nin my account',
+      highlightWord: 'not\nreceived',
       action: { type: 'whatsapp' }
     }
   ];
@@ -112,8 +112,8 @@ const HelpMenuOverlay = ({ onClose, whatsappUrl }) => {
     if (card.id === 'payment') {
       return (
         <>
-          I paid but it's <span className="text-red-500 font-semibold">not</span><br/>
-          <span className="text-red-500 font-semibold">in my account</span>
+          Payment <span className="text-red-500 font-semibold">not</span><br/>
+          <span className="text-red-500 font-semibold">received</span>
         </>
       );
     }
