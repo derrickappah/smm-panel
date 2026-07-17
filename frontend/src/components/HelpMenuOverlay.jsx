@@ -123,6 +123,21 @@ const HelpMenuOverlay = ({ onClose, whatsappUrl }) => {
 
   return createPortal(
     <>
+      <style>{`
+        @keyframes card-pulse-1 {
+          0%, 100% { box-shadow: 0 10px 40px -10px rgba(0,0,0,0.1), inset 0px 1px 0px rgba(255,255,255,0.5); transform: scale(1); }
+          30%       { box-shadow: 0 0 0 6px rgba(139,92,246,0.25), 0 10px 40px -10px rgba(0,0,0,0.12); transform: scale(1.03); }
+          60%       { box-shadow: 0 0 0 2px rgba(139,92,246,0.1),  0 10px 40px -10px rgba(0,0,0,0.10); transform: scale(1); }
+        }
+        @keyframes card-pulse-2 {
+          0%, 100% { box-shadow: 0 10px 40px -10px rgba(0,0,0,0.1), inset 0px 1px 0px rgba(255,255,255,0.5); transform: scale(1); }
+          30%       { box-shadow: 0 0 0 6px rgba(236,72,153,0.25), 0 10px 40px -10px rgba(0,0,0,0.12); transform: scale(1.03); }
+          60%       { box-shadow: 0 0 0 2px rgba(236,72,153,0.1),  0 10px 40px -10px rgba(0,0,0,0.10); transform: scale(1); }
+        }
+        .card-pulse-1 { animation: card-pulse-1 2.4s ease-in-out infinite; }
+        .card-pulse-2 { animation: card-pulse-2 2.4s ease-in-out infinite; animation-delay: 1.2s; }
+      `}</style>
+
       <div 
         className="fixed inset-0 z-[9000] bg-black/40 backdrop-blur-[8px] animate-in fade-in duration-300 flex flex-col pt-safe px-4 pb-10 sm:p-6"
         onClick={(e) => {
@@ -143,23 +158,53 @@ const HelpMenuOverlay = ({ onClose, whatsappUrl }) => {
               <button
                 key={card.id}
                 onClick={() => handleCardClick(card.action)}
-                className="bg-white/95 backdrop-blur-xl rounded-3xl p-4 sm:p-5 flex flex-col items-start text-left shadow-xl ring-1 ring-white hover:bg-white active:scale-95 transition-all duration-200 group"
+                className={`bg-white/95 backdrop-blur-xl rounded-3xl p-4 sm:p-5 flex flex-col items-start text-left shadow-xl ring-1 ring-white hover:bg-white active:scale-95 transition-all duration-200 group ${
+                  idx === 0 ? 'card-pulse-1' : idx === 1 ? 'card-pulse-2' : ''
+                }`}
                 style={{
                   boxShadow: '0 10px 40px -10px rgba(0,0,0,0.1), inset 0px 1px 0px rgba(255,255,255,0.5)',
                   minHeight: '160px'
                 }}
               >
-                <div className="mb-4 transform group-hover:scale-105 transition-transform duration-300 group-hover:-rotate-3">
-                  {card.icon}
+                {/* Header row: icon + step badge (first 2 cards only) */}
+                <div className="w-full flex items-start justify-between mb-4">
+                  <div className="transform group-hover:scale-105 transition-transform duration-300 group-hover:-rotate-3">
+                    {card.icon}
+                  </div>
+                  {idx < 2 && (
+                    <span
+                      className="text-[10px] sm:text-[11px] font-extrabold text-white px-2 py-[3px] rounded-lg leading-none tracking-wide"
+                      style={{ background: 'linear-gradient(135deg,#a855f7,#7c3aed)', flexShrink: 0 }}
+                    >
+                      STEP {idx + 1}
+                    </span>
+                  )}
                 </div>
                 
-                <h3 className={`text-[13px] sm:text-[14px] font-bold leading-snug mb-2 ${card.titleColor || 'text-gray-800'}`}>
+                <h3 className={`text-[13px] sm:text-[14px] font-bold leading-snug mb-3 ${card.titleColor || 'text-gray-800'}`}>
                   {renderTitle(card)}
                 </h3>
                 
-                <p className={`text-[11px] sm:text-[12px] font-medium mt-auto ${card.subtitleColor || 'text-gray-500'}`}>
-                  {card.subtitle}
-                </p>
+                {/* Subtitle / action row */}
+                {idx < 2 ? (
+                  <div className="flex items-center gap-2 mt-auto">
+                    <span
+                      className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
+                      style={{ background: 'rgba(139,92,246,0.15)' }}
+                    >
+                      <svg width="10" height="12" viewBox="0 0 10 12" fill="none">
+                        <path d="M1 1L9 6L1 11V1Z" fill="#7c3aed"/>
+                      </svg>
+                    </span>
+                    <span className={`text-[11px] sm:text-[12px] font-semibold ${idx === 1 ? 'text-purple-600' : 'text-gray-500'}`}>
+                      Watch video
+                    </span>
+                  </div>
+                ) : (
+                  <p className={`text-[11px] sm:text-[12px] font-medium mt-auto ${card.subtitleColor || 'text-gray-500'}`}>
+                    {card.subtitle}
+                  </p>
+                )}
               </button>
             ))}
           </div>
