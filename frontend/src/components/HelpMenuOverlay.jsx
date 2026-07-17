@@ -125,17 +125,17 @@ const HelpMenuOverlay = ({ onClose, whatsappUrl }) => {
     <>
       <style>{`
         @keyframes card-pulse-1 {
-          0%, 100% { box-shadow: 0 10px 40px -10px rgba(0,0,0,0.1), inset 0px 1px 0px rgba(255,255,255,0.5); transform: scale(1); }
-          30%       { box-shadow: 0 0 0 6px rgba(139,92,246,0.25), 0 10px 40px -10px rgba(0,0,0,0.12); transform: scale(1.03); }
-          60%       { box-shadow: 0 0 0 2px rgba(139,92,246,0.1),  0 10px 40px -10px rgba(0,0,0,0.10); transform: scale(1); }
+          0%   { box-shadow: 0 0 0 0px rgba(139,92,246,0.7),  0 0 0 0px rgba(139,92,246,0.4),  0 10px 40px -10px rgba(0,0,0,0.1); transform: scale(1); }
+          50%  { box-shadow: 0 0 0 10px rgba(139,92,246,0.25), 0 0 0 20px rgba(139,92,246,0.08), 0 12px 40px -8px rgba(139,92,246,0.3); transform: scale(1.04); }
+          100% { box-shadow: 0 0 0 14px rgba(139,92,246,0),   0 0 0 28px rgba(139,92,246,0),   0 10px 40px -10px rgba(0,0,0,0.1); transform: scale(1); }
         }
         @keyframes card-pulse-2 {
-          0%, 100% { box-shadow: 0 10px 40px -10px rgba(0,0,0,0.1), inset 0px 1px 0px rgba(255,255,255,0.5); transform: scale(1); }
-          30%       { box-shadow: 0 0 0 6px rgba(236,72,153,0.25), 0 10px 40px -10px rgba(0,0,0,0.12); transform: scale(1.03); }
-          60%       { box-shadow: 0 0 0 2px rgba(236,72,153,0.1),  0 10px 40px -10px rgba(0,0,0,0.10); transform: scale(1); }
+          0%   { box-shadow: 0 0 0 0px rgba(236,72,153,0.7),  0 0 0 0px rgba(236,72,153,0.4),  0 10px 40px -10px rgba(0,0,0,0.1); transform: scale(1); }
+          50%  { box-shadow: 0 0 0 10px rgba(236,72,153,0.25), 0 0 0 20px rgba(236,72,153,0.08), 0 12px 40px -8px rgba(236,72,153,0.3); transform: scale(1.04); }
+          100% { box-shadow: 0 0 0 14px rgba(236,72,153,0),   0 0 0 28px rgba(236,72,153,0),   0 10px 40px -10px rgba(0,0,0,0.1); transform: scale(1); }
         }
-        .card-pulse-1 { animation: card-pulse-1 2.4s ease-in-out infinite; }
-        .card-pulse-2 { animation: card-pulse-2 2.4s ease-in-out infinite; animation-delay: 1.2s; }
+        .card-pulse-1 { animation: card-pulse-1 2s ease-in-out infinite; }
+        .card-pulse-2 { animation: card-pulse-2 2s ease-in-out infinite; animation-delay: 1s; }
       `}</style>
 
       <div 
