@@ -19,13 +19,14 @@ const {
   mapOldSMMStatus
 } = require('./utils/statusMapping');
 
-// Response cache for SMMGen API calls
-const responseCache = new Map();
+// Import Redis client & caching utilities
+const { getCached, setCached, isRedisAvailable } = require('./utils/redisClient');
+
 const CACHE_TTL = {
-  services: 5 * 60 * 1000, // 5 minutes
-  balance: 2 * 60 * 1000,   // 2 minutes
-  status: 30 * 1000,        // 30 seconds
-  order: 0                  // No cache for orders
+  services: 600, // 10 minutes in seconds
+  balance: 120,   // 2 minutes in seconds
+  status: 30,     // 30 seconds in seconds
+  order: 0        // No cache for orders
 };
 
 // Middleware
@@ -47,26 +48,24 @@ app.use('/api/', limiter);
 const SMMGEN_API_URL = process.env.SMMGEN_API_URL || 'https://smmgen.com/api/v2';
 const SMMGEN_API_KEY = process.env.SMMGEN_API_KEY || '05b299d99f4ef2052da59f7956325f3d';
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', message: 'SMMGen proxy server is running' });
+// Health check endpoint with Redis status
+app.get('/health', async (req, res) => {
+  const redisHealthy = await isRedisAvailable();
+  res.json({
+    status: 'ok',
+    message: 'SMMGen proxy server is running',
+    redis: redisHealthy ? 'connected' : 'disconnected'
+  });
 });
 
-// Helper function to get cached response
-const getCachedResponse = (key) => {
-  const cached = responseCache.get(key);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL[key]) {
-    return cached.data;
-  }
-  return null;
+// Helper function to get cached response from Upstash Redis
+const getCachedResponse = async (key) => {
+  return await getCached(`smmgen:${key}`);
 };
 
-// Helper function to set cached response
-const setCachedResponse = (key, data) => {
-  responseCache.set(key, {
-    data,
-    timestamp: Date.now()
-  });
+// Helper function to set cached response in Upstash Redis
+const setCachedResponse = async (key, data) => {
+  await setCached(`smmgen:${key}`, data, CACHE_TTL[key] || 300);
 };
 
 // Proxy endpoint to fetch services from SMMGen
@@ -78,11 +77,12 @@ app.post('/api/smmgen/services', async (req, res) => {
       });
     }
 
-    // Check cache first
-    const cached = getCachedResponse('services');
+    // Check Redis cache first
+    const cached = await getCachedResponse('services');
     if (cached) {
       res.set({
-        'Cache-Control': 'public, max-age=300', // 5 minutes
+        'Cache-Control': 'public, max-age=600',
+        'X-Cache': 'HIT',
         'ETag': `"${Date.now()}"`
       });
       return res.json(cached);
@@ -99,11 +99,12 @@ app.post('/api/smmgen/services', async (req, res) => {
       timeout: 10000 // 10 second timeout
     });
 
-    // Cache the response
-    setCachedResponse('services', response.data);
+    // Cache the response in Upstash Redis
+    await setCachedResponse('services', response.data);
 
     res.set({
-      'Cache-Control': 'public, max-age=300', // 5 minutes
+      'Cache-Control': 'public, max-age=600',
+      'X-Cache': 'MISS',
       'ETag': `"${Date.now()}"`,
       'Last-Modified': new Date().toUTCString()
     });
@@ -181,15 +182,16 @@ app.post('/api/smmgen/status', async (req, res) => {
       });
     }
 
-    // Check cache for status (short TTL since status changes frequently)
+    // Check Redis cache for status
     const cacheKey = `status:${order}`;
-    const cached = getCachedResponse('status');
-    if (cached && cached[order]) {
+    const cached = await getCached(cacheKey);
+    if (cached) {
       res.set({
-        'Cache-Control': 'public, max-age=30', // 30 seconds
+        'Cache-Control': 'public, max-age=30',
+        'X-Cache': 'HIT',
         'ETag': `"${Date.now()}"`
       });
-      return res.json(cached[order]);
+      return res.json(cached);
     }
 
     const response = await axios.post(SMMGEN_API_URL, {
@@ -203,16 +205,12 @@ app.post('/api/smmgen/status', async (req, res) => {
       timeout: 10000 // 10 second timeout
     });
 
-    // Cache the response (store by order ID)
-    if (!responseCache.has('status') || !responseCache.get('status').data) {
-      setCachedResponse('status', {});
-    }
-    const statusCache = responseCache.get('status');
-    statusCache.data[order] = response.data;
-    statusCache.timestamp = Date.now();
+    // Cache in Upstash Redis for 30s
+    await setCached(cacheKey, response.data, 30);
 
     res.set({
-      'Cache-Control': 'public, max-age=30', // 30 seconds
+      'Cache-Control': 'public, max-age=30',
+      'X-Cache': 'MISS',
       'ETag': `"${Date.now()}"`,
       'Last-Modified': new Date().toUTCString()
     });
@@ -235,11 +233,12 @@ app.post('/api/smmgen/balance', async (req, res) => {
       });
     }
 
-    // Check cache first
-    const cached = getCachedResponse('balance');
+    // Check Redis cache first
+    const cached = await getCachedResponse('balance');
     if (cached) {
       res.set({
-        'Cache-Control': 'public, max-age=120', // 2 minutes
+        'Cache-Control': 'public, max-age=120',
+        'X-Cache': 'HIT',
         'ETag': `"${Date.now()}"`
       });
       return res.json(cached);
@@ -255,11 +254,12 @@ app.post('/api/smmgen/balance', async (req, res) => {
       timeout: 10000 // 10 second timeout
     });
 
-    // Cache the response
-    setCachedResponse('balance', response.data);
+    // Cache in Upstash Redis for 2 minutes
+    await setCachedResponse('balance', response.data);
 
     res.set({
-      'Cache-Control': 'public, max-age=120', // 2 minutes
+      'Cache-Control': 'public, max-age=120',
+      'X-Cache': 'MISS',
       'ETag': `"${Date.now()}"`,
       'Last-Modified': new Date().toUTCString()
     });

@@ -4,6 +4,8 @@
  * Centralizes interaction with different SMM provider APIs.
  */
 
+import { getCached, setCached } from './redisClient.js';
+
 const REQUEST_TIMEOUT = 30000;
 
 /**
@@ -81,7 +83,7 @@ export async function findMatchingProviderOrder(provider, params) {
 }
 
 /**
- * Fetches order status from a specific provider
+ * Fetches order status from a specific provider (with 30-second Redis cache)
  * @param {string} provider - 'smmgen', 'jbsmmpanel', or 'smmcost'
  * @param {string|number} providerOrderId - ID assigned by the provider
  * @returns {Promise<Object>} Status response
@@ -89,22 +91,40 @@ export async function findMatchingProviderOrder(provider, params) {
 export async function fetchProviderOrderStatus(provider, providerOrderId) {
     if (!providerOrderId) throw new Error('Provider Order ID is required');
 
+    const cacheKey = `order_status:${provider.toLowerCase()}:${providerOrderId}`;
+    const cachedStatus = await getCached(cacheKey);
+    if (cachedStatus) {
+        return cachedStatus;
+    }
+
+    let statusResult = null;
     switch (provider.toLowerCase()) {
         case 'smmgen':
-            return await fetchSMMGenStatus(providerOrderId);
+            statusResult = await fetchSMMGenStatus(providerOrderId);
+            break;
         case 'jbsmmpanel':
-            return await fetchJBSMMPanelStatus(providerOrderId);
+            statusResult = await fetchJBSMMPanelStatus(providerOrderId);
+            break;
         case 'smmcost':
-            return await fetchSMMCostStatus(providerOrderId);
+            statusResult = await fetchSMMCostStatus(providerOrderId);
+            break;
         case 'worldofsmm':
-            return await fetchWorldOfSMMStatus(providerOrderId);
+            statusResult = await fetchWorldOfSMMStatus(providerOrderId);
+            break;
         case 'g1618':
-            return await fetchG1618Status(providerOrderId);
+            statusResult = await fetchG1618Status(providerOrderId);
+            break;
         case 'oldsmm':
-            return await fetchOldSMMStatus(providerOrderId);
+            statusResult = await fetchOldSMMStatus(providerOrderId);
+            break;
         default:
             throw new Error(`Unsupported status check provider: ${provider}`);
     }
+
+    if (statusResult) {
+        await setCached(cacheKey, statusResult, 30);
+    }
+    return statusResult;
 }
 
 
