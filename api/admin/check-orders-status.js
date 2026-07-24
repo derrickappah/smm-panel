@@ -9,7 +9,8 @@ import { verifyAdmin, getServiceRoleClient } from '../utils/auth.js';
 import {
     mapSMMGenStatus,
     mapSMMCostStatus,
-    mapJBSMMPanelStatus
+    mapJBSMMPanelStatus,
+    mapApiOwnerStatus
 } from '../utils/statusMapping.js';
 
 const REQUEST_TIMEOUT = 15000; // 15 seconds per provider call
@@ -50,7 +51,8 @@ export default async function handler(req, res) {
         const groups = {
             smmgen: orders.filter(o => o.smmgen_order_id && o.smmgen_order_id !== "order not placed at smm gen" && o.smmgen_order_id !== o.id),
             smmcost: orders.filter(o => o.smmcost_order_id && String(o.smmcost_order_id).toLowerCase() !== "order not placed at smmcost"),
-            jbsmmpanel: orders.filter(o => o.jbsmmpanel_order_id && Number(o.jbsmmpanel_order_id) > 0)
+            jbsmmpanel: orders.filter(o => o.jbsmmpanel_order_id && Number(o.jbsmmpanel_order_id) > 0),
+            apiowner: orders.filter(o => o.apiowner_order_id && String(o.apiowner_order_id).toLowerCase() !== "order not placed at apiowner")
         };
 
         const results = {
@@ -180,6 +182,43 @@ export default async function handler(req, res) {
                 }
             });
             await Promise.all(jbTasks);
+        }
+
+        // 7. Process ApiOwner orders
+        if (groups.apiowner.length > 0) {
+            const API_URL = process.env.APIOWNER_API_URL || 'https://apiowner.com/api/v2';
+            const API_KEY = process.env.APIOWNER_API_KEY;
+
+            const apiOwnerTasks = groups.apiowner.map(async (order) => {
+                results.checked++;
+                try {
+                    console.log(`[ApiOwner] Checking status for order ${order.id} (Provider ID: ${order.apiowner_order_id})`);
+                    const response = await fetch(API_URL, {
+                        method: 'POST',
+                        body: new URLSearchParams({ key: API_KEY, action: 'status', order: order.apiowner_order_id.toString() })
+                    });
+                    const data = await response.json();
+
+                    let rawStatus = data.status || data.Status || data.order?.status;
+                    if (rawStatus === undefined && Array.isArray(data) && data.length > 0) {
+                        rawStatus = data[0]?.status || data[0]?.Status;
+                    }
+
+                    const mappedStatus = mapApiOwnerStatus(rawStatus);
+
+                    if (mappedStatus && mappedStatus !== order.status) {
+                        const success = await updateOrder(order.id, mappedStatus, rawStatus);
+                        if (success) {
+                            results.updated++;
+                            results.details.push({ id: order.id, old: order.status, new: mappedStatus, provider: 'apiowner' });
+                        }
+                    }
+                } catch (err) {
+                    console.error(`[ApiOwner] Error checking order ${order.id}:`, err.message);
+                    results.errors.push({ id: order.id, provider: 'apiowner', error: err.message });
+                }
+            });
+            await Promise.all(apiOwnerTasks);
         }
 
         const duration = Date.now() - startTime;

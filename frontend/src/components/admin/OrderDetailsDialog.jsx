@@ -38,6 +38,8 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
 
   // Helper function to get Order ID based on priority
   const getOrderId = (order) => {
+    const hasApiOwner = order.apiowner_order_id &&
+      String(order.apiowner_order_id).toLowerCase() !== "order not placed at apiowner";
     const hasOldSmm = order.oldsmm_order_id &&
       String(order.oldsmm_order_id).toLowerCase() !== "order not placed at oldsmm";
     const hasG1618 = order.g1618_order_id &&
@@ -45,7 +47,9 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
     const hasWorldofsmm = order.worldofsmm_order_id &&
       String(order.worldofsmm_order_id).toLowerCase() !== "order not placed at worldofsmm";
 
-    if (hasOldSmm) {
+    if (hasApiOwner) {
+      return { id: order.apiowner_order_id, type: 'apiowner' };
+    } else if (hasOldSmm) {
       return { id: order.oldsmm_order_id, type: 'oldsmm' };
     } else if (hasG1618) {
       return { id: order.g1618_order_id, type: 'g1618' };
@@ -66,7 +70,7 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
   // Get Order ID display value
   const getOrderIdDisplay = (order) => {
     const orderIdInfo = getOrderId(order);
-    if (orderIdInfo.type === 'uuid' && !order.smmcost_order_id && !order.jbsmmpanel_order_id && !order.smmgen_order_id && !order.worldofsmm_order_id && !order.g1618_order_id && !order.oldsmm_order_id) {
+    if (orderIdInfo.type === 'uuid' && !order.smmcost_order_id && !order.jbsmmpanel_order_id && !order.smmgen_order_id && !order.worldofsmm_order_id && !order.g1618_order_id && !order.oldsmm_order_id && !order.apiowner_order_id) {
       return 'order not placed';
     }
     return orderIdInfo.id;
@@ -94,6 +98,8 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
     String(order.g1618_order_id).toLowerCase() !== "order not placed at g1618";
   const hasOldSmm = order.oldsmm_order_id &&
     String(order.oldsmm_order_id).toLowerCase() !== "order not placed at oldsmm";
+  const hasApiOwner = order.apiowner_order_id &&
+    String(order.apiowner_order_id).toLowerCase() !== "order not placed at apiowner";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -115,6 +121,9 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
                   <p className="text-2xl sm:text-3xl font-bold text-indigo-600 font-mono">
                     {orderIdDisplay}
                   </p>
+                  {orderIdInfo.type === 'apiowner' && (
+                    <p className="text-xs text-gray-500 mt-1">ApiOwner Order ID</p>
+                  )}
                   {orderIdInfo.type === 'oldsmm' && (
                     <p className="text-xs text-gray-500 mt-1">OldSMM Order ID</p>
                   )}
@@ -255,6 +264,12 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
                   <div className="flex items-center justify-between p-2 bg-purple-50 rounded-lg">
                     <span className="text-sm font-medium text-gray-700">G1618:</span>
                     <span className="text-sm font-mono font-bold text-gray-900">{order.g1618_order_id}</span>
+                  </div>
+                )}
+                {hasApiOwner && (
+                  <div className="flex items-center justify-between p-2 bg-emerald-50 rounded-lg">
+                    <span className="text-sm font-medium text-gray-700">ApiOwner:</span>
+                    <span className="text-sm font-mono font-bold text-gray-900">{order.apiowner_order_id}</span>
                   </div>
                 )}
                 {(hasSmmcost || hasJbsmmpanel || hasSmmgen || hasWorldofsmm || hasG1618 || hasOldSmm) &&

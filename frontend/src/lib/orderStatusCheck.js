@@ -172,6 +172,28 @@ const mapJBSMMPanelStatus = (jbsmmpanelStatus) => {
 };
 
 /**
+ * Map ApiOwner status to our status format
+ * @param {string} apiownerStatus - Status from ApiOwner API
+ * @returns {string|null} Mapped status or null if unknown
+ */
+const mapApiOwnerStatus = (apiownerStatus) => {
+  if (!apiownerStatus) return null;
+
+  const statusString = String(apiownerStatus).trim();
+  const statusLower = statusString.toLowerCase();
+
+  if (statusLower === 'pending' || statusLower.includes('pending')) return 'pending';
+  if (statusLower === 'in progress' || statusLower.includes('in progress')) return 'in progress';
+  if (statusLower === 'completed' || statusLower.includes('completed')) return 'completed';
+  if (statusLower === 'partial' || statusLower.includes('partial')) return 'partial';
+  if (statusLower === 'processing' || statusLower.includes('processing')) return 'processing';
+  if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower.includes('cancel')) return 'canceled';
+  if (statusLower === 'refunds' || statusLower.includes('refund')) return 'refunds';
+
+  return null;
+};
+
+/**
  * Check if an order should be checked for status updates
  * @param {Object} order - Order object
  * @param {number} minIntervalMinutes - Minimum minutes since last check (default: 5)
@@ -193,6 +215,7 @@ export const shouldCheckOrder = (order, minIntervalMinutes = 5) => {
   const hasWorldofsmmId = order.worldofsmm_order_id && String(order.worldofsmm_order_id).toLowerCase() !== "order not placed at worldofsmm";
   const hasG1618Id = order.g1618_order_id && String(order.g1618_order_id).toLowerCase() !== "order not placed at g1618";
   const hasOldSmmId = order.oldsmm_order_id && String(order.oldsmm_order_id).toLowerCase() !== "order not placed at oldsmm";
+  const hasApiOwnerId = order.apiowner_order_id && String(order.apiowner_order_id).toLowerCase() !== "order not placed at apiowner";
 
   // Debug logging for JB SMM Panel orders
   if (jbsmmpanelId) {
@@ -520,6 +543,13 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
       const oldsmmStatus = statusData?.status || statusData?.Status;
       mappedStatus = mapOldSMMStatus(oldsmmStatus);
       panelSource = 'oldsmm';
+    } else if (hasApiOwnerId) {
+      // Get status from ApiOwner
+      const { getApiOwnerStatus } = await import('./apiowner');
+      statusData = await getApiOwnerStatus(order.apiowner_order_id);
+      const apiownerStatus = statusData?.status || statusData?.Status;
+      mappedStatus = mapApiOwnerStatus(apiownerStatus);
+      panelSource = 'apiowner';
     } else if (hasSmmgenId) {
       // Get status from SMMGen
       statusData = await getSMMGenOrderStatus(order.smmgen_order_id);
@@ -628,6 +658,7 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
       worldofsmmOrderId: order.worldofsmm_order_id,
       g1618OrderId: order.g1618_order_id,
       oldsmmOrderId: order.oldsmm_order_id,
+      apiownerOrderId: order.apiowner_order_id,
       panelSource: panelSource || 'unknown'
     });
     result.error = error.message;
@@ -746,7 +777,8 @@ export const checkOrdersStatusBatch = async (orders, options = {}) => {
         const hasWorldofsmmId = order.worldofsmm_order_id && String(order.worldofsmm_order_id).toLowerCase() !== "order not placed at worldofsmm";
         const hasG1618Id = order.g1618_order_id && String(order.g1618_order_id).toLowerCase() !== "order not placed at g1618";
         const hasOldSmmId = order.oldsmm_order_id && String(order.oldsmm_order_id).toLowerCase() !== "order not placed at oldsmm";
-        const hasValidId = hasSmmgenId || hasSmmcostId || hasJbsmmpanelId || hasWorldofsmmId || hasG1618Id || hasOldSmmId;
+        const hasApiOwnerId = order.apiowner_order_id && String(order.apiowner_order_id).toLowerCase() !== "order not placed at apiowner";
+        const hasValidId = hasSmmgenId || hasSmmcostId || hasJbsmmpanelId || hasWorldofsmmId || hasG1618Id || hasOldSmmId || hasApiOwnerId;
         const isCompleted = order.status === 'completed' || order.status === 'refunded';
         const recentlyChecked = minIntervalMinutes > 0 && order.last_status_check &&
           (new Date() - new Date(order.last_status_check)) / (1000 * 60) < minIntervalMinutes;
@@ -760,10 +792,12 @@ export const checkOrdersStatusBatch = async (orders, options = {}) => {
           hasWorldofsmmId,
           hasG1618Id,
           hasOldSmmId,
+          hasApiOwnerId,
           jbsmmpanel_order_id: order.jbsmmpanel_order_id,
           worldofsmm_order_id: order.worldofsmm_order_id,
           g1618_order_id: order.g1618_order_id,
           oldsmm_order_id: order.oldsmm_order_id,
+          apiowner_order_id: order.apiowner_order_id,
           isCompleted,
           recentlyChecked,
           status: order.status,
@@ -907,8 +941,9 @@ export const checkOrdersStatusBatch = async (orders, options = {}) => {
     const hasWorldofsmmId = order.worldofsmm_order_id && String(order.worldofsmm_order_id).toLowerCase() !== "order not placed at worldofsmm";
     const hasG1618Id = order.g1618_order_id && String(order.g1618_order_id).toLowerCase() !== "order not placed at g1618";
     const hasOldSmmId = order.oldsmm_order_id && String(order.oldsmm_order_id).toLowerCase() !== "order not placed at oldsmm";
+    const hasApiOwnerId = order.apiowner_order_id && String(order.apiowner_order_id).toLowerCase() !== "order not placed at apiowner";
     return !shouldCheckOrder(order, minIntervalMinutes) &&
-      (hasSmmgenId || hasSmmcostId || hasJbsmmpanelId || hasWorldofsmmId || hasG1618Id || hasOldSmmId) &&
+      (hasSmmgenId || hasSmmcostId || hasJbsmmpanelId || hasWorldofsmmId || hasG1618Id || hasOldSmmId || hasApiOwnerId) &&
       order.status !== 'completed' &&
       order.status !== 'refunded';
   });

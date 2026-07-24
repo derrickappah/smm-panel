@@ -13,7 +13,8 @@ import {
     mapJBSMMPanelStatus,
     mapWorldOfSMMStatus,
     mapG1618Status,
-    mapOldSMMStatus
+    mapOldSMMStatus,
+    mapApiOwnerStatus
 } from './utils/statusMapping.js';
 
 /**
@@ -162,7 +163,8 @@ export default async function handler(req, res) {
             jbsmmpanel: orders.filter(o => o.jbsmmpanel_order_id && Number(o.jbsmmpanel_order_id) > 0),
             worldofsmm: orders.filter(o => o.worldofsmm_order_id && o.worldofsmm_order_id !== "order not placed at worldofsmm"),
             g1618: orders.filter(o => o.g1618_order_id && o.g1618_order_id !== "order not placed at g1618"),
-            oldsmm: orders.filter(o => o.oldsmm_order_id && o.oldsmm_order_id !== "order not placed at oldsmm")
+            oldsmm: orders.filter(o => o.oldsmm_order_id && o.oldsmm_order_id !== "order not placed at oldsmm"),
+            apiowner: orders.filter(o => o.apiowner_order_id && o.apiowner_order_id !== "order not placed at apiowner")
         };
 
         const results = {
@@ -312,7 +314,8 @@ export default async function handler(req, res) {
             processProviderBatch('jbsmmpanel', groups.jbsmmpanel, process.env.JBSMMPANEL_API_URL || 'https://jbsmmpanel.com/api/v2', process.env.JBSMMPANEL_API_KEY, mapJBSMMPanelStatus, 'jbsmmpanel_order_id'),
             processProviderBatch('worldofsmm', groups.worldofsmm, process.env.WORLDOFSMM_API_URL || 'https://worldofsmm.com/api/v2', process.env.WORLDOFSMM_API_KEY, mapWorldOfSMMStatus, 'worldofsmm_order_id'),
             processProviderBatch('g1618', groups.g1618, process.env.G1618_API_URL || 'https://g1618.com/api/v2', process.env.G1618_API_KEY, mapG1618Status, 'g1618_order_id'),
-            processProviderBatch('oldsmm', groups.oldsmm, process.env.OLDSMM_API_URL || 'https://oldsmm.com/api/v2', process.env.OLDSMM_API_KEY, mapOldSMMStatus, 'oldsmm_order_id')
+            processProviderBatch('oldsmm', groups.oldsmm, process.env.OLDSMM_API_URL || 'https://oldsmm.com/api/v2', process.env.OLDSMM_API_KEY, mapOldSMMStatus, 'oldsmm_order_id'),
+            processProviderBatch('apiowner', groups.apiowner, process.env.APIOWNER_API_URL || 'https://apiowner.com/api/v2', process.env.APIOWNER_API_KEY, mapApiOwnerStatus, 'apiowner_order_id')
         ]);
 
         return res.status(200).json({ success: true, ...results });

@@ -24,7 +24,8 @@ export default async function handler(req, res) {
                 jbsmmpanel_order_id,
                 worldofsmm_order_id,
                 g1618_order_id,
-                oldsmm_order_id
+                oldsmm_order_id,
+                apiowner_order_id
             `)
             .or(`status.neq.completed,created_at.gt.${new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()}`)
             .limit(50); // Batch limit for performance
@@ -57,6 +58,9 @@ export default async function handler(req, res) {
             } else if (order.oldsmm_order_id) {
                 provider = 'oldsmm';
                 providerId = order.oldsmm_order_id;
+            } else if (order.apiowner_order_id) {
+                provider = 'apiowner';
+                providerId = order.apiowner_order_id;
             }
 
             if (!provider || !providerId || String(providerId).toLowerCase().startsWith("order not placed")) {

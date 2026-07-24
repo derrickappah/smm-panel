@@ -30,6 +30,8 @@ export async function placeProviderOrder(provider, params) {
             return await placeG1618Order(service, link, quantity, comments);
         case 'oldsmm':
             return await placeOldSMMOrder(service, link, quantity, comments);
+        case 'apiowner':
+            return await placeApiOwnerOrder(service, link, quantity, comments);
         default:
             throw new Error(`Unsupported provider: ${provider}`);
     }
@@ -117,6 +119,9 @@ export async function fetchProviderOrderStatus(provider, providerOrderId) {
         case 'oldsmm':
             statusResult = await fetchOldSMMStatus(providerOrderId);
             break;
+        case 'apiowner':
+            statusResult = await fetchApiOwnerStatus(providerOrderId);
+            break;
         default:
             throw new Error(`Unsupported status check provider: ${provider}`);
     }
@@ -149,6 +154,8 @@ export async function fetchProviderOrders(provider, limit = 100) {
             return await fetchG1618RecentOrders(limit);
         case 'oldsmm':
             return await fetchOldSMMRecentOrders(limit);
+        case 'apiowner':
+            return await fetchApiOwnerRecentOrders(limit);
         default:
             console.warn(`Provider ${provider} does not support order listing.`);
             return [];
@@ -780,3 +787,108 @@ async function placeOldSMMOrder(service, link, quantity, comments) {
 
     return await response.json();
 }
+
+async function fetchApiOwnerRecentOrders(limit) {
+    const APIOWNER_API_URL = process.env.APIOWNER_API_URL || 'https://apiowner.com/api/v2';
+    const APIOWNER_API_KEY = process.env.APIOWNER_API_KEY;
+
+    if (!APIOWNER_API_KEY) return [];
+
+    try {
+        const params = new URLSearchParams({
+            key: APIOWNER_API_KEY,
+            action: 'orders',
+            limit: String(limit)
+        });
+
+        const response = await fetch(APIOWNER_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params
+        });
+
+        if (!response.ok) return [];
+        const data = await response.json();
+        return Array.isArray(data) ? data.map(o => ({
+            id: String(o.order),
+            service: String(o.service),
+            link: o.link,
+            quantity: parseInt(o.quantity),
+            status: o.status,
+            charge: parseFloat(o.charge),
+            date: o.date
+        })) : [];
+    } catch (e) {
+        console.error('ApiOwner fetch orders failed:', e);
+        return [];
+    }
+}
+
+async function fetchApiOwnerStatus(providerOrderId) {
+    const APIOWNER_API_URL = process.env.APIOWNER_API_URL || 'https://apiowner.com/api/v2';
+    const APIOWNER_API_KEY = process.env.APIOWNER_API_KEY;
+
+    if (!APIOWNER_API_KEY) throw new Error('ApiOwner API key not configured');
+
+    const requestBody = new URLSearchParams({
+        key: APIOWNER_API_KEY,
+        action: 'status',
+        order: String(providerOrderId)
+    }).toString();
+
+    const response = await fetch(APIOWNER_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: requestBody
+    });
+
+    if (!response.ok) throw new Error(`ApiOwner API error: ${response.status}`);
+    return await response.json();
+}
+
+async function placeApiOwnerOrder(service, link, quantity, comments) {
+    const APIOWNER_API_URL = process.env.APIOWNER_API_URL || 'https://apiowner.com/api/v2';
+    const APIOWNER_API_KEY = process.env.APIOWNER_API_KEY;
+
+    if (!APIOWNER_API_KEY) throw new Error('ApiOwner API key not configured');
+
+    const params = {
+        key: APIOWNER_API_KEY,
+        action: 'add',
+        service: String(service).trim(),
+        link: link.trim(),
+        quantity: String(quantity)
+    };
+
+    if (comments) {
+        params.comments = String(comments).trim();
+    }
+
+    const requestBody = new URLSearchParams(params).toString();
+
+    const response = await fetch(APIOWNER_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: requestBody
+    });
+
+    if (!response.ok) {
+        let errorData;
+        try {
+            errorData = await response.json();
+        } catch (e) {
+            errorData = { rawResponse: await response.text().catch(() => 'No response body') };
+        }
+
+        const errorMessage = errorData.error || errorData.message || `ApiOwner API error: ${response.status}`;
+        console.error(`[PROVIDER FAILURE] apiowner: ${errorMessage}`, { status: response.status, details: errorData });
+
+        const error = new Error(errorMessage);
+        error.providerDetails = errorData;
+        error.providerStatus = response.status;
+        throw error;
+    }
+
+    return await response.json();
+}
+

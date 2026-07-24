@@ -70,8 +70,8 @@ export default async function handler(req, res) {
             .from('orders')
             .select(`
                 *,
-                services(smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id),
-                promotion_packages(smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id)
+                services(smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id),
+                promotion_packages(smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id)
             `)
             .eq('id', order_id)
             .single();
@@ -97,6 +97,9 @@ export default async function handler(req, res) {
         } else if (orderDetails.services?.oldsmm_service_id || orderDetails.promotion_packages?.oldsmm_service_id) {
             provider = 'oldsmm';
             provider_service_id = orderDetails.services?.oldsmm_service_id || orderDetails.promotion_packages?.oldsmm_service_id;
+        } else if (orderDetails.services?.apiowner_service_id || orderDetails.promotion_packages?.apiowner_service_id) {
+            provider = 'apiowner';
+            provider_service_id = orderDetails.services?.apiowner_service_id || orderDetails.promotion_packages?.apiowner_service_id;
         }
 
         if (!provider || !provider_service_id) {
@@ -133,6 +136,7 @@ export default async function handler(req, res) {
             if (provider === 'worldofsmm') updateData.worldofsmm_order_id = String(matchingOrder.id);
             if (provider === 'g1618') updateData.g1618_order_id = String(matchingOrder.id);
             if (provider === 'oldsmm') updateData.oldsmm_order_id = String(matchingOrder.id);
+            if (provider === 'apiowner') updateData.apiowner_order_id = String(matchingOrder.id);
 
             await supabase.from('orders').update(updateData).eq('id', order_id);
 
@@ -167,6 +171,7 @@ export default async function handler(req, res) {
                 if (provider === 'worldofsmm') updateData.worldofsmm_order_id = String(providerOrderId);
                 if (provider === 'g1618') updateData.g1618_order_id = String(providerOrderId);
                 if (provider === 'oldsmm') updateData.oldsmm_order_id = String(providerOrderId);
+                if (provider === 'apiowner') updateData.apiowner_order_id = String(providerOrderId);
 
                 await supabase.from('orders').update(updateData).eq('id', order_id);
 

@@ -111,7 +111,7 @@ export default async function handler(req, res) {
                     const componentIds = service.combo_service_ids.map(item => typeof item === 'object' && item !== null ? item.id : item);
                     const { data: compServices, error: compErr } = await supabase
                         .from('services')
-                        .select('id, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id')
+                        .select('id, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id')
                         .in('id', componentIds);
 
                     if (!compErr && compServices) {
@@ -137,6 +137,9 @@ export default async function handler(req, res) {
                             } else if (s.oldsmm_service_id) {
                                 compProvider = 'oldsmm';
                                 compProviderId = s.oldsmm_service_id;
+                            } else if (s.apiowner_service_id) {
+                                compProvider = 'apiowner';
+                                compProviderId = s.apiowner_service_id;
                             }
 
                             if (compProvider && compProviderId) {
@@ -167,6 +170,9 @@ export default async function handler(req, res) {
                 } else if (service.oldsmm_service_id) {
                     provider = 'oldsmm';
                     provider_service_id = service.oldsmm_service_id;
+                } else if (service.apiowner_service_id) {
+                    provider = 'apiowner';
+                    provider_service_id = service.apiowner_service_id;
                 }
 
                 if (provider && provider_service_id) {
@@ -215,7 +221,7 @@ export default async function handler(req, res) {
                     const componentIds = pkg.combo_package_ids.map(item => typeof item === 'object' && item !== null ? item.id : item);
                     const { data: compPkgs, error: compErr } = await supabase
                         .from('promotion_packages')
-                        .select('id, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id')
+                        .select('id, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id')
                         .in('id', componentIds);
 
                     if (!compErr && compPkgs) {
@@ -241,6 +247,9 @@ export default async function handler(req, res) {
                             } else if (p.oldsmm_service_id) {
                                 compProvider = 'oldsmm';
                                 compProviderId = p.oldsmm_service_id;
+                            } else if (p.apiowner_service_id) {
+                                compProvider = 'apiowner';
+                                compProviderId = p.apiowner_service_id;
                             }
 
                             if (compProvider && compProviderId) {
@@ -271,6 +280,9 @@ export default async function handler(req, res) {
                 } else if (pkg.oldsmm_service_id) {
                     provider = 'oldsmm';
                     provider_service_id = pkg.oldsmm_service_id;
+                } else if (pkg.apiowner_service_id) {
+                    provider = 'apiowner';
+                    provider_service_id = pkg.apiowner_service_id;
                 }
 
                 if (provider && provider_service_id) {
@@ -467,6 +479,7 @@ export default async function handler(req, res) {
                     if (p === 'worldofsmm') updateData.worldofsmm_order_id = pid;
                     if (p === 'g1618')      updateData.g1618_order_id     = pid;
                     if (p === 'oldsmm')     updateData.oldsmm_order_id    = pid;
+                    if (p === 'apiowner')   updateData.apiowner_order_id  = pid;
                 }
 
                 await supabase.from('orders').update(updateData).eq('id', order_id);
@@ -659,6 +672,11 @@ function getProviderApiConfig(provider) {
         oldsmm: {
             url: process.env.OLDSMM_API_URL || 'https://oldsmm.com/api/v2',
             key: process.env.OLDSMM_API_KEY,
+            useJson: false,
+        },
+        apiowner: {
+            url: process.env.APIOWNER_API_URL || 'https://apiowner.com/api/v2',
+            key: process.env.APIOWNER_API_KEY,
             useJson: false,
         },
     };

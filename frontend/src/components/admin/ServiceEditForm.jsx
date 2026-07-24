@@ -34,6 +34,7 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
     worldofsmm_service_id: service.worldofsmm_service_id || '',
     g1618_service_id: service.g1618_service_id || '',
     oldsmm_service_id: service.oldsmm_service_id || '',
+    apiowner_service_id: service.apiowner_service_id || '',
     url_type: service.url_type || '',          // 'post' | 'profile' | '' (no validation)
     is_combo: service.is_combo || false,
     combo_service_ids: normalizeComboServices(service.combo_service_ids),
@@ -81,6 +82,7 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
       worldofsmm_service_id: formData.worldofsmm_service_id || null,
       g1618_service_id: formData.g1618_service_id || null,
       oldsmm_service_id: formData.oldsmm_service_id || null,
+      apiowner_service_id: formData.apiowner_service_id || null,
       url_type: formData.url_type || null,    // null = skip URL type validation
       is_combo: Boolean(formData.is_combo),
       combo_service_ids: formData.is_combo && formData.combo_service_ids.length > 0
@@ -240,6 +242,15 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
             onChange={(e) => setFormData({ ...formData, oldsmm_service_id: e.target.value })}
           />
           <p className="text-xs text-gray-500 mt-1">Enter the OldSMM API service ID for integration</p>
+        </div>
+        <div>
+          <Label>ApiOwner Service ID</Label>
+          <Input
+            placeholder="ApiOwner API service ID (optional)"
+            value={formData.apiowner_service_id}
+            onChange={(e) => setFormData({ ...formData, apiowner_service_id: e.target.value })}
+          />
+          <p className="text-xs text-gray-500 mt-1">Enter the ApiOwner API service ID for integration</p>
         </div>
       </div>
 

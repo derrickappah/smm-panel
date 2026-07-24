@@ -35,7 +35,7 @@ const OrderHistory = ({ user, onLogout }) => {
       const [ordersRes, servicesRes] = await Promise.all([
         supabase
           .from('orders')
-          .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, created_at, completed_at, refund_status, total_cost, last_status_check, is_reward, promotion_packages(name, platform, service_type), services(id, name, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id)')
+          .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, created_at, completed_at, refund_status, total_cost, last_status_check, is_reward, promotion_packages(name, platform, service_type), services(id, name, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id)')
           .eq('user_id', authUser.id)
           .order('created_at', { ascending: false }),
         supabase
@@ -151,8 +151,9 @@ const OrderHistory = ({ user, onLogout }) => {
     const hasWorldofsmmId = order.worldofsmm_order_id && order.worldofsmm_order_id !== "order not placed at worldofsmm";
     const hasG1618Id = order.g1618_order_id && order.g1618_order_id !== "order not placed at g1618";
     const hasOldSmmId = order.oldsmm_order_id && order.oldsmm_order_id !== "order not placed at oldsmm";
+    const hasApiOwnerId = order.apiowner_order_id && order.apiowner_order_id !== "order not placed at apiowner";
 
-    if (!hasSmmgenId && !hasSmmcostId && !hasJbsmmpanelId && !hasWorldofsmmId && !hasG1618Id && !hasOldSmmId) {
+    if (!hasSmmgenId && !hasSmmcostId && !hasJbsmmpanelId && !hasWorldofsmmId && !hasG1618Id && !hasOldSmmId && !hasApiOwnerId) {
       console.log(`Skipping status check for order ${order.id} - no valid panel order ID`);
       return;
     }
@@ -162,7 +163,7 @@ const OrderHistory = ({ user, onLogout }) => {
       return;
     }
 
-    const orderId = hasOldSmmId ? order.oldsmm_order_id : (hasG1618Id ? order.g1618_order_id : (hasWorldofsmmId ? order.worldofsmm_order_id : (hasSmmcostId ? order.smmcost_order_id : (hasJbsmmpanelId ? order.jbsmmpanel_order_id : order.smmgen_order_id))));
+    const orderId = hasApiOwnerId ? order.apiowner_order_id : (hasOldSmmId ? order.oldsmm_order_id : (hasG1618Id ? order.g1618_order_id : (hasWorldofsmmId ? order.worldofsmm_order_id : (hasSmmcostId ? order.smmcost_order_id : (hasJbsmmpanelId ? order.jbsmmpanel_order_id : order.smmgen_order_id)))));
     console.log(`Manually checking status for order ${order.id} with panel order ID: ${orderId}`);
     setCheckingStatus(prev => ({ ...prev, [order.id]: true }));
 
@@ -286,7 +287,7 @@ const OrderHistory = ({ user, onLogout }) => {
 
           const { data: currentOrders } = await supabase
             .from('orders')
-            .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, created_at, completed_at, refund_status, total_cost, last_status_check, promotion_packages(name, platform, service_type), services(id, name, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id)')
+            .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, created_at, completed_at, refund_status, total_cost, last_status_check, promotion_packages(name, platform, service_type), services(id, name, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id)')
             .eq('user_id', authUser.id)
             .order('created_at', { ascending: false });
 

@@ -39,6 +39,9 @@ async function fetchProviderServices(provider) {
     } else if (p === 'oldsmm') {
         apiUrl = process.env.OLDSMM_API_URL || 'https://oldsmm.com/api/v2';
         apiKey = process.env.OLDSMM_API_KEY;
+    } else if (p === 'apiowner') {
+        apiUrl = process.env.APIOWNER_API_URL || 'https://apiowner.com/api/v2';
+        apiKey = process.env.APIOWNER_API_KEY;
     }
 
     if (!apiKey || apiKey.includes('PLACEHOLDER')) return [];
@@ -94,13 +97,13 @@ export default async function handler(req, res) {
             // Fetch all local database services that are imported from a provider
             const { data: localServices, error: fetchError } = await supabase
                 .from('services')
-                .select('id, name, rate, platform, enabled, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id')
+                .select('id, name, rate, platform, enabled, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id')
                 .order('name');
 
             if (fetchError) throw fetchError;
 
             // Group local services by provider and find active provider IDs
-            const providers = ['smmgen', 'smmcost', 'jbsmmpanel', 'worldofsmm', 'g1618', 'oldsmm'];
+            const providers = ['smmgen', 'smmcost', 'jbsmmpanel', 'worldofsmm', 'g1618', 'oldsmm', 'apiowner'];
             const liveCatalogs = {};
 
             // Fetch live service catalogs in parallel
@@ -132,6 +135,9 @@ export default async function handler(req, res) {
                 } else if (service.oldsmm_service_id) {
                     provider = 'oldsmm';
                     providerServiceId = service.oldsmm_service_id;
+                } else if (service.apiowner_service_id) {
+                    provider = 'apiowner';
+                    providerServiceId = service.apiowner_service_id;
                 }
 
                 if (!provider || !providerServiceId) continue;
@@ -167,7 +173,7 @@ export default async function handler(req, res) {
             // Fetch last 40 orders submitted to providers
             const { data: recentOrders, error: fetchError } = await supabase
                 .from('orders')
-                .select('id, created_at, status, quantity, total_cost, service_id, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, services(name, rate)')
+                .select('id, created_at, status, quantity, total_cost, service_id, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, services(name, rate)')
                 .order('created_at', { ascending: false })
                 .limit(40);
 
@@ -198,6 +204,9 @@ export default async function handler(req, res) {
                 } else if (order.oldsmm_order_id) {
                     provider = 'oldsmm';
                     providerOrderId = order.oldsmm_order_id;
+                } else if (order.apiowner_order_id) {
+                    provider = 'apiowner';
+                    providerOrderId = order.apiowner_order_id;
                 }
 
                 if (!provider || !providerOrderId) return;

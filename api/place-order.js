@@ -78,7 +78,7 @@ export default async function handler(req, res) {
     }
 
     // Get request body
-    const { service_id, package_id, link, quantity, total_cost, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, comments } = req.body;
+    const { service_id, package_id, link, quantity, total_cost, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, comments } = req.body;
 
     // Validate required fields
     if (!link || typeof link !== 'string' || link.trim() === '') {
@@ -257,6 +257,11 @@ export default async function handler(req, res) {
       ? String(oldsmm_order_id)
       : null;
 
+    // Ensure apiowner_order_id is a string (database expects TEXT)
+    const apiownerOrderIdString = apiowner_order_id
+      ? String(apiowner_order_id)
+      : null;
+
     // Log what we received and converted
     console.log('API received order IDs:', {
       smmcost_order_id: {
@@ -288,6 +293,12 @@ export default async function handler(req, res) {
         originalType: typeof oldsmm_order_id,
         converted: oldsmmOrderIdString,
         convertedType: typeof oldsmmOrderIdString
+      },
+      apiowner_order_id: {
+        original: apiowner_order_id,
+        originalType: typeof apiowner_order_id,
+        converted: apiownerOrderIdString,
+        convertedType: typeof apiownerOrderIdString
       }
     });
 

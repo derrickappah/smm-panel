@@ -35,6 +35,7 @@ const AdminJBSMMPanel = lazy(() => import('@/pages/admin/AdminJBSMMPanel'));
 const AdminWorldOfSMM = lazy(() => import('@/pages/admin/AdminWorldOfSMM'));
 const AdminG1618 = lazy(() => import('@/pages/admin/AdminG1618'));
 const AdminOldSMM = lazy(() => import('@/pages/admin/AdminOldSMM'));
+const AdminApiOwner = lazy(() => import('@/pages/admin/AdminApiOwner'));
 const AdminMoolre = lazy(() => import('@/pages/admin/AdminMoolre'));
 const AdminFAQ = lazy(() => import('@/pages/admin/AdminFAQ'));
 const AdminTerms = lazy(() => import('@/pages/admin/AdminTerms'));
@@ -91,6 +92,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
         'worldofsmm': 'worldofsmm',
         'g1618': 'g1618',
         'oldsmm': 'oldsmm',
+        'apiowner': 'apiowner',
         'moolre': 'moolre',
         'faq': 'faq',
         'terms': 'terms',
@@ -332,6 +334,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     worldofsmm: 'World of SMM Integration',
     g1618: 'G1618 Integration',
     oldsmm: 'OldSMM Integration',
+    apiowner: 'ApiOwner Integration',
     moolre: 'Moolre Transactions',
     rewards: 'Reward Claims',
     'rewards-settings': 'Reward Settings',
@@ -364,6 +367,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     { id: 'worldofsmm', label: 'World of SMM', icon: Server },
     { id: 'g1618', label: 'G1618', icon: Server },
     { id: 'oldsmm', label: 'OldSMM', icon: Server },
+    { id: 'apiowner', label: 'ApiOwner', icon: Server },
     { id: 'moolre', label: 'Moolre', icon: CreditCard },
     { id: 'rewards', label: 'Rewards', icon: Gift },
     { id: 'rewards-settings', label: 'Reward Settings', icon: Settings },
@@ -806,6 +810,13 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                 <TabsContent value="oldsmm" className="lg:mt-0">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminOldSMM />
+                  </Suspense>
+                </TabsContent>
+
+                {/* ApiOwner Section */}
+                <TabsContent value="apiowner" className="lg:mt-0">
+                  <Suspense fallback={<ComponentLoader />}>
+                    <AdminApiOwner />
                   </Suspense>
                 </TabsContent>
 

@@ -29,7 +29,7 @@ const fetchServices = async () => {
   // Try with rate_unit first, fallback to without it if column doesn't exist
   let primaryQuery = supabase
     .from('services')
-    .select('id, name, description, rate, rate_unit, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only')
+    .select('id, name, description, rate, rate_unit, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only')
     .eq('enabled', true);
 
   // Filter out seller-only services for regular users
@@ -46,7 +46,7 @@ const fetchServices = async () => {
     console.warn('rate_unit column not found, fetching without it:', error.message);
     let fallbackQuery = supabase
       .from('services')
-      .select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only')
+      .select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only')
       .eq('enabled', true);
 
     // Filter out seller-only services for regular users
@@ -88,7 +88,7 @@ const fetchRecentOrders = async () => {
 
   const { data, error, count } = await supabase
     .from('orders')
-    .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, created_at, completed_at, refund_status, total_cost, last_status_check, promotion_packages(name, platform, service_type)', { count: 'exact' })
+    .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, created_at, completed_at, refund_status, total_cost, last_status_check, promotion_packages(name, platform, service_type)', { count: 'exact' })
     .eq('user_id', authUser.id)
     .order('created_at', { ascending: false })
     .limit(1);
@@ -114,7 +114,7 @@ const fetchRecentOrders = async () => {
     // Fetch updated orders to return latest status
     const { data: updatedData } = await supabase
       .from('orders')
-      .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, created_at, completed_at, refund_status, total_cost, last_status_check, promotion_packages(name, platform, service_type)')
+      .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, created_at, completed_at, refund_status, total_cost, last_status_check, promotion_packages(name, platform, service_type)')
       .eq('user_id', authUser.id)
       .in('id', orders.map(o => o.id))
       .order('created_at', { ascending: false });
@@ -139,7 +139,7 @@ const fetchAllPendingOrders = async () => {
   console.log('Fetching orders from database for user:', authUser.id);
   const { data, error } = await supabase
     .from('orders')
-    .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, created_at, completed_at, refund_status, total_cost, last_status_check, promotion_packages(name, platform, service_type)')
+    .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, created_at, completed_at, refund_status, total_cost, last_status_check, promotion_packages(name, platform, service_type)')
     .eq('user_id', authUser.id)
     .neq('status', 'completed')
     .neq('status', 'refunded')
@@ -185,8 +185,10 @@ const fetchAllPendingOrders = async () => {
       String(order.g1618_order_id).toLowerCase() !== "order not placed at g1618";
     const hasOldSmmId = order.oldsmm_order_id &&
       String(order.oldsmm_order_id).toLowerCase() !== "order not placed at oldsmm";
+    const hasApiOwnerId = order.apiowner_order_id &&
+      String(order.apiowner_order_id).toLowerCase() !== "order not placed at apiowner";
 
-    const shouldInclude = hasSmmgenId || hasSmmcostId || hasJbsmmpanelId || hasWorldofsmmId || hasG1618Id || hasOldSmmId;
+    const shouldInclude = hasSmmgenId || hasSmmcostId || hasJbsmmpanelId || hasWorldofsmmId || hasG1618Id || hasOldSmmId || hasApiOwnerId;
 
     if (jbsmmpanelId) {
       console.log('Filtering JB SMM Panel order:', {
