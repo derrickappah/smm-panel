@@ -464,10 +464,12 @@ const OrderHistory = ({ user, onLogout }) => {
                                   const serviceHasWorldofsmm = orderService?.worldofsmm_service_id;
                                   const serviceHasG1618 = orderService?.g1618_service_id;
                                   const serviceHasOldsmm = orderService?.oldsmm_service_id;
+                                  const serviceHasApiowner = orderService?.apiowner_service_id;
 
-                                  // Prioritize: OldSMM > G1618 > World of SMM > SMMCost > JB SMM Panel > SMMGen
+                                  // Prioritize: ApiOwner > OldSMM > G1618 > World of SMM > SMMCost > JB SMM Panel > SMMGen
                                   // Check if smmgen_order_id is the internal UUID (set by trigger) - if so, ignore it
                                   const isInternalUuid = order.smmgen_order_id === order.id;
+                                  const hasApiowner = order.apiowner_order_id && String(order.apiowner_order_id).toLowerCase() !== "order not placed at apiowner";
                                   const hasOldsmm = order.oldsmm_order_id && order.oldsmm_order_id !== "order not placed at oldsmm";
                                   const hasG1618 = order.g1618_order_id && order.g1618_order_id !== "order not placed at g1618";
                                   const hasSmmcost = order.smmcost_order_id && String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost";
@@ -477,7 +479,9 @@ const OrderHistory = ({ user, onLogout }) => {
                                     !isInternalUuid; // Ignore if it's just the internal UUID
                                   const hasWorldofsmm = order.worldofsmm_order_id && order.worldofsmm_order_id !== "order not placed at worldofsmm";
 
-                                  if (hasOldsmm) {
+                                  if (hasApiowner) {
+                                    return <p className="font-medium text-gray-900 text-sm">{order.apiowner_order_id}</p>;
+                                  } else if (hasOldsmm) {
                                     // OldSMM order ID exists and is valid
                                     return <p className="font-medium text-gray-900 text-sm">{order.oldsmm_order_id}</p>;
                                   } else if (hasG1618) {
@@ -495,6 +499,8 @@ const OrderHistory = ({ user, onLogout }) => {
                                   } else if (hasSmmgen) {
                                     // SMMGen order ID exists and is valid (and not the internal UUID)
                                     return <p className="font-medium text-gray-900 text-sm">{order.smmgen_order_id}</p>;
+                                  } else if (order.apiowner_order_id === "order not placed at apiowner" || String(order.apiowner_order_id || '').toLowerCase() === "order not placed at apiowner") {
+                                    return <p className="text-xs text-red-600 italic font-medium">Order not placed</p>;
                                   } else if (order.oldsmm_order_id === "order not placed at oldsmm") {
                                     return <p className="text-xs text-red-600 italic font-medium">Order not placed</p>;
                                   } else if (order.smmcost_order_id === "order not placed at smmcost" || String(order.smmcost_order_id || '').toLowerCase() === "order not placed at smmcost") {
@@ -507,6 +513,8 @@ const OrderHistory = ({ user, onLogout }) => {
                                     return <p className="text-xs text-red-600 italic font-medium">Order not placed</p>;
                                   } else if (order.g1618_order_id === "order not placed at g1618") {
                                     // Order failed at G1618
+                                    return <p className="text-xs text-red-600 italic font-medium">Order not placed</p>;
+                                  } else if (serviceHasApiowner && !hasApiowner) {
                                     return <p className="text-xs text-red-600 italic font-medium">Order not placed</p>;
                                   } else if (serviceHasOldsmm && !hasOldsmm) {
                                     return <p className="text-xs text-red-600 italic font-medium">Order not placed</p>;
@@ -525,7 +533,7 @@ const OrderHistory = ({ user, onLogout }) => {
                                   } else if (order.is_reward) {
                                     // Reward order not yet sent to a panel
                                     return <p className="text-xs text-blue-600 italic font-medium">Processed Reward</p>;
-                                  } else if (order.smmcost_order_id === null && order.smmgen_order_id === null && order.jbsmmpanel_order_id === null && order.worldofsmm_order_id === null && order.g1618_order_id === null && order.oldsmm_order_id === null) {
+                                  } else if (order.smmcost_order_id === null && order.smmgen_order_id === null && order.jbsmmpanel_order_id === null && order.worldofsmm_order_id === null && order.g1618_order_id === null && order.oldsmm_order_id === null && order.apiowner_order_id === null) {
                                     // No order IDs at all (shouldn't happen, but handle gracefully)
                                     return <p className="text-xs text-gray-400 italic">N/A</p>;
                                   } else {
@@ -572,8 +580,9 @@ const OrderHistory = ({ user, onLogout }) => {
                                   const hasWorldofsmm = order.worldofsmm_order_id && order.worldofsmm_order_id !== "order not placed at worldofsmm";
                                   const hasG1618 = order.g1618_order_id && order.g1618_order_id !== "order not placed at g1618";
                                   const hasOldsmm = order.oldsmm_order_id && order.oldsmm_order_id !== "order not placed at oldsmm";
+                                  const hasApiowner = order.apiowner_order_id && order.apiowner_order_id !== "order not placed at apiowner";
  
-                                  if (hasSmmcost || hasJbsmmpanel || hasSmmgen || hasWorldofsmm || hasG1618 || hasOldsmm) {
+                                  if (hasSmmcost || hasJbsmmpanel || hasSmmgen || hasWorldofsmm || hasG1618 || hasOldsmm || hasApiowner) {
                                     return (
                                       <Button
                                         size="sm"

@@ -962,6 +962,20 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                     <p className="text-xs text-red-600 italic font-medium">Order not placed at G1618</p>
                   </div>
                 );
+              } else if (order.apiowner_order_id === "order not placed at apiowner" || String(order.apiowner_order_id || '').toLowerCase() === "order not placed at apiowner") {
+                return (
+                  <div className="flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-4 h-4 text-red-500" />
+                    <p className="text-xs text-red-600 italic font-medium">Order not placed at ApiOwner</p>
+                  </div>
+                );
+              } else if (serviceHasApiowner && !hasApiowner) {
+                return (
+                  <div className="flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-4 h-4 text-red-500" />
+                    <p className="text-xs text-red-600 italic font-medium">Order not placed at ApiOwner</p>
+                  </div>
+                );
               } else if (order.is_reward) {
                 return (
                   <div className="flex items-center gap-1 mt-1">
@@ -969,7 +983,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                     <p className="text-xs text-blue-600 italic font-medium">Processed Reward</p>
                   </div>
                 );
-              } else if (order.smmcost_order_id === null && order.jbsmmpanel_order_id === null && order.smmgen_order_id === null && order.worldofsmm_order_id === null && order.g1618_order_id === null && order.oldsmm_order_id === null) {
+              } else if (order.smmcost_order_id === null && order.jbsmmpanel_order_id === null && order.smmgen_order_id === null && order.worldofsmm_order_id === null && order.g1618_order_id === null && order.oldsmm_order_id === null && order.apiowner_order_id === null) {
                 return (
                   <div className="flex items-center gap-1 mt-1">
                     <AlertCircle className="w-4 h-4 text-orange-500" />
@@ -986,6 +1000,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               }
             })()}
             {(() => {
+              const hasApiowner = order.apiowner_order_id && String(order.apiowner_order_id).toLowerCase() !== "order not placed at apiowner";
               const hasOldsmm = order.oldsmm_order_id && order.oldsmm_order_id !== "order not placed at oldsmm";
               const hasG1618 = order.g1618_order_id && order.g1618_order_id !== "order not placed at g1618";
               const hasWorldofsmm = order.worldofsmm_order_id && order.worldofsmm_order_id !== "order not placed at worldofsmm";
@@ -994,6 +1009,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
 
               const panelIds = [];
+              if (hasApiowner) panelIds.push(`ApiOwner: ${order.apiowner_order_id}`);
               if (hasOldsmm) panelIds.push(`OldSMM: ${order.oldsmm_order_id}`);
               if (hasG1618) panelIds.push(`G1618: ${order.g1618_order_id}`);
               if (hasWorldofsmm) panelIds.push(`WorldOfSMM: ${order.worldofsmm_order_id}`);
