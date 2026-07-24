@@ -26,6 +26,7 @@
 import { verifyAuth, getServiceRoleClient } from './utils/auth.js';
 import { logUserAction } from './utils/activityLogger.js';
 import { rateLimit } from './middleware/rateLimit.js';
+import { redis } from './utils/redisClient.js';
 
 export default async function handler(req, res) {
   // Enable CORS - restricted to app domain only
@@ -118,6 +119,17 @@ export default async function handler(req, res) {
       return res.status(400).json({
         error: 'Invalid total_cost: must be a positive number'
       });
+    }
+
+    // Atomic Redis Order Idempotency Lock (10s lock)
+    if (redis) {
+      const orderLockKey = `smm:lock:order:${user.id}:${service_id || package_id}:${encodeURIComponent(link.trim())}`;
+      const acquired = await redis.set(orderLockKey, 'locked', { nx: true, ex: 10 });
+      if (!acquired) {
+        return res.status(409).json({
+          error: 'An identical order is currently being processed. Please wait a few seconds before retrying.'
+        });
+      }
     }
 
     // Validate that either service_id or package_id is provided

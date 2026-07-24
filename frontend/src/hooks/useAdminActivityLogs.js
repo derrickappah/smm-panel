@@ -160,8 +160,9 @@ export const useAdminActivityLogs = (options = {}) => {
       getNextPageParam: (lastPage) => lastPage.nextPage,
       initialPageParam: 0,
       enabled: queryEnabled,
-      staleTime: 0, // 30 seconds
-      gcTime: 0, // 5 minutes
+      staleTime: 1 * 60 * 1000, // 1 minute
+      gcTime: 10 * 60 * 1000, // 10 minutes
+      placeholderData: (previousData) => previousData,
     });
   }
 
@@ -169,8 +170,9 @@ export const useAdminActivityLogs = (options = {}) => {
     queryKey: ['admin', 'activity-logs', filters],
     queryFn: () => fetchActivityLogs({ pageParam: 0, filters }),
     enabled: queryEnabled,
-    staleTime: 0,
-    gcTime: 0,
+    staleTime: 1 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    placeholderData: (previousData) => previousData,
   });
 };
 

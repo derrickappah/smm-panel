@@ -21,7 +21,26 @@ export const useAdminStats = (options = {}) => {
   const { data, isLoading, error } = useQuery({
     queryKey: ['admin', 'stats', 'dashboard', dateRangeStart, dateRangeEnd],
     queryFn: async () => {
-      // Build RPC params
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          const res = await fetch('/api/admin/dashboard-stats', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`
+            },
+            body: JSON.stringify({ dateRangeStart, dateRangeEnd })
+          });
+          if (res.ok) {
+            return await res.json();
+          }
+        }
+      } catch (apiErr) {
+        console.warn('[useAdminStats] API call failed, falling back to direct RPC:', apiErr.message);
+      }
+
+      // Direct Supabase RPC Fallback
       const params = {};
       if (dateRangeStart) {
         const start = new Date(dateRangeStart);
@@ -44,9 +63,10 @@ export const useAdminStats = (options = {}) => {
       return data;
     },
     enabled: queryEnabled,
-    staleTime: 30 * 1000, // 30 seconds - stats don't need to be real-time
-    gcTime: 60 * 1000,    // 1 minute cache
-    refetchInterval: 60 * 1000, // Auto-refresh every 60 seconds
+    staleTime: 2 * 60 * 1000,   // 2 minutes stale time
+    gcTime: 10 * 60 * 1000,     // 10 minutes cache retention
+    placeholderData: (previousData) => previousData,
+    refetchInterval: 120 * 1000, // Auto-refresh every 2 minutes
   });
 
   // Extract stats and sub-data from the RPC result

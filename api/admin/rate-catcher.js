@@ -1,13 +1,25 @@
 import { verifyAdmin, getServiceRoleClient } from '../utils/auth.js';
 import { fetchProviderOrderStatus } from '../utils/providers.js';
+import { getCached, setCached } from '../utils/redisClient.js';
 
-// Helper to fetch services list from any SMM provider API
+// Helper to fetch services list from any SMM provider API (with Upstash Redis caching)
 async function fetchProviderServices(provider) {
+    const p = provider.toLowerCase();
+    const cacheKey = `smm:provider:${p}:services`;
+
+    try {
+        const cached = await getCached(cacheKey);
+        if (cached && Array.isArray(cached)) {
+            return cached;
+        }
+    } catch (cacheErr) {
+        // Continue to live fetch if cache fails
+    }
+
     let apiUrl = '';
     let apiKey = '';
     let isJson = false;
 
-    const p = provider.toLowerCase();
     if (p === 'smmgen') {
         apiUrl = process.env.SMMGEN_API_URL || 'https://smmgen.com/api/v2';
         apiKey = process.env.SMMGEN_API_KEY;
@@ -49,7 +61,11 @@ async function fetchProviderServices(provider) {
 
         if (!response.ok) return [];
         const data = await response.json();
-        return Array.isArray(data) ? data : [];
+        const servicesList = Array.isArray(data) ? data : [];
+        if (servicesList.length > 0) {
+            await setCached(cacheKey, servicesList, 600);
+        }
+        return servicesList;
     } catch (e) {
         console.error(`Fetch services list failed for ${provider}:`, e.message);
         return [];

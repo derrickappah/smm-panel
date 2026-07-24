@@ -88,8 +88,9 @@ export const useAdminTransactions = (options = {}) => {
       getNextPageParam: (lastPage) => lastPage.nextPage,
       initialPageParam: 0,
       enabled: queryEnabled,
-      staleTime: 0,
-      gcTime: 0,
+      staleTime: 2 * 60 * 1000,
+      gcTime: 10 * 60 * 1000,
+      placeholderData: (previousData) => previousData,
     });
   }
 
@@ -97,8 +98,9 @@ export const useAdminTransactions = (options = {}) => {
     queryKey: ['admin', 'transactions', 'all'],
     queryFn: fetchAllTransactions,
     enabled: queryEnabled,
-    staleTime: 0, // 3 minutes - increased for better caching
-    gcTime: 0, // 10 minutes - keep in cache longer
+    staleTime: 3 * 60 * 1000, // 3 minutes - increased for better caching
+    gcTime: 15 * 60 * 1000, // 15 minutes - keep in cache longer
+    placeholderData: (previousData) => previousData,
   });
 };
 

@@ -6,15 +6,8 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-
-
-
-/**
- * Verify Supabase JWT token from request and return authenticated user
- * @param {Object} req - Request object
- * @returns {Object} - { user, supabase } or throws error
- */
 import jwt from 'jsonwebtoken';
+import { getCached, setCached } from './redisClient.js';
 
 /**
  * Verify Supabase JWT token from request and return authenticated user
@@ -112,18 +105,27 @@ export async function verifyAuth(req) {
 export async function verifyAdmin(req) {
   const { user, supabase } = await verifyAuth(req);
 
-  // Get user profile to check role
-  const { data: profile, error } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single();
+  // Check Redis cache for user role first (300s TTL)
+  const cacheKey = `smm:user:${user.id}:role`;
+  let userRole = await getCached(cacheKey);
 
-  if (error) {
-    throw new Error('Failed to fetch user profile');
+  if (!userRole) {
+    // Get user profile to check role from DB
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (error) {
+      throw new Error('Failed to fetch user profile');
+    }
+
+    userRole = profile?.role || 'user';
+    await setCached(cacheKey, userRole, 300);
   }
 
-  const isAdmin = profile?.role === 'admin';
+  const isAdmin = userRole === 'admin';
 
   if (!isAdmin) {
     throw new Error('Admin access required');

@@ -1,4 +1,4 @@
-// Vercel Serverless Function for G1618 Balance
+import { getCached, setCached } from '../utils/redisClient.js';
 
 export default async function handler(req, res) {
     // Enable CORS
@@ -15,7 +15,14 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
+    const cacheKey = 'smm:provider:g1618:balance';
+
     try {
+        const cachedBalance = await getCached(cacheKey);
+        if (cachedBalance) {
+            return res.status(200).json(cachedBalance);
+        }
+
         const G1618_API_URL = process.env.G1618_API_URL || 'https://g1618.com/api/v2';
         const G1618_API_KEY = process.env.G1618_API_KEY;
 
@@ -46,6 +53,7 @@ export default async function handler(req, res) {
         }
 
         const data = await response.json();
+        await setCached(cacheKey, data, 180);
         return res.status(200).json(data);
     } catch (error) {
         console.error('G1618 balance error:', error);

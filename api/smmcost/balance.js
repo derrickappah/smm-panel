@@ -1,5 +1,4 @@
-// Vercel Serverless Function for SMMCost Balance
-// This replaces the need for a separate backend server
+import { getCached, setCached } from '../utils/redisClient.js';
 
 const REQUEST_TIMEOUT = 20000; // 20 seconds
 
@@ -20,8 +19,13 @@ export default async function handler(req, res) {
   }
 
   const startTime = Date.now();
+  const cacheKey = 'smm:provider:smmcost:balance';
 
   try {
+    const cachedBalance = await getCached(cacheKey);
+    if (cachedBalance) {
+      return res.status(200).json(cachedBalance);
+    }
     const SMMCOST_API_URL = process.env.SMMCOST_API_URL || 'https://api.smmcost.com';
     const SMMCOST_API_KEY = process.env.SMMCOST_API_KEY;
 
@@ -108,6 +112,8 @@ export default async function handler(req, res) {
 
       const duration = Date.now() - startTime;
       console.log(`SMMCost balance fetched successfully in ${duration}ms`);
+
+      await setCached(cacheKey, data, 180);
 
       return res.status(200).json(data);
     } catch (fetchError) {

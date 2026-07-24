@@ -42,8 +42,9 @@ export const useAdminPromotionPackages = (options = {}) => {
     queryKey: ['admin', 'promotion-packages'],
     queryFn: fetchPromotionPackages,
     enabled: queryEnabled,
-    staleTime: 0, // 5 minutes
-    gcTime: 0, // 10 minutes
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 15 * 60 * 1000, // 15 minutes
+    placeholderData: (previousData) => previousData,
   });
 };
 
@@ -55,8 +56,9 @@ export const usePromotionPackages = (options = {}) => {
     queryKey: ['promotion-packages'],
     queryFn: fetchEnabledPromotionPackages,
     enabled: enabled,
-    staleTime: 0, // 5 minutes
-    gcTime: 0, // 10 minutes,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 15 * 60 * 1000, // 15 minutes
+    placeholderData: (previousData) => previousData,
   });
 };
 

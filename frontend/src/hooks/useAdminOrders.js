@@ -458,8 +458,8 @@ export const useAdminOrders = (options = {}) => {
       getNextPageParam: (lastPage) => lastPage.nextPage,
       initialPageParam: 0,
       enabled: queryEnabled,
-      staleTime: 0, // 1 minute - orders change frequently
-      gcTime: 0, // 3 minutes
+      staleTime: 2 * 60 * 1000, // 2 minutes
+      gcTime: 10 * 60 * 1000, // 10 minutes
       placeholderData: (previousData) => previousData, // Show stale data while fetching
     });
   }
@@ -476,8 +476,8 @@ export const useAdminOrders = (options = {}) => {
       queryKey: ['admin', 'orders', 'all', { checkSMMGenStatus }],
       queryFn: () => fetchAllOrders(checkSMMGenStatus),
       enabled: queryEnabled,
-      staleTime: 0, // 2 minutes - increased for better caching
-      gcTime: 0, // 5 minutes - keep in cache longer
+      staleTime: 2 * 60 * 1000, // 2 minutes - increased for better caching
+      gcTime: 10 * 60 * 1000, // 10 minutes - keep in cache longer
       placeholderData: (previousData) => previousData, // Show stale data while fetching
     });
   }
@@ -498,8 +498,8 @@ export const useAdminOrders = (options = {}) => {
       return result;
     },
     enabled: queryEnabled,
-    staleTime: 0, // 1 minute - orders change frequently
-    gcTime: 0, // 3 minutes
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
     placeholderData: (previousData) => previousData, // Show stale data while fetching
   });
 };

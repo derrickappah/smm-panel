@@ -1,4 +1,4 @@
-// Vercel Serverless Function for G1618 Services
+import { getCached, setCached } from '../utils/redisClient.js';
 
 export default async function handler(req, res) {
     // Enable CORS
@@ -15,7 +15,15 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
+    const cacheKey = 'smm:provider:g1618:services';
+
     try {
+        // Check Redis cache first
+        const cachedServices = await getCached(cacheKey);
+        if (cachedServices) {
+            return res.status(200).json(cachedServices);
+        }
+
         const G1618_API_URL = process.env.G1618_API_URL || 'https://g1618.com/api/v2';
         const G1618_API_KEY = process.env.G1618_API_KEY;
 
@@ -45,6 +53,10 @@ export default async function handler(req, res) {
         }
 
         const data = await response.json();
+
+        // Cache response in Redis for 10 minutes (600s)
+        await setCached(cacheKey, data, 600);
+
         return res.status(200).json(data);
     } catch (error) {
         console.error('G1618 services error:', error);

@@ -1,4 +1,4 @@
-// Vercel Serverless Function for World of SMM Balance
+import { getCached, setCached } from '../utils/redisClient.js';
 
 export default async function handler(req, res) {
     // Enable CORS
@@ -15,7 +15,14 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
+    const cacheKey = 'smm:provider:worldofsmm:balance';
+
     try {
+        const cachedBalance = await getCached(cacheKey);
+        if (cachedBalance) {
+            return res.status(200).json(cachedBalance);
+        }
+
         const WORLDOFSMM_API_URL = process.env.WORLDOFSMM_API_URL || 'https://worldofsmm.com/api/v2';
         const WORLDOFSMM_API_KEY = process.env.WORLDOFSMM_API_KEY;
 
@@ -46,6 +53,7 @@ export default async function handler(req, res) {
         }
 
         const data = await response.json();
+        await setCached(cacheKey, data, 180);
         return res.status(200).json(data);
     } catch (error) {
         console.error('World of SMM balance error:', error);

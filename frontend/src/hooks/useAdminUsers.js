@@ -126,8 +126,9 @@ export const useUserDepositStatuses = () => {
     queryKey: ['admin', 'user-deposit-statuses'],
     queryFn: fetchUserDepositStatuses,
     enabled: !roleLoading && isAdmin,
-    staleTime: 0, // 2 minutes
-    gcTime: 0, // 5 minutes
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
+    placeholderData: (previousData) => previousData,
   });
 };
 
@@ -148,8 +149,9 @@ export const useAdminUsers = (options = {}) => {
       getNextPageParam: (lastPage) => lastPage.nextPage,
       initialPageParam: 0,
       enabled: queryEnabled,
-      staleTime: 0, // 2 minutes
-      gcTime: 0, // 5 minutes
+      staleTime: 2 * 60 * 1000, // 2 minutes
+      gcTime: 10 * 60 * 1000, // 10 minutes
+      placeholderData: (previousData) => previousData,
     });
   }
 
@@ -157,8 +159,9 @@ export const useAdminUsers = (options = {}) => {
     queryKey: ['admin', 'users', 'all'],
     queryFn: fetchAllUsers,
     enabled: queryEnabled,
-    staleTime: 0, // 3 minutes - increased for better caching
-    gcTime: 0, // 10 minutes - keep in cache longer
+    staleTime: 3 * 60 * 1000, // 3 minutes - increased for better caching
+    gcTime: 15 * 60 * 1000, // 15 minutes - keep in cache longer
+    placeholderData: (previousData) => previousData,
   });
 };
 

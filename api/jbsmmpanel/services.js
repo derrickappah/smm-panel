@@ -1,6 +1,4 @@
-// Vercel Serverless Function for JB SMM Panel Services
-// This replaces the need for a separate backend server
-// API keys are kept secure on the server side
+import { getCached, setCached } from '../utils/redisClient.js';
 
 const REQUEST_TIMEOUT = 30000; // 30 seconds
 
@@ -21,8 +19,13 @@ export default async function handler(req, res) {
   }
 
   const startTime = Date.now();
+  const cacheKey = 'smm:provider:jbsmmpanel:services';
 
   try {
+    const cachedServices = await getCached(cacheKey);
+    if (cachedServices) {
+      return res.status(200).json(cachedServices);
+    }
     const JBSMMPANEL_API_URL = process.env.JBSMMPANEL_API_URL || 'https://jbsmmpanel.com/api/v2';
     const JBSMMPANEL_API_KEY = process.env.JBSMMPANEL_API_KEY;
 
@@ -118,6 +121,8 @@ export default async function handler(req, res) {
 
       const duration = Date.now() - startTime;
       console.log(`JB SMM Panel services fetched successfully in ${duration}ms`);
+
+      await setCached(cacheKey, data, 600);
 
       return res.status(200).json(data);
     } catch (fetchError) {

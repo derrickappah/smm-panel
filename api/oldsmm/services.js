@@ -1,4 +1,4 @@
-// Vercel Serverless Function for OldSMM Services
+import { getCached, setCached } from '../utils/redisClient.js';
 
 export default async function handler(req, res) {
     // Enable CORS
@@ -15,7 +15,14 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
+    const cacheKey = 'smm:provider:oldsmm:services';
+
     try {
+        const cachedServices = await getCached(cacheKey);
+        if (cachedServices) {
+            return res.status(200).json(cachedServices);
+        }
+
         const OLDSMM_API_URL = process.env.OLDSMM_API_URL || 'https://oldsmm.com/api/v2';
         const OLDSMM_API_KEY = process.env.OLDSMM_API_KEY;
 
@@ -45,6 +52,7 @@ export default async function handler(req, res) {
         }
 
         const data = await response.json();
+        await setCached(cacheKey, data, 600);
         return res.status(200).json(data);
     } catch (error) {
         console.error('OldSMM services error:', error);

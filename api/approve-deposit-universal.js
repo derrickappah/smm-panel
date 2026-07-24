@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { verifyTransactionOwner } from './utils/auth.js';
 import { logAdminAction, logSecurityEvent } from './utils/activityLogger.js';
+import { redis } from './utils/redisClient.js';
 
 export default async function handler(req, res) {
   // Enable CORS
@@ -40,6 +41,18 @@ export default async function handler(req, res) {
         payment_method: payment_method || null,
         payment_reference: payment_reference || null
       });
+    }
+
+    // Atomic Redis Idempotency Lock (30s)
+    if (redis) {
+      const lockKey = `smm:lock:deposit:${transaction_id}`;
+      const acquired = await redis.set(lockKey, 'locked', { nx: true, ex: 30 });
+      if (!acquired) {
+        return res.status(409).json({
+          error: 'Deposit approval for this transaction is currently being processed. Please wait.',
+          transaction_id
+        });
+      }
     }
 
     // Authenticate user and verify transaction ownership (users can approve their own, admins can approve any)

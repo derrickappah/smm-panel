@@ -1,5 +1,4 @@
-// Vercel Serverless Function for JB SMM Panel Balance
-// This replaces the need for a separate backend server
+import { getCached, setCached } from '../utils/redisClient.js';
 
 const REQUEST_TIMEOUT = 20000; // 20 seconds
 
@@ -20,8 +19,13 @@ export default async function handler(req, res) {
   }
 
   const startTime = Date.now();
+  const cacheKey = 'smm:provider:jbsmmpanel:balance';
 
   try {
+    const cachedBalance = await getCached(cacheKey);
+    if (cachedBalance) {
+      return res.status(200).json(cachedBalance);
+    }
     const JBSMMPANEL_API_URL = process.env.JBSMMPANEL_API_URL || 'https://jbsmmpanel.com/api/v2';
     const JBSMMPANEL_API_KEY = process.env.JBSMMPANEL_API_KEY;
 
@@ -117,6 +121,8 @@ export default async function handler(req, res) {
 
       const duration = Date.now() - startTime;
       console.log(`JB SMM Panel balance fetched successfully in ${duration}ms`);
+
+      await setCached(cacheKey, data, 180);
 
       return res.status(200).json(data);
     } catch (fetchError) {
