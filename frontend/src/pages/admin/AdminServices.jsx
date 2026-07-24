@@ -130,7 +130,7 @@ const SortableServiceItem = memo(({ service, editingService, onEdit, onToggle, o
                   Includes {service.combo_service_ids.length} service{service.combo_service_ids.length !== 1 ? 's' : ''}
                 </p>
               )}
-              {(service.smmgen_service_id || service.smmcost_service_id || service.jbsmmpanel_service_id || service.worldofsmm_service_id) && (
+              {(service.smmgen_service_id || service.smmcost_service_id || service.jbsmmpanel_service_id || service.worldofsmm_service_id || service.g1618_service_id || service.oldsmm_service_id || service.apiowner_service_id) && (
                 <div className="flex flex-wrap gap-2 text-xs text-gray-500 mt-1">
                   {service.smmgen_service_id && (
                     <span>SMMGen ID: {service.smmgen_service_id}</span>
@@ -146,6 +146,12 @@ const SortableServiceItem = memo(({ service, editingService, onEdit, onToggle, o
                   )}
                   {service.g1618_service_id && (
                     <span>G1618 ID: {service.g1618_service_id}</span>
+                  )}
+                  {service.oldsmm_service_id && (
+                    <span>OldSMM ID: {service.oldsmm_service_id}</span>
+                  )}
+                  {service.apiowner_service_id && (
+                    <span>ApiOwner ID: {service.apiowner_service_id}</span>
                   )}
                 </div>
               )}
@@ -229,6 +235,9 @@ const AdminServices = memo(() => {
     smmcost_service_id: '',
     jbsmmpanel_service_id: '',
     worldofsmm_service_id: '',
+    g1618_service_id: '',
+    oldsmm_service_id: '',
+    apiowner_service_id: '',
     is_combo: false,
     combo_service_ids: [],
     combo_smmgen_service_ids: [],
@@ -289,6 +298,8 @@ const AdminServices = memo(() => {
         jbsmmpanel_service_id: serviceForm.jbsmmpanel_service_id ? parseInt(serviceForm.jbsmmpanel_service_id, 10) : null,
         worldofsmm_service_id: serviceForm.worldofsmm_service_id || null,
         g1618_service_id: serviceForm.g1618_service_id || null,
+        oldsmm_service_id: serviceForm.oldsmm_service_id || null,
+        apiowner_service_id: serviceForm.apiowner_service_id || null,
         is_combo: serviceForm.is_combo || false,
         combo_service_ids: serviceForm.is_combo && serviceForm.combo_service_ids.length > 0
           ? serviceForm.combo_service_ids
@@ -315,6 +326,8 @@ const AdminServices = memo(() => {
         jbsmmpanel_service_id: '',
         worldofsmm_service_id: '',
         g1618_service_id: '',
+        oldsmm_service_id: '',
+        apiowner_service_id: '',
         is_combo: false,
         combo_service_ids: [],
         combo_smmgen_service_ids: [],
@@ -590,6 +603,24 @@ const AdminServices = memo(() => {
               />
               <p className="text-xs text-gray-500 mt-1">Enter the G1618 API service ID for integration</p>
             </div>
+            <div>
+              <Label>OldSMM Service ID</Label>
+              <Input
+                placeholder="OldSMM API service ID (optional)"
+                value={serviceForm.oldsmm_service_id}
+                onChange={(e) => setServiceForm({ ...serviceForm, oldsmm_service_id: e.target.value })}
+              />
+              <p className="text-xs text-gray-500 mt-1">Enter the OldSMM API service ID for integration</p>
+            </div>
+            <div>
+              <Label>ApiOwner Service ID</Label>
+              <Input
+                placeholder="ApiOwner API service ID (optional)"
+                value={serviceForm.apiowner_service_id}
+                onChange={(e) => setServiceForm({ ...serviceForm, apiowner_service_id: e.target.value })}
+              />
+              <p className="text-xs text-gray-500 mt-1">Enter the ApiOwner API service ID for integration</p>
+            </div>
           </div>
 
           {/* Combo Service Options */}
@@ -856,7 +887,7 @@ const AdminServices = memo(() => {
                           Includes {service.combo_service_ids.length} service{service.combo_service_ids.length !== 1 ? 's' : ''}
                         </p>
                       )}
-                      {(service.smmgen_service_id || service.smmcost_service_id || service.jbsmmpanel_service_id || service.worldofsmm_service_id) && (
+                      {(service.smmgen_service_id || service.smmcost_service_id || service.jbsmmpanel_service_id || service.worldofsmm_service_id || service.g1618_service_id || service.oldsmm_service_id || service.apiowner_service_id) && (
                         <div className="flex flex-wrap gap-2 text-xs text-gray-500 mt-1">
                           {service.smmgen_service_id && (
                             <span>SMMGen ID: {service.smmgen_service_id}</span>
@@ -869,6 +900,12 @@ const AdminServices = memo(() => {
                           )}
                           {service.g1618_service_id && (
                             <span>G1618 ID: {service.g1618_service_id}</span>
+                          )}
+                          {service.oldsmm_service_id && (
+                            <span>OldSMM ID: {service.oldsmm_service_id}</span>
+                          )}
+                          {service.apiowner_service_id && (
+                            <span>ApiOwner ID: {service.apiowner_service_id}</span>
                           )}
                         </div>
                       )}
