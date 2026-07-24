@@ -80,7 +80,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
       console.log('[AdminOrders] Fetching pending orders for status check...');
       const { data, error } = await supabase
         .from('orders')
-        .select('id, user_id, service_id, promotion_package_id, link, quantity, total_cost, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, component_provider_order_ids, created_at, completed_at, refund_status, last_status_check, is_reward, services(name, platform, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, is_combo), promotion_packages(name, platform, service_type, smmgen_service_id, oldsmm_service_id, is_combo), profiles(name, email, phone_number)')
+        .select('id, user_id, service_id, promotion_package_id, link, quantity, total_cost, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, component_provider_order_ids, created_at, completed_at, refund_status, last_status_check, is_reward, services(name, platform, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id, is_combo), promotion_packages(name, platform, service_type, smmgen_service_id, oldsmm_service_id, apiowner_service_id, is_combo), profiles(name, email, phone_number)')
         .in('status', ['pending', 'processing', 'in progress'])
         .not('status', 'eq', 'completed')
         .not('status', 'eq', 'refunded')
@@ -491,8 +491,10 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
             const serviceHasWorldofsmm = order.services?.worldofsmm_service_id;
             const serviceHasG1618 = order.services?.g1618_service_id;
             const serviceHasOldsmm = order.services?.oldsmm_service_id;
+            const serviceHasApiowner = order.services?.apiowner_service_id;
 
-            // Prioritize: OldSMM > G1618 > WorldOfSMM > SMMCost > JB SMM Panel > SMMGen
+            // Prioritize: ApiOwner > OldSMM > G1618 > WorldOfSMM > SMMCost > JB SMM Panel > SMMGen
+            const hasApiowner = order.apiowner_order_id && order.apiowner_order_id !== "order not placed at apiowner";
             const hasOldsmm = order.oldsmm_order_id && order.oldsmm_order_id !== "order not placed at oldsmm";
             const hasG1618 = order.g1618_order_id && order.g1618_order_id !== "order not placed at g1618";
             const hasWorldofsmm = order.worldofsmm_order_id && order.worldofsmm_order_id !== "order not placed at worldofsmm";
@@ -500,7 +502,9 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
             const hasJbsmmpanel = order.jbsmmpanel_order_id && String(order.jbsmmpanel_order_id).toLowerCase() !== "order not placed at jbsmmpanel";
             const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
 
-            if (hasOldsmm) {
+            if (hasApiowner) {
+              return <p className="font-medium text-gray-900 text-sm">{order.apiowner_order_id}</p>;
+            } else if (hasOldsmm) {
               // OldSMM order ID exists and is valid
               return <p className="font-medium text-gray-900 text-sm">{order.oldsmm_order_id}</p>;
             } else if (hasG1618) {
@@ -866,8 +870,10 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               const serviceHasWorldofsmm = order.services?.worldofsmm_service_id;
               const serviceHasG1618 = order.services?.g1618_service_id;
               const serviceHasOldsmm = order.services?.oldsmm_service_id;
+              const serviceHasApiowner = order.services?.apiowner_service_id;
 
-              // Prioritize: OldSMM > G1618 > WorldOfSMM > SMMCost > JB SMM Panel > SMMGen
+              // Prioritize: ApiOwner > OldSMM > G1618 > WorldOfSMM > SMMCost > JB SMM Panel > SMMGen
+              const hasApiowner = order.apiowner_order_id && order.apiowner_order_id !== "order not placed at apiowner";
               const hasOldsmm = order.oldsmm_order_id && order.oldsmm_order_id !== "order not placed at oldsmm";
               const hasG1618 = order.g1618_order_id && order.g1618_order_id !== "order not placed at g1618";
               const hasWorldofsmm = order.worldofsmm_order_id && order.worldofsmm_order_id !== "order not placed at worldofsmm";
@@ -875,7 +881,9 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               const hasJbsmmpanel = order.jbsmmpanel_order_id && String(order.jbsmmpanel_order_id).toLowerCase() !== "order not placed at jbsmmpanel";
               const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
 
-              if (hasOldsmm) {
+              if (hasApiowner) {
+                return <p className="font-semibold text-gray-900 text-base">Order No: {order.apiowner_order_id}</p>;
+              } else if (hasOldsmm) {
                 return <p className="font-semibold text-gray-900 text-base">Order No: {order.oldsmm_order_id}</p>;
               } else if (hasG1618) {
                 return <p className="font-semibold text-gray-900 text-base">Order No: {order.g1618_order_id}</p>;

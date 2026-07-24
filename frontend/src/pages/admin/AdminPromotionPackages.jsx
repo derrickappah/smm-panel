@@ -45,6 +45,7 @@ const AdminPromotionPackages = memo(() => {
     worldofsmm_service_id: '',
     g1618_service_id: '',
     oldsmm_service_id: '',
+    apiowner_service_id: '',
     url_type: '',
     enabled: true,
     display_order: '0',
@@ -81,6 +82,7 @@ const AdminPromotionPackages = memo(() => {
         worldofsmm_service_id: packageForm.worldofsmm_service_id || null,
         g1618_service_id: packageForm.g1618_service_id || null,
         oldsmm_service_id: packageForm.oldsmm_service_id || null,
+        apiowner_service_id: packageForm.apiowner_service_id || null,
         url_type: packageForm.url_type || null,
         enabled: Boolean(packageForm.enabled !== false),
         display_order: parseInt(packageForm.display_order) || 0,
@@ -106,6 +108,7 @@ const AdminPromotionPackages = memo(() => {
         worldofsmm_service_id: '',
         g1618_service_id: '',
         oldsmm_service_id: '',
+        apiowner_service_id: '',
         url_type: '',
         enabled: true,
         display_order: '0',
@@ -434,6 +437,14 @@ const AdminPromotionPackages = memo(() => {
                 onChange={(e) => setPackageForm({ ...packageForm, oldsmm_service_id: e.target.value })}
               />
             </div>
+            <div>
+              <Label>ApiOwner ID</Label>
+              <Input
+                placeholder="ApiOwner ID"
+                value={packageForm.apiowner_service_id}
+                onChange={(e) => setPackageForm({ ...packageForm, apiowner_service_id: e.target.value })}
+              />
+            </div>
           </div>
 
           {/* Combo Package Options */}
@@ -675,6 +686,7 @@ const AdminPromotionPackages = memo(() => {
                         {pkg.worldofsmm_service_id && <p><span className="font-medium">WorldOfSMM ID:</span> {pkg.worldofsmm_service_id}</p>}
                         {pkg.g1618_service_id && <p><span className="font-medium">G1618 ID:</span> {pkg.g1618_service_id}</p>}
                         {pkg.oldsmm_service_id && <p><span className="font-medium">OldSMM ID:</span> {pkg.oldsmm_service_id}</p>}
+                        {pkg.apiowner_service_id && <p><span className="font-medium">ApiOwner ID:</span> {pkg.apiowner_service_id}</p>}
                         {pkg.url_type && (
                           <p>
                             <span className="font-medium">URL Type:</span>{' '}
@@ -743,6 +755,7 @@ const PackageEditForm = ({ pkg, onSave, onCancel, packages = [] }) => {
     worldofsmm_service_id: pkg.worldofsmm_service_id || '',
     g1618_service_id: pkg.g1618_service_id || '',
     oldsmm_service_id: pkg.oldsmm_service_id || '',
+    apiowner_service_id: pkg.apiowner_service_id || '',
     url_type: pkg.url_type || '',
     enabled: pkg.enabled === true,
     display_order: pkg.display_order || 0,
@@ -766,6 +779,7 @@ const PackageEditForm = ({ pkg, onSave, onCancel, packages = [] }) => {
       worldofsmm_service_id: formData.worldofsmm_service_id || null,
       g1618_service_id: formData.g1618_service_id || null,
       oldsmm_service_id: formData.oldsmm_service_id || null,
+      apiowner_service_id: formData.apiowner_service_id || null,
       url_type: formData.url_type || null,
       enabled: Boolean(formData.enabled !== false),
       display_order: parseInt(formData.display_order) || 0,
@@ -936,6 +950,14 @@ const PackageEditForm = ({ pkg, onSave, onCancel, packages = [] }) => {
             className="h-8 text-xs"
             value={formData.oldsmm_service_id}
             onChange={(e) => setFormData({ ...formData, oldsmm_service_id: e.target.value })}
+          />
+        </div>
+        <div>
+          <Label className="text-xs">ApiOwner ID</Label>
+          <Input
+            className="h-8 text-xs"
+            value={formData.apiowner_service_id}
+            onChange={(e) => setFormData({ ...formData, apiowner_service_id: e.target.value })}
           />
         </div>
       </div>
