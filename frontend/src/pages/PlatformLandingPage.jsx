@@ -40,7 +40,7 @@ const PlatformLandingPage = ({ user, onLogout }) => {
   const fetchServices = async () => {
     setLoading(true);
     try {
-      let canSeeSellerOnly = false;
+      let userRole = 'user';
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (authUser) {
         const { data: profile } = await supabase
@@ -48,8 +48,7 @@ const PlatformLandingPage = ({ user, onLogout }) => {
           .select('role')
           .eq('id', authUser.id)
           .single();
-        const role = profile?.role || 'user';
-        canSeeSellerOnly = role === 'seller' || role === 'admin';
+        userRole = profile?.role || 'user';
       }
 
       let query = supabase
@@ -58,7 +57,9 @@ const PlatformLandingPage = ({ user, onLogout }) => {
         .eq('platform', platformName)
         .eq('enabled', true);
 
-      if (!canSeeSellerOnly) {
+      if (userRole === 'seller') {
+        query = query.eq('seller_only', true);
+      } else if (userRole !== 'admin') {
         query = query.eq('seller_only', false);
       }
 

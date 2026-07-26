@@ -95,6 +95,21 @@ export default async function handler(req, res) {
                 return res.status(400).json({ error: 'Service not found or disabled' });
             }
 
+            // Enforce seller_only role restrictions
+            const { data: userProfile } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', user.id)
+                .single();
+            const userRole = userProfile?.role || 'user';
+
+            if (userRole === 'seller' && !service.seller_only) {
+                return res.status(403).json({ error: 'Sellers can only order seller services' });
+            }
+            if (userRole !== 'seller' && userRole !== 'admin' && service.seller_only) {
+                return res.status(403).json({ error: 'This service is only available to sellers' });
+            }
+
             // Capture url_type for validation below
             serviceUrlType = service.url_type || null;
 

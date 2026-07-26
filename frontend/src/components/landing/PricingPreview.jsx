@@ -149,8 +149,6 @@ const PricingPreview = () => {
     checkRole();
   }, []);
 
-  const canSeeSellerOnly = currentUserRole === 'seller' || currentUserRole === 'admin';
-
   // Fetch all enabled services using React Query for caching
   const { data: services, isLoading } = useQuery({
     queryKey: ['landing-pricing-services', currentUserRole],
@@ -161,7 +159,9 @@ const PricingPreview = () => {
         .select('id, name, rate, rate_unit, platform, service_type, min_quantity, max_quantity, seller_only')
         .eq('enabled', true);
 
-      if (!canSeeSellerOnly) {
+      if (currentUserRole === 'seller') {
+        query = query.eq('seller_only', true);
+      } else if (currentUserRole !== 'admin') {
         query = query.eq('seller_only', false);
       }
 
@@ -175,7 +175,9 @@ const PricingPreview = () => {
           .select('id, name, rate, platform, service_type, min_quantity, max_quantity, seller_only')
           .eq('enabled', true);
 
-        if (!canSeeSellerOnly) {
+        if (currentUserRole === 'seller') {
+          fallbackQuery = fallbackQuery.eq('seller_only', true);
+        } else if (currentUserRole !== 'admin') {
           fallbackQuery = fallbackQuery.eq('seller_only', false);
         }
 

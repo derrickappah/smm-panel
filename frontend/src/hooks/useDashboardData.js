@@ -22,18 +22,13 @@ const fetchServices = async () => {
     }
   }
 
-  // Determine if the user can see seller-only services
-  const canSeeSelerOnly = userRole === 'seller' || userRole === 'admin';
-
-  // Fetch services from Supabase
-  // Try with rate_unit first, fallback to without it if column doesn't exist
-  let primaryQuery = supabase
-    .from('services')
-    .select('id, name, description, rate, rate_unit, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only')
-    .eq('enabled', true);
-
-  // Filter out seller-only services for regular users
-  if (!canSeeSelerOnly) {
+  // Filter services based on user role:
+  // - seller: ONLY sees seller_only = true services
+  // - user / guest: ONLY sees seller_only = false services
+  // - admin: sees ALL enabled services
+  if (userRole === 'seller') {
+    primaryQuery = primaryQuery.eq('seller_only', true);
+  } else if (userRole !== 'admin') {
     primaryQuery = primaryQuery.eq('seller_only', false);
   }
 
@@ -49,8 +44,9 @@ const fetchServices = async () => {
       .select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only')
       .eq('enabled', true);
 
-    // Filter out seller-only services for regular users
-    if (!canSeeSelerOnly) {
+    if (userRole === 'seller') {
+      fallbackQuery = fallbackQuery.eq('seller_only', true);
+    } else if (userRole !== 'admin') {
       fallbackQuery = fallbackQuery.eq('seller_only', false);
     }
 

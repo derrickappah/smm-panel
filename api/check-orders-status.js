@@ -220,7 +220,7 @@ export default async function handler(req, res) {
                 for (const order of providerOrders) {
                     results.checked++;
                     const panelId = order[orderIdField].toString();
-                    const statusInfo = data[panelId];
+                    const statusInfo = data[panelId] || (data && (data.status || data.Status) ? data : null);
 
                     if (statusInfo) {
                         const rawStatus = statusInfo.status || statusInfo.Status;

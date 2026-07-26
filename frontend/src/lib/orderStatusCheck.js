@@ -177,18 +177,28 @@ const mapJBSMMPanelStatus = (jbsmmpanelStatus) => {
  * @returns {string|null} Mapped status or null if unknown
  */
 const mapApiOwnerStatus = (apiownerStatus) => {
-  if (!apiownerStatus) return null;
+  if (apiownerStatus === null || apiownerStatus === undefined) return null;
 
   const statusString = String(apiownerStatus).trim();
+  if (!statusString) return null;
+
   const statusLower = statusString.toLowerCase();
 
-  if (statusLower === 'pending' || statusLower.includes('pending')) return 'pending';
-  if (statusLower === 'in progress' || statusLower.includes('in progress')) return 'in progress';
-  if (statusLower === 'completed' || statusLower.includes('completed')) return 'completed';
-  if (statusLower === 'partial' || statusLower.includes('partial')) return 'partial';
-  if (statusLower === 'processing' || statusLower.includes('processing')) return 'processing';
-  if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower.includes('cancel')) return 'canceled';
-  if (statusLower === 'refunds' || statusLower.includes('refund')) return 'refunds';
+  if (statusLower === 'pending') return 'pending';
+  if (statusLower === 'in progress' || statusLower === 'in-progress' || statusLower === 'inprogress') return 'in progress';
+  if (statusLower === 'completed' || statusLower === 'complete') return 'completed';
+  if (statusLower === 'partial') return 'partial';
+  if (statusLower === 'processing' || statusLower === 'process') return 'processing';
+  if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower === 'cancel') return 'canceled';
+  if (statusLower === 'refunds' || statusLower === 'refunded' || statusLower === 'refund') return 'refunds';
+
+  if (statusLower.includes('in progress') || statusLower.includes('in-progress')) return 'in progress';
+  if (statusLower.includes('completed') || statusLower.includes('complete')) return 'completed';
+  if (statusLower.includes('partial')) return 'partial';
+  if (statusLower.includes('processing') || statusLower.includes('process')) return 'processing';
+  if (statusLower.includes('cancel')) return 'canceled';
+  if (statusLower.includes('refund')) return 'refunds';
+  if (statusLower.includes('pending')) return 'pending';
 
   return null;
 };
@@ -238,7 +248,7 @@ export const shouldCheckOrder = (order, minIntervalMinutes = 5) => {
   }
 
   // Skip if no valid order ID from any panel
-  if (!hasSmmgenId && !hasSmmcostId && !hasJbsmmpanelId && !hasWorldofsmmId && !hasG1618Id && !hasOldSmmId) {
+  if (!hasSmmgenId && !hasSmmcostId && !hasJbsmmpanelId && !hasWorldofsmmId && !hasG1618Id && !hasOldSmmId && !hasApiOwnerId) {
     if (jbsmmpanelId) {
       console.log('[orderStatusCheck] shouldCheckOrder - Skipping JB SMM Panel order (no valid ID):', {
         orderId: order.id,
@@ -361,9 +371,17 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
     const hasWorldofsmmId = order.worldofsmm_order_id && String(order.worldofsmm_order_id).toLowerCase() !== "order not placed at worldofsmm";
     const hasG1618Id = order.g1618_order_id && String(order.g1618_order_id).toLowerCase() !== "order not placed at g1618";
     const hasOldSmmId = order.oldsmm_order_id && String(order.oldsmm_order_id).toLowerCase() !== "order not placed at oldsmm";
+    const hasApiOwnerId = order.apiowner_order_id && String(order.apiowner_order_id).toLowerCase() !== "order not placed at apiowner";
 
-    // Prioritize: WorldOfSMM > SMMCost > JB SMM Panel > G1618 > OldSMM > SMMGen
-    if (hasWorldofsmmId) {
+    // Prioritize: ApiOwner > WorldOfSMM > SMMCost > JB SMM Panel > G1618 > OldSMM > SMMGen
+    if (hasApiOwnerId) {
+      // Get status from ApiOwner
+      const { getApiOwnerStatus } = await import('./apiowner');
+      statusData = await getApiOwnerStatus(order.apiowner_order_id);
+      const apiownerStatus = statusData?.status || statusData?.Status;
+      mappedStatus = mapApiOwnerStatus(apiownerStatus);
+      panelSource = 'apiowner';
+    } else if (hasWorldofsmmId) {
       // Get status from World of SMM
       statusData = await getWorldOfSMMOrderStatus(order.worldofsmm_order_id);
       const worldofsmmStatus = statusData?.status || statusData?.Status;
@@ -543,13 +561,6 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
       const oldsmmStatus = statusData?.status || statusData?.Status;
       mappedStatus = mapOldSMMStatus(oldsmmStatus);
       panelSource = 'oldsmm';
-    } else if (hasApiOwnerId) {
-      // Get status from ApiOwner
-      const { getApiOwnerStatus } = await import('./apiowner');
-      statusData = await getApiOwnerStatus(order.apiowner_order_id);
-      const apiownerStatus = statusData?.status || statusData?.Status;
-      mappedStatus = mapApiOwnerStatus(apiownerStatus);
-      panelSource = 'apiowner';
     } else if (hasSmmgenId) {
       // Get status from SMMGen
       statusData = await getSMMGenOrderStatus(order.smmgen_order_id);

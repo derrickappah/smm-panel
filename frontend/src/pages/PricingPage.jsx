@@ -18,7 +18,7 @@ const PricingPage = ({ user, onLogout }) => {
 
   const fetchSampleServices = async () => {
     try {
-      let canSeeSellerOnly = false;
+      let userRole = 'user';
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (authUser) {
         const { data: profile } = await supabase
@@ -26,8 +26,7 @@ const PricingPage = ({ user, onLogout }) => {
           .select('role')
           .eq('id', authUser.id)
           .single();
-        const role = profile?.role || 'user';
-        canSeeSellerOnly = role === 'seller' || role === 'admin';
+        userRole = profile?.role || 'user';
       }
 
       // Try with rate_unit first, fallback to without it if column doesn't exist
@@ -36,7 +35,9 @@ const PricingPage = ({ user, onLogout }) => {
         .select('id, platform, service_type, name, rate, rate_unit, min_quantity, max_quantity, seller_only')
         .eq('enabled', true);
 
-      if (!canSeeSellerOnly) {
+      if (userRole === 'seller') {
+        query = query.eq('seller_only', true);
+      } else if (userRole !== 'admin') {
         query = query.eq('seller_only', false);
       }
 
@@ -53,7 +54,9 @@ const PricingPage = ({ user, onLogout }) => {
           .select('id, platform, service_type, name, rate, min_quantity, max_quantity, seller_only')
           .eq('enabled', true);
 
-        if (!canSeeSellerOnly) {
+        if (userRole === 'seller') {
+          fallbackQuery = fallbackQuery.eq('seller_only', true);
+        } else if (userRole !== 'admin') {
           fallbackQuery = fallbackQuery.eq('seller_only', false);
         }
 

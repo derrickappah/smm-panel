@@ -171,18 +171,28 @@ export const mapOldSMMStatus = (oldsmmStatus) => {
  * @returns {string|null} Mapped status or null if unknown
  */
 export const mapApiOwnerStatus = (apiownerStatus) => {
-    if (!apiownerStatus) return null;
+    if (apiownerStatus === null || apiownerStatus === undefined) return null;
 
     const statusString = String(apiownerStatus).trim();
+    if (!statusString) return null;
+
     const statusLower = statusString.toLowerCase();
 
-    if (statusLower === 'pending' || statusLower.includes('pending')) return 'pending';
-    if (statusLower === 'in progress' || statusLower.includes('in progress')) return 'in progress';
-    if (statusLower === 'completed' || statusLower.includes('completed')) return 'completed';
-    if (statusLower === 'partial' || statusLower.includes('partial')) return 'partial';
-    if (statusLower === 'processing' || statusLower.includes('processing')) return 'processing';
-    if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower.includes('cancel')) return 'canceled';
-    if (statusLower === 'refunds' || statusLower.includes('refund')) return 'refunds';
+    if (statusLower === 'pending') return 'pending';
+    if (statusLower === 'in progress' || statusLower === 'in-progress' || statusLower === 'inprogress') return 'in progress';
+    if (statusLower === 'completed' || statusLower === 'complete') return 'completed';
+    if (statusLower === 'partial') return 'partial';
+    if (statusLower === 'processing' || statusLower === 'process') return 'processing';
+    if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower === 'cancel') return 'canceled';
+    if (statusLower === 'refunds' || statusLower === 'refunded' || statusLower === 'refund') return 'refunds';
+
+    if (statusLower.includes('in progress') || statusLower.includes('in-progress')) return 'in progress';
+    if (statusLower.includes('completed') || statusLower.includes('complete')) return 'completed';
+    if (statusLower.includes('partial')) return 'partial';
+    if (statusLower.includes('processing') || statusLower.includes('process')) return 'processing';
+    if (statusLower.includes('cancel')) return 'canceled';
+    if (statusLower.includes('refund')) return 'refunds';
+    if (statusLower.includes('pending')) return 'pending';
 
     return null;
 };

@@ -52,7 +52,7 @@ const ServicesPage = ({ user, onLogout }) => {
     setLoading(true);
     try {
       // Fetch the current user's role to determine visibility of seller-only services
-      let canSeeSellerOnly = false;
+      let userRole = 'user';
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (authUser) {
         const { data: profile } = await supabase
@@ -60,8 +60,7 @@ const ServicesPage = ({ user, onLogout }) => {
           .select('role')
           .eq('id', authUser.id)
           .single();
-        const role = profile?.role || 'user';
-        canSeeSellerOnly = role === 'seller' || role === 'admin';
+        userRole = profile?.role || 'user';
       }
 
       // Fetch services from Supabase only
@@ -69,8 +68,13 @@ const ServicesPage = ({ user, onLogout }) => {
       // Try with rate_unit first, fallback to without it if column doesn't exist
       let query = supabase.from('services').select('id, name, description, rate, rate_unit, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only').eq('enabled', true);
 
-      // Filter out seller-only services for regular/non-authenticated users
-      if (!canSeeSellerOnly) {
+      // Filter services by role:
+      // - seller: ONLY sees seller_only = true services
+      // - user / guest: ONLY sees seller_only = false services
+      // - admin: sees ALL enabled services
+      if (userRole === 'seller') {
+        query = query.eq('seller_only', true);
+      } else if (userRole !== 'admin') {
         query = query.eq('seller_only', false);
       }
 
@@ -87,8 +91,9 @@ const ServicesPage = ({ user, onLogout }) => {
         console.warn('rate_unit column not found, fetching without it:', error.message);
         let fallbackQuery = supabase.from('services').select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only').eq('enabled', true);
 
-        // Filter out seller-only services for regular/non-authenticated users
-        if (!canSeeSellerOnly) {
+        if (userRole === 'seller') {
+          fallbackQuery = fallbackQuery.eq('seller_only', true);
+        } else if (userRole !== 'admin') {
           fallbackQuery = fallbackQuery.eq('seller_only', false);
         }
 
