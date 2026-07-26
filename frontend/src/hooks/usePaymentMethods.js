@@ -30,6 +30,7 @@ export const DEFAULT_PAYMENT_SETTINGS = {
   whatsappNumber: '',
   supportPhoneNumber: '',
   requireCaptcha: true, // Default to true
+  requireOtp: true, // Default to true (Admins can toggle on/off)
   depositMethod: 'moolre_web' // Default method
 };
 
@@ -56,6 +57,7 @@ export const fetchPaymentSettingsFn = async () => {
       'manual_deposit_instructions',
       'whatsapp_number',
       'require_captcha',
+      'require_otp',
       'support_phone_number'
     ]);
 
@@ -125,6 +127,9 @@ export const fetchPaymentSettingsFn = async () => {
 
   // Parse CAPTCHA
   settings.requireCaptcha = getEnabled('require_captcha', DEFAULT_PAYMENT_SETTINGS.requireCaptcha);
+
+  // Parse OTP Verification
+  settings.requireOtp = getEnabled('require_otp', DEFAULT_PAYMENT_SETTINGS.requireOtp);
 
   // Determine Deposit Method
   let depositMethod = null;
@@ -211,6 +216,7 @@ export const usePaymentMethods = () => {
     whatsappNumber: data?.whatsappNumber || DEFAULT_PAYMENT_SETTINGS.whatsappNumber,
     supportPhoneNumber: data?.supportPhoneNumber || DEFAULT_PAYMENT_SETTINGS.supportPhoneNumber,
     requireCaptcha: data?.requireCaptcha ?? DEFAULT_PAYMENT_SETTINGS.requireCaptcha,
+    requireOtp: data?.requireOtp ?? DEFAULT_PAYMENT_SETTINGS.requireOtp,
     isLoading,
     refetch: () => {
       queryClient.invalidateQueries({ queryKey: PAYMENT_SETTINGS_QUERY_KEY });

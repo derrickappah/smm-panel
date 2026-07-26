@@ -1,5 +1,6 @@
 import { verifyAuth } from './utils/auth.js';
 import { logUserAction } from './utils/activityLogger.js';
+import { rateLimit } from './middleware/rateLimit.js';
 
 
 export default async function handler(req, res) {
@@ -19,6 +20,11 @@ export default async function handler(req, res) {
   }
 
   try {
+    // 1. Velocity Control / Rate Limiting (IP & User Throttling)
+    const limitCheck = await rateLimit(req, res);
+    if (limitCheck?.blocked) {
+      return res.status(429).json({ error: limitCheck.message || 'Too many payment attempts. Please try again later.' });
+    }
     // Authenticate user
     let user;
     try {

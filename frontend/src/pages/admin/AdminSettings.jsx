@@ -24,6 +24,7 @@ const AdminSettings = memo(() => {
     whatsappNumber: remoteWhatsappNumber,
     supportPhoneNumber: remoteSupportPhoneNumber,
     requireCaptcha: remoteRequireCaptcha,
+    requireOtp: remoteRequireOtp,
     isLoading,
     refetch
   } = usePaymentMethods();
@@ -34,6 +35,7 @@ const AdminSettings = memo(() => {
   const [whatsappNumber, setWhatsappNumber] = useState(remoteWhatsappNumber);
   const [supportPhoneNumber, setSupportPhoneNumber] = useState(remoteSupportPhoneNumber);
   const [requireCaptcha, setRequireCaptcha] = useState(remoteRequireCaptcha);
+  const [requireOtp, setRequireOtp] = useState(remoteRequireOtp);
 
   useEffect(() => {
     if (!isLoading) {
@@ -43,8 +45,9 @@ const AdminSettings = memo(() => {
       setWhatsappNumber(remoteWhatsappNumber);
       setSupportPhoneNumber(remoteSupportPhoneNumber);
       setRequireCaptcha(remoteRequireCaptcha);
+      setRequireOtp(remoteRequireOtp);
     }
-  }, [remotePaymentSettings, remoteMinDepositSettings, remoteManualDepositDetails, remoteWhatsappNumber, remoteSupportPhoneNumber, remoteRequireCaptcha, isLoading]);
+  }, [remotePaymentSettings, remoteMinDepositSettings, remoteManualDepositDetails, remoteWhatsappNumber, remoteSupportPhoneNumber, remoteRequireCaptcha, remoteRequireOtp, isLoading]);
 
   const togglePaymentMethod = useMutation({
     mutationFn: async ({ method, enabled }) => {
@@ -416,6 +419,57 @@ const AdminSettings = memo(() => {
     updateRequireCaptcha.mutate(checked);
   }, [updateRequireCaptcha]);
 
+  const updateRequireOtp = useMutation({
+    mutationFn: async (enabled) => {
+      const { error } = await supabase
+        .from('app_settings')
+        .upsert({
+          key: 'require_otp',
+          value: enabled ? 'true' : 'false',
+          description: 'Require OTP verification for registration and sensitive activities'
+        }, {
+          onConflict: 'key'
+        });
+
+      if (error) throw error;
+      return enabled;
+    },
+    onSuccess: async (enabled) => {
+      setRequireOtp(enabled);
+      queryClient.invalidateQueries({ queryKey: ['admin', 'payment-settings'] });
+      queryClient.invalidateQueries({ queryKey: ['payment-settings'] });
+
+      // Log settings change
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await logUserActivity({
+            action_type: 'settings_changed',
+            entity_type: 'settings',
+            description: `OTP verification ${enabled ? 'enabled' : 'disabled'}`,
+            metadata: {
+              setting_key: 'require_otp',
+              old_value: !enabled,
+              new_value: enabled
+            },
+            severity: 'security'
+          });
+        }
+      } catch (error) {
+        console.warn('Failed to log settings change:', error);
+      }
+
+      toast.success(`OTP verification ${enabled ? 'enabled' : 'disabled'} successfully`);
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to update OTP setting');
+    },
+  });
+
+  const handleToggleRequireOtp = useCallback((checked) => {
+    updateRequireOtp.mutate(checked);
+  }, [updateRequireOtp]);
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -722,6 +776,23 @@ const AdminSettings = memo(() => {
                   checked={requireCaptcha}
                   onCheckedChange={handleToggleRequireCaptcha}
                   disabled={updateRequireCaptcha.isPending}
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-blue-50/30 rounded-xl border border-blue-50">
+                <div className="space-y-0.5">
+                  <Label htmlFor="otp-verification" className="font-semibold text-gray-850">
+                    OTP Verification
+                  </Label>
+                  <p className="text-xs text-muted-foreground max-w-[200px]">
+                    Require OTP verification during user onboarding and sign-up.
+                  </p>
+                </div>
+                <Switch
+                  id="otp-verification"
+                  checked={requireOtp}
+                  onCheckedChange={handleToggleRequireOtp}
+                  disabled={updateRequireOtp.isPending}
                 />
               </div>
             </CardContent>

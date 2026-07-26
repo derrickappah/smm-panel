@@ -13,6 +13,9 @@ import TermsDialog from '@/components/TermsDialog';
 
 import { Turnstile } from '@/components/ui/turnstile';
 import { usePaymentMethods } from '@/hooks/usePaymentMethods';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
+import { ShieldCheck, Mail, RefreshCw } from 'lucide-react';
 
 // Email validation function with TLD validation
 const isValidEmail = (email) => {
@@ -107,7 +110,12 @@ const AuthPage = () => {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [termsDialogOpen, setTermsDialogOpen] = useState(false);
   const [captchaToken, setCaptchaToken] = useState('');
-  const { requireCaptcha } = usePaymentMethods();
+  const { requireCaptcha, requireOtp } = usePaymentMethods();
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [otpValue, setOtpValue] = useState('');
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -142,6 +150,67 @@ const AuthPage = () => {
       return '';
     }
     return manualReferralCode.trim() || referralCode.trim();
+  };
+
+  const sendOtpCode = async (email, phone) => {
+    setSendingOtp(true);
+    try {
+      const response = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, phone_number: phone })
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        if (data.demo_otp) {
+          toast.success(`OTP verification code sent! (Demo Code: ${data.demo_otp})`);
+        } else {
+          toast.success('OTP verification code sent to your email / phone number.');
+        }
+        setShowOtpModal(true);
+      } else {
+        toast.error(data.error || 'Failed to send OTP code. Please try again.');
+      }
+    } catch (err) {
+      console.error('Error sending OTP:', err);
+      toast.error('Failed to send OTP verification code.');
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (!otpValue || otpValue.length < 6) {
+      toast.error('Please enter the complete 6-digit OTP code');
+      return;
+    }
+    setVerifyingOtp(true);
+    try {
+      const response = await fetch('/api/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: formData.email,
+          phone_number: formData.phone_number,
+          code: otpValue
+        })
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        toast.success('OTP verified successfully!');
+        setOtpVerified(true);
+        setShowOtpModal(false);
+        // Continue signup automatically
+        completeSignup();
+      } else {
+        toast.error(data.error || 'Invalid OTP verification code.');
+      }
+    } catch (err) {
+      console.error('Error verifying OTP:', err);
+      toast.error('Failed to verify OTP code.');
+    } finally {
+      setVerifyingOtp(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -281,31 +350,46 @@ const AuthPage = () => {
         }
       } else {
         // SIGNUP
-        try {
-          // Phone number is already in 0XXXXXXXXX format from formatting function
-          const normalizedPhone = formData.phone_number.trim().replace(/\D/g, '');
+        if (requireOtp && !otpVerified) {
+          await sendOtpCode(formData.email.trim(), formData.phone_number.trim());
+          setLoading(false);
+          return;
+        }
+        await completeSignup();
+      }
+    } catch (error) {
+      console.error('Auth error:', error);
+      toast.error(error.message || 'An error occurred. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-          const signupMetadata = {
-            name: formData.name.trim(),
-            phone_number: normalizedPhone,
-            terms_accepted_at: new Date().toISOString(),
-          };
+  const completeSignup = async () => {
+    setLoading(true);
+    try {
+      const normalizedPhone = formData.phone_number.trim().replace(/\D/g, '');
 
-          // Add referral code to metadata if provided (manual input takes precedence)
-          const activeReferralCode = getActiveReferralCode();
-          if (activeReferralCode) {
-            signupMetadata.referral_code = activeReferralCode;
-          }
+      const signupMetadata = {
+        name: formData.name.trim(),
+        phone_number: normalizedPhone,
+        terms_accepted_at: new Date().toISOString(),
+      };
 
-          const { data, error } = await supabase.auth.signUp({
-            email: formData.email.trim(),
-            password: formData.password,
-            options: {
-              data: signupMetadata,
-              captchaToken: requireCaptcha ? (captchaToken || undefined) : undefined,
-              captcha_token: requireCaptcha ? (captchaToken || undefined) : undefined,
-            },
-          });
+      const activeReferralCode = getActiveReferralCode();
+      if (activeReferralCode) {
+        signupMetadata.referral_code = activeReferralCode;
+      }
+
+      const { data, error } = await supabase.auth.signUp({
+        email: formData.email.trim(),
+        password: formData.password,
+        options: {
+          data: signupMetadata,
+          captchaToken: requireCaptcha ? (captchaToken || undefined) : undefined,
+          captcha_token: requireCaptcha ? (captchaToken || undefined) : undefined,
+        },
+      });
 
           if (error) {
             console.error('Supabase signup error:', error);
@@ -381,17 +465,10 @@ const AuthPage = () => {
           // Catch any errors that might occur during signup
           console.error('Signup exception:', signupError);
           toast.error('An unexpected error occurred during signup. Please try again.');
+        } finally {
           setLoading(false);
-          return;
         }
-      }
-    } catch (error) {
-      console.error('Auth error:', error);
-      toast.error(error.message || 'An error occurred. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
+      };
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 sm:px-6 py-8 sm:py-12">
@@ -730,6 +807,61 @@ const AuthPage = () => {
         onAccept={() => setTermsAccepted(true)}
       />
 
+      {/* OTP Verification Modal */}
+      <Dialog open={showOtpModal} onOpenChange={setShowOtpModal}>
+        <DialogContent className="sm:max-w-md border-2 border-indigo-100 shadow-2xl">
+          <DialogHeader className="text-center space-y-2">
+            <div className="mx-auto w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 mb-2">
+              <ShieldCheck className="w-6 h-6" />
+            </div>
+            <DialogTitle className="text-xl font-bold text-gray-900">
+              Security Verification Code
+            </DialogTitle>
+            <DialogDescription className="text-sm text-gray-600">
+              An OTP verification code was sent to <span className="font-semibold text-gray-900">{formData.email}</span>. Please enter the 6-digit code below to complete your onboarding.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col items-center justify-center py-6 space-y-6">
+            <InputOTP
+              maxLength={6}
+              value={otpValue}
+              onChange={(val) => setOtpValue(val)}
+            >
+              <InputOTPGroup>
+                <InputOTPSlot index={0} />
+                <InputOTPSlot index={1} />
+                <InputOTPSlot index={2} />
+                <InputOTPSlot index={3} />
+                <InputOTPSlot index={4} />
+                <InputOTPSlot index={5} />
+              </InputOTPGroup>
+            </InputOTP>
+
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>Didn't receive the code?</span>
+              <button
+                type="button"
+                onClick={() => sendOtpCode(formData.email.trim(), formData.phone_number.trim())}
+                disabled={sendingOtp}
+                className="text-indigo-600 hover:underline font-medium inline-flex items-center gap-1"
+              >
+                <RefreshCw className={`w-3 h-3 ${sendingOtp ? 'animate-spin' : ''}`} />
+                Resend Code
+              </button>
+            </div>
+
+            <Button
+              type="button"
+              onClick={handleVerifyOtp}
+              disabled={verifyingOtp || otpValue.length < 6}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold h-11"
+            >
+              {verifyingOtp ? 'Verifying OTP...' : 'Verify OTP & Complete Sign Up'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
