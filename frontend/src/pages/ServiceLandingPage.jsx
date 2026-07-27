@@ -8,6 +8,7 @@ import { generateServiceMetaTags } from '@/utils/metaTags';
 import { getServiceKeywords } from '@/data/keywords';
 import { ArrowRight, TrendingUp, Shield, Clock, DollarSign, CheckCircle, Users, Heart, Eye, MessageCircle } from 'lucide-react';
 import Navbar from '@/components/Navbar';
+import PlatformIcon from '@/components/PlatformIcon';
 
 const ServiceLandingPage = ({ user, onLogout }) => {
   const { platform, serviceType } = useParams();
@@ -192,8 +193,8 @@ const ServiceLandingPage = ({ user, onLogout }) => {
       <section className="bg-gradient-to-br from-indigo-600 to-purple-600 text-white py-12 sm:py-16 lg:py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-white/20 rounded-full mb-6">
-              <ServiceIcon className="w-8 h-8 text-white" />
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-white/20 rounded-full mb-6 p-3">
+              <PlatformIcon platform={platform} className="w-10 h-10 object-contain" />
             </div>
             <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4">
               Buy {platformDisplay} {serviceTypeDisplay}

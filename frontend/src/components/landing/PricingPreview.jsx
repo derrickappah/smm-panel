@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
 import { useQuery } from '@tanstack/react-query';
 import { usePromotionPackages } from '@/hooks/useAdminPromotionPackages';
+import PlatformIcon from '@/components/PlatformIcon';
 
 const platformIcons = {
   instagram: Instagram,
@@ -342,8 +343,8 @@ const PricingPreview = () => {
                         Special Offer
                       </span>
                     </div>
-                    <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-2">
-                      <Icon className="w-4 h-4 text-purple-600" />
+                    <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-2 p-1">
+                      <PlatformIcon platform={pkg.platform} serviceName={pkg.name} className="w-6 h-6 object-contain" />
                     </div>
                     <h3 className="text-sm font-bold text-gray-900 mb-0.5 truncate px-1" title={pkg.name}>
                       {pkg.name}
@@ -414,8 +415,8 @@ const PricingPreview = () => {
                   key={service.id}
                   className="bg-white border border-gray-200 rounded-lg p-5 sm:p-6 text-center hover:shadow-lg transition-shadow duration-200"
                 >
-                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-100 rounded-lg flex items-center justify-center mx-auto mb-3 sm:mb-4">
-                    <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-600" />
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-50 rounded-lg flex items-center justify-center mx-auto mb-3 sm:mb-4 p-2">
+                    <PlatformIcon platform={service.platform} serviceName={service.name} className="w-6 h-6 sm:w-8 sm:h-8 object-contain" />
                   </div>
                   <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-1">
                     {platformName}

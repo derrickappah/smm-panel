@@ -7,6 +7,7 @@ import { generateBreadcrumbSchema } from '@/utils/schema';
 import { generatePlatformMetaTags } from '@/utils/metaTags';
 import { ArrowRight, Instagram, Youtube, Facebook, Twitter, Music, TrendingUp, Shield, Clock, DollarSign, Users, Heart, Eye, MessageCircle, Send } from 'lucide-react';
 import Navbar from '@/components/Navbar';
+import PlatformIcon from '@/components/PlatformIcon';
 
 const PlatformLandingPage = ({ user, onLogout }) => {
   const navigate = useNavigate();
@@ -166,8 +167,8 @@ const PlatformLandingPage = ({ user, onLogout }) => {
       <section className="bg-gradient-to-br from-indigo-600 to-purple-600 text-white py-12 sm:py-16 lg:py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-white/20 rounded-full mb-6">
-              <PlatformIcon className="w-8 h-8 text-white" />
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-white/20 rounded-full mb-6 p-3">
+              <PlatformIcon platform={platformName} className="w-10 h-10 object-contain" />
             </div>
             <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4">
               {platformDisplay} SMM Services

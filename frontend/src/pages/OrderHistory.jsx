@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Clock, CheckCircle, XCircle, Loader, RefreshCw, Search, Filter, ChevronLeft, ChevronRight, Tag, Gift } from 'lucide-react';
 import SEO from '@/components/SEO';
+import PlatformIcon from '@/components/PlatformIcon';
 
 const OrderHistory = ({ user, onLogout }) => {
   const [orders, setOrders] = useState([]);
@@ -439,6 +440,7 @@ const OrderHistory = ({ user, onLogout }) => {
                               {/* Service */}
                               <div className="text-center">
                                 <div className="flex items-center justify-center gap-2">
+                                  <PlatformIcon platform={order.services?.platform || order.promotion_packages?.platform} serviceName={serviceName} className="w-4 h-4 object-contain shrink-0" />
                                   <p className="font-medium text-gray-900 text-sm">{serviceName}</p>
                                   {isPackageOrder && (
                                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded">

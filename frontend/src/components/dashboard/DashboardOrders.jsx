@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Tag, Gift } from 'lucide-react';
+import PlatformIcon from '@/components/PlatformIcon';
 
 const DashboardOrders = React.memo(({ orders, services }) => {
   const navigate = useNavigate();
@@ -48,6 +49,7 @@ const DashboardOrders = React.memo(({ orders, services }) => {
         {orders.map((order) => {
           const service = services?.find(s => s.id === order.service_id);
           const isPackageOrder = !!order.promotion_package_id;
+          const platformName = service?.platform || order.promotion_packages?.platform || '';
           const serviceName = isPackageOrder
             ? order.promotion_packages?.name || 'Package'
             : service?.name || 'Service';
@@ -56,6 +58,7 @@ const DashboardOrders = React.memo(({ orders, services }) => {
             <div key={order.id} className={`bg-gray-50 border ${isPackageOrder ? 'border-purple-200' : 'border-gray-200'} px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg hover:border-gray-300 transition-colors`}>
               <div className="flex items-center justify-between gap-3">
                 <div className="flex-1 min-w-0 flex items-center gap-2">
+                  <PlatformIcon platform={platformName} serviceName={serviceName} className="w-4 h-4 object-contain shrink-0" />
                   <p className="text-sm font-medium text-gray-900 truncate max-w-[150px] sm:max-w-none">{serviceName}</p>
                   <span className="text-[10px] sm:text-xs text-gray-500 whitespace-nowrap shrink-0">({order.quantity?.toLocaleString() || '0'})</span>
                   {isPackageOrder && (

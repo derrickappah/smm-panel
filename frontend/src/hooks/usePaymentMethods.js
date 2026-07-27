@@ -27,8 +27,8 @@ export const DEFAULT_PAYMENT_SETTINGS = {
     account_name: '',
     instructions: ''
   },
-  whatsappNumber: '',
-  supportPhoneNumber: '',
+  whatsappNumber: '0500861771',
+  supportPhoneNumber: '0500861771',
   requireCaptcha: true, // Default to true
   requireOtp: true, // Default to true (Admins can toggle on/off)
   depositMethod: 'moolre_web' // Default method

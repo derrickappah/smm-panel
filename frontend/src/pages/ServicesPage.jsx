@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
 import { Instagram, Youtube, Facebook, Twitter, ArrowRight, Tag, MessageCircle, Send, Music, Search, X } from 'lucide-react';
 import SEO from '@/components/SEO';
+import PlatformIcon from '@/components/PlatformIcon';
 import { generateServiceListSchema } from '@/utils/schema';
 import { generatePlatformMetaTags } from '@/utils/metaTags';
 import { getServiceKeywords, primaryKeywords, longTailKeywords } from '@/data/keywords';
@@ -33,15 +34,16 @@ const ServicesPage = ({ user, onLogout }) => {
 
   const platforms = [
     { id: 'all', name: 'All Services', icon: null },
-    { id: 'instagram', name: 'Instagram', icon: Instagram, color: 'from-pink-500 to-purple-600' },
-    { id: 'tiktok', name: 'TikTok', icon: null, color: 'from-gray-700 to-gray-900' },
-    { id: 'youtube', name: 'YouTube', icon: Youtube, color: 'from-red-500 to-red-600' },
-    { id: 'facebook', name: 'Facebook', icon: Facebook, color: 'from-blue-500 to-blue-600' },
-    { id: 'twitter', name: 'Twitter', icon: Twitter, color: 'from-sky-400 to-sky-600' },
-    { id: 'whatsapp', name: 'WhatsApp', icon: MessageCircle, color: 'from-green-500 to-green-600' },
-    { id: 'telegram', name: 'Telegram', icon: Send, color: 'from-blue-400 to-blue-500' },
-    { id: 'spotify', name: 'Spotify', icon: Music, color: 'from-green-400 to-green-600' },
-    { id: 'audiomark', name: 'Audio Mark', icon: Music, color: 'from-purple-500 to-purple-700' },
+    { id: 'instagram', name: 'Instagram', color: 'from-pink-500 to-purple-600' },
+    { id: 'tiktok', name: 'TikTok', color: 'from-gray-700 to-gray-900' },
+    { id: 'youtube', name: 'YouTube', color: 'from-red-500 to-red-600' },
+    { id: 'facebook', name: 'Facebook', color: 'from-blue-500 to-blue-600' },
+    { id: 'twitter', name: 'Twitter', color: 'from-sky-400 to-sky-600' },
+    { id: 'whatsapp', name: 'WhatsApp', color: 'from-green-500 to-green-600' },
+    { id: 'telegram', name: 'Telegram', color: 'from-blue-400 to-blue-500' },
+    { id: 'spotify', name: 'Spotify', color: 'from-green-400 to-green-600' },
+    { id: 'snapchat', name: 'Snapchat', color: 'from-yellow-400 to-yellow-500' },
+    { id: 'audiomark', name: 'Audio Mark', color: 'from-purple-500 to-purple-700' },
   ];
 
   useEffect(() => {
@@ -354,7 +356,9 @@ const ServicesPage = ({ user, onLogout }) => {
                 onClick={() => setSelectedPlatform(platform.id)}
                 className={`flex items-center space-x-2 rounded-lg px-4 sm:px-6 py-2 sm:py-2.5 whitespace-nowrap border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${getPlatformColor()}`}
               >
-                {platform.icon && <platform.icon className="w-4 h-4" />}
+                {platform.id !== 'all' && (
+                  <PlatformIcon platform={platform.id} className="w-4 h-4 object-contain shrink-0" />
+                )}
                 <span className="text-sm font-medium">{platform.name}</span>
               </Button>
             );
@@ -389,7 +393,7 @@ const ServicesPage = ({ user, onLogout }) => {
                 >
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-2">
-                      <Tag className="w-4 h-4 text-purple-600" />
+                      <PlatformIcon platform={pkg.platform} serviceName={pkg.name} className="w-5 h-5 object-contain shrink-0" />
                       <span className="text-xs font-medium px-2.5 py-1 rounded border bg-purple-100 text-purple-700 border-purple-200">
                         {pkg.platform}
                       </span>
@@ -399,7 +403,8 @@ const ServicesPage = ({ user, onLogout }) => {
                       <p className="text-xs text-gray-600">Fixed Price</p>
                     </div>
                   </div>
-                  <h3 className="text-sm sm:text-base font-bold text-gray-900 mb-2">
+                  <h3 className="text-sm sm:text-base font-bold text-gray-900 mb-2 flex items-center gap-2">
+                    <PlatformIcon platform={pkg.platform} serviceName={pkg.name} className="w-4 h-4 object-contain shrink-0" />
                     {pkg.name}
                   </h3>
                   <Tooltip>
@@ -492,7 +497,8 @@ const ServicesPage = ({ user, onLogout }) => {
                     style={{ animationDelay: `${index * 0.05}s` }}
                   >
                     <div className="flex items-start justify-between mb-4">
-                      <div>
+                      <div className="flex items-center gap-2">
+                        <PlatformIcon platform={service.platform} serviceName={service.name} className="w-6 h-6 object-contain shrink-0" />
                         <span className={`text-xs font-medium px-2.5 py-1 rounded border ${getPlatformBadgeColor()}`}>
                           {service.platform}
                         </span>
@@ -502,8 +508,9 @@ const ServicesPage = ({ user, onLogout }) => {
                         <p className="text-xs text-gray-600">per {service.rate_unit || 1000}</p>
                       </div>
                     </div>
-                    <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-2">
-                      {service.name}
+                    <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
+                      <PlatformIcon platform={service.platform} serviceName={service.name} className="w-5 h-5 object-contain shrink-0" />
+                      <span>{service.name}</span>
                     </h3>
                     <p className="text-sm text-gray-600 mb-4 line-clamp-2">{service.description}</p>
                     <div className="flex justify-between items-center text-xs text-gray-600 pt-4 border-t border-gray-200">

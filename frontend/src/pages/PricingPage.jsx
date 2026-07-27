@@ -6,6 +6,7 @@ import { generateBreadcrumbSchema } from '@/utils/schema';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, CheckCircle } from 'lucide-react';
+import PlatformIcon from '@/components/PlatformIcon';
 
 const PricingPage = ({ user, onLogout }) => {
   const navigate = useNavigate();
@@ -145,8 +146,9 @@ const PricingPage = ({ user, onLogout }) => {
 
                 return (
                   <div key={platform}>
-                    <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-6">
-                      {platformName} Services Pricing
+                    <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+                      <PlatformIcon platform={platform} className="w-8 h-8 object-contain shrink-0" />
+                      <span>{platformName} Services Pricing</span>
                     </h2>
                     <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
                       <div className="overflow-x-auto">
@@ -171,9 +173,14 @@ const PricingPage = ({ user, onLogout }) => {
                             {platformServices.map((service, index) => (
                               <tr key={index} className="hover:bg-gray-50">
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                  <div className="text-sm font-medium text-gray-900">{service.name}</div>
-                                  <div className="text-xs text-gray-500 capitalize">
-                                    {service.service_type?.replace(/_/g, ' ')}
+                                  <div className="flex items-center gap-2">
+                                    <PlatformIcon platform={service.platform} serviceName={service.name} className="w-5 h-5 object-contain shrink-0" />
+                                    <div>
+                                      <div className="text-sm font-medium text-gray-900">{service.name}</div>
+                                      <div className="text-xs text-gray-500 capitalize">
+                                        {service.service_type?.replace(/_/g, ' ')}
+                                      </div>
+                                    </div>
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
