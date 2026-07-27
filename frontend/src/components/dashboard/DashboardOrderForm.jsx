@@ -341,15 +341,15 @@ const DashboardOrderForm = React.memo(({
                           }}
                         >
                           <div className="flex flex-col">
-                            <div className="flex items-center gap-2">
-                              <PlatformIcon platform={pkg.platform} serviceName={pkg.name} className="w-4 h-4 object-contain shrink-0" />
+                            <div className="flex items-center gap-2.5">
+                              <PlatformIcon platform={pkg.platform} serviceName={pkg.name} className="w-7 h-7 sm:w-8 sm:h-8 object-contain shrink-0" />
                               <span className="font-medium text-gray-900">{pkg.name}</span>
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded">
                                 <Tag className="w-3 h-3" />
                                 Package
                               </span>
                             </div>
-                            <span className="text-xs text-gray-500">
+                            <span className="text-xs text-gray-500 pl-9">
                               {pkg.platform && `${pkg.platform} • `}{pkg.price} GHS (Fixed)
                             </span>
                           </div>
@@ -379,8 +379,8 @@ const DashboardOrderForm = React.memo(({
                           }}
                         >
                           <div className="flex flex-col">
-                            <div className="flex items-center gap-2">
-                              <PlatformIcon platform={service.platform} serviceName={service.name} className="w-4 h-4 object-contain shrink-0" />
+                            <div className="flex items-center gap-2.5">
+                              <PlatformIcon platform={service.platform} serviceName={service.name} className="w-7 h-7 sm:w-8 sm:h-8 object-contain shrink-0" />
                               <span className="font-medium text-gray-900">{service.name}</span>
                               {service.is_combo && (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded">
@@ -389,7 +389,7 @@ const DashboardOrderForm = React.memo(({
                                 </span>
                               )}
                             </div>
-                            <span className="text-xs text-gray-500">
+                            <span className="text-xs text-gray-500 pl-9">
                               {service.platform && `${service.platform} • `}₵{service.rate}/{service.rate_unit || 1000}
                               {service.is_combo && service.combo_service_ids && (
                                 <span className="ml-2 text-purple-600">
@@ -419,13 +419,13 @@ const DashboardOrderForm = React.memo(({
 
           {orderForm.package_id && selectedPackage && (
             <div className="mt-3 p-3 bg-purple-50 border-2 border-purple-300 rounded-lg">
-              <div className="flex items-center gap-2 mb-1">
-                <PlatformIcon platform={selectedPackage.platform} serviceName={selectedPackage.name} className="w-5 h-5 object-contain shrink-0" />
+              <div className="flex items-center gap-2.5 mb-1">
+                <PlatformIcon platform={selectedPackage.platform} serviceName={selectedPackage.name} className="w-8 h-8 object-contain shrink-0" />
                 <p className="text-sm font-medium text-gray-900">
                   Selected Package: {selectedPackage.name}
                 </p>
               </div>
-              <p className="text-xs text-gray-600 mt-0.5">
+              <p className="text-xs text-gray-600 mt-0.5 pl-10.5">
                 Fixed Price: {selectedPackage.price} GHS • Quantity: {selectedPackage.quantity.toLocaleString()}
               </p>
             </div>
@@ -433,13 +433,13 @@ const DashboardOrderForm = React.memo(({
 
           {orderForm.service_id && selectedService && (
             <div className="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
-              <div className="flex items-center gap-2 mb-1">
-                <PlatformIcon platform={selectedService.platform} serviceName={selectedService.name} className="w-5 h-5 object-contain shrink-0" />
+              <div className="flex items-center gap-2.5 mb-1">
+                <PlatformIcon platform={selectedService.platform} serviceName={selectedService.name} className="w-8 h-8 object-contain shrink-0" />
                 <p className="text-sm font-medium text-gray-900">
                   Selected: {selectedService.name}
                 </p>
               </div>
-              <p className="text-xs text-gray-600 mt-0.5">
+              <p className="text-xs text-gray-600 mt-0.5 pl-10.5">
                 ₵{selectedService.rate}/{selectedService.rate_unit || 1000}
               </p>
             </div>
