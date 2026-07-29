@@ -107,7 +107,7 @@ const AuthPage = () => {
   const [referralCode, setReferralCode] = useState('');
   const [manualReferralCode, setManualReferralCode] = useState('');
   const [showReferralCode, setShowReferralCode] = useState(false);
-  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(true);
   const [termsDialogOpen, setTermsDialogOpen] = useState(false);
   const [captchaToken, setCaptchaToken] = useState('');
   const { requireCaptcha, requireOtp } = usePaymentMethods();

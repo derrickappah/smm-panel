@@ -33,7 +33,7 @@ export const LandingForm = () => {
     const [isLogin, setIsLogin] = useState(true);
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
-    const [termsAccepted, setTermsAccepted] = useState(false);
+    const [termsAccepted, setTermsAccepted] = useState(true);
     const [captchaToken, setCaptchaToken] = useState('');
     const { requireCaptcha } = usePaymentMethods();
     const [formData, setFormData] = useState({
