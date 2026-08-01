@@ -184,7 +184,7 @@ BEGIN
 END;
 $$;
 
--- 8. Stored Function: Atomic Place Combo Order with wallet balance validation (using public.profiles)
+-- 8. Stored Function: Atomic Place Combo Order with wallet balance validation (using public.profiles and status='approved')
 CREATE OR REPLACE FUNCTION place_combo_order_atomic(
     p_user_id UUID,
     p_combo_service_id UUID,
@@ -216,7 +216,7 @@ BEGIN
 
     v_selling_price := v_combo.selling_price;
 
-    -- Check and update balance from public.profiles table
+    -- Check and deduct user balance from public.profiles
     SELECT balance INTO v_user_balance FROM profiles WHERE id = p_user_id FOR UPDATE;
     IF v_user_balance IS NULL OR v_user_balance < v_selling_price THEN
         RETURN jsonb_build_object('success', false, 'error', 'Insufficient user balance');
@@ -249,6 +249,7 @@ BEGIN
         'pending'
     ) RETURNING id INTO v_parent_order_id;
 
+    -- Insert transaction with status='approved' (matching transactions_status_check constraint)
     INSERT INTO transactions (
         user_id,
         amount,
@@ -259,7 +260,7 @@ BEGIN
         p_user_id,
         v_selling_price,
         'order',
-        'completed',
+        'approved',
         'Combo Order #' || v_parent_order_id || ' (' || v_combo.name || ')'
     );
 
