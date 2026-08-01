@@ -1,7 +1,6 @@
-import axios from 'axios';
-
 /**
  * Universal Provider Client for placing orders and checking status
+ * Uses native fetch (no external dependencies required)
  */
 
 const PROVIDER_CONFIGS = {
@@ -36,7 +35,7 @@ const PROVIDER_CONFIGS = {
 };
 
 /**
- * Normalize provider key string (e.g. 'SM Engine' -> 'smmgen' or standard format)
+ * Normalize provider key string (e.g. 'SM Engine' -> 'smmgen')
  */
 export function normalizeProviderName(rawName) {
   if (!rawName) return 'smmgen';
@@ -68,45 +67,46 @@ export async function dispatchProviderOrder({ provider, service_id, link, quanti
   }
 
   try {
-    const payload = {
-      key: cfg.key,
-      action: 'add',
-      service: String(service_id),
-      link: link,
-      quantity: Number(quantity)
-    };
+    const params = new URLSearchParams();
+    params.append('key', cfg.key);
+    params.append('action', 'add');
+    params.append('service', String(service_id));
+    params.append('link', String(link));
+    params.append('quantity', String(quantity));
 
-    const res = await axios.post(cfg.url, payload, {
-      headers: { 'Content-Type': 'application/json' },
-      timeout: 15000
+    const response = await fetch(cfg.url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString()
     });
 
-    if (res.data && (res.data.order || res.data.order_id)) {
-      const pOrderId = String(res.data.order || res.data.order_id);
+    const resData = await response.json();
+
+    if (resData && (resData.order || resData.order_id)) {
+      const pOrderId = String(resData.order || resData.order_id);
       return {
         success: true,
         provider_order_id: pOrderId,
-        raw_response: res.data
+        raw_response: resData
       };
-    } else if (res.data && res.data.error) {
+    } else if (resData && resData.error) {
       return {
         success: false,
-        error: res.data.error,
-        raw_response: res.data
+        error: resData.error,
+        raw_response: resData
       };
     } else {
       return {
         success: false,
-        error: res.data ? JSON.stringify(res.data) : 'Unknown provider response format',
-        raw_response: res.data
+        error: resData ? JSON.stringify(resData) : 'Unknown provider response format',
+        raw_response: resData
       };
     }
   } catch (err) {
-    const errMsg = err.response?.data?.error || err.message || 'Network error connecting to provider';
     return {
       success: false,
-      error: errMsg,
-      raw_response: err.response?.data || null
+      error: err.message || 'Network error connecting to provider',
+      raw_response: null
     };
   }
 }
@@ -128,36 +128,38 @@ export async function fetchProviderOrderStatus({ provider, provider_order_id }) 
   }
 
   try {
-    const payload = {
-      key: cfg.key,
-      action: 'status',
-      order: String(provider_order_id)
-    };
+    const params = new URLSearchParams();
+    params.append('key', cfg.key);
+    params.append('action', 'status');
+    params.append('order', String(provider_order_id));
 
-    const res = await axios.post(cfg.url, payload, {
-      headers: { 'Content-Type': 'application/json' },
-      timeout: 15000
+    const response = await fetch(cfg.url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString()
     });
 
-    if (res.data && res.data.status) {
+    const resData = await response.json();
+
+    if (resData && resData.status) {
       return {
         success: true,
-        status: res.data.status,
-        remains: res.data.remains || 0,
-        raw_response: res.data
+        status: resData.status,
+        remains: resData.remains || 0,
+        raw_response: resData
       };
     } else {
       return {
         success: false,
-        error: res.data?.error || 'Failed to fetch status',
-        raw_response: res.data
+        error: resData?.error || 'Failed to fetch status',
+        raw_response: resData
       };
     }
   } catch (err) {
     return {
       success: false,
       error: err.message,
-      raw_response: err.response?.data || null
+      raw_response: null
     };
   }
 }
