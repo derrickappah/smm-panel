@@ -195,13 +195,17 @@ export async function verifyTransactionOwner(req, transactionId) {
  */
 export function getServiceRoleClient() {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL;
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  let supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!supabaseUrl || !supabaseServiceKey) {
-    throw new Error('Supabase service role credentials not configured');
+  if (!supabaseKey || supabaseKey.includes('PLACEHOLDER')) {
+    supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY;
   }
 
-  return createClient(supabaseUrl, supabaseServiceKey, {
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Supabase credentials not configured');
+  }
+
+  return createClient(supabaseUrl, supabaseKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false

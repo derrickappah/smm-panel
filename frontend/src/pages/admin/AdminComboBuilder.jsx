@@ -69,7 +69,16 @@ export default function AdminComboBuilder() {
           'Authorization': `Bearer ${jwtToken}`
         }
       });
-      const data = await res.json();
+      const resText = await res.text();
+      let data = {};
+      try {
+        data = JSON.parse(resText);
+      } catch (parseErr) {
+        console.error('Non-JSON response:', resText);
+        toast.error('Server error: ' + (resText.slice(0, 100) || 'Invalid response'));
+        return;
+      }
+
       if (data.success) {
         setCombos(data.combos || []);
       } else {
@@ -215,7 +224,16 @@ export default function AdminComboBuilder() {
         body: JSON.stringify(bodyPayload)
       });
 
-      const data = await res.json();
+      const resText = await res.text();
+      let data = {};
+      try {
+        data = JSON.parse(resText);
+      } catch (parseErr) {
+        console.error('Non-JSON response:', resText);
+        toast.error('Server error: ' + (resText.slice(0, 100) || 'Invalid response'));
+        return;
+      }
+
       if (data.success) {
         toast.success(editingId ? 'Combo service updated successfully!' : 'Combo service created successfully!');
         resetForm();
@@ -252,7 +270,17 @@ export default function AdminComboBuilder() {
           'Authorization': `Bearer ${jwtToken}`
         }
       });
-      const data = await res.json();
+
+      const resText = await res.text();
+      let data = {};
+      try {
+        data = JSON.parse(resText);
+      } catch (parseErr) {
+        console.error('Non-JSON response:', resText);
+        toast.error('Server error: ' + (resText.slice(0, 100) || 'Invalid response'));
+        return;
+      }
+
       if (data.success) {
         toast.success('Combo service deleted');
         fetchCombos();

@@ -32,7 +32,16 @@ export default function AdminComboOrdersView() {
           'Authorization': `Bearer ${jwtToken}`
         }
       });
-      const data = await res.json();
+      const resText = await res.text();
+      let data = {};
+      try {
+        data = JSON.parse(resText);
+      } catch (parseErr) {
+        console.error('Non-JSON response:', resText);
+        toast.error('Server error: ' + (resText.slice(0, 100) || 'Invalid response'));
+        return;
+      }
+
       if (data.success) {
         setOrders(data.orders || []);
       } else {
@@ -80,7 +89,16 @@ export default function AdminComboOrdersView() {
         body: JSON.stringify({ child_order_id: childOrderId })
       });
 
-      const data = await res.json();
+      const retryText = await res.text();
+      let data = {};
+      try {
+        data = JSON.parse(retryText);
+      } catch (parseErr) {
+        console.error('Non-JSON response:', retryText);
+        toast.error('Server error: ' + (retryText.slice(0, 100) || 'Invalid response'));
+        return;
+      }
+
       if (data.success) {
         toast.success(`Child order retried successfully! New Provider Order ID: ${data.provider_order_id}`);
         fetchComboOrders();
