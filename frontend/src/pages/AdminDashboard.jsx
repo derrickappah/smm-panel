@@ -9,7 +9,7 @@ import {
   Users, ShoppingCart, DollarSign, Package, Wallet, Receipt,
   MessageSquare, UserPlus, RefreshCw, BarChart3, Menu, X, LayoutDashboard, Tag,
   ChevronLeft, ChevronRight, FileText, Server, HelpCircle, CreditCard, Scale, Bell, Video,
-  Gift, Settings
+  Gift, Settings, Layers
 } from 'lucide-react';
 import { useReferralStats } from '@/hooks/useAdminReferrals';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -23,6 +23,7 @@ const AdminOrders = lazy(() => import('@/pages/admin/AdminOrders'));
 const AdminDeposits = lazy(() => import('@/pages/admin/AdminDeposits'));
 const AdminTransactions = lazy(() => import('@/pages/admin/AdminTransactions'));
 const AdminServices = lazy(() => import('@/pages/admin/AdminServices'));
+const AdminComboBuilder = lazy(() => import('@/pages/admin/AdminComboBuilder'));
 const AdminPromotionPackages = lazy(() => import('@/pages/admin/AdminPromotionPackages'));
 const AdminSupport = lazy(() => import('@/pages/admin/AdminSupport'));
 const AdminReferrals = lazy(() => import('@/pages/admin/AdminReferrals'));
@@ -77,6 +78,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
         'deposits': 'deposits',
         'orders': 'orders',
         'services': 'services',
+        'combo-builder': 'combo-builder',
         'promotion-packages': 'promotion-packages',
         'payment-methods': 'payment-methods',
         'users': 'users',
@@ -317,6 +319,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     deposits: 'Deposits',
     orders: 'Orders',
     services: 'Services',
+    'combo-builder': 'Combo Service Builder',
     'promotion-packages': 'Promotion Packages',
     'payment-methods': 'Payment Methods',
     users: 'Users',
@@ -348,6 +351,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     { id: 'deposits', label: 'Deposits', icon: DollarSign, badge: stats.pending_deposits },
     { id: 'orders', label: 'Orders', icon: ShoppingCart },
     { id: 'services', label: 'Services', icon: Package },
+    { id: 'combo-builder', label: 'Combo Builder', icon: Layers },
     { id: 'promotion-packages', label: 'Promotion Packages', icon: Tag },
     { id: 'payment-methods', label: 'Payment Methods', icon: Wallet },
     { id: 'users', label: 'Users', icon: Users },
@@ -718,9 +722,16 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                 </TabsContent>
 
                 {/* Services Section */}
-                <TabsContent value="services" className="lg:mt-0">
+                <TabsContent value="services" className="lg:mt-0 w-full max-w-full">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminServices />
+                  </Suspense>
+                </TabsContent>
+
+                {/* Combo Service Builder Section */}
+                <TabsContent value="combo-builder" className="lg:mt-0 w-full max-w-full">
+                  <Suspense fallback={<ComponentLoader />}>
+                    <AdminComboBuilder />
                   </Suspense>
                 </TabsContent>
 

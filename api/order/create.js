@@ -1,5 +1,6 @@
 import { verifyAuth, getServiceRoleClient } from '../utils/auth.js';
 import { placeProviderOrder, extractOrderId } from '../utils/providers.js';
+import comboHandler from './place-combo-order.js';
 import {
     cleanUrl,
     validateUrlForService,
@@ -110,8 +111,11 @@ export default async function handler(req, res) {
                 return res.status(403).json({ error: 'This service is only available to sellers' });
             }
 
-            // Capture url_type for validation below
-            serviceUrlType = service.url_type || null;
+            // If this is a new Combo Service Builder combo service, delegate directly to place-combo-order engine
+            if (service.combo_service_id || (service.is_combo && !service.combo_service_ids && !service.combo_smmgen_service_ids)) {
+                req.body.combo_service_id = service.combo_service_id || service.id;
+                return comboHandler(req, res);
+            }
 
             is_combo = service.is_combo || false;
 

@@ -14,10 +14,13 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { checkOrdersStatusBatch } from '@/lib/orderStatusCheck';
 
+import AdminComboOrdersView from '@/components/admin/AdminComboOrdersView';
+
 const ITEMS_PER_PAGE = 50;
 const VIRTUAL_SCROLL_THRESHOLD = 100;
 
 const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
+  const [activeTab, setActiveTab] = useState('standard');
   const [searchTerm, setSearchTerm] = useState('');
   const [searchType, setSearchType] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -1276,36 +1279,61 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
   const useVirtualScroll = paginatedOrders.length > VIRTUAL_SCROLL_THRESHOLD;
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm w-full max-w-full overflow-hidden">
-      <div className="flex flex-col gap-4 mb-6">
-        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-          <div className="flex items-center gap-4">
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Orders</h2>
-            <Button
-              onClick={() => {
-                refetch();
-                if (onRefresh) onRefresh();
-              }}
-              disabled={refreshing}
-              variant="outline"
-              size="sm"
-              className="flex items-center gap-2 min-h-[44px]"
-            >
-              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-            <Button
-              onClick={handleCheckPendingOrders}
-              disabled={isCheckingStatus || refreshing}
-              variant="outline"
-              size="sm"
-              className="flex items-center gap-2 min-h-[44px]"
-            >
-              <CheckCircle2 className={`w-4 h-4 ${isCheckingStatus ? 'animate-spin' : ''}`} />
-              {isCheckingStatus ? 'Checking...' : 'Check Pending Orders'}
-            </Button>
+    <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm w-full max-w-full overflow-hidden space-y-6">
+      {/* Top Section Tab Selector */}
+      <div className="flex border-b border-gray-200 pb-3 gap-2">
+        <button
+          onClick={() => setActiveTab('standard')}
+          className={`px-4 py-2 text-sm font-bold rounded-lg transition-colors ${
+            activeTab === 'standard' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          Standard Orders
+        </button>
+        <button
+          onClick={() => setActiveTab('combo')}
+          className={`px-4 py-2 text-sm font-bold rounded-lg transition-colors flex items-center gap-2 ${
+            activeTab === 'combo' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          Combo Orders Builder
+        </button>
+      </div>
+
+      {activeTab === 'combo' ? (
+        <AdminComboOrdersView />
+      ) : (
+        <>
+          <div className="flex flex-col gap-4 mb-6">
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+              <div className="flex items-center gap-4">
+                <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Orders</h2>
+                <Button
+                  onClick={() => {
+                    refetch();
+                    if (onRefresh) onRefresh();
+                  }}
+                  disabled={refreshing}
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-2 min-h-[44px]"
+                >
+                  <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+                <Button
+                  onClick={handleCheckPendingOrders}
+                  disabled={isCheckingStatus || refreshing}
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-2 min-h-[44px]"
+                >
+                  <CheckCircle2 className={`w-4 h-4 ${isCheckingStatus ? 'animate-spin' : ''}`} />
+                  {isCheckingStatus ? 'Checking...' : 'Check Pending Orders'}
+                </Button>
+              </div>
+            </div>
           </div>
-        </div>
         <div className="flex flex-col gap-3">
           <div className="flex flex-col sm:flex-row gap-3">
             <Select
@@ -1375,7 +1403,6 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
             </Select>
           </div>
         </div>
-      </div>
 
       {isLoading && paginatedOrders.length === 0 ? (
         <div className="space-y-2">
@@ -1459,6 +1486,8 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
           </div>
         </>
       )}
+    </>
+  )}
 
       {/* Detail Modals */}
       <OrderErrorModal
