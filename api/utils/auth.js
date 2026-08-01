@@ -105,27 +105,41 @@ export async function verifyAuth(req) {
 export async function verifyAdmin(req) {
   const { user, supabase } = await verifyAuth(req);
 
+  // Quick check on JWT token app_metadata or user role first
+  if (user?.app_metadata?.role === 'admin' || user?.app_metadata?.role === 'superadmin' || user?.role === 'admin' || user?.role === 'superadmin') {
+    return { user, supabase, isAdmin: true };
+  }
+
   // Check Redis cache for user role first (300s TTL)
   const cacheKey = `smm:user:${user.id}:role`;
   let userRole = await getCached(cacheKey);
 
   if (!userRole) {
-    // Get user profile to check role from DB
-    const { data: profile, error } = await supabase
+    // 1. Check profiles table
+    const { data: profile } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .single();
 
-    if (error) {
-      throw new Error('Failed to fetch user profile');
+    userRole = profile?.role;
+
+    // 2. Fallback to users table if not found in profiles
+    if (!userRole) {
+      const { data: userRec } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+      userRole = userRec?.role;
     }
 
-    userRole = profile?.role || 'user';
+    userRole = userRole || 'user';
     await setCached(cacheKey, userRole, 300);
   }
 
-  const isAdmin = userRole === 'admin';
+  const isAdmin = userRole === 'admin' || userRole === 'superadmin';
 
   if (!isAdmin) {
     throw new Error('Admin access required');

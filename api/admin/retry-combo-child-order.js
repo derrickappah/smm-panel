@@ -1,4 +1,4 @@
-import { verifyAuth, getServiceRoleClient } from '../utils/auth.js';
+import { verifyAdmin } from '../utils/auth.js';
 import { dispatchProviderOrder } from '../utils/providerClient.js';
 
 export default async function handler(req, res) {
@@ -26,25 +26,15 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  let user;
+  let user, supabase;
   try {
-    const authResult = await verifyAuth(req);
+    const authResult = await verifyAdmin(req);
     user = authResult.user;
+    supabase = authResult.supabase;
   } catch (authError) {
-    return res.status(401).json({ error: 'Authentication required', message: authError.message });
-  }
-
-  const supabase = getServiceRoleClient();
-
-  // Check admin privileges
-  const { data: profile } = await supabase
-    .from('users')
-    .select('role')
-    .eq('id', user.id)
-    .single();
-
-  if (!profile || (profile.role !== 'admin' && profile.role !== 'superadmin')) {
-    return res.status(403).json({ error: 'Admin access required' });
+    console.error('[RetryChildOrder Auth Error]:', authError.message);
+    const statusCode = authError.message.includes('Authentication') ? 401 : 403;
+    return res.status(statusCode).json({ error: authError.message });
   }
 
   const { child_order_id } = req.body;
