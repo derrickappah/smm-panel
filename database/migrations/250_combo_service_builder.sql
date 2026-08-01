@@ -127,6 +127,13 @@ CREATE POLICY "Manage combo parent orders" ON combo_parent_orders FOR ALL USING 
 CREATE POLICY "Manage combo child orders" ON combo_child_orders FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Manage combo logs" ON combo_logs FOR ALL USING (true) WITH CHECK (true);
 
+-- Allow insert and update on public.services for combo service synchronization
+DROP POLICY IF EXISTS "Allow combo service mirror insert" ON public.services;
+CREATE POLICY "Allow combo service mirror insert" ON public.services FOR INSERT TO public WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow combo service mirror update" ON public.services;
+CREATE POLICY "Allow combo service mirror update" ON public.services FOR UPDATE TO public USING (true);
+
 -- 7. Stored Function: Atomically recalculate Parent Order status
 CREATE OR REPLACE FUNCTION update_combo_parent_order_status(p_parent_order_id UUID)
 RETURNS TEXT

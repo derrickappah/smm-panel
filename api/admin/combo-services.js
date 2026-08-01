@@ -1,4 +1,4 @@
-import { verifyAdmin } from '../utils/auth.js';
+import { verifyAdmin, getServiceRoleClient } from '../utils/auth.js';
 
 export default async function handler(req, res) {
   // CORS Headers
@@ -32,12 +32,20 @@ export default async function handler(req, res) {
     return res.status(statusCode).json({ error: authError.message });
   }
 
+  // Admin DB client: Use service role client if available to bypass RLS on services table
+  let adminDbClient = supabase;
+  try {
+    adminDbClient = getServiceRoleClient();
+  } catch (e) {
+    adminDbClient = supabase;
+  }
+
   // ----------------------------------------------------
   // GET: List all combo services with child items
   // ----------------------------------------------------
   if (req.method === 'GET') {
     try {
-      const { data: combos, error: comboErr } = await supabase
+      const { data: combos, error: comboErr } = await adminDbClient
         .from('combo_services')
         .select(`
           *,
@@ -95,7 +103,7 @@ export default async function handler(req, res) {
       totalProviderCost = Math.round((totalProviderCost + Number.EPSILON) * 100) / 100;
 
       // 1. Insert into combo_services
-      const { data: newCombo, error: insertErr } = await supabase
+      const { data: newCombo, error: insertErr } = await adminDbClient
         .from('combo_services')
         .insert({
           name: name.trim(),
@@ -119,7 +127,7 @@ export default async function handler(req, res) {
         combo_service_id: newCombo.id
       }));
 
-      const { data: createdItems, error: itemsErr } = await supabase
+      const { data: createdItems, error: itemsErr } = await adminDbClient
         .from('combo_service_items')
         .insert(itemsToInsert)
         .select();
@@ -127,12 +135,12 @@ export default async function handler(req, res) {
       if (itemsErr) throw itemsErr;
 
       // 3. Upsert linked entry in main services table so customer can purchase via store UI
-      const { data: serviceRecord, error: serviceErr } = await supabase
+      const { data: serviceRecord, error: serviceErr } = await adminDbClient
         .from('services')
         .insert({
           name: newCombo.name,
           platform: selectedPlatform,
-          category: newCombo.category,
+          service_type: 'Combo',
           rate: newCombo.selling_price,
           min_quantity: newCombo.min_order,
           max_quantity: newCombo.max_order,
@@ -149,7 +157,7 @@ export default async function handler(req, res) {
         console.warn('[ComboServices POST] Failed to mirror to services table:', serviceErr);
       } else if (serviceRecord) {
         // Link service_id back to combo_services
-        await supabase
+        await adminDbClient
           .from('combo_services')
           .update({ service_id: serviceRecord.id })
           .eq('id', newCombo.id);
@@ -206,7 +214,7 @@ export default async function handler(req, res) {
       totalProviderCost = Math.round((totalProviderCost + Number.EPSILON) * 100) / 100;
 
       // Update combo_services definition
-      const { data: updatedCombo, error: updateErr } = await supabase
+      const { data: updatedCombo, error: updateErr } = await adminDbClient
         .from('combo_services')
         .update({
           name: name.trim(),
@@ -227,8 +235,8 @@ export default async function handler(req, res) {
       if (updateErr) throw updateErr;
 
       // Replace items for this combo service
-      await supabase.from('combo_service_items').delete().eq('combo_service_id', id);
-      const { data: newItems, error: itemsErr } = await supabase
+      await adminDbClient.from('combo_service_items').delete().eq('combo_service_id', id);
+      const { data: newItems, error: itemsErr } = await adminDbClient
         .from('combo_service_items')
         .insert(formattedItems)
         .select();
@@ -237,12 +245,12 @@ export default async function handler(req, res) {
 
       // Update corresponding entry in services table if it exists
       if (updatedCombo.service_id) {
-        await supabase
+        await adminDbClient
           .from('services')
           .update({
             name: updatedCombo.name,
             platform: selectedPlatform,
-            category: updatedCombo.category,
+            service_type: 'Combo',
             rate: updatedCombo.selling_price,
             min_quantity: updatedCombo.min_order,
             max_quantity: updatedCombo.max_order,
@@ -251,6 +259,32 @@ export default async function handler(req, res) {
             seller_only: false
           })
           .eq('id', updatedCombo.service_id);
+      } else {
+        // Create mirrored entry if missing
+        const { data: newSvcRecord } = await adminDbClient
+          .from('services')
+          .insert({
+            name: updatedCombo.name,
+            platform: selectedPlatform,
+            service_type: 'Combo',
+            rate: updatedCombo.selling_price,
+            min_quantity: updatedCombo.min_order,
+            max_quantity: updatedCombo.max_order,
+            description: updatedCombo.description,
+            enabled: updatedCombo.status === 'active',
+            seller_only: false,
+            is_combo: true,
+            combo_service_id: updatedCombo.id
+          })
+          .select()
+          .single();
+
+        if (newSvcRecord) {
+          await adminDbClient
+            .from('combo_services')
+            .update({ service_id: newSvcRecord.id })
+            .eq('id', updatedCombo.id);
+        }
       }
 
       return res.status(200).json({
@@ -275,13 +309,13 @@ export default async function handler(req, res) {
       if (!id) return res.status(400).json({ error: 'Combo Service ID required' });
 
       // Get service_id before deletion
-      const { data: combo } = await supabase.from('combo_services').select('service_id').eq('id', id).single();
+      const { data: combo } = await adminDbClient.from('combo_services').select('service_id').eq('id', id).single();
 
       if (combo && combo.service_id) {
-        await supabase.from('services').delete().eq('id', combo.service_id);
+        await adminDbClient.from('services').delete().eq('id', combo.service_id);
       }
 
-      const { error: delErr } = await supabase.from('combo_services').delete().eq('id', id);
+      const { error: delErr } = await adminDbClient.from('combo_services').delete().eq('id', id);
       if (delErr) throw delErr;
 
       return res.status(200).json({ success: true, message: 'Combo service deleted' });
