@@ -1,5 +1,5 @@
 -- Migration: 250_combo_service_builder.sql
--- Description: Combo Service Builder infrastructure with separate tables, foreign keys, logs, and stored functions
+-- Description: Combo Service Builder infrastructure with separate tables, foreign keys, logs, stored functions, and RLS policies
 
 BEGIN;
 
@@ -99,7 +99,35 @@ CREATE INDEX IF NOT EXISTS idx_combo_logs_child_id ON combo_logs(child_order_id)
 ALTER TABLE services ADD COLUMN IF NOT EXISTS is_combo BOOLEAN DEFAULT FALSE;
 ALTER TABLE services ADD COLUMN IF NOT EXISTS combo_service_id UUID REFERENCES combo_services(id) ON DELETE SET NULL;
 
--- 6. Stored Function: Atomically recalculate Parent Order status
+-- 6. Row Level Security (RLS) Policies
+ALTER TABLE combo_services ENABLE ROW LEVEL SECURITY;
+ALTER TABLE combo_service_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE combo_parent_orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE combo_child_orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE combo_logs ENABLE ROW LEVEL SECURITY;
+
+-- Drop old policies if existing
+DROP POLICY IF EXISTS "Public read combo_services" ON combo_services;
+DROP POLICY IF EXISTS "Public read combo_service_items" ON combo_service_items;
+DROP POLICY IF EXISTS "Admins manage combo_services" ON combo_services;
+DROP POLICY IF EXISTS "Admins manage combo_service_items" ON combo_service_items;
+DROP POLICY IF EXISTS "Users view own combo parent orders" ON combo_parent_orders;
+DROP POLICY IF EXISTS "Manage combo parent orders" ON combo_parent_orders;
+DROP POLICY IF EXISTS "Manage combo child orders" ON combo_child_orders;
+DROP POLICY IF EXISTS "Manage combo logs" ON combo_logs;
+
+-- Create permissive RLS policies for combo builder tables
+CREATE POLICY "Public read combo_services" ON combo_services FOR SELECT USING (true);
+CREATE POLICY "Public read combo_service_items" ON combo_service_items FOR SELECT USING (true);
+
+CREATE POLICY "Admins manage combo_services" ON combo_services FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Admins manage combo_service_items" ON combo_service_items FOR ALL USING (true) WITH CHECK (true);
+
+CREATE POLICY "Manage combo parent orders" ON combo_parent_orders FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Manage combo child orders" ON combo_child_orders FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Manage combo logs" ON combo_logs FOR ALL USING (true) WITH CHECK (true);
+
+-- 7. Stored Function: Atomically recalculate Parent Order status
 CREATE OR REPLACE FUNCTION update_combo_parent_order_status(p_parent_order_id UUID)
 RETURNS TEXT
 LANGUAGE plpgsql
@@ -149,7 +177,7 @@ BEGIN
 END;
 $$;
 
--- 7. Stored Function: Atomic Place Combo Order with wallet balance validation
+-- 8. Stored Function: Atomic Place Combo Order with wallet balance validation
 CREATE OR REPLACE FUNCTION place_combo_order_atomic(
     p_user_id UUID,
     p_combo_service_id UUID,
@@ -170,32 +198,27 @@ DECLARE
     v_scheduled_at TIMESTAMPTZ;
     v_created_children JSONB := '[]'::jsonb;
 BEGIN
-    -- 1. Fetch combo service definition
     SELECT * INTO v_combo FROM combo_services WHERE id = p_combo_service_id AND status = 'active';
     IF NOT FOUND THEN
         RETURN jsonb_build_object('success', false, 'error', 'Combo service not found or inactive');
     END IF;
 
-    -- Validate quantity bounds
     IF p_quantity < v_combo.min_order OR p_quantity > v_combo.max_order THEN
         RETURN jsonb_build_object('success', false, 'error', 'Quantity out of bounds for combo service');
     END IF;
 
     v_selling_price := v_combo.selling_price;
 
-    -- 2. Lock & check user wallet balance
     SELECT balance INTO v_user_balance FROM users WHERE id = p_user_id FOR UPDATE;
     IF v_user_balance IS NULL OR v_user_balance < v_selling_price THEN
         RETURN jsonb_build_object('success', false, 'error', 'Insufficient user balance');
     END IF;
 
-    -- 3. Deduct balance
     UPDATE users 
     SET balance = balance - v_selling_price,
         updated_at = NOW()
     WHERE id = p_user_id;
 
-    -- 4. Create Parent Order
     INSERT INTO combo_parent_orders (
         user_id,
         combo_service_id,
@@ -218,7 +241,6 @@ BEGIN
         'pending'
     ) RETURNING id INTO v_parent_order_id;
 
-    -- Also record in standard transactions table for accounting
     INSERT INTO transactions (
         user_id,
         amount,
@@ -233,7 +255,6 @@ BEGIN
         'Combo Order #' || v_parent_order_id || ' (' || v_combo.name || ')'
     );
 
-    -- Log parent order creation
     INSERT INTO combo_logs (parent_order_id, log_type, message, details)
     VALUES (
         v_parent_order_id,
@@ -242,7 +263,6 @@ BEGIN
         jsonb_build_object('user_id', p_user_id, 'combo_service_id', v_combo.id, 'price', v_selling_price)
     );
 
-    -- 5. Generate Child Orders for enabled items
     FOR v_item IN 
         SELECT * FROM combo_service_items 
         WHERE combo_service_id = v_combo.id AND enabled = TRUE 
@@ -274,7 +294,6 @@ BEGIN
             v_scheduled_at
         ) RETURNING id INTO v_child_order_id;
 
-        -- Log child order creation
         INSERT INTO combo_logs (parent_order_id, child_order_id, log_type, message, details)
         VALUES (
             v_parent_order_id,
