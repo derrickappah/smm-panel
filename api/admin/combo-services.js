@@ -59,7 +59,7 @@ export default async function handler(req, res) {
   // ----------------------------------------------------
   if (req.method === 'POST') {
     try {
-      const { name, description, selling_price, category, min_order, max_order, status, child_services } = req.body;
+      const { name, description, selling_price, category, platform, min_order, max_order, status, child_services } = req.body;
 
       if (!name || name.trim() === '') {
         return res.status(400).json({ error: 'Combo Service Name is required' });
@@ -71,6 +71,8 @@ export default async function handler(req, res) {
       if (!Array.isArray(child_services) || child_services.length === 0) {
         return res.status(400).json({ error: 'At least one child service is required' });
       }
+
+      const selectedPlatform = (platform || 'tiktok').toLowerCase();
 
       // Calculate total provider cost and profit
       let totalProviderCost = 0;
@@ -129,13 +131,14 @@ export default async function handler(req, res) {
         .from('services')
         .insert({
           name: newCombo.name,
-          platform: 'combo',
+          platform: selectedPlatform,
           category: newCombo.category,
           rate: newCombo.selling_price,
           min_quantity: newCombo.min_order,
           max_quantity: newCombo.max_order,
           description: newCombo.description,
           enabled: newCombo.status === 'active',
+          seller_only: false,
           is_combo: true,
           combo_service_id: newCombo.id
         })
@@ -170,7 +173,7 @@ export default async function handler(req, res) {
   // ----------------------------------------------------
   if (req.method === 'PUT') {
     try {
-      const { id, name, description, selling_price, category, min_order, max_order, status, child_services } = req.body;
+      const { id, name, description, selling_price, category, platform, min_order, max_order, status, child_services } = req.body;
 
       if (!id) return res.status(400).json({ error: 'Combo Service ID is required' });
       if (!name || name.trim() === '') return res.status(400).json({ error: 'Combo Service Name is required' });
@@ -179,6 +182,8 @@ export default async function handler(req, res) {
       if (!Array.isArray(child_services) || child_services.length === 0) {
         return res.status(400).json({ error: 'At least one child service is required' });
       }
+
+      const selectedPlatform = (platform || 'tiktok').toLowerCase();
 
       let totalProviderCost = 0;
       const formattedItems = child_services.map((item, idx) => {
@@ -236,12 +241,14 @@ export default async function handler(req, res) {
           .from('services')
           .update({
             name: updatedCombo.name,
+            platform: selectedPlatform,
             category: updatedCombo.category,
             rate: updatedCombo.selling_price,
             min_quantity: updatedCombo.min_order,
             max_quantity: updatedCombo.max_order,
             description: updatedCombo.description,
-            enabled: updatedCombo.status === 'active'
+            enabled: updatedCombo.status === 'active',
+            seller_only: false
           })
           .eq('id', updatedCombo.service_id);
       }

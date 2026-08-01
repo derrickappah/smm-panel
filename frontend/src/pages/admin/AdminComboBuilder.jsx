@@ -40,6 +40,7 @@ export default function AdminComboBuilder() {
   const [description, setDescription] = useState('');
   const [sellingPrice, setSellingPrice] = useState('20.00');
   const [category, setCategory] = useState('TikTok Boost');
+  const [platform, setPlatform] = useState('tiktok');
   const [minOrder, setMinOrder] = useState('1');
   const [maxOrder, setMaxOrder] = useState('100000');
   const [status, setStatus] = useState('active');
@@ -132,6 +133,7 @@ export default function AdminComboBuilder() {
     setDescription('');
     setSellingPrice('20.00');
     setCategory('TikTok Boost');
+    setPlatform('tiktok');
     setMinOrder('1');
     setMaxOrder('100000');
     setStatus('active');
@@ -148,6 +150,7 @@ export default function AdminComboBuilder() {
     setDescription(combo.description || '');
     setSellingPrice(String(combo.selling_price || '0.00'));
     setCategory(combo.category || 'Combo');
+    setPlatform(combo.platform || 'tiktok');
     setMinOrder(String(combo.min_order || '1'));
     setMaxOrder(String(combo.max_order || '100000'));
     setStatus(combo.status || 'active');
@@ -196,6 +199,7 @@ export default function AdminComboBuilder() {
         description: description.trim(),
         selling_price: Number(sellingPrice),
         category: category.trim(),
+        platform,
         min_order: Number(minOrder),
         max_order: Number(maxOrder),
         status,
@@ -314,6 +318,27 @@ export default function AdminComboBuilder() {
                 placeholder="e.g. TikTok Premium Boost Package"
                 required
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="font-semibold text-gray-700">Platform</Label>
+              <Select value={platform} onValueChange={setPlatform}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="tiktok">TikTok</SelectItem>
+                  <SelectItem value="instagram">Instagram</SelectItem>
+                  <SelectItem value="youtube">YouTube</SelectItem>
+                  <SelectItem value="facebook">Facebook</SelectItem>
+                  <SelectItem value="twitter">Twitter / X</SelectItem>
+                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                  <SelectItem value="telegram">Telegram</SelectItem>
+                  <SelectItem value="spotify">Spotify</SelectItem>
+                  <SelectItem value="audiomark">Audiomack</SelectItem>
+                  <SelectItem value="combo">Combo (General)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">
