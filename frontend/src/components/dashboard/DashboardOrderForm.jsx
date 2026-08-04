@@ -21,6 +21,7 @@ const normalizeComboServices = (comboServiceIds) => {
 
 const DashboardOrderForm = React.memo(({
   services = [],
+  packages = [],
   orderForm,
   setOrderForm,
   handleOrder,
@@ -47,6 +48,11 @@ const DashboardOrderForm = React.memo(({
     [sortedServices, orderForm.service_id]
   );
 
+  const selectedPackage = useMemo(() =>
+    packages.find(p => p.id === orderForm.package_id),
+    [packages, orderForm.package_id]
+  );
+
   const filteredServices = useMemo(() => {
     if (!serviceSearch.trim()) return sortedServices;
     const searchLower = serviceSearch.toLowerCase();
@@ -59,7 +65,12 @@ const DashboardOrderForm = React.memo(({
   }, [sortedServices, serviceSearch]);
 
   const estimatedCost = useMemo(() => {
-    // Calculate from service
+    // If package is selected, use fixed price
+    if (selectedPackage) {
+      return (selectedPackage.price ?? 0).toFixed(2);
+    }
+
+    // Otherwise calculate from service
     if (!selectedService || !orderForm.quantity) return '0.00';
 
     const quantity = parseInt(orderForm.quantity);
@@ -90,7 +101,7 @@ const DashboardOrderForm = React.memo(({
 
     const rateUnit = selectedService.rate_unit || 1000;
     return ((quantity / rateUnit) * selectedService.rate).toFixed(2);
-  }, [selectedService, orderForm.quantity, sortedServices]);
+  }, [selectedService, selectedPackage, orderForm.quantity, sortedServices]);
 
   const handleServiceSearchChange = useCallback((e) => {
     const value = e.target.value;
@@ -336,6 +347,20 @@ const DashboardOrderForm = React.memo(({
             </SelectTrigger>
           </Select>
 
+          {orderForm.package_id && selectedPackage && (
+            <div className="mt-3 p-3 bg-purple-50 border-2 border-purple-300 rounded-lg">
+              <div className="flex items-center gap-2.5 mb-1">
+                <PlatformIcon platform={selectedPackage.platform} serviceName={selectedPackage.name} className="w-8 h-8 object-contain shrink-0" />
+                <p className="text-sm font-medium text-gray-900">
+                  Selected Package: {selectedPackage.name}
+                </p>
+              </div>
+              <p className="text-xs text-gray-600 mt-0.5 pl-10.5">
+                Fixed Price: {selectedPackage.price} GHS • Quantity: {selectedPackage.quantity.toLocaleString()}
+              </p>
+            </div>
+          )}
+
           {orderForm.service_id && selectedService && (
             <div className="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
               <div className="flex items-center gap-2.5 mb-1">
@@ -379,9 +404,16 @@ const DashboardOrderForm = React.memo(({
             placeholder="1000"
             value={orderForm.quantity}
             onChange={handleQuantityChange}
-            disabled={isCustomCommentsService}
+            disabled={!!selectedPackage || isCustomCommentsService}
             className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
           />
+          {selectedPackage && (
+            <div className="mt-2 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+              <p className="text-xs text-purple-700">
+                <span className="font-medium">Package Quantity:</span> {selectedPackage.quantity.toLocaleString()} (Fixed)
+              </p>
+            </div>
+          )}
           {isCustomCommentsService && (
             <div className="mt-2 text-xs text-indigo-600 font-medium">
               Quantity is automatically set based on the number of comments ({orderForm.quantity || 0}).
@@ -445,18 +477,18 @@ const DashboardOrderForm = React.memo(({
         <Button
           data-testid="order-submit-btn"
           type="submit"
-          disabled={loading || !orderForm.service_id}
+          disabled={loading || (!orderForm.service_id && !orderForm.package_id)}
           className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? 'Processing...' : 'Place Order'}
         </Button>
       </form>
 
-      {selectedService?.description && (
+      {(selectedService?.description || selectedPackage?.description) && (
         <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
           <p className="text-sm font-medium text-gray-900 mb-2">Description</p>
           <div className="text-sm text-gray-700 leading-relaxed">
-            {formatDescription(selectedService.description)}
+            {formatDescription(selectedService?.description || selectedPackage?.description)}
           </div>
         </div>
       )}
