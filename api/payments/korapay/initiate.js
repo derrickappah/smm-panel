@@ -114,6 +114,7 @@ export default async function handler(req, res) {
             notification_url: `${baseUrl}/api/payments/korapay/webhook`,
             redirect_url: `${baseUrl}/payment/success?provider=korapay`,
             merchant_bears_cost: true,
+            channels: ['mobile_money', 'card', 'bank_transfer'],
             customer: {
                 email: customerEmail,
                 name: customerName || 'Customer'
