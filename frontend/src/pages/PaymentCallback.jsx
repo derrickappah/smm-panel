@@ -79,7 +79,7 @@ const PaymentCallback = ({ onUpdateUser }) => {
 
         // Verify payment based on method
         if (paymentMethod === 'korapay') {
-          const verifyResponse = await fetch('/api/korapay-verify', {
+          const verifyResponse = await fetch('/api/payments/korapay/verify', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

@@ -79,39 +79,19 @@ export const useOrderStatus = () => {
         // Verify Korapay transactions
         if (transaction.korapay_reference && transaction.deposit_method === 'korapay') {
           try {
-            const verifyResponse = await fetch('/api/korapay-verify', {
+            const { data: { session } } = await supabase.auth.getSession();
+            const authToken = session?.access_token ? `Bearer ${session.access_token}` : '';
+
+            await fetch('/api/payments/korapay/verify', {
               method: 'POST',
               headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Authorization': authToken
               },
               body: JSON.stringify({
                 reference: transaction.korapay_reference
               })
             });
-
-            if (verifyResponse.ok) {
-              const verifyData = await verifyResponse.json();
-              
-              if (verifyData.success && verifyData.data && verifyData.data.status === 'success') {
-                // Payment succeeded, update transaction
-                await supabase
-                  .from('transactions')
-                  .update({ 
-                    status: 'completed',
-                    updated_at: new Date().toISOString()
-                  })
-                  .eq('id', transaction.id);
-              } else if (verifyData.data && verifyData.data.status === 'failed') {
-                // Payment failed, update transaction
-                await supabase
-                  .from('transactions')
-                  .update({ 
-                    status: 'failed',
-                    updated_at: new Date().toISOString()
-                  })
-                  .eq('id', transaction.id);
-              }
-            }
           } catch (error) {
             console.error(`Error verifying Korapay transaction ${transaction.id}:`, error);
           }

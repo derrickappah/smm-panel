@@ -62,13 +62,13 @@ export default async function handler(req, res) {
 
         const supabase = getServiceRoleClient();
 
-        // 2. Fetch the transaction (scoped to this user)
+        // 2. Fetch the transaction (scoped to this user by reference or korapay_reference)
         const { data: transaction, error: fetchError } = await supabase
             .from('transactions')
             .select('*')
-            .eq('client_reference', reference)
+            .or(`client_reference.eq.${reference},korapay_reference.eq.${reference}`)
             .eq('user_id', user.id)
-            .single();
+            .maybeSingle();
 
         if (fetchError || !transaction) {
             return res.status(404).json({ error: 'Transaction not found' });

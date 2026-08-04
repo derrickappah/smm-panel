@@ -33,15 +33,22 @@ export default async function handler(req, res) {
             return res.status(401).json({ error: 'Missing webhook signature' });
         }
 
-        const rawBody = JSON.stringify(req.body);
+        const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
         const expectedSignature = crypto
             .createHmac('sha256', korapaySecretKey)
-            .update(rawBody)
+            .update(rawBody, 'utf8')
             .digest('hex');
 
-        if (signature !== expectedSignature) {
-            console.error('KoraPay webhook signature mismatch');
-            return res.status(401).json({ error: 'Invalid webhook signature' });
+        try {
+            const sigBuf = Buffer.from(signature, 'hex');
+            const expBuf = Buffer.from(expectedSignature, 'hex');
+            if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+                console.error('KoraPay webhook signature mismatch');
+                return res.status(401).json({ error: 'Invalid webhook signature' });
+            }
+        } catch (e) {
+            console.error('KoraPay webhook signature verification error:', e);
+            return res.status(401).json({ error: 'Invalid signature format' });
         }
 
         const payload = req.body;
@@ -67,12 +74,12 @@ export default async function handler(req, res) {
 
         const supabase = getServiceRoleClient();
 
-        // 2. Find transaction by client_reference (the reference we generated)
+        // 2. Find transaction by client_reference or korapay_reference
         const { data: transaction, error: fetchError } = await supabase
             .from('transactions')
             .select('*')
-            .eq('client_reference', reference)
-            .single();
+            .or(`client_reference.eq.${reference},korapay_reference.eq.${reference}`)
+            .maybeSingle();
 
         if (fetchError || !transaction) {
             console.error(`Transaction not found for KoraPay webhook: ${reference}`);

@@ -61,8 +61,9 @@ function verifyWebhookSignature(provider, rawBody, signature) {
     throw new Error(`Payment provider ${provider} not configured`);
   }
 
+  const algorithm = provider === 'korapay' ? 'sha256' : 'sha512';
   const expectedSignature = crypto
-    .createHmac('sha512', config.secretKey)
+    .createHmac(algorithm, config.secretKey)
     .update(rawBody, 'utf8')
     .digest('hex');
 
@@ -125,13 +126,16 @@ function extractTransactionDetails(provider, payload) {
         customer: payload.data?.customer
       };
 
-    case 'korapay':
+    case 'korapay': {
+      const data = payload.data || payload;
+      const isSuccess = payload.event === 'charge.success' || data.status === 'success';
       return {
-        reference: payload.reference,
-        amount: payload.amount,
-        status: payload.status === 'success' ? 'success' : 'failed',
-        customer: payload.customer
+        reference: data.reference || payload.reference,
+        amount: data.amount ? parseFloat(data.amount) : null,
+        status: isSuccess ? 'success' : 'failed',
+        customer: data.customer || payload.customer
       };
+    }
 
     case 'moolre':
       return {
