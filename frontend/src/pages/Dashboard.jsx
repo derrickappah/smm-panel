@@ -3282,7 +3282,6 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           {/* Quick Order */}
           <DashboardOrderForm
             services={services}
-            packages={promotionPackages}
             orderForm={orderForm}
             setOrderForm={setOrderForm}
             handleOrder={handleOrder}
