@@ -589,7 +589,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
       'manual': 'Mobile Money',
       'momo': 'Mobile Money',
       'hubtel': 'Hubtel/MoMo',
-      'korapay': 'Korapay',
+      'korapay': 'Korapay (Nigeria)',
       'moolre': 'Moolre',
       'moolre_web': 'Moolre Web',
       'ref_bonus': 'Referral Bonus'

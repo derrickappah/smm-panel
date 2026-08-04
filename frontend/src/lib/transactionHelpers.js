@@ -127,7 +127,7 @@ export const autoClassifyTransaction = async (context) => {
   if (paymentMethod || paymentReference) {
     const methodMap = {
       'paystack': 'Paystack',
-      'korapay': 'Korapay',
+      'korapay': 'Korapay (Nigeria)',
       'moolre': 'Moolre',
       'moolre_web': 'Moolre Web',
       'hubtel': 'Hubtel/MoMo',

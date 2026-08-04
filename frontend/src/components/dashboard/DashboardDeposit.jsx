@@ -227,7 +227,7 @@ const DashboardDeposit = React.memo(({
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
             >
-              Korapay
+              Korapay (Nigeria)
             </button>
           )}
           {paymentMethodSettings.moolre_enabled && (
@@ -469,7 +469,7 @@ const DashboardDeposit = React.memo(({
             disabled={loading || !depositAmount}
             className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? 'Processing...' : 'Pay with Korapay'}
+            {loading ? 'Processing...' : 'Pay with Korapay (Nigeria)'}
           </Button>
           <p className="text-xs sm:text-sm text-gray-600 text-center">
             Secure payment via Korapay. Funds are added instantly after successful payment.

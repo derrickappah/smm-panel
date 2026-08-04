@@ -516,8 +516,8 @@ const AdminSettings = memo(() => {
     },
     {
       id: 'korapay',
-      name: 'Korapay',
-      description: 'Korapay payment gateway',
+      name: 'Korapay (Nigeria)',
+      description: 'Korapay payment gateway (Nigeria / NGN)',
       icon: Globe,
       color: 'bg-green-100 text-green-600',
       enabled: paymentMethodSettings.korapay_enabled,
