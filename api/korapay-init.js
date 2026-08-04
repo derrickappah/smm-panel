@@ -41,7 +41,7 @@ export default async function handler(req, res) {
 
     const {
       amount,
-      currency = 'GHS',
+      currency = 'NGN',
       reference,
       customer,
       notification_url,

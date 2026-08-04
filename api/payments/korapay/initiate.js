@@ -106,15 +106,17 @@ export default async function handler(req, res) {
         const customerEmail = profile?.email || user.email || '';
         const customerName = profile?.name || '';
 
+        const currency = req.body.currency || 'NGN';
+
         const korapayPayload = {
             amount: totalAmount,
-            currency: 'GHS',
+            currency: currency,
             reference: reference,
             narration: description || 'Wallet Deposit',
             notification_url: `${baseUrl}/api/payments/korapay/webhook`,
             redirect_url: `${baseUrl}/payment/success?provider=korapay`,
             merchant_bears_cost: true,
-            channels: ['mobile_money', 'card', 'bank_transfer'],
+            channels: ['bank_transfer', 'card', 'pay_with_bank', 'mobile_money', 'nqr'],
             customer: {
                 email: customerEmail,
                 name: customerName || 'Customer'
@@ -125,7 +127,7 @@ export default async function handler(req, res) {
             url: 'https://api.korapay.com/merchant/api/v1/charges/initialize',
             reference,
             amount: totalAmount,
-            currency: 'GHS'
+            currency: currency
         });
 
         // 6. Call KoraPay API

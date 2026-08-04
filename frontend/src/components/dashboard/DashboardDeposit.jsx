@@ -451,7 +451,7 @@ const DashboardDeposit = React.memo(({
       ) : depositMethod === 'korapay' && paymentMethodSettings.korapay_enabled ? (
         <form onSubmit={handleKorapayDeposit} className="space-y-4">
           <div>
-            <Label htmlFor="korapay-amount" className="text-sm font-medium text-gray-700 mb-2 block">Amount (GHS)</Label>
+            <Label htmlFor="korapay-amount" className="text-sm font-medium text-gray-700 mb-2 block">Amount (NGN)</Label>
             <Input
               id="korapay-amount"
               type="number"
