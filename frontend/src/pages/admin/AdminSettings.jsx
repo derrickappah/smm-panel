@@ -60,9 +60,9 @@ const AdminSettings = memo(() => {
         displayName = 'Paystack';
       } else if (method === 'manual') {
         settingKey = 'payment_method_manual_enabled';
-        description = 'Enable/disable Manual (Mobile Money) payment method';
+        description = 'Enable/disable Nigerian Payment method';
         stateKey = 'manual_enabled';
-        displayName = 'Manual';
+        displayName = 'Nigerian Payment';
       } else if (method === 'hubtel') {
         settingKey = 'payment_method_hubtel_enabled';
         description = 'Enable/disable Hubtel payment method';
@@ -152,9 +152,9 @@ const AdminSettings = memo(() => {
         displayName = 'Paystack';
       } else if (method === 'manual') {
         settingKey = 'payment_method_manual_min_deposit';
-        description = 'Minimum deposit amount for Manual (Mobile Money) payment method';
+        description = 'Minimum deposit amount for Nigerian Payment method';
         stateKey = 'manual_min';
-        displayName = 'Manual';
+        displayName = 'Nigerian Payment';
       } else if (method === 'hubtel') {
         settingKey = 'payment_method_hubtel_min_deposit';
         description = 'Minimum deposit amount for Hubtel payment method';
@@ -498,8 +498,8 @@ const AdminSettings = memo(() => {
     },
     {
       id: 'manual',
-      name: 'Manual (Mobile Money)',
-      description: 'Direct mobile money transfer',
+      name: 'Nigerian Payment',
+      description: 'Direct Nigerian bank or manual transfer',
       icon: Smartphone,
       color: 'bg-yellow-100 text-yellow-600',
       enabled: paymentMethodSettings.manual_enabled,

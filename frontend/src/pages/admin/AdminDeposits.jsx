@@ -586,7 +586,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
     if (!method) return 'N/A';
     const methodMap = {
       'paystack': 'Paystack',
-      'manual': 'Mobile Money',
+      'manual': 'Nigerian Payment',
       'momo': 'Mobile Money',
       'hubtel': 'Hubtel/MoMo',
       'korapay': 'Korapay (Nigeria)',
