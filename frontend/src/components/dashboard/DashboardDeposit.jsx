@@ -80,6 +80,24 @@ const DashboardDeposit = React.memo(({
     [paymentMethodSettings]
   );
 
+  const parsedAmount = parseFloat(depositAmount);
+  const isValidAmount = !isNaN(parsedAmount) && parsedAmount > 0;
+
+  const renderChargedNotice = (currencySymbol = 'GH₵') => {
+    if (!isValidAmount) return null;
+    const totalCharged = (parsedAmount + 0.50).toFixed(2);
+    return (
+      <div className="mt-2 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+        <div className="flex items-center justify-between">
+          <span className="text-xs sm:text-sm font-medium text-indigo-900">You will be charged:</span>
+          <span className="text-sm sm:text-base font-bold text-indigo-700">
+            {currencySymbol} {totalCharged}
+          </span>
+        </div>
+      </div>
+    );
+  };
+
   // Countdown timer for payment confirmation (60 seconds)
   const [countdown, setCountdown] = useState(60);
 
@@ -282,6 +300,7 @@ const DashboardDeposit = React.memo(({
               onChange={(e) => setDepositAmount(e.target.value)}
               className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             />
+            {renderChargedNotice('GH₵')}
           </div>
           <Button
             data-testid="deposit-submit-btn"
@@ -421,6 +440,7 @@ const DashboardDeposit = React.memo(({
               className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               required
             />
+            {renderChargedNotice('GH₵')}
           </div>
           <Button
             type="submit"
@@ -463,6 +483,7 @@ const DashboardDeposit = React.memo(({
               className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               required
             />
+            {renderChargedNotice('NGN')}
           </div>
           <Button
             type="submit"
@@ -669,6 +690,7 @@ const DashboardDeposit = React.memo(({
                   className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   required
                 />
+                {renderChargedNotice('GH₵')}
               </div>
               <div>
                 <Label htmlFor="moolre-phone" className="text-sm font-medium text-gray-700 mb-2 block">
@@ -769,6 +791,7 @@ const DashboardDeposit = React.memo(({
               className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               required
             />
+            {renderChargedNotice('GH₵')}
           </div>
           <Button
             type="submit"
