@@ -346,35 +346,6 @@ const AdminOrderSearch = memo(({ refreshing = false }) => {
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Top Header Banner */}
-      <div className="bg-gradient-to-r from-indigo-900 via-indigo-800 to-purple-900 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden">
-        <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 opacity-10 pointer-events-none">
-          <Zap className="w-80 h-80 text-white" />
-        </div>
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-700/50 border border-indigo-400/30 text-indigo-200 text-xs font-semibold mb-3">
-              <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-              <span>Dedicated Instant Order Search Engine</span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Order Search Center</h1>
-            <p className="text-indigo-200 text-sm mt-1 max-w-2xl">
-              Search millions of orders by Order ID, Provider ID, User Email, Name, Link, or Status. Results guaranteed under 3 seconds.
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <Button 
-              variant="outline" 
-              onClick={() => navigate('/admin/orders')}
-              className="bg-white/10 hover:bg-white/20 text-white border-white/20 hover:border-white/40 backdrop-blur-sm"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to All Orders
-            </Button>
-          </div>
-        </div>
-      </div>
-
       {/* Primary Search Controls Box */}
       <div className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-6 shadow-md space-y-4">
         <form onSubmit={handleSearchSubmit} className="space-y-4">
@@ -412,8 +383,8 @@ const AdminOrderSearch = memo(({ refreshing = false }) => {
                 </>
               ) : (
                 <>
-                  <Zap className="w-5 h-5 fill-current" />
-                  <span>Instant Search</span>
+                  <Search className="w-5 h-5" />
+                  <span>Search</span>
                 </>
               )}
             </Button>
@@ -504,7 +475,7 @@ const AdminOrderSearch = memo(({ refreshing = false }) => {
           <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
             <Search className="w-8 h-8" />
           </div>
-          <h3 className="text-xl font-bold text-gray-900 mb-1">Instant Order Search Engine</h3>
+          <h3 className="text-xl font-bold text-gray-900 mb-1">Search Orders</h3>
           <p className="text-gray-500 text-sm max-w-md mx-auto mb-6">
             Enter an Order ID, Provider ID (e.g. JB SMM Panel ID, SMMGen ID), user email, name, or link to search instantly.
           </p>
