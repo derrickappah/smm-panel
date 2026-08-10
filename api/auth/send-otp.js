@@ -83,14 +83,19 @@ export default async function handler(req, res) {
             ]
           };
 
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 6000); // 6s timeout
+
           const moolreRes = await fetch('https://api.moolre.com/open/sms/send', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'X-API-VASKEY': vasKey
             },
-            body: JSON.stringify(smsPayload)
+            body: JSON.stringify(smsPayload),
+            signal: controller.signal
           });
+          clearTimeout(timeoutId);
 
           const moolreData = await moolreRes.json();
           console.log('[MOOLRE SMS RESPONSE]', moolreData);
@@ -103,8 +108,8 @@ export default async function handler(req, res) {
             smsMessage = moolreData.message || 'SMS delivery pending/failed';
           }
         } catch (smsErr) {
-          console.error('[MOOLRE SMS ERROR]', smsErr);
-          smsMessage = 'Error connecting to SMS gateway';
+          console.error('[MOOLRE SMS ERROR]', smsErr.name === 'AbortError' ? 'Moolre SMS API request timed out (6s)' : smsErr);
+          smsMessage = smsErr.name === 'AbortError' ? 'SMS gateway request timed out' : 'Error connecting to SMS gateway';
         }
       } else {
         console.warn('[MOOLRE SMS] No X-API-VASKEY configured in app_settings or environment variables.');
@@ -114,10 +119,9 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       success: true,
-      message: smsSent ? smsMessage : `OTP generated successfully for ${identifier}`,
+      message: smsSent ? smsMessage : `OTP generated for ${identifier}. ${smsMessage}`,
       sms_sent: smsSent,
-      // For development/testing demo visibility
-      demo_otp: process.env.NODE_ENV !== 'production' ? otpCode : undefined
+      demo_otp: (process.env.NODE_ENV !== 'production' || !smsSent) ? otpCode : undefined
     });
   } catch (error) {
     console.error('Error sending OTP:', error);

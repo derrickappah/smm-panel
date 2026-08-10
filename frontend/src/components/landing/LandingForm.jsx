@@ -35,7 +35,7 @@ export const LandingForm = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [termsAccepted, setTermsAccepted] = useState(true);
     const [captchaToken, setCaptchaToken] = useState('');
-    const { requireCaptcha } = usePaymentMethods();
+    const { requireCaptcha, requirePhoneVerification, requireOtp } = usePaymentMethods();
     const [formData, setFormData] = useState({
         email: '',
         password: '',
@@ -117,12 +117,21 @@ export const LandingForm = () => {
                 if (data.user) {
                     await logLoginAttempt({ success: true, email });
                     toast.success('Welcome back!');
-                    
-
-
                     navigate('/dashboard');
                 }
             } else {
+                if (requirePhoneVerification || requireOtp) {
+                    const params = new URLSearchParams();
+                    params.set('mode', 'signup');
+                    if (email) params.set('email', email);
+                    if (formData.phone_number) params.set('phone', formData.phone_number);
+                    if (formData.name) params.set('name', formData.name);
+                    if (formData.referral_code) params.set('ref', formData.referral_code);
+                    toast.info('Please complete phone verification to finalize your account.');
+                    navigate(`/auth?${params.toString()}`);
+                    return;
+                }
+
                 const signupMetadata = {
                     name: formData.name.trim(),
                     phone_number: formData.phone_number.trim(),

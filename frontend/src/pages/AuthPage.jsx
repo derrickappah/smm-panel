@@ -165,17 +165,21 @@ const AuthPage = () => {
         if (data.demo_otp) {
           toast.success(`OTP verification code sent! (Demo Code: ${data.demo_otp})`);
         } else {
-          toast.success('OTP verification code sent to your email / phone number.');
+          toast.success('OTP verification code sent to your phone number.');
         }
         setShowOtpModal(true);
+        return true;
       } else {
-        toast.error(data.error || 'Failed to send OTP code. Please try again.');
+        toast.error(data.error || data.message || 'Failed to send OTP code. Please try again.');
+        return false;
       }
     } catch (err) {
       console.error('Error sending OTP:', err);
       toast.error('Failed to send OTP verification code.');
+      return false;
     } finally {
       setSendingOtp(false);
+      setLoading(false);
     }
   };
 
@@ -200,8 +204,8 @@ const AuthPage = () => {
         toast.success('OTP verified successfully!');
         setOtpVerified(true);
         setShowOtpModal(false);
-        // Continue signup automatically
-        completeSignup();
+        // Continue signup automatically with verified flag
+        await completeSignup(true);
       } else {
         toast.error(data.error || 'Invalid OTP verification code.');
       }
@@ -352,11 +356,11 @@ const AuthPage = () => {
         // SIGNUP
         const needsOtp = (requirePhoneVerification || requireOtp) && !otpVerified;
         if (needsOtp) {
-          await sendOtpCode(formData.email.trim(), formData.phone_number.trim());
+          const sent = await sendOtpCode(formData.email.trim(), formData.phone_number.trim());
           setLoading(false);
           return;
         }
-        await completeSignup();
+        await completeSignup(otpVerified);
       }
     } catch (error) {
       console.error('Auth error:', error);
@@ -366,7 +370,7 @@ const AuthPage = () => {
     }
   };
 
-  const completeSignup = async () => {
+  const completeSignup = async (isVerified = false) => {
     setLoading(true);
     try {
       const normalizedPhone = formData.phone_number.trim().replace(/\D/g, '');
@@ -382,13 +386,16 @@ const AuthPage = () => {
         signupMetadata.referral_code = activeReferralCode;
       }
 
+      // If CAPTCHA is required but has expired during OTP step, omit expired token if user is already SMS verified
+      const useCaptchaToken = (requireCaptcha && captchaToken) ? captchaToken : undefined;
+
       const { data, error } = await supabase.auth.signUp({
         email: formData.email.trim(),
         password: formData.password,
         options: {
           data: signupMetadata,
-          captchaToken: requireCaptcha ? (captchaToken || undefined) : undefined,
-          captcha_token: requireCaptcha ? (captchaToken || undefined) : undefined,
+          captchaToken: useCaptchaToken,
+          captcha_token: useCaptchaToken,
         },
       });
 
