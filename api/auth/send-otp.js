@@ -1,7 +1,14 @@
 import { getServiceRoleClient } from '../utils/auth.js';
-import crypto from 'crypto';
 
-// In-memory OTP store (per serverless instance) & Supabase fallback table
+// Format phone number for Moolre SMS Gateway (e.g., converts 024XXXXXXX to 23324XXXXXXX)
+function formatPhoneForMoolre(phone) {
+  let cleaned = (phone || '').replace(/\D/g, '');
+  if (cleaned.startsWith('0') && cleaned.length === 10) {
+    cleaned = '233' + cleaned.substring(1);
+  }
+  return cleaned;
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -12,7 +19,7 @@ export default async function handler(req, res) {
 
   try {
     const { email, phone_number } = req.body;
-    const identifier = (email || phone_number || '').trim().toLowerCase();
+    const identifier = (phone_number || email || '').trim().toLowerCase();
 
     if (!identifier) {
       return res.status(400).json({ error: 'Email or phone number is required to send OTP' });
@@ -44,9 +51,71 @@ export default async function handler(req, res) {
 
     console.log(`[OTP ONBOARDING] OTP code generated for ${identifier}: ${otpCode}`);
 
+    // If phone number is provided, send SMS via Moolre Gateway
+    let smsSent = false;
+    let smsMessage = '';
+
+    if (phone_number) {
+      const recipientPhone = formatPhoneForMoolre(phone_number);
+
+      // Fetch Moolre SMS configuration from app_settings
+      const { data: settings } = await supabase
+        .from('app_settings')
+        .select('key, value')
+        .in('key', ['moolre_vaskey', 'moolre_sender_id', 'require_phone_verification']);
+
+      const settingsMap = {};
+      settings?.forEach(item => { settingsMap[item.key] = item.value; });
+
+      const vasKey = settingsMap.moolre_vaskey || process.env.MOOLRE_VAS_KEY || process.env.MOOLRE_API_PUBKEY;
+      const senderId = settingsMap.moolre_sender_id || process.env.MOOLRE_SENDER_ID || 'BoostUpGH';
+
+      if (vasKey) {
+        try {
+          const smsPayload = {
+            type: 1,
+            senderid: senderId,
+            messages: [
+              {
+                recipient: recipientPhone,
+                message: `Your BoostUp GH verification code is: ${otpCode}. Valid for 10 minutes.`
+              }
+            ]
+          };
+
+          const moolreRes = await fetch('https://api.moolre.com/open/sms/send', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-API-VASKEY': vasKey
+            },
+            body: JSON.stringify(smsPayload)
+          });
+
+          const moolreData = await moolreRes.json();
+          console.log('[MOOLRE SMS RESPONSE]', moolreData);
+
+          if (moolreRes.ok && moolreData.status === 1) {
+            smsSent = true;
+            smsMessage = `Verification SMS sent to ${recipientPhone}`;
+          } else {
+            console.warn('[MOOLRE SMS WARNING]', moolreData.message || 'Failed to send SMS');
+            smsMessage = moolreData.message || 'SMS delivery pending/failed';
+          }
+        } catch (smsErr) {
+          console.error('[MOOLRE SMS ERROR]', smsErr);
+          smsMessage = 'Error connecting to SMS gateway';
+        }
+      } else {
+        console.warn('[MOOLRE SMS] No X-API-VASKEY configured in app_settings or environment variables.');
+        smsMessage = 'SMS gateway credentials not configured';
+      }
+    }
+
     return res.status(200).json({
       success: true,
-      message: `OTP sent successfully to ${identifier}`,
+      message: smsSent ? smsMessage : `OTP generated successfully for ${identifier}`,
+      sms_sent: smsSent,
       // For development/testing demo visibility
       demo_otp: process.env.NODE_ENV !== 'production' ? otpCode : undefined
     });
@@ -55,3 +124,4 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Failed to send OTP verification code' });
   }
 }
+

@@ -31,6 +31,8 @@ export const DEFAULT_PAYMENT_SETTINGS = {
   supportPhoneNumber: '0500861771',
   requireCaptcha: true, // Default to true
   requireOtp: true, // Default to true (Admins can toggle on/off)
+  requirePhoneVerification: true, // Default to true (Admins can toggle on/off via Moolre SMS)
+  moolreSenderId: 'BoostUpGH',
   depositMethod: 'moolre_web' // Default method
 };
 
@@ -58,6 +60,8 @@ export const fetchPaymentSettingsFn = async () => {
       'whatsapp_number',
       'require_captcha',
       'require_otp',
+      'require_phone_verification',
+      'moolre_sender_id',
       'support_phone_number'
     ]);
 
@@ -130,6 +134,10 @@ export const fetchPaymentSettingsFn = async () => {
 
   // Parse OTP Verification
   settings.requireOtp = getEnabled('require_otp', DEFAULT_PAYMENT_SETTINGS.requireOtp);
+
+  // Parse Phone Verification (Moolre SMS)
+  settings.requirePhoneVerification = getEnabled('require_phone_verification', DEFAULT_PAYMENT_SETTINGS.requirePhoneVerification);
+  settings.moolreSenderId = getString('moolre_sender_id', DEFAULT_PAYMENT_SETTINGS.moolreSenderId);
 
   // Determine Deposit Method
   let depositMethod = null;
@@ -217,6 +225,8 @@ export const usePaymentMethods = () => {
     supportPhoneNumber: data?.supportPhoneNumber || DEFAULT_PAYMENT_SETTINGS.supportPhoneNumber,
     requireCaptcha: data?.requireCaptcha ?? DEFAULT_PAYMENT_SETTINGS.requireCaptcha,
     requireOtp: data?.requireOtp ?? DEFAULT_PAYMENT_SETTINGS.requireOtp,
+    requirePhoneVerification: data?.requirePhoneVerification ?? DEFAULT_PAYMENT_SETTINGS.requirePhoneVerification,
+    moolreSenderId: data?.moolreSenderId || DEFAULT_PAYMENT_SETTINGS.moolreSenderId,
     isLoading,
     refetch: () => {
       queryClient.invalidateQueries({ queryKey: PAYMENT_SETTINGS_QUERY_KEY });

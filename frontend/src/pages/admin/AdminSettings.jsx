@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
-import { RefreshCw, Save, CreditCard, Banknote, Smartphone, Globe, MessageCircle, ShieldCheck } from 'lucide-react';
+import { RefreshCw, Save, CreditCard, Banknote, Smartphone, Globe, MessageCircle, ShieldCheck, Send, CheckCircle2, Clock, XCircle, Plus, Key } from 'lucide-react';
 import { toast } from 'sonner';
 import { logUserActivity } from '@/lib/activityLogger';
 import { usePaymentMethods } from '@/hooks/usePaymentMethods';
@@ -25,6 +25,8 @@ const AdminSettings = memo(() => {
     supportPhoneNumber: remoteSupportPhoneNumber,
     requireCaptcha: remoteRequireCaptcha,
     requireOtp: remoteRequireOtp,
+    requirePhoneVerification: remoteRequirePhoneVerification,
+    moolreSenderId: remoteMoolreSenderId,
     isLoading,
     refetch
   } = usePaymentMethods();
@@ -36,6 +38,36 @@ const AdminSettings = memo(() => {
   const [supportPhoneNumber, setSupportPhoneNumber] = useState(remoteSupportPhoneNumber);
   const [requireCaptcha, setRequireCaptcha] = useState(remoteRequireCaptcha);
   const [requireOtp, setRequireOtp] = useState(remoteRequireOtp);
+  const [requirePhoneVerification, setRequirePhoneVerification] = useState(remoteRequirePhoneVerification);
+  const [moolreVasKey, setMoolreVasKey] = useState('');
+  const [moolreSenderId, setMoolreSenderId] = useState(remoteMoolreSenderId || 'BoostUpGH');
+  const [smsBalance, setSmsBalance] = useState(null);
+  const [loadingSmsBalance, setLoadingSmsBalance] = useState(false);
+  const [senderIdsList, setSenderIdsList] = useState([]);
+  const [loadingSenderIds, setLoadingSenderIds] = useState(false);
+  const [newSenderIdInput, setNewSenderIdInput] = useState('');
+  const [creatingSenderId, setCreatingSenderId] = useState(false);
+  const [savingMoolreConfig, setSavingMoolreConfig] = useState(false);
+
+  const fetchMoolreSettingsAndData = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      const token = session.access_token;
+
+      const res = await fetch('/api/admin/moolre-sms?action=get_settings', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success && data.settings) {
+        setRequirePhoneVerification(data.settings.require_phone_verification);
+        setMoolreSenderId(data.settings.moolre_sender_id || 'BoostUpGH');
+        setMoolreVasKey(data.settings.moolre_vaskey || '');
+      }
+    } catch (err) {
+      console.warn('Failed to load Moolre settings:', err);
+    }
+  }, []);
 
   useEffect(() => {
     if (!isLoading) {
@@ -46,8 +78,147 @@ const AdminSettings = memo(() => {
       setSupportPhoneNumber(remoteSupportPhoneNumber);
       setRequireCaptcha(remoteRequireCaptcha);
       setRequireOtp(remoteRequireOtp);
+      setRequirePhoneVerification(remoteRequirePhoneVerification);
+      setMoolreSenderId(remoteMoolreSenderId || 'BoostUpGH');
     }
-  }, [remotePaymentSettings, remoteMinDepositSettings, remoteManualDepositDetails, remoteWhatsappNumber, remoteSupportPhoneNumber, remoteRequireCaptcha, remoteRequireOtp, isLoading]);
+    fetchMoolreSettingsAndData();
+  }, [remotePaymentSettings, remoteMinDepositSettings, remoteManualDepositDetails, remoteWhatsappNumber, remoteSupportPhoneNumber, remoteRequireCaptcha, remoteRequireOtp, remoteRequirePhoneVerification, remoteMoolreSenderId, isLoading, fetchMoolreSettingsAndData]);
+
+  const handleSaveMoolreSettings = async () => {
+    setSavingMoolreConfig(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Not authenticated');
+
+      const res = await fetch('/api/admin/moolre-sms', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          action: 'save_settings',
+          require_phone_verification: requirePhoneVerification,
+          moolre_sender_id: moolreSenderId,
+          moolre_vaskey: moolreVasKey
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast.success('Moolre SMS configuration saved successfully!');
+        queryClient.invalidateQueries({ queryKey: ['payment-settings'] });
+      } else {
+        toast.error(data.error || 'Failed to save Moolre SMS configuration.');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Error saving Moolre configuration');
+    } finally {
+      setSavingMoolreConfig(false);
+    }
+  };
+
+  const handleFetchSmsBalance = async () => {
+    setLoadingSmsBalance(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Not authenticated');
+
+      const res = await fetch('/api/admin/moolre-sms', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          action: 'get_balance',
+          vaskey: moolreVasKey
+        })
+      });
+
+      const data = await res.json();
+      if (data.status === 1 && data.data?.balance !== undefined) {
+        setSmsBalance(data.data.balance);
+        toast.success(`SMS Balance: ${data.data.balance} credits`);
+      } else {
+        toast.error(data.message || data.error || 'Failed to fetch SMS balance');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Failed to check SMS balance');
+    } finally {
+      setLoadingSmsBalance(false);
+    }
+  };
+
+  const handleFetchSenderIds = async () => {
+    setLoadingSenderIds(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Not authenticated');
+
+      const res = await fetch('/api/admin/moolre-sms', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          action: 'list_sender_ids',
+          vaskey: moolreVasKey
+        })
+      });
+
+      const data = await res.json();
+      if (data.status === 1 && Array.isArray(data.data)) {
+        setSenderIdsList(data.data);
+        toast.success(`Loaded ${data.data.length} Sender IDs`);
+      } else {
+        toast.error(data.message || data.error || 'Failed to list Sender IDs');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Failed to list Sender IDs');
+    } finally {
+      setLoadingSenderIds(false);
+    }
+  };
+
+  const handleCreateSenderId = async () => {
+    if (!newSenderIdInput.trim() || newSenderIdInput.trim().length > 11) {
+      toast.error('Sender ID is required and must be max 11 characters');
+      return;
+    }
+    setCreatingSenderId(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Not authenticated');
+
+      const res = await fetch('/api/admin/moolre-sms', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          action: 'create_sender_id',
+          senderid: newSenderIdInput.trim(),
+          vaskey: moolreVasKey
+        })
+      });
+
+      const data = await res.json();
+      if (data.status === 1) {
+        toast.success(data.message || 'Sender ID request submitted successfully!');
+        setNewSenderIdInput('');
+        handleFetchSenderIds();
+      } else {
+        toast.error(data.message || data.error || 'Failed to create Sender ID');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Failed to create Sender ID');
+    } finally {
+      setCreatingSenderId(false);
+    }
+  };
 
   const togglePaymentMethod = useMutation({
     mutationFn: async ({ method, enabled }) => {
@@ -779,6 +950,22 @@ const AdminSettings = memo(() => {
                 />
               </div>
 
+              <div className="flex items-center justify-between p-3 bg-purple-50/30 rounded-xl border border-purple-50">
+                <div className="space-y-0.5">
+                  <Label htmlFor="phone-verification" className="font-semibold text-gray-850">
+                    Phone Verification (Moolre SMS)
+                  </Label>
+                  <p className="text-xs text-muted-foreground max-w-[200px]">
+                    Require phone verification via Moolre SMS during user signup.
+                  </p>
+                </div>
+                <Switch
+                  id="phone-verification"
+                  checked={requirePhoneVerification}
+                  onCheckedChange={(checked) => setRequirePhoneVerification(checked)}
+                />
+              </div>
+
               <div className="flex items-center justify-between p-3 bg-blue-50/30 rounded-xl border border-blue-50">
                 <div className="space-y-0.5">
                   <Label htmlFor="otp-verification" className="font-semibold text-gray-850">
@@ -799,6 +986,174 @@ const AdminSettings = memo(() => {
           </Card>
         </div>
       </div>
+
+      <Separator className="my-8" />
+
+      {/* Moolre SMS Gateway & Management Panel */}
+      <Card className="border-2 border-purple-100 shadow-md">
+        <CardHeader className="bg-gradient-to-r from-purple-50/50 to-indigo-50/50">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-purple-600 text-white rounded-xl shadow-sm">
+                <Send className="w-5 h-5" />
+              </div>
+              <div>
+                <CardTitle className="text-lg font-bold">Moolre SMS Gateway & Management</CardTitle>
+                <CardDescription>Configure credentials, toggle phone verification, check SMS balance, and manage Sender IDs.</CardDescription>
+              </div>
+            </div>
+            <Button
+              onClick={handleSaveMoolreSettings}
+              disabled={savingMoolreConfig}
+              className="bg-purple-600 hover:bg-purple-700 text-white shadow-sm"
+            >
+              <Save className="w-4 h-4 mr-2" />
+              {savingMoolreConfig ? 'Saving...' : 'Save SMS Config'}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6 pt-6">
+          {/* Credentials Section */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <Label htmlFor="moolre-vaskey" className="flex items-center gap-1.5 font-semibold">
+                <Key className="w-4 h-4 text-purple-600" />
+                Moolre API VAS Key (X-API-VASKEY)
+              </Label>
+              <Input
+                id="moolre-vaskey"
+                type="password"
+                value={moolreVasKey}
+                onChange={(e) => setMoolreVasKey(e.target.value)}
+                placeholder="Enter your X-API-VASKEY..."
+              />
+              <p className="text-xs text-muted-foreground">
+                Required for sending SMS via api.moolre.com. Kept secure and private.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="moolre-senderid" className="flex items-center gap-1.5 font-semibold">
+                <Send className="w-4 h-4 text-purple-600" />
+                Approved Sender ID (Max 11 chars)
+              </Label>
+              <Input
+                id="moolre-senderid"
+                maxLength={11}
+                value={moolreSenderId}
+                onChange={(e) => setMoolreSenderId(e.target.value)}
+                placeholder="e.g. BoostUpGH"
+              />
+              <p className="text-xs text-muted-foreground">
+                Your registered and approved Sender ID with Moolre.
+              </p>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Balance & Sender ID Management Actions */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Balance Card */}
+            <div className="p-4 bg-purple-50/50 rounded-xl border border-purple-100 space-y-3 flex flex-col justify-between">
+              <div>
+                <div className="text-xs font-semibold text-purple-700 uppercase tracking-wider mb-1">
+                  SMS Credit Balance
+                </div>
+                <div className="text-2xl font-black text-gray-900">
+                  {smsBalance !== null ? `${smsBalance} Credits` : '---'}
+                </div>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={handleFetchSmsBalance}
+                disabled={loadingSmsBalance}
+                className="w-full border-purple-200 text-purple-700 hover:bg-purple-100"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${loadingSmsBalance ? 'animate-spin' : ''}`} />
+                Check SMS Balance
+              </Button>
+            </div>
+
+            {/* List Sender IDs Card */}
+            <div className="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100 space-y-3 flex flex-col justify-between">
+              <div>
+                <div className="text-xs font-semibold text-indigo-700 uppercase tracking-wider mb-1">
+                  Registered Sender IDs
+                </div>
+                <div className="text-sm text-gray-600">
+                  {senderIdsList.length > 0 ? `${senderIdsList.length} registered ID(s)` : 'Click to fetch list'}
+                </div>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={handleFetchSenderIds}
+                disabled={loadingSenderIds}
+                className="w-full border-indigo-200 text-indigo-700 hover:bg-indigo-100"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${loadingSenderIds ? 'animate-spin' : ''}`} />
+                Fetch Sender IDs List
+              </Button>
+            </div>
+
+            {/* Request New Sender ID */}
+            <div className="p-4 bg-blue-50/50 rounded-xl border border-blue-100 space-y-3">
+              <div className="text-xs font-semibold text-blue-700 uppercase tracking-wider">
+                Request New Sender ID
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="New Sender ID"
+                  maxLength={11}
+                  value={newSenderIdInput}
+                  onChange={(e) => setNewSenderIdInput(e.target.value)}
+                  className="h-8 text-xs"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleCreateSenderId}
+                  disabled={creatingSenderId || !newSenderIdInput.trim()}
+                  className="h-8 bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <Plus className="w-3.5 h-3.5 mr-1" />
+                  Submit
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Sender ID List Table */}
+          {senderIdsList.length > 0 && (
+            <div className="mt-4 border rounded-xl overflow-hidden bg-white shadow-sm">
+              <div className="px-4 py-2.5 bg-gray-50 border-b font-semibold text-xs text-gray-700 flex justify-between">
+                <span>Sender ID</span>
+                <span>Status</span>
+              </div>
+              <div className="divide-y max-h-40 overflow-y-auto">
+                {senderIdsList.map((item, idx) => (
+                  <div key={idx} className="px-4 py-2 flex items-center justify-between text-xs">
+                    <span className="font-medium text-gray-900">{item.senderid}</span>
+                    <Badge
+                      variant={
+                        item.approval === 'Approved' ? 'success' :
+                        item.approval === 'Pending' ? 'outline' : 'destructive'
+                      }
+                      className="capitalize"
+                    >
+                      {item.approval}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 });

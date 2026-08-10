@@ -110,7 +110,7 @@ const AuthPage = () => {
   const [termsAccepted, setTermsAccepted] = useState(true);
   const [termsDialogOpen, setTermsDialogOpen] = useState(false);
   const [captchaToken, setCaptchaToken] = useState('');
-  const { requireCaptcha, requireOtp } = usePaymentMethods();
+  const { requireCaptcha, requireOtp, requirePhoneVerification } = usePaymentMethods();
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [otpValue, setOtpValue] = useState('');
   const [verifyingOtp, setVerifyingOtp] = useState(false);
@@ -350,7 +350,8 @@ const AuthPage = () => {
         }
       } else {
         // SIGNUP
-        if (requireOtp && !otpVerified) {
+        const needsOtp = (requirePhoneVerification || requireOtp) && !otpVerified;
+        if (needsOtp) {
           await sendOtpCode(formData.email.trim(), formData.phone_number.trim());
           setLoading(false);
           return;
@@ -815,10 +816,10 @@ const AuthPage = () => {
               <ShieldCheck className="w-6 h-6" />
             </div>
             <DialogTitle className="text-xl font-bold text-gray-900">
-              Security Verification Code
+              Phone / Security Verification Code
             </DialogTitle>
             <DialogDescription className="text-sm text-gray-600">
-              An OTP verification code was sent to <span className="font-semibold text-gray-900">{formData.email}</span>. Please enter the 6-digit code below to complete your onboarding.
+              An OTP verification code was sent via SMS to <span className="font-semibold text-gray-900">{formData.phone_number || formData.email}</span>. Please enter the 6-digit code below to complete your sign up.
             </DialogDescription>
           </DialogHeader>
 

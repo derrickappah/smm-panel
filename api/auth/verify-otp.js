@@ -10,10 +10,11 @@ export default async function handler(req, res) {
 
   try {
     const { email, phone_number, code } = req.body;
-    const identifier = (email || phone_number || '').trim().toLowerCase();
+    const rawIdentifier = (phone_number || email || '').trim().toLowerCase();
+    const cleanDigits = (phone_number || '').replace(/\D/g, '');
     const userCode = (code || '').trim();
 
-    if (!identifier || !userCode) {
+    if (!rawIdentifier || !userCode) {
       return res.status(400).json({ error: 'Identifier and OTP code are required' });
     }
 
@@ -25,7 +26,7 @@ export default async function handler(req, res) {
       .select('id, metadata, created_at')
       .eq('event_type', 'otp_generated')
       .order('created_at', { ascending: false })
-      .limit(10);
+      .limit(15);
 
     if (error || !events) {
       return res.status(400).json({ error: 'Invalid or expired OTP code' });
@@ -33,7 +34,11 @@ export default async function handler(req, res) {
 
     const matchingEvent = events.find(e => {
       const meta = e.metadata || {};
-      const matchesIdentifier = meta.identifier === identifier;
+      const metaId = (meta.identifier || '').toLowerCase();
+      const metaDigits = metaId.replace(/\D/g, '');
+
+      const matchesIdentifier = metaId === rawIdentifier ||
+        (cleanDigits && metaDigits && (metaDigits.endsWith(cleanDigits) || cleanDigits.endsWith(metaDigits)));
       const matchesCode = meta.otp_code === userCode;
       const notExpired = new Date(meta.expires_at) > new Date();
       return matchesIdentifier && matchesCode && notExpired;
