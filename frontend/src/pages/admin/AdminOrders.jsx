@@ -21,7 +21,10 @@ const VIRTUAL_SCROLL_THRESHOLD = 100;
 
 const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
   const [activeTab, setActiveTab] = useState('standard');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('search') || '';
+  });
   const [searchType, setSearchType] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('');

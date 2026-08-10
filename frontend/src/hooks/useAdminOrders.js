@@ -27,6 +27,48 @@ const checkSMMGenStatusesInBackground = async (ordersToCheck) => {
   console.log(`Completed background SMMGen status check: ${result.checked} checked, ${result.updated} updated, ${result.errors.length} errors`);
 };
 
+// Helper to build PostgreSQL-compatible PostgREST search conditions for order/provider fields
+const buildOrderFieldConditions = (trimmedSearch, includeLink = false) => {
+  const searchPattern = `%${trimmedSearch}%`;
+  const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(trimmedSearch);
+  const isNumeric = /^\d+$/.test(trimmedSearch);
+
+  const conditions = [
+    `smmgen_order_id.ilike.${searchPattern}`,
+    `smmcost_order_id.ilike.${searchPattern}`,
+    `worldofsmm_order_id.ilike.${searchPattern}`,
+    `g1618_order_id.ilike.${searchPattern}`,
+    `oldsmm_order_id.ilike.${searchPattern}`,
+    `apiowner_order_id.ilike.${searchPattern}`
+  ];
+
+  if (includeLink) {
+    conditions.push(`link.ilike.${searchPattern}`);
+  }
+
+  // id is UUID in PostgreSQL, so ilike will throw a 42883 error. Only use eq when trimmedSearch is valid UUID.
+  if (isUuid) {
+    conditions.push(`id.eq.${trimmedSearch}`);
+  }
+
+  // jbsmmpanel_order_id is INTEGER in PostgreSQL, so ilike throws error. Only use eq when search term is numeric.
+  if (isNumeric) {
+    conditions.push(`jbsmmpanel_order_id.eq.${trimmedSearch}`);
+  }
+
+  // Search inside component_provider_order_ids JSONB array for combo orders
+  try {
+    const jsonMatchProvider = JSON.stringify([{ provider_order_id: trimmedSearch }]);
+    const jsonMatchId = JSON.stringify([{ id: trimmedSearch }]);
+    conditions.push(`component_provider_order_ids.cs.${jsonMatchProvider}`);
+    conditions.push(`component_provider_order_ids.cs.${jsonMatchId}`);
+  } catch (e) {
+    // Ignore JSON stringify errors
+  }
+
+  return conditions;
+};
+
 // Fetch orders with pagination and server-side filtering
 const fetchOrders = async ({
   pageParam = 0,
@@ -142,26 +184,8 @@ const fetchOrders = async ({
       }
     } else if (searchType === 'order_id') {
       // Search only by order ID and panel IDs
-      // Supabase doesn't support ::text casting in OR conditions, so we use separate conditions
-      // For UUID (id), Supabase handles conversion automatically
-      // For TEXT fields (smmgen_order_id, smmcost_order_id, worldofsmm_order_id), use ilike directly
-      // For INTEGER (jbsmmpanel_order_id), try numeric match first, then text search
-      const trimmedSearch = searchTerm.trim();
-
-      // Build conditions for text fields (UUID and TEXT columns)
-      const textFieldsSearch = `id.ilike.${searchPattern},smmgen_order_id.ilike.${searchPattern},smmcost_order_id.ilike.${searchPattern},worldofsmm_order_id.ilike.${searchPattern},g1618_order_id.ilike.${searchPattern},oldsmm_order_id.ilike.${searchPattern},apiowner_order_id.ilike.${searchPattern}`;
-
-      // For numeric jbsmmpanel_order_id, check if search term is numeric
-      const numericSearch = /^\d+$/.test(trimmedSearch);
-      let numericCondition = '';
-      if (numericSearch) {
-        // If search term is numeric, also search jbsmmpanel_order_id as number
-        numericCondition = `,jbsmmpanel_order_id.eq.${trimmedSearch}`;
-      }
-
-      // Combine text and numeric conditions
-      const orderFieldsSearch = textFieldsSearch + numericCondition;
-      query = query.or(orderFieldsSearch);
+      const conditions = buildOrderFieldConditions(trimmedSearch, false);
+      query = query.or(conditions.join(','));
     } else if (searchType === 'user_name') {
       // Search only by user name (partial match, case-insensitive)
       try {
@@ -219,21 +243,8 @@ const fetchOrders = async ({
       // Search only by link
       query = query.ilike('link', searchPattern);
     } else {
-      // "all" - Search all fields including service/package names
-      // Supabase doesn't support ::text casting in OR conditions, so we use compatible syntax
-      // For UUID (id), Supabase handles conversion automatically
-      // For TEXT fields (smmgen_order_id, smmcost_order_id, worldofsmm_order_id), use ilike directly
-      // For INTEGER (jbsmmpanel_order_id), try numeric match if search term is numeric
-      const trimmedSearch = searchTerm.trim();
-      const numericSearch = /^\d+$/.test(trimmedSearch);
-
-      // Build conditions for text fields (UUID and TEXT columns)
-      let orderFieldsSearch = `id.ilike.${searchPattern},smmgen_order_id.ilike.${searchPattern},smmcost_order_id.ilike.${searchPattern},worldofsmm_order_id.ilike.${searchPattern},g1618_order_id.ilike.${searchPattern},oldsmm_order_id.ilike.${searchPattern},apiowner_order_id.ilike.${searchPattern},link.ilike.${searchPattern}`;
-
-      // For numeric jbsmmpanel_order_id, add numeric condition if search term is numeric
-      if (numericSearch) {
-        orderFieldsSearch += `,jbsmmpanel_order_id.eq.${trimmedSearch}`;
-      }
+      // "all" - Search all fields including order/provider IDs, link, service/package names, and user profiles
+      const orderConditions = buildOrderFieldConditions(trimmedSearch, true);
 
       // Search services and packages for matching names
       let matchingServiceIds = [];
@@ -283,7 +294,6 @@ const fetchOrders = async ({
       }
 
       // Limit the number of IDs to prevent query from becoming too long
-      // Supabase has limits on query/URL length, so we cap at 15 per type (45 total + 5 order fields = 50 max)
       const MAX_IDS_PER_TYPE = 15;
       const limitedUserIds = matchingUserIds.slice(0, MAX_IDS_PER_TYPE);
       const limitedServiceIds = matchingServiceIds.slice(0, MAX_IDS_PER_TYPE);
@@ -299,7 +309,7 @@ const fetchOrders = async ({
       }
 
       // Build OR condition: order fields OR user_id OR service_id OR promotion_package_id
-      const conditions = [orderFieldsSearch];
+      const conditions = [...orderConditions];
 
       if (limitedUserIds.length > 0) {
         conditions.push(...limitedUserIds.map(id => `user_id.eq.${id}`));
