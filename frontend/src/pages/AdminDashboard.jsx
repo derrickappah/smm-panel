@@ -9,7 +9,7 @@ import {
   Users, ShoppingCart, DollarSign, Package, Wallet, Receipt,
   MessageSquare, UserPlus, RefreshCw, BarChart3, Menu, X, LayoutDashboard, Tag,
   ChevronLeft, ChevronRight, FileText, Server, HelpCircle, CreditCard, Scale, Bell, Video,
-  Gift, Settings, Layers
+  Gift, Settings, Layers, Search
 } from 'lucide-react';
 import { useReferralStats } from '@/hooks/useAdminReferrals';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -20,6 +20,7 @@ const AdminStats = lazy(() => import('@/pages/admin/AdminStats'));
 const AdminAnalytics = lazy(() => import('@/pages/admin/AdminAnalytics'));
 const AdminUsers = lazy(() => import('@/pages/admin/AdminUsers'));
 const AdminOrders = lazy(() => import('@/pages/admin/AdminOrders'));
+const AdminOrderSearch = lazy(() => import('@/pages/admin/AdminOrderSearch'));
 const AdminDeposits = lazy(() => import('@/pages/admin/AdminDeposits'));
 const AdminTransactions = lazy(() => import('@/pages/admin/AdminTransactions'));
 const AdminServices = lazy(() => import('@/pages/admin/AdminServices'));
@@ -77,6 +78,8 @@ const AdminDashboard = memo(({ user, onLogout }) => {
         'analytics': 'analytics',
         'deposits': 'deposits',
         'orders': 'orders',
+        'order-search': 'order-search',
+        'orders/search': 'order-search',
         'services': 'services',
         'combo-builder': 'combo-builder',
         'promotion-packages': 'promotion-packages',
@@ -318,6 +321,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     analytics: 'Analytics & Segmentation',
     deposits: 'Deposits',
     orders: 'Orders',
+    'order-search': 'Order Search Engine',
     services: 'Services',
     'combo-builder': 'Combo Service Builder',
     'promotion-packages': 'Promotion Packages',
@@ -350,6 +354,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'deposits', label: 'Deposits', icon: DollarSign, badge: stats.pending_deposits },
     { id: 'orders', label: 'Orders', icon: ShoppingCart },
+    { id: 'order-search', label: 'Order Search', icon: Search },
     { id: 'services', label: 'Services', icon: Package },
     { id: 'combo-builder', label: 'Combo Builder', icon: Layers },
     { id: 'promotion-packages', label: 'Promotion Packages', icon: Tag },
@@ -711,6 +716,13 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                 <TabsContent value="orders" className="lg:mt-0 w-full max-w-full">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminOrders onRefresh={handleRefresh} refreshing={refreshing} />
+                  </Suspense>
+                </TabsContent>
+
+                {/* Order Search Section */}
+                <TabsContent value="order-search" className="lg:mt-0 w-full max-w-full">
+                  <Suspense fallback={<ComponentLoader />}>
+                    <AdminOrderSearch refreshing={refreshing} />
                   </Suspense>
                 </TabsContent>
 
