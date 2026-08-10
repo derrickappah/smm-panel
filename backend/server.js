@@ -1110,6 +1110,17 @@ app.post('/api/admin/update-reward-limit', async (req, res) => {
   }
 });
 
+// Admin High-Speed Order Search Server Action
+app.post('/api/admin/search-orders', async (req, res) => {
+  try {
+    const handler = (await import('../api/admin/search-orders.js')).default;
+    await handler(req, res);
+  } catch (error) {
+    console.error('Error in /api/admin/search-orders endpoint:', error);
+    res.status(500).json({ error: 'Server action failed', message: error.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 SMM Proxy Server running on port ${PORT}`);
 });

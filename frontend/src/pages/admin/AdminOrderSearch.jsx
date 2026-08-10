@@ -47,13 +47,45 @@ const buildSearchConditions = (trimmedSearch, searchMode = 'all') => {
   return { orderConditions, isNumeric, isUuid };
 };
 
-// High-speed Order Search function (Guaranteed < 3 seconds, target < 300ms)
+// High-speed Order Search function (Guaranteed < 3 seconds, target < 100ms via Server Action)
 const executeInstantOrderSearch = async ({ searchTerm, searchMode = 'all', statusFilter = 'all' }) => {
   if (!searchTerm || !searchTerm.trim()) {
     return { orders: [], searchTimeMs: 0, total: 0 };
   }
 
   const startTime = performance.now();
+
+  // Try High-Speed Server Action Endpoint first
+  try {
+    const sessionRes = await supabase.auth.getSession();
+    const token = sessionRes.data.session?.access_token;
+
+    if (token) {
+      const response = await fetch('/api/admin/search-orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ searchTerm, searchMode, statusFilter, limit: 100 })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          return {
+            orders: result.orders || [],
+            searchTimeMs: result.searchTimeMs || Math.round(performance.now() - startTime),
+            total: result.total || (result.orders?.length || 0)
+          };
+        }
+      }
+    }
+  } catch (serverActionError) {
+    console.warn('Server action order search fallback to direct DB:', serverActionError);
+  }
+
+  // Fallback to Direct Supabase Client Search
   const trimmedSearch = searchTerm.trim();
   const searchPattern = `%${trimmedSearch}%`;
 
