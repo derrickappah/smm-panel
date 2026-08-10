@@ -51,6 +51,35 @@ CREATE INDEX IF NOT EXISTS idx_orders_smmcost_id_search
 ON orders(smmcost_order_id) 
 WHERE smmcost_order_id IS NOT NULL;
 
+-- Index for JBSMMPanel order ID search
+CREATE INDEX IF NOT EXISTS idx_orders_jbsmmpanel_id_search 
+ON orders(jbsmmpanel_order_id) 
+WHERE jbsmmpanel_order_id IS NOT NULL;
+
+-- Index for WorldOfSMM order ID search
+CREATE INDEX IF NOT EXISTS idx_orders_worldofsmm_id_search 
+ON orders(worldofsmm_order_id) 
+WHERE worldofsmm_order_id IS NOT NULL;
+
+-- Index for G1618 order ID search
+CREATE INDEX IF NOT EXISTS idx_orders_g1618_id_search 
+ON orders(g1618_order_id) 
+WHERE g1618_order_id IS NOT NULL;
+
+-- Index for OldSMM order ID search
+CREATE INDEX IF NOT EXISTS idx_orders_oldsmm_id_search 
+ON orders(oldsmm_order_id) 
+WHERE oldsmm_order_id IS NOT NULL;
+
+-- Index for ApiOwner order ID search
+CREATE INDEX IF NOT EXISTS idx_orders_apiowner_id_search 
+ON orders(apiowner_order_id) 
+WHERE apiowner_order_id IS NOT NULL;
+
+-- GIN Index for JSONB combo order provider ID search
+CREATE INDEX IF NOT EXISTS idx_orders_component_provider_ids_gin 
+ON orders USING GIN (component_provider_order_ids jsonb_path_ops);
+
 -- Composite index for date filtering with status
 -- Used when filtering by date and status together
 CREATE INDEX IF NOT EXISTS idx_orders_date_status 
@@ -67,4 +96,10 @@ COMMENT ON INDEX idx_orders_link_search IS 'Optimizes case-insensitive link/URL 
 COMMENT ON INDEX idx_orders_id_search IS 'Optimizes order ID search';
 COMMENT ON INDEX idx_orders_smmgen_id_search IS 'Optimizes SMMGen order ID search';
 COMMENT ON INDEX idx_orders_smmcost_id_search IS 'Optimizes SMMCost order ID search';
+COMMENT ON INDEX idx_orders_jbsmmpanel_id_search IS 'Optimizes JBSMMPanel order ID search';
+COMMENT ON INDEX idx_orders_worldofsmm_id_search IS 'Optimizes WorldOfSMM order ID search';
+COMMENT ON INDEX idx_orders_g1618_id_search IS 'Optimizes G1618 order ID search';
+COMMENT ON INDEX idx_orders_oldsmm_id_search IS 'Optimizes OldSMM order ID search';
+COMMENT ON INDEX idx_orders_apiowner_id_search IS 'Optimizes ApiOwner order ID search';
+COMMENT ON INDEX idx_orders_component_provider_ids_gin IS 'Optimizes combo order component provider ID search';
 COMMENT ON INDEX idx_orders_date_status IS 'Optimizes date and status filtering together';

@@ -246,51 +246,40 @@ const fetchOrders = async ({
       // "all" - Search all fields including order/provider IDs, link, service/package names, and user profiles
       const orderConditions = buildOrderFieldConditions(trimmedSearch, true);
 
-      // Search services and packages for matching names
+      const isNumeric = /^\d+$/.test(trimmedSearch);
+      const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(trimmedSearch);
+
       let matchingServiceIds = [];
       let matchingPackageIds = [];
       let matchingUserIds = [];
 
-      // Search services - limit to 15 to prevent query from becoming too long
-      try {
-        const { data: matchingServices } = await supabase
-          .from('services')
-          .select('id')
-          .ilike('name', searchPattern)
-          .limit(15);
-        matchingServiceIds = matchingServices?.map(s => s.id) || [];
-      } catch (e) {
-        console.warn('Service search in "all" mode failed:', e);
-      }
+      // FAST PATH: If searching a numeric ID or UUID, skip service/package/user name sub-queries for instant response
+      if (!isNumeric && !isUuid) {
+        try {
+          const [servicesRes, packagesRes, profilesRes] = await Promise.all([
+            supabase
+              .from('services')
+              .select('id')
+              .ilike('name', searchPattern)
+              .limit(15),
+            supabase
+              .from('promotion_packages')
+              .select('id')
+              .ilike('name', searchPattern)
+              .limit(15),
+            supabase
+              .from('profiles')
+              .select('id')
+              .or(`name.ilike.${searchPattern},email.ilike.${searchPattern},phone_number.ilike.${searchPattern}`)
+              .limit(15)
+          ]);
 
-      // Search packages - limit to 15 to prevent query from becoming too long
-      try {
-        const { data: matchingPackages } = await supabase
-          .from('promotion_packages')
-          .select('id')
-          .ilike('name', searchPattern)
-          .limit(15);
-        matchingPackageIds = matchingPackages?.map(p => p.id) || [];
-      } catch (e) {
-        console.warn('Package search in "all" mode failed:', e);
-      }
-
-      // Search profiles (name, email, phone)
-      // Limit to first 15 to prevent query from becoming too long
-      try {
-        const { data: matchingProfiles, error: profileError } = await supabase
-          .from('profiles')
-          .select('id')
-          .or(`name.ilike.${searchPattern},email.ilike.${searchPattern},phone_number.ilike.${searchPattern}`)
-          .limit(15);
-
-        if (!profileError) {
-          matchingUserIds = matchingProfiles?.map(p => p.id) || [];
-        } else {
-          console.warn('Profile search error in "all" mode:', profileError);
+          matchingServiceIds = servicesRes.data?.map(s => s.id) || [];
+          matchingPackageIds = packagesRes.data?.map(p => p.id) || [];
+          matchingUserIds = profilesRes.data?.map(p => p.id) || [];
+        } catch (e) {
+          console.warn('Parallel sub-queries in "all" mode failed:', e);
         }
-      } catch (profileSearchError) {
-        console.warn('Profile search failed in "all" mode:', profileSearchError);
       }
 
       // Limit the number of IDs to prevent query from becoming too long
@@ -298,15 +287,6 @@ const fetchOrders = async ({
       const limitedUserIds = matchingUserIds.slice(0, MAX_IDS_PER_TYPE);
       const limitedServiceIds = matchingServiceIds.slice(0, MAX_IDS_PER_TYPE);
       const limitedPackageIds = matchingPackageIds.slice(0, MAX_IDS_PER_TYPE);
-
-      // Warn if we're truncating results
-      if (matchingUserIds.length > MAX_IDS_PER_TYPE || matchingServiceIds.length > MAX_IDS_PER_TYPE || matchingPackageIds.length > MAX_IDS_PER_TYPE) {
-        console.warn(`[useAdminOrders] Search term "${searchTerm}" matched too many results. Limiting to first ${MAX_IDS_PER_TYPE} per type.`, {
-          users: matchingUserIds.length,
-          services: matchingServiceIds.length,
-          packages: matchingPackageIds.length
-        });
-      }
 
       // Build OR condition: order fields OR user_id OR service_id OR promotion_package_id
       const conditions = [...orderConditions];

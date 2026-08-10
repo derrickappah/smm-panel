@@ -34,7 +34,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
   const [hasAutoChecked, setHasAutoChecked] = useState(false);
   const autoCheckTimerRef = useRef(null);
 
-  const debouncedSearch = useDebounce(searchTerm, 300);
+  const debouncedSearch = useDebounce(searchTerm, 150);
 
   const queryClient = useQueryClient();
 
