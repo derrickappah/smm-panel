@@ -39,7 +39,7 @@ export default async function handler(req, res) {
         success: true,
         settings: {
           require_phone_verification: settings.require_phone_verification !== 'false',
-          moolre_sender_id: settings.moolre_sender_id || 'BoostUpGH',
+          moolre_sender_id: settings.moolre_sender_id || 'SHM TECH',
           moolre_vaskey: settings.moolre_vaskey || '',
           has_vaskey: !!vasKey
         }

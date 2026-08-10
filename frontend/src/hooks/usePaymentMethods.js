@@ -32,7 +32,7 @@ export const DEFAULT_PAYMENT_SETTINGS = {
   requireCaptcha: true, // Default to true
   requireOtp: true, // Default to true (Admins can toggle on/off)
   requirePhoneVerification: true, // Default to true (Admins can toggle on/off via Moolre SMS)
-  moolreSenderId: 'BoostUpGH',
+  moolreSenderId: 'SHM TECH',
   depositMethod: 'moolre_web' // Default method
 };
 
