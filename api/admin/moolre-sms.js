@@ -134,6 +134,24 @@ export default async function handler(req, res) {
       return res.status(200).json(data);
     }
 
+    // ACTION: CHECK SMS DELIVERY STATUS
+    if (action === 'check_sms_status') {
+      const refs = req.body?.ref || req.query?.ref;
+      const refArray = Array.isArray(refs) ? refs : [refs].filter(Boolean);
+
+      if (refArray.length === 0) {
+        return res.status(400).json({ error: 'Reference array (ref) is required' });
+      }
+
+      const response = await fetch('https://api.moolre.com/open/sms/status', {
+        method: 'POST',
+        headers: MOOLRE_HEADERS,
+        body: JSON.stringify({ type: 5, ref: refArray })
+      });
+      const data = await response.json();
+      return res.status(200).json(data);
+    }
+
     // ACTION: CREATE / REQUEST SENDER ID
     if (action === 'create_sender_id') {
       const newSenderId = req.body?.senderid;

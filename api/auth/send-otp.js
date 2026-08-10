@@ -72,13 +72,16 @@ export default async function handler(req, res) {
 
       if (vasKey) {
         try {
+          const smsRef = `ref_otp_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+
           const smsPayload = {
             type: 1,
             senderid: senderId,
             messages: [
               {
                 recipient: recipientPhone,
-                message: `Your BoostUp GH verification code is: ${otpCode}. Valid for 10 minutes.`
+                message: `Your BoostUp GH verification code is: ${otpCode}. Valid for 10 minutes.`,
+                ref: smsRef
               }
             ]
           };
@@ -103,6 +106,18 @@ export default async function handler(req, res) {
           if (moolreRes.ok && moolreData.status === 1) {
             smsSent = true;
             smsMessage = `Verification SMS sent to ${recipientPhone}`;
+
+            // Update event metadata with sms_ref
+            await supabase.from('system_events').update({
+              metadata: {
+                identifier,
+                otp_code: otpCode,
+                expires_at: expiresAt,
+                verified: false,
+                sms_ref: smsRef,
+                sms_sent: true
+              }
+            }).eq('description', `OTP generated for ${identifier}`).order('created_at', { ascending: false }).limit(1);
           } else {
             console.warn('[MOOLRE SMS WARNING]', moolreData.message || 'Failed to send SMS');
             smsMessage = moolreData.message || 'SMS delivery pending/failed';
