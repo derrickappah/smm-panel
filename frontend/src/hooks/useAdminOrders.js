@@ -56,16 +56,6 @@ const buildOrderFieldConditions = (trimmedSearch, includeLink = false) => {
     conditions.push(`jbsmmpanel_order_id.eq.${trimmedSearch}`);
   }
 
-  // Search inside component_provider_order_ids JSONB array for combo orders
-  try {
-    const jsonMatchProvider = JSON.stringify([{ provider_order_id: trimmedSearch }]);
-    const jsonMatchId = JSON.stringify([{ id: trimmedSearch }]);
-    conditions.push(`component_provider_order_ids.cs.${jsonMatchProvider}`);
-    conditions.push(`component_provider_order_ids.cs.${jsonMatchId}`);
-  } catch (e) {
-    // Ignore JSON stringify errors
-  }
-
   return conditions;
 };
 

@@ -44,16 +44,6 @@ const buildSearchConditions = (trimmedSearch, searchMode = 'all') => {
     orderConditions.push(`jbsmmpanel_order_id.eq.${trimmedSearch}`);
   }
 
-  // Search inside component_provider_order_ids JSONB array for combo orders
-  try {
-    const jsonMatchProvider = JSON.stringify([{ provider_order_id: trimmedSearch }]);
-    const jsonMatchId = JSON.stringify([{ id: trimmedSearch }]);
-    orderConditions.push(`component_provider_order_ids.cs.${jsonMatchProvider}`);
-    orderConditions.push(`component_provider_order_ids.cs.${jsonMatchId}`);
-  } catch (e) {
-    // Ignore stringify error
-  }
-
   return { orderConditions, isNumeric, isUuid };
 };
 
@@ -155,7 +145,35 @@ const executeInstantOrderSearch = async ({ searchTerm, searchMode = 'all', statu
     }
   }
 
-  const { data, error, count } = await query;
+  let { data, error, count } = await query;
+
+  // Fallback search inside component_provider_order_ids JSONB array for combo child orders
+  if ((!data || data.length === 0) && !error) {
+    try {
+      const jsonMatchString = JSON.stringify([{ provider_order_id: trimmedSearch }]);
+      const fallbackRes = await supabase
+        .from('orders')
+        .select(`
+          id, user_id, service_id, promotion_package_id, link, quantity, total_cost, 
+          status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, 
+          g1618_order_id, oldsmm_order_id, apiowner_order_id, component_provider_order_ids, 
+          created_at, completed_at, refund_status, last_status_check, is_reward,
+          services(name, platform, service_type, is_combo), 
+          promotion_packages(name, platform, service_type, is_combo), 
+          profiles(name, email, phone_number)
+        `, { count: 'exact' })
+        .contains('component_provider_order_ids', jsonMatchString)
+        .limit(50);
+
+      if (fallbackRes.data && fallbackRes.data.length > 0) {
+        data = fallbackRes.data;
+        count = fallbackRes.count || fallbackRes.data.length;
+      }
+    } catch (e) {
+      console.warn('Fallback combo search failed:', e);
+    }
+  }
+
   const endTime = performance.now();
   const searchTimeMs = Math.round(endTime - startTime);
 
