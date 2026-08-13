@@ -1,13 +1,15 @@
-const vasKey = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ2YXNpZCI6MzIyNiwiZXhwIjoxOTU2NTI3OTk5fQ.KToP7MpSQnfpnw5NsJXNWFYmP7KjzpacxOarpnVoOM4';
+const vasKey = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ2YXNpZCI6MjcwMywiZXhwIjoxOTU2NTI3OTk5fQ.dS3km2zIh-Fhl8IR8oz5s_bBZJAupV3ZPxXeKxCAeM8';
 const recipientPhone = '233599342940';
-const senderId = 'SHM TECH';
+const senderId = 'Boostupgh';
 const testOtp = Math.floor(100000 + Math.random() * 900000).toString();
+const customRef = `ref_otp_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 
 async function sendTestSms() {
   console.log(`=== Sending Test Verification SMS ===`);
   console.log(`Recipient: ${recipientPhone}`);
   console.log(`Sender ID: ${senderId}`);
   console.log(`Generated OTP: ${testOtp}`);
+  console.log(`SMS Ref: ${customRef}`);
 
   const smsPayload = {
     type: 1,
@@ -15,7 +17,8 @@ async function sendTestSms() {
     messages: [
       {
         recipient: recipientPhone,
-        message: `Your BoostUp GH verification code is: ${testOtp}. Valid for 10 minutes.`
+        message: `Your BoostUp GH verification code is: ${testOtp}. Valid for 10 minutes.`,
+        ref: customRef
       }
     ]
   };
@@ -35,9 +38,9 @@ async function sendTestSms() {
     console.log(JSON.stringify(data, null, 2));
 
     if (data.status === 1 && data.code === 'SMS01') {
-      console.log(`\n✅ SUCCESS: Verification SMS containing OTP [${testOtp}] dispatched to ${recipientPhone} via Moolre!`);
+      console.log(`\n✅ SUCCESS: Verification SMS containing OTP [${testOtp}] dispatched to ${recipientPhone} via Moolre with Sender ID "${senderId}"!`);
     } else {
-      console.error(`\n❌ SMS DELIVER FAILED:`, data);
+      console.error(`\n❌ SMS DELIVERY FAILED:`, data);
     }
   } catch (err) {
     console.error(`\n❌ Network / HTTP Error:`, err);

@@ -40,7 +40,7 @@ const AdminSettings = memo(() => {
   const [requireOtp, setRequireOtp] = useState(remoteRequireOtp);
   const [requirePhoneVerification, setRequirePhoneVerification] = useState(remoteRequirePhoneVerification);
   const [moolreVasKey, setMoolreVasKey] = useState('');
-  const [moolreSenderId, setMoolreSenderId] = useState(remoteMoolreSenderId || 'SHM TECH');
+  const [moolreSenderId, setMoolreSenderId] = useState(remoteMoolreSenderId || 'Boostupgh');
   const [smsBalance, setSmsBalance] = useState(null);
   const [loadingSmsBalance, setLoadingSmsBalance] = useState(false);
   const [senderIdsList, setSenderIdsList] = useState([]);

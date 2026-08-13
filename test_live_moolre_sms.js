@@ -1,8 +1,10 @@
-const vasKey = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ2YXNpZCI6MzIyNiwiZXhwIjoxOTU2NTI3OTk5fQ.KToP7MpSQnfpnw5NsJXNWFYmP7KjzpacxOarpnVoOM4';
+const vasKey = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ2YXNpZCI6MjcwMywiZXhwIjoxOTU2NTI3OTk5fQ.dS3km2zIh-Fhl8IR8oz5s_bBZJAupV3ZPxXeKxCAeM8';
 const recipientPhone = '233599342940';
+const senderId = 'Boostupgh';
 
 async function runLiveMoolreTest() {
-  console.log("=== Testing Moolre API Live ===");
+  console.log("=== Testing New Moolre API Key & Approved Sender ID ===");
+  console.log("Sender ID:", senderId);
 
   // 1. Check Balance
   try {
@@ -21,7 +23,6 @@ async function runLiveMoolreTest() {
   }
 
   // 2. List Sender IDs
-  let registeredSenderId = 'BoostUpGH';
   try {
     const listRes = await fetch('https://api.moolre.com/open/sms/status', {
       method: 'POST',
@@ -33,31 +34,24 @@ async function runLiveMoolreTest() {
     });
     const listData = await listRes.json();
     console.log("[2. SENDER IDS LIST RESPONSE]", JSON.stringify(listData, null, 2));
-
-    if (listData.status === 1 && Array.isArray(listData.data) && listData.data.length > 0) {
-      const approved = listData.data.find(item => item.approval === 'Approved');
-      if (approved) {
-        registeredSenderId = approved.senderid;
-        console.log(`Using approved Sender ID from account: "${registeredSenderId}"`);
-      } else {
-        console.log(`No approved Sender ID found in list. First Sender ID is "${listData.data[0].senderid}" (${listData.data[0].approval})`);
-        registeredSenderId = listData.data[0].senderid;
-      }
-    }
   } catch (err) {
     console.error("List Sender IDs fetch error:", err);
   }
 
   // 3. Send Test SMS via POST
-  console.log(`\nAttempting to send SMS to ${recipientPhone} using Sender ID: "${registeredSenderId}"...`);
+  console.log(`\nAttempting to send SMS to ${recipientPhone} using Sender ID: "${senderId}"...`);
   try {
+    const testOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    const customRef = `ref_test_${Date.now()}`;
+
     const smsPayload = {
       type: 1,
-      senderid: registeredSenderId,
+      senderid: senderId,
       messages: [
         {
           recipient: recipientPhone,
-          message: "Your BoostUp GH verification code is: 123456. Valid for 10 minutes."
+          message: `Your BoostUp GH verification code is: ${testOtp}. Valid for 10 minutes.`,
+          ref: customRef
         }
       ]
     };
@@ -71,7 +65,7 @@ async function runLiveMoolreTest() {
       body: JSON.stringify(smsPayload)
     });
     const sendData = await sendRes.json();
-    console.log("[3. SEND SMS (POST) RESPONSE]", JSON.stringify(sendData, null, 2));
+    console.log("[3. SEND SMS RESPONSE]", JSON.stringify(sendData, null, 2));
   } catch (err) {
     console.error("Send SMS error:", err);
   }

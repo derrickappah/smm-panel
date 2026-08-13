@@ -68,7 +68,7 @@ export default async function handler(req, res) {
       settings?.forEach(item => { settingsMap[item.key] = item.value; });
 
       const vasKey = settingsMap.moolre_vaskey || process.env.MOOLRE_VAS_KEY || process.env.MOOLRE_API_PUBKEY;
-      const senderId = settingsMap.moolre_sender_id || process.env.MOOLRE_SENDER_ID || 'SHM TECH';
+      const senderId = settingsMap.moolre_sender_id || process.env.MOOLRE_SENDER_ID || 'Boostupgh';
 
       if (vasKey) {
         try {
