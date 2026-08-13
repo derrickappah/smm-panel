@@ -1,5 +1,5 @@
 const vasKey = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ2YXNpZCI6MjcwMywiZXhwIjoxOTU2NTI3OTk5fQ.dS3km2zIh-Fhl8IR8oz5s_bBZJAupV3ZPxXeKxCAeM8';
-const recipientPhone = '233599342940';
+const recipientPhone = '233596599174';
 const senderId = 'Boostupgh';
 const testOtp = Math.floor(100000 + Math.random() * 900000).toString();
 const customRef = `ref_otp_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
