@@ -574,10 +574,15 @@ async function placeWorldOfSMMOrder(service, link, quantity, comments) {
 
 /**
  * Extracts Provider Order ID from success response
+ * Supports both extractOrderId(response) and extractOrderId(provider, response)
  */
-export function extractOrderId(response) {
+export function extractOrderId(providerOrResponse, maybeResponse) {
+    const response = maybeResponse !== undefined ? maybeResponse : providerOrResponse;
     if (!response) return null;
-    return response.order || response.order_id || response.orderId || (response.data && response.data.order) || null;
+    if (typeof response === 'number' || (typeof response === 'string' && /^\d+$/.test(response.trim()))) {
+        return String(response).trim();
+    }
+    return response.order || response.order_id || response.orderId || (response.data && (response.data.order || response.data.order_id || response.data.id)) || response.id || null;
 }
 
 async function fetchG1618RecentOrders(limit) {

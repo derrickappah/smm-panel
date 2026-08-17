@@ -434,7 +434,7 @@ export default async function handler(req, res) {
 
                     console.log(`[ORDER] Provider response (${component.provider}):`, providerResponse);
 
-                    const extId = extractOrderId(component.provider, providerResponse);
+                    const extId = extractOrderId(providerResponse);
 
                     if (extId) {
                         someSuccess = true;
