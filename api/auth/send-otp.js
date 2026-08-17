@@ -1,7 +1,7 @@
 import { getServiceRoleClient } from '../utils/auth.js';
 import { setCorsHeaders } from '../utils/corsHeaders.js';
 import { redis } from '../utils/redisClient.js';
-
+import crypto from 'crypto';
 // Format phone number for Moolre SMS Gateway (e.g., converts 024XXXXXXX to 23324XXXXXXX)
 function formatPhoneForMoolre(phone) {
   let cleaned = (phone || '').replace(/\D/g, '');
@@ -51,6 +51,10 @@ export default async function handler(req, res) {
     const supabase = getServiceRoleClient();
 
     // Store in system_events for serverless verification
+    // Generate salt and hash for OTP
+    const salt = crypto.randomBytes(16).toString('hex');
+    const otpHash = crypto.createHash('sha256').update(salt + otpCode).digest('hex');
+
     const { error: insertError } = await supabase.from('system_events').insert({
       event_type: 'otp_generated',
       severity: 'info',
@@ -58,7 +62,8 @@ export default async function handler(req, res) {
       description: `OTP generated for ${identifier}`,
       metadata: {
         identifier,
-        otp_code: otpCode,
+        otp_hash: otpHash,
+        salt,
         expires_at: expiresAt,
         verified: false
       }

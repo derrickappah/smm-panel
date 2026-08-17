@@ -1,7 +1,8 @@
 import { getServiceRoleClient } from '../../utils/auth.js';
 import { logUserAction } from '../../utils/activityLogger.js';
 import crypto from 'crypto';
-
+import getRawBody from 'raw-body';
+export const config = { api: { bodyParser: false } };
 /**
  * KoraPay Webhook (notification_url)
  *
@@ -33,7 +34,8 @@ export default async function handler(req, res) {
             return res.status(401).json({ error: 'Missing webhook signature' });
         }
 
-        const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+        const rawBodyBuffer = await getRawBody(req);
+        const rawBody = rawBodyBuffer.toString('utf8');
         const expectedSignature = crypto
             .createHmac('sha256', korapaySecretKey)
             .update(rawBody, 'utf8')
@@ -51,7 +53,7 @@ export default async function handler(req, res) {
             return res.status(401).json({ error: 'Invalid signature format' });
         }
 
-        const payload = req.body;
+        const payload = JSON.parse(rawBody);
 
         // KoraPay sends: { "event": "charge.success", "data": { ... } }
         const event = payload.event;

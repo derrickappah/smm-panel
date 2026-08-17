@@ -1,7 +1,7 @@
 import { getServiceRoleClient } from '../utils/auth.js';
 import { setCorsHeaders } from '../utils/corsHeaders.js';
 import { redis } from '../utils/redisClient.js';
-
+import crypto from 'crypto';
 export default async function handler(req, res) {
   setCorsHeaders(req, res);
 
@@ -44,27 +44,25 @@ export default async function handler(req, res) {
       .from('system_events')
       .select('id, metadata, created_at')
       .eq('event_type', 'otp_generated')
+      .eq('metadata->>identifier', rawIdentifier)
       .order('created_at', { ascending: false })
-      .limit(15);
+      .limit(1);
 
     if (error || !events) {
       return res.status(400).json({ error: 'Invalid or expired OTP code' });
     }
 
-    const matchingEvent = events.find(e => {
-      const meta = e.metadata || {};
-      const metaId = (meta.identifier || '').toLowerCase();
-      const metaDigits = metaId.replace(/\D/g, '');
-
-      const matchesIdentifier = metaId === rawIdentifier ||
-        (cleanDigits && metaDigits && (metaDigits.endsWith(cleanDigits) || cleanDigits.endsWith(metaDigits)));
-      const matchesCode = meta.otp_code === userCode;
-      const notExpired = new Date(meta.expires_at) > new Date();
-      const notVerified = !meta.verified; // Don't allow reuse of verified OTPs
-      return matchesIdentifier && matchesCode && notExpired && notVerified;
-    });
-
+    const matchingEvent = events[0];
     if (!matchingEvent) {
+      return res.status(400).json({ error: 'Invalid or expired OTP code. Please check and try again.' });
+    }
+    const meta = matchingEvent.metadata || {};
+    const storedHash = meta.otp_hash;
+    const storedSalt = meta.salt;
+    const computedHash = crypto.createHash('sha256').update(storedSalt + userCode).digest('hex');
+    const notExpired = new Date(meta.expires_at) > new Date();
+    const notVerified = !meta.verified;
+    if (computedHash !== storedHash || !notExpired || !notVerified) {
       return res.status(400).json({ error: 'Invalid or expired OTP code. Please check and try again.' });
     }
 

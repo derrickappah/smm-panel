@@ -249,6 +249,21 @@ const AuthPage = () => {
         return;
       }
 
+      if (!isLogin) {
+        if (formData.password.length < 8) {
+          toast.error('Registration password must be at least 8 characters long');
+          setLoading(false);
+          return;
+        }
+        const hasNumber = /\d/.test(formData.password);
+        const hasLetter = /[a-zA-Z]/.test(formData.password);
+        if (!hasNumber || !hasLetter) {
+          toast.error('Password must contain both letters and numbers for account security');
+          setLoading(false);
+          return;
+        }
+      }
+
       if (!isLogin && !formData.name.trim()) {
         toast.error('Please enter your name');
         setLoading(false);

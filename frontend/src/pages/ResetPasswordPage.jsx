@@ -179,8 +179,16 @@ const ResetPasswordPage = () => {
       }
 
       // Validate password
-      if (!formData.password || formData.password.length < 6) {
-        setPasswordError('Password must be at least 6 characters');
+      if (!formData.password || formData.password.length < 8) {
+        setPasswordError('Password must be at least 8 characters');
+        setLoading(false);
+        return;
+      }
+
+      const hasNumber = /\d/.test(formData.password);
+      const hasLetter = /[a-zA-Z]/.test(formData.password);
+      if (!hasNumber || !hasLetter) {
+        setPasswordError('Password must contain both letters and numbers');
         setLoading(false);
         return;
       }

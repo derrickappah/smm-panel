@@ -9,6 +9,16 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Security Hardening: Disable x-powered-by and apply security headers
+app.disable('x-powered-by');
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
 // Import status mapping utilities
 const {
   mapSMMGenStatus,
@@ -49,7 +59,7 @@ app.use('/api/', limiter);
 
 // SMMGen API configuration
 const SMMGEN_API_URL = process.env.SMMGEN_API_URL || 'https://smmgen.com/api/v2';
-const SMMGEN_API_KEY = process.env.SMMGEN_API_KEY || '05b299d99f4ef2052da59f7956325f3d';
+const SMMGEN_API_KEY = process.env.SMMGEN_API_KEY || '';
 
 // Health check endpoint with Redis status
 app.get('/health', async (req, res) => {
@@ -121,9 +131,54 @@ app.post('/api/smmgen/services', async (req, res) => {
   }
 });
 
-// Proxy endpoint to place order via SMMGen
+// Helper function to verify admin authentication
+const verifyAdminRequest = async (req) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    throw new Error('Authentication required');
+  }
+
+  const token = authHeader.replace('Bearer ', '');
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Supabase credentials not configured');
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+    auth: { autoRefreshToken: false, persistSession: false }
+  });
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+  if (authError || !user) {
+    throw new Error('Invalid or expired token');
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single();
+
+  if (profileError || profile?.role !== 'admin') {
+    throw new Error('Admin access required');
+  }
+
+  return { user, profile };
+};
+
+// Proxy endpoint to place order via SMMGen (Admin only)
 app.post('/api/smmgen/order', async (req, res) => {
   try {
+    // Enforce admin auth on direct provider order placement
+    try {
+      await verifyAdminRequest(req);
+    } catch (authErr) {
+      return res.status(403).json({ error: authErr.message });
+    }
+
     const { service, link, quantity } = req.body;
 
     if (!service || !link || !quantity) {
@@ -227,9 +282,15 @@ app.post('/api/smmgen/status', async (req, res) => {
   }
 });
 
-// Proxy endpoint to get balance from SMMGen
+// Proxy endpoint to get balance from SMMGen (Admin only)
 app.post('/api/smmgen/balance', async (req, res) => {
   try {
+    try {
+      await verifyAdminRequest(req);
+    } catch (authErr) {
+      return res.status(403).json({ error: authErr.message });
+    }
+
     if (!SMMGEN_API_KEY || SMMGEN_API_KEY.includes('your-smmgen')) {
       return res.status(400).json({
         error: 'SMMGen API key not configured'
