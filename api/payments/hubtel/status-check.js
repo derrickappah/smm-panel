@@ -1,6 +1,6 @@
 import { verifyAuth, getServiceRoleClient } from '../../utils/auth.js';
 import { logUserAction } from '../../utils/activityLogger.js';
-import crypto from 'crypto';
+
 
 /**
  * Hubtel Transaction Status Check API
@@ -77,10 +77,11 @@ export default async function handler(req, res) {
             });
         }
 
-        // 2. Prepare Hubtel API credentials
+        // 3. Call Mandatory Hubtel Status API (Public RMSC Endpoint)
+        // Hubtel credentials
         const clientId = (process.env.HUBTEL_API_ID || process.env.HUBTEL_CLIENT_ID || '').trim();
         const clientSecret = (process.env.HUBTEL_API_KEY || process.env.HUBTEL_CLIENT_SECRET || '').trim();
-        const posId = process.env.HUBTEL_POS_ID || process.env.HUBTEL_MERCHANT_ACCOUNT; // Just in case
+        const posId = (process.env.HUBTEL_POS_ID || process.env.HUBTEL_MERCHANT_ACCOUNT || '').trim();
 
         if (!clientId || !clientSecret || !posId) {
             console.error('Missing Hubtel credentials in environment variables');
@@ -91,29 +92,13 @@ export default async function handler(req, res) {
         const encodedAuth = Buffer.from(authString).toString('base64');
         const authHeader = `Basic ${encodedAuth}`;
 
-        // 3. SECURE REDIRECT FALLBACK: Verify HMAC token before anything else
-        // This allows us to trust the redirect even if the status API is blocked.
-        const { token: receivedToken } = req.body;
-        let tokenVerified = false;
-        const expectedToken = crypto.createHmac('sha256', process.env.HUBTEL_API_KEY || 'boostup_secret').update(clientReference).digest('hex');
-
-        if (receivedToken && receivedToken === expectedToken) {
-            console.log(`Secure Redirect Verified for ${clientReference}. Proceeding with balance update.`);
-            tokenVerified = true;
-        } else if (receivedToken) {
-            console.warn(`Token mismatch for ${clientReference}. Expected: ${expectedToken}, Received: ${receivedToken}`);
-        }
-
-        // 4. Call Mandatory Hubtel Status API (Public RMSC Endpoint)
-        // This endpoint does not require a static IP.
-        // POS Sales ID is the Hubtel POS ID from environment.
         let hubtelData = null;
-        let isSuccessful = tokenVerified; // Start with token status
+        let isSuccessful = false;
 
         const hubtelUrl = `https://rmsc.hubtel.com/v1/merchantaccount/merchants/${posId}/transactions/status?clientReference=${clientReference}`;
         
         try {
-            console.log('Trying Mandatory Hubtel Status API:', hubtelUrl);
+            console.log('Querying Hubtel RMSC Status API:', hubtelUrl);
             const response = await fetch(hubtelUrl, {
                 method: 'GET',
                 headers: { 
@@ -125,8 +110,7 @@ export default async function handler(req, res) {
             if (response.ok) {
                 hubtelData = await response.json();
                 console.log('Hubtel API Response:', JSON.stringify(hubtelData));
-            } else if (!tokenVerified) {
-                // Only return error if token is NOT verified
+            } else {
                 const errorText = await response.text();
                 console.error('Hubtel status API error:', response.status, errorText);
                 return res.status(200).json({ 
@@ -138,12 +122,10 @@ export default async function handler(req, res) {
             }
         } catch (apiError) {
             console.error('Network error during Hubtel status check:', apiError);
-            if (!tokenVerified) {
-                return res.status(500).json({ error: 'Failed to reach Hubtel API', message: apiError.message });
-            }
+            return res.status(500).json({ error: 'Failed to reach Hubtel API', message: apiError.message });
         }
 
-        // 5. Update Database based on Hubtel status (if we got data)
+        // 4. Evaluate authoritative status from Hubtel API response
         let responseData = {};
         let transactionStatus = null;
         let responseCode = null;
@@ -159,14 +141,19 @@ export default async function handler(req, res) {
             }
             transactionStatus = responseData.status || responseData.Status || hubtelData.status || hubtelData.Status;
 
-            // Merge API success with token success
-            isSuccessful = isSuccessful || responseData.isSuccessful === true ||
+            const verifiedAmount = parseFloat(responseData.amount || responseData.Amount || responseData.amountPaid || responseData.AmountPaid || 0);
+            const expectedAmount = parseFloat(transaction.amount || 0);
+            const amountMatches = verifiedAmount >= expectedAmount * 0.99;
+
+            isSuccessful = (
+                responseData.isSuccessful === true ||
                 transactionStatus === 'Paid' ||
                 transactionStatus === 'Success' ||
-                (responseCode === '0000' && transactionStatus && transactionStatus !== 'Unpaid' && transactionStatus !== 'Failed');
+                (responseCode === '0000' && transactionStatus && transactionStatus !== 'Unpaid' && transactionStatus !== 'Failed')
+            ) && amountMatches;
         }
 
-        // 6. Determine new status and update DB
+        // 5. Determine new status and update DB
         let newStatus = transaction.status;
         if (isSuccessful) {
             newStatus = 'approved';

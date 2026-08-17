@@ -1,11 +1,13 @@
 import { getServiceRoleClient } from '../../utils/auth.js';
-import { logUserAction } from '../../utils/activityLogger.js';
+import { logUserAction, logSecurityEvent } from '../../utils/activityLogger.js';
 
 /**
  * Hubtel Online Checkout Callback (Webhook)
  * 
- * This endpoint handles asynchronous notifications from Hubtel
- * when a transaction status changes.
+ * This endpoint handles asynchronous notifications from Hubtel.
+ * To prevent forged callbacks and fraud, ALL incoming callbacks
+ * are verified server-to-server against Hubtel's official Status API
+ * before any balance is credited.
  * 
  * Documentation: https://developers.hubtel.com/docs/callback-handling
  */
@@ -15,26 +17,11 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    // Log the raw notification for UAT and debugging
+    // Log the raw notification
     console.log('Hubtel Callback received:', JSON.stringify(req.body, null, 2));
 
     try {
-        const payload = req.body;
-
-        /**
-         * Payload structure (Redirect Checkout):
-         * {
-         *   "ResponseCode": "0000",
-         *   "Status": "Success",
-         *   "Amount": 10.00,
-         *   "ClientReference": "...",
-         *   "TransactionId": "...",
-         *   "ExternalTransactionId": "...",
-         *   "CheckoutId": "...",
-         *   "PaymentDetails": { "Channel": "mtn-gh", ... },
-         *   "Description": "..."
-         * }
-         */
+        const payload = req.body || {};
 
         // Extract values from the deeply nested Hubtel Data array or object
         let responseData = {};
@@ -45,9 +32,7 @@ export default async function handler(req, res) {
         }
 
         const clientReference = payload.clientReference || payload.ClientReference || responseData.clientReference || responseData.ClientReference;
-        const hubtelStatus = payload.status || payload.Status || responseData.status || responseData.Status;
-        const responseCode = payload.responseCode || payload.ResponseCode || responseData.responseCode || responseData.ResponseCode;
-        const amount = payload.amount || payload.Amount || responseData.amount || responseData.Amount;
+        const callbackAmount = payload.amount || payload.Amount || responseData.amount || responseData.Amount;
 
         if (!clientReference) {
             console.error('Hubtel Callback missing ClientReference');
@@ -74,44 +59,117 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true, message: 'Already processed' });
         }
 
-        // 3. Security Verification: Validate amount matches
-        // Note: Hubtel sometimes adds processing fees to the callback amount.
-        // We allow the received amount to be slightly higher (fees), but verify it's not significantly lower.
-        const expectedAmount = parseFloat(transaction.amount);
-        const receivedAmount = parseFloat(amount);
+        // 3. Mandatory Server-to-Server Verification with Hubtel RMSC Status API
+        const clientId = (process.env.HUBTEL_API_ID || process.env.HUBTEL_CLIENT_ID || '').trim();
+        const clientSecret = (process.env.HUBTEL_API_KEY || process.env.HUBTEL_CLIENT_SECRET || '').trim();
+        const posId = (process.env.HUBTEL_POS_ID || process.env.HUBTEL_MERCHANT_ACCOUNT || '').trim();
 
-        // Tolerance: allow up to 5% extra for fees, or at least 1% minimum
-        if (receivedAmount < expectedAmount) {
-            console.error(`Potential underpayment in Hubtel callback! Expected: ${expectedAmount}, Received: ${receivedAmount}`);
-            await logUserAction({
-                user_id: transaction.user_id,
-                action_type: 'suspicious_callback',
-                entity_type: 'transaction',
-                entity_id: transaction.id,
-                description: `Underpayment detected. Expected: ${expectedAmount}, Received: ${receivedAmount}`,
-                metadata: { payload }
+        if (!clientId || !clientSecret || !posId) {
+            console.error('Missing Hubtel credentials for server-side verification');
+            return res.status(500).json({ error: 'Payment provider configuration error' });
+        }
+
+        const authString = `${clientId}:${clientSecret}`;
+        const encodedAuth = Buffer.from(authString).toString('base64');
+        const authHeader = `Basic ${encodedAuth}`;
+
+        const hubtelStatusUrl = `https://rmsc.hubtel.com/v1/merchantaccount/merchants/${posId}/transactions/status?clientReference=${clientReference}`;
+        
+        console.log(`Verifying Hubtel callback server-to-server for clientReference: ${clientReference}`);
+        
+        let hubtelVerifiedData = null;
+        let isPaymentConfirmed = false;
+
+        try {
+            const statusResponse = await fetch(hubtelStatusUrl, {
+                method: 'GET',
+                headers: {
+                    'Authorization': authHeader,
+                    'Content-Type': 'application/json'
+                }
             });
-            return res.status(400).json({ error: 'Amount mismatch (underpayment)' });
+
+            if (statusResponse.ok) {
+                hubtelVerifiedData = await statusResponse.json();
+                console.log('Hubtel Authoritative Verification Response:', JSON.stringify(hubtelVerifiedData));
+            } else {
+                const errText = await statusResponse.text();
+                console.warn(`Hubtel Status API returned status ${statusResponse.status}: ${errText}`);
+            }
+        } catch (apiErr) {
+            console.error('Error calling Hubtel Status API for verification:', apiErr);
+            return res.status(502).json({ error: 'Failed to verify with payment provider' });
         }
 
-        // 4. Update Transaction Status
-        let newStatus = 'Pending';
-        const isSuccessful = responseData.isSuccessful ?? (hubtelStatus === 'Success' || responseCode === '0000');
+        // Parse authoritative status from Hubtel
+        let verifiedStatus = null;
+        let verifiedAmount = 0;
+        let verifiedTransactionId = null;
 
-        if (isSuccessful || responseCode === '0000') {
-            newStatus = 'approved';
-        } else if (responseCode === '2001' || hubtelStatus === 'Failed') {
-            newStatus = 'rejected';
+        if (hubtelVerifiedData) {
+            let apiData = hubtelVerifiedData.data || hubtelVerifiedData.Data || hubtelVerifiedData;
+            if (Array.isArray(apiData) && apiData.length > 0) {
+                apiData = apiData[0];
+            }
+
+            verifiedStatus = apiData.status || apiData.Status || hubtelVerifiedData.status || hubtelVerifiedData.Status;
+            verifiedAmount = parseFloat(apiData.amount || apiData.Amount || apiData.amountPaid || apiData.AmountPaid || 0);
+            verifiedTransactionId = apiData.transactionId || apiData.TransactionId || hubtelVerifiedData.transactionId || hubtelVerifiedData.TransactionId;
+
+            const responseCode = hubtelVerifiedData.responseCode || hubtelVerifiedData.ResponseCode;
+
+            // Strict confirmation criteria from Hubtel official response
+            const statusMatches = (
+                verifiedStatus === 'Paid' || 
+                verifiedStatus === 'Success' || 
+                apiData.isSuccessful === true ||
+                (responseCode === '0000' && verifiedStatus && verifiedStatus !== 'Unpaid' && verifiedStatus !== 'Failed')
+            );
+
+            const expectedAmount = parseFloat(transaction.amount);
+            const amountMatches = verifiedAmount >= expectedAmount * 0.99; // Allow small rounding
+
+            if (statusMatches && amountMatches) {
+                isPaymentConfirmed = true;
+            }
         }
 
+        // 4. If Hubtel API did NOT confirm genuine payment, reject the callback
+        if (!isPaymentConfirmed) {
+            console.warn(`REJECTING Hubtel callback for ${clientReference} — Hubtel API did NOT confirm payment.`, {
+                receivedPayload: payload,
+                hubtelApiResult: hubtelVerifiedData
+            });
+
+            await logSecurityEvent({
+                action_type: 'forged_callback_attempt',
+                description: `Hubtel callback rejected: payment not confirmed by Hubtel RMSC API for reference ${clientReference}`,
+                metadata: {
+                    clientReference,
+                    expectedAmount: transaction.amount,
+                    callbackPayload: payload,
+                    hubtelApiResponse: hubtelVerifiedData
+                },
+                severity: 'critical',
+                req
+            });
+
+            return res.status(400).json({
+                error: 'Payment verification failed with Hubtel',
+                clientReference
+            });
+        }
+
+        // 5. Payment verified genuine: Update transaction and credit wallet balance
         const { error: updateError } = await supabase
             .from('transactions')
             .update({
-                status: newStatus,
-                hubtel_transaction_id: payload.transactionId || payload.TransactionId || responseData.transactionId || responseData.TransactionId,
-                external_transaction_id: payload.externalTransactionId || payload.ExternalTransactionId || responseData.externalTransactionId || responseData.ExternalTransactionId,
+                status: 'approved',
+                hubtel_transaction_id: verifiedTransactionId || payload.transactionId || payload.TransactionId,
+                external_transaction_id: payload.externalTransactionId || payload.ExternalTransactionId || responseData.externalTransactionId,
                 payment_method: payload.PaymentDetails?.Channel || responseData.PaymentDetails?.Channel || transaction.payment_method,
                 raw_callback: payload,
+                raw_status_check: hubtelVerifiedData,
                 updated_at: new Date().toISOString()
             })
             .eq('id', transaction.id);
@@ -121,41 +179,42 @@ export default async function handler(req, res) {
             return res.status(500).json({ error: 'Internal update error' });
         }
 
-        // 5. If successful, update user balance
-        console.log(`Hubtel Callback Status for ${clientReference}: ${newStatus}`);
-        if (newStatus === 'approved') {
-            const { data: profile } = await supabase
+        // 6. Update user balance atomically
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('balance')
+            .eq('id', transaction.user_id)
+            .single();
+
+        if (profile) {
+            const currentBal = parseFloat(profile.balance || 0);
+            const depositAmt = parseFloat(transaction.amount);
+            const newBalance = currentBal + depositAmt;
+
+            const { error: balanceError } = await supabase
                 .from('profiles')
-                .select('balance')
-                .eq('id', transaction.user_id)
-                .single();
+                .update({ balance: newBalance })
+                .eq('id', transaction.user_id);
 
-            if (profile) {
-                const newBalance = (profile.balance || 0) + parseFloat(transaction.amount);
-                const { error: balanceError } = await supabase
-                    .from('profiles')
-                    .update({ balance: newBalance })
-                    .eq('id', transaction.user_id);
-
-                if (balanceError) {
-                    console.error('Error updating balance in Hubtel callback:', balanceError);
-                } else {
-                    // Log completion
-                    await logUserAction({
-                        user_id: transaction.user_id,
-                        action_type: 'deposit_completed',
-                        entity_type: 'transaction',
-                        entity_id: transaction.id,
-                        description: `Hubtel deposit completed: ₵${transaction.amount}`,
-                        metadata: { hubtel_transaction_id: payload.TransactionId },
-                        req
-                    });
-                }
+            if (balanceError) {
+                console.error('Error updating balance in Hubtel callback:', balanceError);
+            } else {
+                await logUserAction({
+                    user_id: transaction.user_id,
+                    action_type: 'deposit_completed',
+                    entity_type: 'transaction',
+                    entity_id: transaction.id,
+                    description: `Hubtel deposit verified and completed: ₵${transaction.amount}`,
+                    metadata: {
+                        hubtel_transaction_id: verifiedTransactionId,
+                        clientReference
+                    },
+                    req
+                });
             }
         }
 
-        // Return 200 OK to Hubtel immediately
-        return res.status(200).json({ success: true });
+        return res.status(200).json({ success: true, message: 'Deposit verified and credited' });
 
     } catch (error) {
         console.error('Error in Hubtel callback handler:', error);
