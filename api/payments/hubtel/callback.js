@@ -112,9 +112,9 @@ export default async function handler(req, res) {
                 apiData = apiData[0];
             }
 
-            verifiedStatus = apiData.status || apiData.Status || hubtelVerifiedData.status || hubtelVerifiedData.Status;
-            verifiedAmount = parseFloat(apiData.amount || apiData.Amount || apiData.amountPaid || apiData.AmountPaid || 0);
-            verifiedTransactionId = apiData.transactionId || apiData.TransactionId || hubtelVerifiedData.transactionId || hubtelVerifiedData.TransactionId;
+            verifiedStatus = apiData.TransactionStatus || apiData.InvoiceStatus || apiData.status || apiData.Status || hubtelVerifiedData.status || hubtelVerifiedData.Status;
+            verifiedAmount = parseFloat(apiData.AmountAfterFees || apiData.TransactionAmount || apiData.amount || apiData.Amount || apiData.amountPaid || apiData.AmountPaid || 0);
+            verifiedTransactionId = apiData.transactionId || apiData.TransactionId || apiData.checkoutId || apiData.CheckoutId || apiData.InvoiceToken || hubtelVerifiedData.transactionId || hubtelVerifiedData.TransactionId;
 
             const responseCode = hubtelVerifiedData.responseCode || hubtelVerifiedData.ResponseCode;
 

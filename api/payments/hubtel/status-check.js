@@ -139,9 +139,9 @@ export default async function handler(req, res) {
             } else {
                 responseData = hubtelData;
             }
-            transactionStatus = responseData.status || responseData.Status || hubtelData.status || hubtelData.Status;
+            transactionStatus = responseData.TransactionStatus || responseData.InvoiceStatus || responseData.status || responseData.Status || hubtelData.status || hubtelData.Status;
 
-            const verifiedAmount = parseFloat(responseData.amount || responseData.Amount || responseData.amountPaid || responseData.AmountPaid || 0);
+            const verifiedAmount = parseFloat(responseData.AmountAfterFees || responseData.TransactionAmount || responseData.amount || responseData.Amount || responseData.amountPaid || responseData.AmountPaid || 0);
             const expectedAmount = parseFloat(transaction.amount || 0);
             const amountMatches = verifiedAmount >= expectedAmount * 0.99;
 
@@ -166,7 +166,8 @@ export default async function handler(req, res) {
             .from('transactions')
             .update({
                 status: newStatus,
-                hubtel_transaction_id: responseData.transactionId || responseData.TransactionId || hubtelData.transactionId || hubtelData.TransactionId || responseData.checkoutId,
+                hubtel_transaction_id: responseData.transactionId || responseData.TransactionId || responseData.checkoutId || responseData.CheckoutId || responseData.InvoiceToken || hubtelData.transactionId || hubtelData.TransactionId,
+                payment_method: responseData.PaymentMethod || responseData.MobileChannelName || transaction.payment_method,
                 raw_status_check: hubtelData,
                 updated_at: new Date().toISOString()
             })
