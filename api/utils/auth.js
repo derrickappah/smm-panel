@@ -44,7 +44,7 @@ export async function verifyAuth(req) {
   let user = null;
   if (jwtSecret) {
     try {
-      const decoded = jwt.verify(token, jwtSecret);
+      const decoded = jwt.verify(token, jwtSecret, { algorithms: ['HS256'] });
       if (decoded && decoded.sub) {
         user = {
           id: decoded.sub,

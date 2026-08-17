@@ -16,10 +16,10 @@ if (typeof setInterval !== 'undefined') {
  * Distributed Rate Limiting Middleware powered by Upstash Redis
  * Performs IP rate limiting (30 req/min) and User rate limiting (10 req/min)
  */
-export async function rateLimit(req, res) {
+export async function rateLimit(req, res, authenticatedUserId = null) {
     const rawIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown';
     const ip = typeof rawIp === 'string' ? rawIp.split(',')[0].trim() : 'unknown';
-    const userId = req.body?.user_id || (req.user ? req.user.id : null);
+    const userId = authenticatedUserId || (req.user ? req.user.id : null);
 
     // If Upstash Redis is active, perform distributed atomic rate-limiting
     if (redis) {

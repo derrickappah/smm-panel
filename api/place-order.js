@@ -59,12 +59,6 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // 🔴 SECURITY PATCH: Global Rate Limiting
-  const rateLimitResult = await rateLimit(req, res);
-  if (rateLimitResult.blocked) {
-    return res.status(429).json({ error: rateLimitResult.message });
-  }
-
     let user, userSupabase;
     try {
       const authResult = await verifyAuth(req);
@@ -75,6 +69,12 @@ export default async function handler(req, res) {
         error: 'Authentication required',
         message: authError.message
       });
+    }
+
+    // Rate Limiting (IP & Authenticated User)
+    const rateLimitResult = await rateLimit(req, res, user.id);
+    if (rateLimitResult.blocked) {
+      return res.status(429).json({ error: rateLimitResult.message });
     }
 
     // Get request body
