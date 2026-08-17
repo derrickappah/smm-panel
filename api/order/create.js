@@ -1,15 +1,10 @@
 import { verifyAuth, getServiceRoleClient } from '../utils/auth.js';
 import { placeProviderOrder, extractOrderId } from '../utils/providers.js';
-import comboHandler from './place-combo-order.js';
 import {
     cleanUrl,
     validateUrlForService,
     classifyProviderError,
-    shouldAutoRefund,
-    isInvalidServiceError,
-    PROVIDER_ERROR_TYPES,
 } from '../utils/orderValidation.js';
-import crypto from 'crypto';
 import { setCorsHeaders } from '../utils/corsHeaders.js';
 
 export default async function handler(req, res) {
@@ -31,26 +26,24 @@ export default async function handler(req, res) {
             });
         }
 
-        const { service_id, package_id, link: rawLink, quantity, total_cost, comments } = req.body;
+        const { service_id, link: rawLink, quantity, comments } = req.body;
 
         // ── Basic field validation ────────────────────────────────────────────
         if (!rawLink || typeof rawLink !== 'string' || rawLink.trim() === '') {
             return res.status(400).json({ error: 'Missing required fields' });
         }
-        if (!quantity || (!service_id && !package_id)) {
+        if (!quantity || !service_id) {
             return res.status(400).json({ error: 'Missing required fields' });
         }
 
-        const numericCost = parseFloat(total_cost);
-        if (isNaN(numericCost) || numericCost <= 0) {
-            return res.status(400).json({ error: 'Invalid total cost. Must be a positive number.' });
+        const quantityNum = parseInt(quantity);
+        if (isNaN(quantityNum) || quantityNum <= 0) {
+            return res.status(400).json({ error: 'Invalid quantity' });
         }
 
         const supabase = getServiceRoleClient();
 
         // ── STEP 1: Clean URL ─────────────────────────────────────────────────
-        // Extract the first valid http(s):// URL from the raw input.
-        // This handles cases like: "Check this https://vt.tiktok.com/ZSCup9dfB/ 😂"
         const cleanedLink = cleanUrl(rawLink.trim());
         if (!cleanedLink) {
             return res.status(400).json({ error: 'Enter a valid link.' });
@@ -66,540 +59,165 @@ export default async function handler(req, res) {
             .gte('created_at', new Date(Date.now() - 60000).toISOString());
 
         if (recentOrderCount > 10) {
-            await supabase.rpc('log_system_event', {
-                p_type: 'rate_limit_exceeded',
-                p_severity: 'warning',
-                p_source: 'order-create',
-                p_description: `User ${user.id} exceeded order rate limit (${recentOrderCount} in last min)`,
-                p_metadata: { user_id: user.id, count: recentOrderCount },
-            });
             return res.status(429).json({ error: 'Too many orders. Please wait a minute.' });
         }
-        let calculatedTotalCost = 0;
 
-        // ── Resolve service / package ─────────────────────────────────────────
-        let provider = null;
-        let provider_service_id = null;
-        let is_combo = false;
-        let combo_components = [];
-        let serviceUrlType = null;
+        // ── STEP 2: Resolve service ───────────────────────────────────────────
+        const { data: service, error: sErr } = await supabase
+            .from('services')
+            .select('id, name, provider_id, provider_service_id, our_price_per_1000, min_quantity, max_quantity, status, url_type')
+            .eq('id', service_id)
+            .single();
 
-        if (service_id) {
-            const { data: service, error: sErr } = await supabase
-                .from('services')
-                .select('*')
-                .eq('id', service_id)
-                .single();
+        if (sErr || !service || service.status !== 'active') {
+            return res.status(400).json({ error: 'Service not found or inactive' });
+        }
 
-            if (sErr || !service || !service.enabled) {
-                return res.status(400).json({ error: 'Service not found or disabled' });
-            }
-
-            // Calculate authoritative cost server-side
-            const ratePerUnit = Number(service.rate);
-            const rateUnit = Number(service.rate_unit) || 1000;
-            calculatedTotalCost = Math.round(((ratePerUnit * Number(quantity)) / rateUnit) * 100) / 100;
-            if (isNaN(calculatedTotalCost) || calculatedTotalCost <= 0) {
-                return res.status(400).json({ error: 'Invalid calculated cost for service' });
-            }
-
-            // Enforce seller_only role restrictions
-            const { data: userProfile } = await supabase
-                .from('profiles')
-                .select('role')
-                .eq('id', user.id)
-                .single();
-            const userRole = userProfile?.role || 'user';
-
-            if (userRole === 'seller' && !service.seller_only) {
-                return res.status(403).json({ error: 'Sellers can only order seller services' });
-            }
-            if (userRole !== 'seller' && userRole !== 'admin' && service.seller_only) {
-                return res.status(403).json({ error: 'This service is only available to sellers' });
-            }
-
-            // If this is a new Combo Service Builder combo service, delegate directly to place-combo-order engine
-            if (service.combo_service_id || (service.is_combo && !service.combo_service_ids && !service.combo_smmgen_service_ids)) {
-                req.body.combo_service_id = service.combo_service_id || service.id;
-                return comboHandler(req, res);
-            }
-
-            is_combo = service.is_combo || false;
-
-            if (is_combo) {
-                if (service.combo_smmgen_service_ids && Array.isArray(service.combo_smmgen_service_ids) && service.combo_smmgen_service_ids.length > 0) {
-                    combo_components = service.combo_smmgen_service_ids.map(sid => ({
-                        provider: 'smmgen',
-                        service_id: sid,
-                    }));
-                } else if (service.combo_service_ids && Array.isArray(service.combo_service_ids)) {
-                    const componentIds = service.combo_service_ids.map(item => typeof item === 'object' && item !== null ? item.id : item);
-                    const { data: compServices, error: compErr } = await supabase
-                        .from('services')
-                        .select('id, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id')
-                        .in('id', componentIds);
-
-                    if (!compErr && compServices) {
-                        const orderedServices = componentIds.map(id => compServices.find(s => s.id === id)).filter(Boolean);
-                        for (const s of orderedServices) {
-                            let compProvider = null;
-                            let compProviderId = null;
-                            if (s.smmgen_service_id) {
-                                compProvider = 'smmgen';
-                                compProviderId = s.smmgen_service_id;
-                            } else if (s.smmcost_service_id) {
-                                compProvider = 'smmcost';
-                                compProviderId = s.smmcost_service_id;
-                            } else if (s.jbsmmpanel_service_id) {
-                                compProvider = 'jbsmmpanel';
-                                compProviderId = s.jbsmmpanel_service_id;
-                            } else if (s.worldofsmm_service_id) {
-                                compProvider = 'worldofsmm';
-                                compProviderId = s.worldofsmm_service_id;
-                            } else if (s.g1618_service_id) {
-                                compProvider = 'g1618';
-                                compProviderId = s.g1618_service_id;
-                            } else if (s.oldsmm_service_id) {
-                                compProvider = 'oldsmm';
-                                compProviderId = s.oldsmm_service_id;
-                            } else if (s.apiowner_service_id) {
-                                compProvider = 'apiowner';
-                                compProviderId = s.apiowner_service_id;
-                            }
-
-                            if (compProvider && compProviderId) {
-                                combo_components.push({
-                                    provider: compProvider,
-                                    service_id: String(compProviderId)
-                                });
-                            }
-                        }
-                    }
-                }
-            } else {
-                if (service.smmcost_service_id) {
-                    provider = 'smmcost';
-                    provider_service_id = service.smmcost_service_id;
-                } else if (service.jbsmmpanel_service_id) {
-                    provider = 'jbsmmpanel';
-                    provider_service_id = service.jbsmmpanel_service_id;
-                } else if (service.smmgen_service_id) {
-                    provider = 'smmgen';
-                    provider_service_id = service.smmgen_service_id;
-                } else if (service.worldofsmm_service_id) {
-                    provider = 'worldofsmm';
-                    provider_service_id = service.worldofsmm_service_id;
-                } else if (service.g1618_service_id) {
-                    provider = 'g1618';
-                    provider_service_id = service.g1618_service_id;
-                } else if (service.oldsmm_service_id) {
-                    provider = 'oldsmm';
-                    provider_service_id = service.oldsmm_service_id;
-                } else if (service.apiowner_service_id) {
-                    provider = 'apiowner';
-                    provider_service_id = service.apiowner_service_id;
-                }
-
-                if (provider && provider_service_id) {
-                    combo_components = [{ provider, service_id: provider_service_id }];
-                }
-            }
-
-            if (quantity < service.min_quantity || quantity > service.max_quantity) {
-                return res.status(400).json({
-                    error: `Quantity must be between ${service.min_quantity} and ${service.max_quantity}`,
-                });
-            }
-
-            console.log('[ORDER] Service provider detection:', {
-                service_id: service.id,
-                service_name: service.name,
-                url_type: serviceUrlType,
-                is_combo,
-                provider,
-                provider_service_id,
-                calculatedCost: calculatedTotalCost,
-                combo_components_count: combo_components.length,
+        // Validate quantity bounds
+        if (service.min_quantity && quantityNum < service.min_quantity) {
+            return res.status(400).json({
+                error: `Minimum quantity is ${service.min_quantity}`,
             });
-        } else if (package_id) {
-            const { data: pkg, error: pErr } = await supabase
-                .from('promotion_packages')
-                .select('*')
-                .eq('id', package_id)
-                .single();
-
-            if (pErr || !pkg) return res.status(400).json({ error: 'Package not found' });
-
-            // Calculate authoritative cost for packages server-side
-            calculatedTotalCost = Math.round(Number(pkg.price) * 100) / 100;
-            if (isNaN(calculatedTotalCost) || calculatedTotalCost <= 0) {
-                return res.status(400).json({ error: 'Invalid calculated cost for package' });
-            }
-
-            // Capture url_type for packages
-            serviceUrlType = pkg.url_type || null;
-            is_combo = pkg.is_combo || false;
-
-            if (is_combo) {
-                if (pkg.combo_smmgen_service_ids && Array.isArray(pkg.combo_smmgen_service_ids) && pkg.combo_smmgen_service_ids.length > 0) {
-                    combo_components = pkg.combo_smmgen_service_ids.map(sid => ({
-                        provider: 'smmgen',
-                        service_id: sid,
-                    }));
-                } else if (pkg.combo_package_ids && Array.isArray(pkg.combo_package_ids)) {
-                    const componentIds = pkg.combo_package_ids.map(item => typeof item === 'object' && item !== null ? item.id : item);
-                    const { data: compPkgs, error: compErr } = await supabase
-                        .from('promotion_packages')
-                        .select('id, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id')
-                        .in('id', componentIds);
-
-                    if (!compErr && compPkgs) {
-                        const orderedPkgs = componentIds.map(id => compPkgs.find(p => p.id === id)).filter(Boolean);
-                        for (const p of orderedPkgs) {
-                            let compProvider = null;
-                            let compProviderId = null;
-                            if (p.smmgen_service_id) {
-                                compProvider = 'smmgen';
-                                compProviderId = p.smmgen_service_id;
-                            } else if (p.smmcost_service_id) {
-                                compProvider = 'smmcost';
-                                compProviderId = p.smmcost_service_id;
-                            } else if (p.jbsmmpanel_service_id) {
-                                compProvider = 'jbsmmpanel';
-                                compProviderId = p.jbsmmpanel_service_id;
-                            } else if (p.worldofsmm_service_id) {
-                                compProvider = 'worldofsmm';
-                                compProviderId = p.worldofsmm_service_id;
-                            } else if (p.g1618_service_id) {
-                                compProvider = 'g1618';
-                                compProviderId = p.g1618_service_id;
-                            } else if (p.oldsmm_service_id) {
-                                compProvider = 'oldsmm';
-                                compProviderId = p.oldsmm_service_id;
-                            } else if (p.apiowner_service_id) {
-                                compProvider = 'apiowner';
-                                compProviderId = p.apiowner_service_id;
-                            }
-
-                            if (compProvider && compProviderId) {
-                                combo_components.push({
-                                    provider: compProvider,
-                                    service_id: String(compProviderId)
-                                });
-                            }
-                        }
-                    }
-                }
-            } else {
-                if (pkg.smmcost_service_id) {
-                    provider = 'smmcost';
-                    provider_service_id = pkg.smmcost_service_id;
-                } else if (pkg.jbsmmpanel_service_id) {
-                    provider = 'jbsmmpanel';
-                    provider_service_id = pkg.jbsmmpanel_service_id;
-                } else if (pkg.smmgen_service_id) {
-                    provider = 'smmgen';
-                    provider_service_id = pkg.smmgen_service_id;
-                } else if (pkg.worldofsmm_service_id) {
-                    provider = 'worldofsmm';
-                    provider_service_id = pkg.worldofsmm_service_id;
-                } else if (pkg.g1618_service_id) {
-                    provider = 'g1618';
-                    provider_service_id = pkg.g1618_service_id;
-                } else if (pkg.oldsmm_service_id) {
-                    provider = 'oldsmm';
-                    provider_service_id = pkg.oldsmm_service_id;
-                } else if (pkg.apiowner_service_id) {
-                    provider = 'apiowner';
-                    provider_service_id = pkg.apiowner_service_id;
-                }
-
-                if (provider && provider_service_id) {
-                    combo_components = [{ provider, service_id: provider_service_id }];
-                }
-            }
-
-            console.log('[ORDER] Package provider detection:', {
-                package_id: pkg.id,
-                package_name: pkg.name,
-                url_type: serviceUrlType,
-                is_combo,
-                provider,
-                provider_service_id,
-                calculatedCost: calculatedTotalCost,
-                combo_components_count: combo_components.length,
+        }
+        if (service.max_quantity && quantityNum > service.max_quantity) {
+            return res.status(400).json({
+                error: `Maximum quantity is ${service.max_quantity}`,
             });
         }
 
-        // ── STEP 2: URL Type Validation ───────────────────────────────────────
-        const urlValidation = validateUrlForService(cleanedLink, serviceUrlType);
+        // ── STEP 3: URL Type Validation ───────────────────────────────────────
+        const urlValidation = validateUrlForService(cleanedLink, service.url_type || null);
         if (!urlValidation.valid) {
             console.log('[ORDER] URL type validation failed:', {
                 url: cleanedLink,
-                required: serviceUrlType,
+                required: service.url_type,
                 message: urlValidation.message,
             });
             return res.status(400).json({ error: urlValidation.message });
         }
 
-        // ── STEP 3: Duplicate Active Order Check ──────────────────────────────
-        if (service_id) {
-            const { data: activeOrders, error: dupErr } = await supabase
-                .from('orders')
-                .select('id, status, created_at')
-                .eq('user_id', user.id)
-                .eq('service_id', service_id)
-                .eq('link', cleanedLink)
-                .in('status', ['pending', 'processing', 'in progress'])
-                .limit(1);
-
-            if (!dupErr && activeOrders && activeOrders.length > 0) {
-                return res.status(409).json({ error: 'Active order already exists.' });
-            }
-        }
-
-        // ── STEP 4: Provider Service Validation (pre-deduction) ───────────────
-        if (!is_combo && provider && provider_service_id) {
-            const serviceValid = await validateProviderService(provider, provider_service_id);
-            if (serviceValid === false) {
-                console.error('[ORDER] Provider service validation failed:', {
-                    provider,
-                    provider_service_id,
-                });
-                await supabase.rpc('log_system_event', {
-                    p_type: 'invalid_provider_service',
-                    p_severity: 'error',
-                    p_source: 'order-create',
-                    p_description: `Provider service ${provider_service_id} not found at ${provider}`,
-                    p_metadata: { provider, provider_service_id, service_id: service_id || null },
-                }).catch(() => {});
-                return res.status(400).json({ error: 'Service temporarily unavailable.' });
-            }
-        }
-
-        // ── STEP 5: Idempotency Check ─────────────────────────────────────────
-        const hashData = `${user.id}-${service_id || package_id}-${cleanedLink}-${quantity}-${Math.floor(Date.now() / 60000)}`;
-        const idempotencyHash = crypto.createHash('md5').update(hashData).digest('hex');
-
-        const { data: existingOrder } = await supabase
+        // ── STEP 4: Duplicate Active Order Check ──────────────────────────────
+        const { data: activeOrders } = await supabase
             .from('orders')
-            .select('id, smmgen_order_id')
+            .select('id, status, created_at')
             .eq('user_id', user.id)
-            .eq('idempotency_key', idempotencyHash)
-            .maybeSingle();
+            .eq('service_id', service_id)
+            .eq('link', cleanedLink)
+            .in('status', ['pending', 'processing', 'in_progress'])
+            .limit(1);
 
-        if (existingOrder) {
-            return res.status(409).json({
-                error: 'Duplicate order detected',
-                message: 'A similar order was placed in the last minute.',
-                order_id: existingOrder.id,
+        if (activeOrders && activeOrders.length > 0) {
+            return res.status(409).json({ error: 'Active order already exists for this link.' });
+        }
+
+        // ── STEP 5: Atomic Balance Deduction & Order Creation ─────────────────
+        // This RPC atomically: checks balance, deducts from wallets, creates order, creates transaction
+        const { data: rpcResult, error: rpcError } = await supabase.rpc('create_order_with_wallet_payment', {
+            p_user_id: user.id,
+            p_service_id: service_id,
+            p_link: cleanedLink,
+            p_quantity: quantityNum,
+        });
+
+        if (rpcError) {
+            console.error('[ORDER] RPC error:', rpcError);
+            return res.status(500).json({
+                error: 'Failed to process order',
+                details: rpcError.message,
             });
         }
 
-        // ── STEP 6: Atomic Balance Deduction & Order Creation ─────────────────
-        const { data: rpcResult, error: rpcError } = await supabase.rpc('create_secure_order', {
-            p_user_id: user.id,
-            p_service_id: service_id || null,
-            p_package_id: package_id || null,
-            p_link: cleanedLink,
-            p_quantity: parseInt(quantity),
-            p_total_cost: calculatedTotalCost,
-            p_idempotency_key: idempotencyHash,
-        });
-
-        if (rpcError || !rpcResult?.success) {
+        if (!rpcResult?.success) {
             return res.status(400).json({
-                error: rpcError?.message || rpcResult?.message || 'Failed to process order',
+                error: rpcResult?.message || 'Failed to process order',
             });
         }
 
         const order_id = rpcResult.order_id;
+        const totalPrice = rpcResult.total_price;
 
-        // ── STEP 7: Call Provider API(s) ──────────────────────────────────────
-        if (combo_components.length > 0) {
-            const componentResults = [];
-            let someSuccess = false;
-            let allFailed = true;
-            let lastError = null;
-            let lastErrorDetails = null;
+        console.log('[ORDER] Order created:', { order_id, totalPrice, service: service.name });
 
-            for (const component of combo_components) {
+        // ── STEP 6: Get provider info and call Provider API ───────────────────
+        if (service.provider_id && service.provider_service_id) {
+            // Look up the provider to get the API URL and key
+            const { data: provider } = await supabase
+                .from('providers')
+                .select('id, name, api_url, api_key, is_active')
+                .eq('id', service.provider_id)
+                .single();
+
+            if (provider && provider.is_active && provider.api_url && provider.api_key) {
                 try {
-                    const providerResponse = await placeProviderOrder(component.provider, {
-                        service: component.service_id,
+                    // Call the provider API to place the order
+                    const providerResponse = await callProviderApi(provider, {
+                        service: service.provider_service_id,
                         link: cleanedLink,
-                        quantity,
+                        quantity: quantityNum,
                         comments: comments || undefined,
                     });
 
-                    console.log(`[ORDER] Provider response (${component.provider}):`, providerResponse);
+                    console.log('[ORDER] Provider response:', providerResponse);
 
-                    const extId = extractOrderId(component.provider, providerResponse);
+                    // Extract the provider's order ID
+                    const providerOrderId = providerResponse?.order
+                        || providerResponse?.id
+                        || providerResponse?.order_id
+                        || null;
 
-                    if (extId) {
-                        someSuccess = true;
-                        allFailed = false;
-                        componentResults.push({
-                            provider: component.provider,
-                            service_id: component.service_id,
-                            provider_order_id: String(extId),
-                            status: 'success',
-                        });
+                    if (providerOrderId) {
+                        // Update order with provider order ID and set status to processing
+                        await supabase.from('orders').update({
+                            provider_order_id: String(providerOrderId),
+                            status: 'processing',
+                            status_updated_at: new Date().toISOString(),
+                        }).eq('id', order_id);
                     } else {
-                        const errMsg = providerResponse?.error || providerResponse?.message || 'Unknown provider error';
-                        lastError = errMsg;
-                        lastErrorDetails = providerResponse;
-                        componentResults.push({
-                            provider: component.provider,
-                            service_id: component.service_id,
-                            provider_order_id: null,
-                            status: 'failed',
-                            error: errMsg,
+                        // Provider responded but no order ID — check for error
+                        const providerError = providerResponse?.error || providerResponse?.message || 'No order ID returned';
+                        console.error('[ORDER] Provider error:', providerError);
+
+                        // Auto-refund on provider failure
+                        await handleProviderFailure(supabase, order_id, user.id, totalPrice, providerError);
+
+                        return res.status(200).json({
+                            success: false,
+                            refunded: true,
+                            message: 'Provider failed. Your balance has been refunded.',
+                            order_id,
                         });
                     }
                 } catch (provErr) {
-                    console.error(`[ORDER] Provider error (${component.provider}):`, provErr.message);
-                    lastError = provErr.message;
-                    lastErrorDetails = provErr.response?.data || null;
-                    componentResults.push({
-                        provider: component.provider,
-                        service_id: component.service_id,
-                        provider_order_id: null,
-                        status: 'failed',
-                        error: provErr.message,
-                    });
-                }
-            }
+                    console.error('[ORDER] Provider call failed:', provErr.message);
 
-            // ── Update Order Record with Provider IDs ─────────────────────────
-            const updateData = {
-                submitted_at: new Date().toISOString(),
-                component_provider_order_ids: componentResults,
-                last_status_check: new Date().toISOString(),
-            };
+                    // Auto-refund on provider exception
+                    await handleProviderFailure(supabase, order_id, user.id, totalPrice, provErr.message);
 
-            for (const resItem of componentResults) {
-                if (resItem.status === 'success' && resItem.provider_order_id) {
-                    const p = resItem.provider;
-                    const pid = resItem.provider_order_id;
-                    if (p === 'smmgen')     updateData.smmgen_order_id     = pid;
-                    if (p === 'smmcost')    updateData.smmcost_order_id   = pid;
-                    if (p === 'jbsmmpanel') updateData.jbsmmpanel_order_id = pid;
-                    if (p === 'worldofsmm') updateData.worldofsmm_order_id = pid;
-                    if (p === 'g1618')      updateData.g1618_order_id      = pid;
-                    if (p === 'oldsmm')     updateData.oldsmm_order_id     = pid;
-                    if (p === 'apiowner')   updateData.apiowner_order_id   = pid;
-                }
-            }
-
-            if (allFailed) {
-                updateData.status = 'failed';
-                updateData.provider_error = lastError;
-                updateData.provider_error_details = lastErrorDetails;
-            } else if (someSuccess && componentResults.some(r => r.status === 'failed')) {
-                updateData.status = 'partial';
-            } else {
-                updateData.status = 'processing';
-            }
-
-            await supabase.from('orders').update(updateData).eq('id', order_id);
-
-            // ── Handle Success ────────────────────────────────────────────────
-            if (someSuccess) {
-                return res.status(200).json({
-                    success: true,
-                    order_id,
-                    components: componentResults,
-                    new_balance: rpcResult.new_balance,
-                });
-            }
-
-            // ── Handle Total Failure & Auto-Refund ────────────────────────────
-            if (allFailed) {
-                console.error('[ORDER] All providers failed for order:', {
-                    order_id,
-                    lastError,
-                    lastErrorDetails,
-                });
-
-                // Classify error
-                const errorType = classifyProviderError(lastError, lastErrorDetails);
-
-                // Update order with classification
-                await supabase.from('orders').update({
-                    provider_error_type: errorType,
-                    metadata: {
-                        error_classification: errorType,
-                        error: lastError,
-                        details: lastErrorDetails,
-                    },
-                }).eq('id', order_id);
-
-                // Auto-refund
-                const refundResult = await supabase.rpc('process_automatic_refund', {
-                    p_order_id:       String(order_id),
-                    p_refund_amount:  calculatedTotalCost,
-                    p_refund_type:    'full',
-                    p_remains:        0,
-                    p_provider_error: lastError || 'Provider failed to place order',
-                    p_error_details:  JSON.stringify({
-                        components: componentResults,
-                        error: lastError,
-                        details: lastErrorDetails,
-                    }),
-                });
-
-                if (refundResult.data?.success) {
-                    console.log('[ORDER] Auto-refund successful:', {
-                        order_id,
-                        amount: calculatedTotalCost,
-                        new_balance: refundResult.data.new_balance,
-                    });
                     return res.status(200).json({
                         success: false,
                         refunded: true,
-                        message: 'Refunded automatically.',
-                        order_id,
-                    });
-                } else {
-                    console.error('[ORDER] CRITICAL: Auto-refund failed!', {
-                        order_id,
-                        refundError: refundResult.data?.error || refundResult.error,
-                    });
-                    await supabase.rpc('log_system_event', {
-                        p_type:        'auto_refund_failed',
-                        p_severity:    'critical',
-                        p_source:      'order-create',
-                        p_description: `Auto-refund failed for order ${order_id}. MANUAL REFUND REQUIRED.`,
-                        p_metadata:    {
-                            order_id,
-                            user_id: user.id,
-                            amount: calculatedTotalCost,
-                            provider_error: lastError,
-                            refund_error: refundResult.data?.error,
-                        },
-                    }).catch(() => {});
-
-                    return res.status(502).json({
-                        error: 'Provider temporarily unavailable.',
-                        message: 'Your order could not be placed. Please contact support if your balance was deducted.',
+                        message: 'Provider temporarily unavailable. Your balance has been refunded.',
                         order_id,
                     });
                 }
+            } else {
+                // Provider not active or not configured — keep order pending
+                console.log('[ORDER] Provider not active or configured, order stays pending');
             }
         }
 
-        // ── No provider configured ─────────────────────────────────────────────
-        await supabase.from('orders').update({
-            status: 'pending',
-            submitted_at: new Date().toISOString(),
-        }).eq('id', order_id);
+        // ── STEP 7: Get updated wallet balance to return ──────────────────────
+        const { data: wallet } = await supabase
+            .from('wallets')
+            .select('balance')
+            .eq('user_id', user.id)
+            .single();
 
         return res.status(200).json({
             success: true,
             order_id,
-            new_balance: rpcResult.new_balance,
-            warning: 'No provider configured for this service',
+            total_price: totalPrice,
+            new_balance: wallet?.balance ?? null,
         });
 
     } catch (error) {
@@ -609,101 +227,61 @@ export default async function handler(req, res) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Provider Service Validation Helper
-//
-// Returns:
-//   true   — service exists and is valid
-//   false  — service explicitly not found / invalid (provider confirmed)
-//   null   — inconclusive (network error, API unavailable, format unknown)
+// Call a provider API to place an order
 // ─────────────────────────────────────────────────────────────────────────────
-async function validateProviderService(provider, providerServiceId) {
-    try {
-        const apiConfig = getProviderApiConfig(provider);
-        if (!apiConfig) return null; // Unknown provider — skip
+async function callProviderApi(provider, orderParams) {
+    const params = new URLSearchParams({
+        key: provider.api_key,
+        action: 'add',
+        service: orderParams.service,
+        link: orderParams.link,
+        quantity: String(orderParams.quantity),
+    });
 
-        const { url, key, useJson } = apiConfig;
-        if (!key) return null; // API key not configured — skip
-
-        let response;
-        if (useJson) {
-            response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ key, action: 'services' }),
-                signal: AbortSignal.timeout(10000), // 10-second timeout
-            });
-        } else {
-            const params = new URLSearchParams({ key, action: 'services' });
-            response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: params,
-                signal: AbortSignal.timeout(10000),
-            });
-        }
-
-        if (!response.ok) return null; // Provider API error — fail open
-
-        const data = await response.json();
-        if (!Array.isArray(data)) return null; // Unexpected format — fail open
-
-        // Check if the service ID exists in the list
-        const serviceIdStr = String(providerServiceId).trim();
-        const found = data.some(s => {
-            const sid = String(s.service || s.id || '').trim();
-            return sid === serviceIdStr;
-        });
-
-        console.log(`[ORDER] Provider service validation [${provider}] service ${providerServiceId}:`, found ? 'FOUND' : 'NOT FOUND');
-        return found; // true = valid, false = not found
-
-    } catch (err) {
-        // Network timeout, parse error, etc. — fail open (do not block order)
-        console.warn(`[ORDER] Provider service validation inconclusive [${provider}]:`, err.message);
-        return null;
+    if (orderParams.comments) {
+        params.append('comments', orderParams.comments);
     }
+
+    const response = await fetch(provider.api_url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params,
+        signal: AbortSignal.timeout(30000), // 30 second timeout
+    });
+
+    if (!response.ok) {
+        throw new Error(`Provider API returned HTTP ${response.status}`);
+    }
+
+    return await response.json();
 }
 
-/**
- * Returns API config for a given provider, or null if unknown.
- */
-function getProviderApiConfig(provider) {
-    const configs = {
-        smmgen: {
-            url: process.env.SMMGEN_API_URL || 'https://smmgen.com/api/v2',
-            key: process.env.SMMGEN_API_KEY,
-            useJson: true,
-        },
-        smmcost: {
-            url: process.env.SMMCOST_API_URL || 'https://smmcost.com/api/v2',
-            key: process.env.SMMCOST_API_KEY,
-            useJson: false,
-        },
-        jbsmmpanel: {
-            url: process.env.JBSMMPANEL_API_URL || 'https://jbsmmpanel.com/api/v2',
-            key: process.env.JBSMMPANEL_API_KEY,
-            useJson: false,
-        },
-        worldofsmm: {
-            url: process.env.WORLDOFSMM_API_URL || 'https://worldofsmm.com/api/v2',
-            key: process.env.WORLDOFSMM_API_KEY,
-            useJson: false,
-        },
-        g1618: {
-            url: process.env.G1618_API_URL || 'https://g1618.com/api/v2',
-            key: process.env.G1618_API_KEY,
-            useJson: false,
-        },
-        oldsmm: {
-            url: process.env.OLDSMM_API_URL || 'https://oldsmm.com/api/v2',
-            key: process.env.OLDSMM_API_KEY,
-            useJson: false,
-        },
-        apiowner: {
-            url: process.env.APIOWNER_API_URL || 'https://apiowner.com/api/v2',
-            key: process.env.APIOWNER_API_KEY,
-            useJson: false,
-        },
-    };
-    return configs[provider.toLowerCase()] || null;
+// ─────────────────────────────────────────────────────────────────────────────
+// Handle provider failure: refund the user
+// ─────────────────────────────────────────────────────────────────────────────
+async function handleProviderFailure(supabase, orderId, userId, refundAmount, errorMessage) {
+    try {
+        // Update order to failed
+        await supabase.from('orders').update({
+            status: 'failed',
+            error_message: errorMessage,
+            status_updated_at: new Date().toISOString(),
+        }).eq('id', orderId);
+
+        // Refund via the database function
+        const { data: refundResult, error: refundError } = await supabase.rpc('process_order_refund', {
+            p_order_id: orderId,
+        });
+
+        if (refundError || !refundResult?.success) {
+            console.error('[ORDER] CRITICAL: Auto-refund failed!', {
+                orderId,
+                refundError: refundError?.message || refundResult?.message,
+            });
+        } else {
+            console.log('[ORDER] Auto-refund successful:', { orderId, amount: refundAmount });
+        }
+    } catch (err) {
+        console.error('[ORDER] CRITICAL: Refund exception:', err.message);
+    }
 }
