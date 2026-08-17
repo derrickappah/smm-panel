@@ -569,7 +569,7 @@ export default async function handler(req, res) {
         // Use atomic function to approve transaction and update balance atomically
         console.log('[MANUAL-VERIFY] Using atomic function to approve transaction and update balance');
         
-        const { data: approvalResult, error: rpcError } = await supabase.rpc('approve_deposit_transaction_universal', {
+        const { data: approvalResult, error: rpcError } = await supabase.rpc('approve_deposit_transaction_universal_v2', {
           p_transaction_id: transaction.id,
           p_payment_method: 'paystack',
           p_payment_status: 'success',

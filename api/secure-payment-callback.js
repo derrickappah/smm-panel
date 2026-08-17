@@ -370,8 +370,8 @@ export default async function handler(req, res) {
     // Amounts match - proceed with approval
     console.log(`Amount verification successful for transaction ${transaction.id}: ${gatewayAmount} ${provider}`);
 
-    // Approve the transaction using the atomic database function
-    const { data: result, error: rpcError } = await supabase.rpc('approve_deposit_transaction_universal', {
+    // Approve the transaction using the atomic database function (v2 hardened)
+    const { data: result, error: rpcError } = await supabase.rpc('approve_deposit_transaction_universal_v2', {
       p_transaction_id: transaction.id,
       p_payment_method: provider,
       p_payment_status: 'success',

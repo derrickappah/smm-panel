@@ -243,12 +243,13 @@ export default async function handler(req, res) {
       }
     }
 
-    // Call the atomic database function
+    // Call the atomic database function (v2 hardened)
     const status = paystack_status || 'success';
-    const { data: result, error: rpcError } = await supabase.rpc('approve_deposit_transaction', {
+    const { data: result, error: rpcError } = await supabase.rpc('approve_deposit_transaction_universal_v2', {
       p_transaction_id: transaction_id,
-      p_paystack_status: status,
-      p_paystack_reference: reference || null
+      p_payment_method: 'paystack',
+      p_payment_status: status,
+      p_payment_reference: reference || null
     });
 
     if (rpcError) {

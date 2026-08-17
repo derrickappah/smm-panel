@@ -135,11 +135,12 @@ export default async function handler(req, res) {
             smsSent = true;
             smsMessage = `Verification SMS sent to ${recipientPhone}`;
 
-            // Update event metadata with sms_ref
+            // Update event metadata with sms_ref while preserving cryptographic hash & salt
             await supabase.from('system_events').update({
               metadata: {
                 identifier,
-                otp_code: otpCode,
+                otp_hash: otpHash,
+                salt,
                 expires_at: expiresAt,
                 verified: false,
                 sms_ref: smsRef,

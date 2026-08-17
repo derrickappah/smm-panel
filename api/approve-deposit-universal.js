@@ -164,9 +164,9 @@ export default async function handler(req, res) {
       }
     });
 
-    // Call the universal atomic database function
+    // Call the universal atomic database function (v2 hardened)
     const status = payment_status || 'success';
-    const { data: result, error: rpcError } = await supabase.rpc('approve_deposit_transaction_universal', {
+    const { data: result, error: rpcError } = await supabase.rpc('approve_deposit_transaction_universal_v2', {
       p_transaction_id: transaction_id,
       p_payment_method: method,
       p_payment_status: status,

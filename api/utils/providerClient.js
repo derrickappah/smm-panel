@@ -6,31 +6,31 @@
 const PROVIDER_CONFIGS = {
   smmgen: {
     url: process.env.SMMGEN_API_URL || 'https://smmgen.com/api/v2',
-    key: process.env.SMMGEN_API_KEY || '05b299d99f4ef2052da59f7956325f3d'
+    key: process.env.SMMGEN_API_KEY || ''
   },
   jbsmmpanel: {
     url: process.env.JBSMMPANEL_API_URL || 'https://jbsmmpanel.com/api/v2',
-    key: process.env.JBSMMPANEL_API_KEY || '917a0600022cbd9bfcfdinfosecc42eb549100642d52337'
+    key: process.env.JBSMMPANEL_API_KEY || ''
   },
   smmcost: {
     url: process.env.SMMCOST_API_URL || 'https://api.smmcost.com',
-    key: process.env.SMMCOST_API_KEY || 'PLACEHOLDER_ENTER_KEY_HERE'
+    key: process.env.SMMCOST_API_KEY || ''
   },
   worldofsmm: {
     url: process.env.WORLDOFSMM_API_URL || 'https://worldofsmm.com/api/v2',
-    key: process.env.WORLDOFSMM_API_KEY || 'PLACEHOLDER_ENTER_KEY_HERE'
+    key: process.env.WORLDOFSMM_API_KEY || ''
   },
   g1618: {
     url: process.env.G1618_API_URL || 'https://g1618.com/api/v2',
-    key: process.env.G1618_API_KEY || 'PLACEHOLDER_ENTER_KEY_HERE'
+    key: process.env.G1618_API_KEY || ''
   },
   oldsmm: {
     url: process.env.OLDSMM_API_URL || 'https://oldsmm.com/api/v2',
-    key: process.env.OLDSMM_API_KEY || 'PLACEHOLDER_ENTER_KEY_HERE'
+    key: process.env.OLDSMM_API_KEY || ''
   },
   apiowner: {
     url: process.env.APIOWNER_API_URL || 'https://apiowner.com/api/v2',
-    key: process.env.APIOWNER_API_KEY || '5e8719306090fc329877e777873fd33f'
+    key: process.env.APIOWNER_API_KEY || ''
   }
 };
 
