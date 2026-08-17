@@ -1,4 +1,5 @@
 import { setCorsHeaders } from '../utils/corsHeaders.js';
+import { verifyAdmin } from '../utils/auth.js';
 
 const REQUEST_TIMEOUT = 30000;
 
@@ -14,6 +15,11 @@ export default async function handler(req, res) {
     }
 
     try {
+        const { isAdmin } = await verifyAdmin(req).catch(() => ({ isAdmin: false }));
+        if (!isAdmin) {
+            return res.status(403).json({ error: 'Unauthorized: Direct provider refill access restricted to admins' });
+        }
+
         const { action, order, orders, refill, refills } = req.body;
 
         const APIOWNER_API_URL = process.env.APIOWNER_API_URL || 'https://apiowner.com/api/v2';

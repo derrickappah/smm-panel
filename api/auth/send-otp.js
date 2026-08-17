@@ -73,8 +73,11 @@ export default async function handler(req, res) {
       console.error('Error logging OTP event:', insertError);
     }
 
-    // OTP code is logged server-side only — never returned in the response
-    console.log(`[OTP ONBOARDING] OTP code generated for ${identifier}: ${otpCode}`);
+    // Log OTP generation event without sensitive code
+    const maskedIdentifier = typeof identifier === 'string' && identifier.length > 4 
+      ? identifier.slice(0, 2) + '****' + identifier.slice(-2) 
+      : '***';
+    console.log(`[OTP ONBOARDING] OTP generated for identifier ${maskedIdentifier}, expires at: ${expiresAt}`);
 
     // If phone number is provided, send SMS via Moolre Gateway
     let smsSent = false;

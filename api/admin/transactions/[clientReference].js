@@ -1,4 +1,4 @@
-import { verifyAuth, getServiceRoleClient } from '../../utils/auth.js';
+import { verifyAdmin, getServiceRoleClient } from '../../utils/auth.js';
 
 /**
  * Admin Transaction Lifecycle View
@@ -13,29 +13,13 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Missing clientReference' });
     }
 
-    let user;
     try {
-        const authResult = await verifyAuth(req);
-        user = authResult.user;
-    } catch (authError) {
-        return res.status(401).json({
-            error: 'Authentication required',
-            message: authError.message
-        });
-    }
-
-        const supabase = getServiceRoleClient();
-
-        // Check if user is admin
-        const { data: profile } = await supabase
-            .from('profiles')
-            .select('is_admin')
-            .eq('id', user.id)
-            .single();
-
-        if (!profile || !profile.is_admin) {
+        const { isAdmin } = await verifyAdmin(req).catch(() => ({ isAdmin: false }));
+        if (!isAdmin) {
             return res.status(403).json({ error: 'Access denied: Admin only' });
         }
+
+        const supabase = getServiceRoleClient();
 
         // 2. Fetch full transaction details
         const { data: transaction, error: fetchError } = await supabase

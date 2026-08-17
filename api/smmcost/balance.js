@@ -1,5 +1,6 @@
 import { getCached, setCached } from '../utils/redisClient.js';
 import { setCorsHeaders } from '../utils/corsHeaders.js';
+import { verifyAdmin } from '../utils/auth.js';
 
 const REQUEST_TIMEOUT = 20000; // 20 seconds
 
@@ -16,10 +17,14 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const startTime = Date.now();
-  const cacheKey = 'smm:provider:smmcost:balance';
-
   try {
+    const { isAdmin } = await verifyAdmin(req).catch(() => ({ isAdmin: false }));
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Unauthorized: Direct provider balance access restricted to admins' });
+    }
+
+    const startTime = Date.now();
+    const cacheKey = 'smm:provider:smmcost:balance';
     const cachedBalance = await getCached(cacheKey);
     if (cachedBalance) {
       return res.status(200).json(cachedBalance);

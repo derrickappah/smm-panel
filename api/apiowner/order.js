@@ -1,4 +1,5 @@
 import { setCorsHeaders } from '../utils/corsHeaders.js';
+import { verifyAdmin } from '../utils/auth.js';
 
 const REQUEST_TIMEOUT = 30000; // 30 seconds
 
@@ -16,6 +17,11 @@ export default async function handler(req, res) {
     }
 
     try {
+        const { isAdmin } = await verifyAdmin(req).catch(() => ({ isAdmin: false }));
+        if (!isAdmin) {
+            return res.status(403).json({ error: 'Unauthorized: Direct provider access restricted to admins' });
+        }
+
         const { service, link, quantity, runs, interval, comments } = req.body;
 
         // Input validation
