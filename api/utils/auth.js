@@ -198,11 +198,15 @@ export function getServiceRoleClient() {
   let supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseKey || supabaseKey.includes('PLACEHOLDER')) {
-    supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY;
+    throw new Error(
+      'CRITICAL: SUPABASE_SERVICE_ROLE_KEY is not configured or is still a placeholder. ' +
+      'Set it in your Vercel Environment Variables (Settings → Environment Variables). ' +
+      'Get the key from your Supabase dashboard (Settings → API → service_role key).'
+    );
   }
 
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Supabase credentials not configured');
+  if (!supabaseUrl) {
+    throw new Error('SUPABASE_URL is not configured');
   }
 
   return createClient(supabaseUrl, supabaseKey, {

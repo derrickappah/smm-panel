@@ -7,77 +7,26 @@
  * Route: POST /api/admin/update-reward-limit
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { verifyAdmin, getServiceRoleClient } from '../utils/auth.js';
+import { setCorsHeaders } from '../utils/corsHeaders.js';
 
 export default async function handler(req, res) {
-    // Enable CORS
-    const origin = req.headers.origin;
-    const allowedOrigins = [
-        'https://boostupgh.com',
-        'https://www.boostupgh.com',
-        'http://localhost:3000'
-    ];
+    setCorsHeaders(req, res);
 
-    if (allowedOrigins.includes(origin)) {
-        res.setHeader('Access-Control-Allow-Origin', origin);
-    } else {
-        res.setHeader('Access-Control-Allow-Origin', 'https://boostupgh.com');
-    }
-
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-
-    // Handle preflight requests
-    if (req.method === 'OPTIONS') {
-        return res.status(200).end();
-    }
-
-    // Only allow POST requests
-    if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method not allowed' });
-    }
+    if (req.method === 'OPTIONS') return res.status(200).end();
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
     try {
-        // Get authorization token
-        const authHeader = req.headers.authorization;
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            return res.status(401).json({ error: 'Unauthorized - No token provided' });
-        }
-
-        const token = authHeader.replace('Bearer ', '');
-
-        // Initialize Supabase client with user's token
-        const SUPABASE_URL = process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL;
-        const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY;
-
-        if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-            return res.status(500).json({ error: 'Server configuration error' });
-        }
-
-        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-            global: {
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
-            }
-        });
-
-        // Verify user authentication and admin role
-        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-        if (authError || !user) {
-            return res.status(401).json({ error: 'Unauthorized - Invalid token' });
-        }
-
-        // Check if user is admin
-        const { data: profile, error: profileError } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', user.id)
-            .single();
-
-        if (profileError || !profile || profile.role !== 'admin') {
-            return res.status(403).json({ error: 'Forbidden - Admin access required' });
+        // Verify admin access using shared auth utility
+        let user, supabase;
+        try {
+            const authResult = await verifyAdmin(req);
+            user = authResult.user;
+            supabase = authResult.supabase;
+        } catch (authError) {
+            return res.status(authError.message.includes('Admin') ? 403 : 401).json({
+                error: authError.message
+            });
         }
 
         // Get and validate request body

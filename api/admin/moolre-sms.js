@@ -1,13 +1,12 @@
 import { verifyAdmin, getServiceRoleClient } from '../utils/auth.js';
+import { setCorsHeaders } from '../utils/corsHeaders.js';
 
 /**
  * Serverless API endpoint for Moolre SMS Administration
  * Handles SMS credit balance, Sender ID list & status, Sender ID registration, and settings.
  */
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  setCorsHeaders(req, res);
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();

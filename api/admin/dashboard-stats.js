@@ -1,5 +1,6 @@
 import { verifyAdmin } from '../utils/auth.js';
 import { getCached, setCached } from '../utils/redisClient.js';
+import { setCorsHeaders } from '../utils/corsHeaders.js';
 
 /**
  * Serverless API endpoint for Admin Dashboard Stats with Upstash Redis Caching
@@ -7,9 +8,7 @@ import { getCached, setCached } from '../utils/redisClient.js';
  */
 export default async function handler(req, res) {
   // CORS setup
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  setCorsHeaders(req, res);
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();

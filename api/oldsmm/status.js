@@ -1,12 +1,10 @@
 // Vercel Serverless Function for OldSMM Status
+import { setCorsHeaders } from '../utils/corsHeaders.js';
 
 const REQUEST_TIMEOUT = 10000; // 10 seconds for status check
 
 export default async function handler(req, res) {
-    // Enable CORS
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    setCorsHeaders(req, res);
 
     // Handle preflight requests
     if (req.method === 'OPTIONS') {

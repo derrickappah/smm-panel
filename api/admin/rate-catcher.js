@@ -1,6 +1,7 @@
 import { verifyAdmin, getServiceRoleClient } from '../utils/auth.js';
 import { fetchProviderOrderStatus } from '../utils/providers.js';
 import { getCached, setCached } from '../utils/redisClient.js';
+import { setCorsHeaders } from '../utils/corsHeaders.js';
 
 // Helper to fetch services list from any SMM provider API (with Upstash Redis caching)
 async function fetchProviderServices(provider) {
@@ -77,9 +78,7 @@ async function fetchProviderServices(provider) {
 
 export default async function handler(req, res) {
     // Enable CORS
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    setCorsHeaders(req, res);
 
     if (req.method === 'OPTIONS') return res.status(200).end();
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });

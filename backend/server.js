@@ -31,7 +31,10 @@ const CACHE_TTL = {
 
 // Middleware
 app.use(compression({ level: 6, threshold: 1024 })); // Compress responses > 1KB
-app.use(cors());
+app.use(cors({
+  origin: ['https://boostupgh.com', 'https://www.boostupgh.com', 'http://localhost:3000'],
+  credentials: true
+}));
 app.use(express.json());
 
 // Rate limiting

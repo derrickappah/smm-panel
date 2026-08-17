@@ -22,6 +22,7 @@
 
 import * as crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
+import { setCorsHeaders } from './utils/corsHeaders.js';
 
 // Payment provider configurations
 const PAYMENT_CONFIGS = {
@@ -198,9 +199,7 @@ async function findTransactionByReference(supabase, provider, reference, amount 
 
 export default async function handler(req, res) {
   // Enable CORS but restrict methods
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Webhook-Signature');
+  setCorsHeaders(req, res);
 
   // Handle preflight requests
   if (req.method === 'OPTIONS') {

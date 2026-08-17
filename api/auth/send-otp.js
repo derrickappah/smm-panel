@@ -1,4 +1,6 @@
 import { getServiceRoleClient } from '../utils/auth.js';
+import { setCorsHeaders } from '../utils/corsHeaders.js';
+import { redis } from '../utils/redisClient.js';
 
 // Format phone number for Moolre SMS Gateway (e.g., converts 024XXXXXXX to 23324XXXXXXX)
 function formatPhoneForMoolre(phone) {
@@ -10,9 +12,7 @@ function formatPhoneForMoolre(phone) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  setCorsHeaders(req, res);
 
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -23,6 +23,25 @@ export default async function handler(req, res) {
 
     if (!identifier) {
       return res.status(400).json({ error: 'Email or phone number is required to send OTP' });
+    }
+
+    // SECURITY: Rate limit OTP sends — max 3 per identifier per 10 minutes
+    if (redis) {
+      try {
+        const rateLimitKey = `smm:otp:send:${identifier}`;
+        const currentCount = await redis.incr(rateLimitKey);
+        if (currentCount === 1) {
+          await redis.expire(rateLimitKey, 600); // 10 minute window
+        }
+        if (currentCount > 3) {
+          console.warn(`[OTP RATE LIMIT] Blocked OTP send for ${identifier} (${currentCount} attempts)`);
+          return res.status(429).json({
+            error: 'Too many OTP requests. Please wait 10 minutes before trying again.'
+          });
+        }
+      } catch (redisErr) {
+        console.error('[OTP RATE LIMIT] Redis error, proceeding without rate limit:', redisErr.message);
+      }
     }
 
     // Generate random 6-digit numeric OTP code
@@ -49,6 +68,7 @@ export default async function handler(req, res) {
       console.error('Error logging OTP event:', insertError);
     }
 
+    // OTP code is logged server-side only — never returned in the response
     console.log(`[OTP ONBOARDING] OTP code generated for ${identifier}: ${otpCode}`);
 
     // If phone number is provided, send SMS via Moolre Gateway
@@ -132,15 +152,14 @@ export default async function handler(req, res) {
       }
     }
 
+    // SECURITY: Never return OTP code in the response — use server logs for debugging
     return res.status(200).json({
       success: true,
-      message: smsSent ? smsMessage : `OTP generated for ${identifier}. ${smsMessage}`,
-      sms_sent: smsSent,
-      demo_otp: (process.env.NODE_ENV !== 'production' || !smsSent) ? otpCode : undefined
+      message: smsSent ? smsMessage : `OTP sent to ${identifier}. Check your SMS.`,
+      sms_sent: smsSent
     });
   } catch (error) {
     console.error('Error sending OTP:', error);
     return res.status(500).json({ error: 'Failed to send OTP verification code' });
   }
 }
-

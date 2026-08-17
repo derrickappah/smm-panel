@@ -16,6 +16,7 @@ import {
     mapOldSMMStatus,
     mapApiOwnerStatus
 } from './utils/statusMapping.js';
+import { setCorsHeaders } from './utils/corsHeaders.js';
 
 /**
  * Handle automatic refund for an order using atomic RPC
@@ -100,9 +101,7 @@ const REQUEST_TIMEOUT = 15000; // 15 seconds per provider call
 
 export default async function handler(req, res) {
     // Enable CORS
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    setCorsHeaders(req, res);
     
     // Add Private Caching (Browser-only) - Cache for 60s
     // Using 'private' prevents CDN caching and ensures data isn't leaked between users.

@@ -11,6 +11,7 @@
 
 import { verifyAdmin, getServiceRoleClient } from './utils/auth.js';
 import { createClient } from '@supabase/supabase-js';
+import { setCorsHeaders } from './utils/corsHeaders.js';
 
 /**
  * Get channel name from channel code
@@ -66,9 +67,7 @@ function inferChannelFromPhone(phoneNumber) {
 
 export default async function handler(req, res) {
   // Enable CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  setCorsHeaders(req, res);
 
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
