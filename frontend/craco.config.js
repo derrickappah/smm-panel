@@ -84,31 +84,24 @@ const webpackConfig = {
 
       // Production optimizations
       if (isProduction) {
-        // Aggressive tree shaking and optimization
+        // Optimization configuration
         webpackConfig.optimization = {
           ...webpackConfig.optimization,
-          // Enable aggressive tree shaking
           usedExports: true,
-          sideEffects: false, // Assume no side effects for better tree shaking
-          // Module concatenation for better tree shaking
           concatenateModules: true,
-          // Minimize in production with terser
           minimize: true,
           minimizer: [
             ...(webpackConfig.optimization.minimizer || []),
-            // Terser plugin is already included by CRA
           ],
-          // Optimize chunk splitting
+          // Optimize chunk splitting cleanly without aggressive maxSize fragmentation
           splitChunks: {
             chunks: 'all',
-            minSize: 20000, // Only split chunks larger than 20KB
-            maxSize: 244000, // Try to keep chunks under 244KB
             cacheGroups: {
               default: false,
               vendors: false,
-              // React and React-DOM in separate chunk (highest priority)
+              // React ecosystem chunk (highest priority)
               react: {
-                name: 'react',
+                name: 'react-vendor',
                 test: /[\\/]node_modules[\\/](react|react-dom|react-router|react-router-dom|@tanstack)[\\/]/,
                 chunks: 'all',
                 priority: 40,
@@ -117,24 +110,24 @@ const webpackConfig = {
               },
               // Radix UI components
               radix: {
-                name: 'radix',
+                name: 'radix-vendor',
                 test: /[\\/]node_modules[\\/]@radix-ui[\\/]/,
                 chunks: 'all',
                 priority: 30,
                 reuseExistingChunk: true,
                 enforce: true,
               },
-              // Supabase and other large libraries
+              // Supabase and network libraries
               supabase: {
-                name: 'supabase',
+                name: 'supabase-vendor',
                 test: /[\\/]node_modules[\\/](@supabase|axios)[\\/]/,
                 chunks: 'all',
                 priority: 25,
                 reuseExistingChunk: true,
               },
-              // Vendor chunk for other node_modules
+              // Other node_modules
               vendor: {
-                name: 'vendor',
+                name: 'vendor-bundle',
                 chunks: 'all',
                 test: /[\\/]node_modules[\\/]/,
                 priority: 20,
@@ -143,12 +136,11 @@ const webpackConfig = {
               },
               // Common code shared across multiple chunks
               common: {
-                name: 'common',
+                name: 'common-bundle',
                 minChunks: 2,
                 chunks: 'all',
                 priority: 10,
                 reuseExistingChunk: true,
-                enforce: true,
               },
             },
           },
