@@ -9,6 +9,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.84.0",
     "@upstash/redis": "^1.38.0",
+    "exceljs": "^4.4.0",
     "jsonwebtoken": "^9.0.3"
   }
 }

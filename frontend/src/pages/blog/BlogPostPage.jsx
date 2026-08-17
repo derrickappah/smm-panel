@@ -1,4 +1,5 @@
 import React from 'react';
+import DOMPurify from 'dompurify';
 import { useParams, useNavigate } from 'react-router-dom';
 import SEO from '@/components/SEO';
 import Navbar from '@/components/Navbar';
@@ -283,7 +284,7 @@ const BlogPostPage = ({ user, onLogout }) => {
 
         <div
           className="prose prose-lg max-w-none"
-          dangerouslySetInnerHTML={{ __html: post.content }}
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(post.content) }}
         />
 
         <div className="mt-12 pt-8 border-t border-gray-200">

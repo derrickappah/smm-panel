@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import DOMPurify from 'dompurify';
 import { useServiceNotifications } from '@/hooks/useServiceNotifications';
 import { Button } from '@/components/ui/button';
 import { Bell, AlertCircle, CheckCircle2, ShieldCheck, Lightbulb, PlayCircle, X } from 'lucide-react';
@@ -118,7 +119,7 @@ const PremiumNotificationPopup = ({ user }) => {
             <div 
               className="text-base font-bold text-gray-900 leading-tight whitespace-pre-wrap"
               dangerouslySetInnerHTML={{ 
-                __html: currentNotification.message.replace(/\*\*(.*?)\*\*/g, '<span class="text-indigo-600">$1</span>') 
+                __html: DOMPurify.sanitize((currentNotification.message || '').replace(/\*\*(.*?)\*\*/g, '<span class="text-indigo-600">$1</span>')) 
               }}
             />
           </div>
@@ -138,7 +139,7 @@ const PremiumNotificationPopup = ({ user }) => {
                   <li key={idx} className="flex gap-2 text-[12px] text-gray-700 font-medium leading-snug">
                     <span className="text-indigo-400 font-bold">{idx + 1}.</span>
                     <span dangerouslySetInnerHTML={{ 
-                      __html: step.replace(/\[(.*?)\]/g, '<span class="text-indigo-600 font-bold">$1</span>') 
+                      __html: DOMPurify.sanitize((step || '').replace(/\[(.*?)\]/g, '<span class="text-indigo-600 font-bold">$1</span>')) 
                     }} />
                   </li>
                 ))}

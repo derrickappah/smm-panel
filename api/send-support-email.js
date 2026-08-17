@@ -1,6 +1,16 @@
 // Vercel Serverless Function to send support response emails
 // Configure with your email service (Resend, SendGrid, etc.)
 
+function escapeHtml(str) {
+  if (!str || typeof str !== 'string') return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -25,6 +35,11 @@ export default async function handler(req, res) {
         error: 'Missing required fields: to, subject, message' 
       });
     }
+
+    const safeUserName = escapeHtml(userName || 'Valued Customer');
+    const safeMessage = escapeHtml(message);
+    const safeTicketId = escapeHtml(ticketId || '');
+    const safeSubject = escapeHtml(subject);
 
     // For now, we'll log the email (in production, integrate with email service)
     // You can integrate with:
@@ -53,8 +68,8 @@ export default async function handler(req, res) {
     //   body: JSON.stringify({
     //     from: 'support@boostupgh.com',
     //     to: to,
-    //     subject: subject,
-    //     html: `<p>Hello ${userName},</p><p>${message}</p><p>Ticket ID: ${ticketId}</p>`
+    //     subject: safeSubject,
+    //     html: `<p>Hello ${safeUserName},</p><p>${safeMessage}</p><p>Ticket ID: ${safeTicketId}</p>`
     //   })
     // });
 
