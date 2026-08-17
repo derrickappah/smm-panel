@@ -25,6 +25,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { verifyAuth } from './utils/auth.js';
 import { setCorsHeaders } from './utils/corsHeaders.js';
+import { rateLimit } from './middleware/rateLimit.js';
 
 export default async function handler(req, res) {
   // Enable CORS
@@ -38,6 +39,12 @@ export default async function handler(req, res) {
   // Only allow GET requests
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Rate Limiting Protection
+  const rateLimitResult = await rateLimit(req, res);
+  if (rateLimitResult.blocked) {
+    return res.status(429).json({ error: rateLimitResult.message });
   }
 
   // OPTIMIZATION: Enable Edge Caching

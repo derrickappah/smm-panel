@@ -32,12 +32,20 @@ export default async function handler(req, res) {
         const headers = ['Name', 'Email', 'Phone', 'Role', 'Balance (₵)', 'Spend (₵)', 'Deposits', 'Orders', 'Joined Date', 'Last Active'];
         const csvRows = [headers.join(',')];
 
-        for (const u of data) {
+            // Sanitize against CSV/Formula injection (Excel DDE attacks)
+            const sanitizeCell = (val) => {
+                const str = String(val ?? '');
+                if (/^[=\+\-@\t\r]/.test(str)) {
+                    return `'${str}`;
+                }
+                return str;
+            };
+
             const row = [
-                u.name || 'N/A',
-                u.email || 'N/A',
-                u.phone_number || 'N/A',
-                u.role || 'user',
+                sanitizeCell(u.name || 'N/A'),
+                sanitizeCell(u.email || 'N/A'),
+                sanitizeCell(u.phone_number || 'N/A'),
+                sanitizeCell(u.role || 'user'),
                 u.balance !== null && u.balance !== undefined ? parseFloat(u.balance).toFixed(2) : '0.00',
                 u.total_spend !== null && u.total_spend !== undefined ? parseFloat(u.total_spend).toFixed(2) : '0.00',
                 u.approved_deposits_count || 0,
@@ -48,7 +56,6 @@ export default async function handler(req, res) {
             // Escape double quotes and wrap in quotes to prevent CSV parsing injection or syntax bugs
             const escapedRow = row.map(cell => `"${String(cell).replace(/"/g, '""')}"`);
             csvRows.push(escapedRow.join(','));
-        }
 
         const csvContent = csvRows.join('\n');
 

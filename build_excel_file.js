@@ -66,6 +66,14 @@ async function main() {
   // Batch insert rows for maximum speed
   console.log('Inserting rows into Excel worksheet...');
   
+  const sanitizeCell = (val) => {
+    const str = String(val ?? '');
+    if (/^[=\+\-@\t\r]/.test(str)) {
+      return `'${str}`;
+    }
+    return str;
+  };
+
   for (let i = 0; i < usersList.length; i++) {
     const u = usersList[i];
     let formattedPhone = u.phone_number || 'N/A';
@@ -83,10 +91,10 @@ async function main() {
 
     worksheet.addRow({
       index: i + 1,
-      name: u.name || 'N/A',
-      phone_number: formattedPhone,
-      email: u.email || 'N/A',
-      role: u.role || 'user',
+      name: sanitizeCell(u.name || 'N/A'),
+      phone_number: sanitizeCell(formattedPhone),
+      email: sanitizeCell(u.email || 'N/A'),
+      role: sanitizeCell(u.role || 'user'),
       created_at: formattedDate,
       id: u.id || ''
     });

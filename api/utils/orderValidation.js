@@ -31,12 +31,45 @@ export function cleanUrl(rawInput) {
     if (!match) return null;
 
     // Strip trailing punctuation that is unlikely to be part of the URL
-    let url = match[0].replace(/[.,;!?)\]]+$/, '');
+    let urlString = match[0].replace(/[.,;!?)\]]+$/, '');
 
-    // Basic sanity check: must have a host
+    // SSRF & Sanity Check: Protocol, Host, and Private IP blocks
     try {
-        new URL(url);
-        return url;
+        const parsed = new URL(urlString);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+            return null;
+        }
+
+        const hostname = parsed.hostname.toLowerCase();
+        
+        // Block localhost and internal names
+        if (hostname === 'localhost' || hostname.endsWith('.local') || hostname.endsWith('.internal')) {
+            return null;
+        }
+
+        // Block AWS / GCP / Azure metadata IP
+        if (hostname === '169.254.169.254' || hostname === 'metadata.google.internal') {
+            return null;
+        }
+
+        // Block IPv4 loopback, private ranges, and 0.0.0.0
+        if (
+            hostname === '0.0.0.0' ||
+            hostname.startsWith('127.') ||
+            hostname.startsWith('10.') ||
+            hostname.startsWith('192.168.') ||
+            hostname.startsWith('169.254.') ||
+            /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname)
+        ) {
+            return null;
+        }
+
+        // Block IPv6 loopback
+        if (hostname === '::1' || hostname === '[::1]') {
+            return null;
+        }
+
+        return urlString;
     } catch {
         return null;
     }
