@@ -1,7 +1,7 @@
 {
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/((?!static/|favicon.ico|manifest.json|logo.*\\.png|sw.js|.*\\.(?:jpg|jpeg|gif|png|webp|svg|woff|woff2|ttf|otf|css|js)).*)",
       "destination": "/index.html"
     }
   ],
@@ -59,7 +59,15 @@
       "headers": [
         {
           "key": "Cache-Control",
-          "value": "public, max-age=0, must-revalidate"
+          "value": "no-cache, no-store, max-age=0, must-revalidate"
+        },
+        {
+          "key": "Pragma",
+          "value": "no-cache"
+        },
+        {
+          "key": "Expires",
+          "value": "0"
         },
         {
           "key": "X-Content-Type-Options",
@@ -70,6 +78,18 @@
     {
       "source": "/(.*)",
       "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, max-age=0, must-revalidate"
+        },
+        {
+          "key": "Pragma",
+          "value": "no-cache"
+        },
+        {
+          "key": "Expires",
+          "value": "0"
+        },
         {
           "key": "X-DNS-Prefetch-Control",
           "value": "on"
@@ -90,4 +110,3 @@
     }
   ]
 }
-
