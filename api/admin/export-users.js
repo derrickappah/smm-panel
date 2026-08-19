@@ -103,35 +103,35 @@ export default async function handler(req, res) {
       });
     }
 
-    // Parse requested limit (default 10,000, max 100,000)
-    let maxToFetch = 10000;
-    if (exportLimit === 'all' || exportLimit === 0 || exportLimit === '0') {
-      const { count: totalMatchCount } = await buildProfilesQuery().limit(1);
-      maxToFetch = Math.min(totalMatchCount || 100000, 100000);
-    } else {
-      maxToFetch = Math.min(parseInt(exportLimit, 10) || 10000, 100000);
+    // Always fetch ALL matching records from the database
+    const { count: totalMatchCount, error: countErr } = await buildProfilesQuery().limit(1);
+    if (countErr) {
+      console.error('Count query error:', countErr);
+      return res.status(500).json({ error: 'Failed to count matching users', details: countErr.message });
     }
 
+    const totalToFetch = totalMatchCount || 0;
     const BATCH_SIZE = 1000;
+    const CONCURRENCY = 8; // 8 parallel requests per step (8,000 items per roundtrip)
     let allUsers = [];
-    let from = 0;
-    let hasMore = true;
 
-    while (hasMore && allUsers.length < maxToFetch) {
-      const to = Math.min(from + BATCH_SIZE - 1, maxToFetch - 1);
-      const { data: pageData, error: pageErr } = await buildProfilesQuery().range(from, to);
-
-      if (pageErr) {
-        console.warn(`Export batch warning at offset ${from}:`, pageErr.message);
-        break; // Stop loop and export whatever has been collected
+    for (let offset = 0; offset < totalToFetch; offset += BATCH_SIZE * CONCURRENCY) {
+      const promises = [];
+      for (let c = 0; c < CONCURRENCY; c++) {
+        const pageFrom = offset + (c * BATCH_SIZE);
+        if (pageFrom >= totalToFetch) break;
+        const pageTo = Math.min(pageFrom + BATCH_SIZE - 1, totalToFetch - 1);
+        promises.push(buildProfilesQuery().range(pageFrom, pageTo));
       }
 
-      if (pageData && pageData.length > 0) {
-        allUsers = allUsers.concat(pageData);
-        hasMore = pageData.length === (to - from + 1) && allUsers.length < maxToFetch;
-        from += pageData.length;
-      } else {
-        hasMore = false;
+      const results = await Promise.all(promises);
+      for (const resBatch of results) {
+        if (resBatch.error) {
+          console.warn('Batch fetch warning:', resBatch.error.message);
+        }
+        if (resBatch.data && resBatch.data.length > 0) {
+          allUsers = allUsers.concat(resBatch.data);
+        }
       }
     }
 
