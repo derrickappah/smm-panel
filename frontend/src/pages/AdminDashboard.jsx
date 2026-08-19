@@ -9,7 +9,7 @@ import {
   Users, ShoppingCart, DollarSign, Package, Wallet, Receipt,
   MessageSquare, UserPlus, RefreshCw, BarChart3, Menu, X, LayoutDashboard, Tag,
   ChevronLeft, ChevronRight, FileText, Server, HelpCircle, CreditCard, Scale, Bell, Video,
-  Gift, Settings, Layers, Search
+  Gift, Settings, Layers, Search, Download
 } from 'lucide-react';
 import { useReferralStats } from '@/hooks/useAdminReferrals';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -20,6 +20,7 @@ const AdminStats = lazy(() => import('@/pages/admin/AdminStats'));
 const AdminAnalytics = lazy(() => import('@/pages/admin/AdminAnalytics'));
 const AdminUsers = lazy(() => import('@/pages/admin/AdminUsers'));
 const AdminUserSearch = lazy(() => import('@/pages/admin/AdminUserSearch'));
+const AdminUserExport = lazy(() => import('@/pages/admin/AdminUserExport'));
 const AdminOrders = lazy(() => import('@/pages/admin/AdminOrders'));
 const AdminOrderSearch = lazy(() => import('@/pages/admin/AdminOrderSearch'));
 const AdminDeposits = lazy(() => import('@/pages/admin/AdminDeposits'));
@@ -88,6 +89,8 @@ const AdminDashboard = memo(({ user, onLogout }) => {
         'users': 'users',
         'user-search': 'user-search',
         'users/search': 'user-search',
+        'export-users': 'export-users',
+        'users/export': 'export-users',
         'transactions': 'transactions',
         'support': 'support',
         'balance': 'balance',
@@ -331,6 +334,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     'payment-methods': 'Payment Methods',
     users: 'Users',
     'user-search': 'User Search',
+    'export-users': 'Export Users',
     transactions: 'Transactions',
     support: 'Support',
     balance: 'Balance Check',
@@ -365,6 +369,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     { id: 'payment-methods', label: 'Payment Methods', icon: Wallet },
     { id: 'users', label: 'Users', icon: Users },
     { id: 'user-search', label: 'User Search', icon: Search },
+    { id: 'export-users', label: 'Export Users', icon: Download },
     { id: 'transactions', label: 'Transactions', icon: Receipt },
     { id: 'support', label: 'Support', icon: MessageSquare, badge: stats.open_tickets },
     { id: 'balance', label: 'Balance', icon: Wallet },
@@ -770,6 +775,13 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                 <TabsContent value="user-search" className="lg:mt-0 w-full max-w-full">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminUserSearch />
+                  </Suspense>
+                </TabsContent>
+
+                {/* Export Users Section */}
+                <TabsContent value="export-users" className="lg:mt-0 w-full max-w-full">
+                  <Suspense fallback={<ComponentLoader />}>
+                    <AdminUserExport />
                   </Suspense>
                 </TabsContent>
 

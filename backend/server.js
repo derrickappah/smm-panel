@@ -1229,6 +1229,17 @@ app.post('/api/admin/user-details-full', async (req, res) => {
   }
 });
 
+// Admin Advanced User Export Server Action
+app.post('/api/admin/export-users', async (req, res) => {
+  try {
+    const handler = (await import('../api/admin/export-users.js')).default;
+    await handler(req, res);
+  } catch (error) {
+    console.error('Error in /api/admin/export-users endpoint:', error);
+    res.status(500).json({ error: 'Server action failed', message: error.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 SMM Proxy Server running on port ${PORT}`);
 });

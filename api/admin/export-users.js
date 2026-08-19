@@ -1,80 +1,277 @@
-import { verifyAdmin } from '../utils/auth.js';
+/**
+ * Advanced Admin User Export Server Action Endpoint
+ * 
+ * Path: /api/admin/export-users
+ * Description: Server action for filtering and exporting users to CSV, JSON, or Excel with custom column selection, date ranges, and live preview count.
+ */
+
+import { verifyAdmin, getServiceRoleClient } from '../utils/auth.js';
 import zlib from 'zlib';
-import { setCorsHeaders } from '../utils/corsHeaders.js';
 
 export default async function handler(req, res) {
-    // Enable CORS
-    setCorsHeaders(req, res);
+  // CORS Headers
+  const origin = req.headers.origin;
+  const allowedOrigins = [
+    'https://boostupgh.com',
+    'https://www.boostupgh.com',
+    'http://localhost:3000'
+  ];
 
-    if (req.method === 'OPTIONS') return res.status(200).end();
-    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', 'https://boostupgh.com');
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
 
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  try {
+    // 1. Verify caller is an admin
+    let authResult;
     try {
-        // 1. Verify Admin access
-        const { supabase, isAdmin } = await verifyAdmin(req);
-        if (!isAdmin) return res.status(403).json({ error: 'Unauthorized' });
-
-        const { segment = 'all', search = '' } = req.body;
-
-        // Fetch ALL users in this segment (limit 200,000 for full export)
-        const { data, error } = await supabase.rpc('get_users_by_segment_json', {
-            p_segment: segment,
-            p_search: search,
-            p_limit: 200000,
-            p_offset: 0,
-            p_sort_field: 'created_at',
-            p_sort_order: 'desc'
-        });
-
-        if (error) throw error;
-
-        // Generate CSV content
-        const headers = ['Name', 'Email', 'Phone', 'Role', 'Balance (₵)', 'Spend (₵)', 'Deposits', 'Orders', 'Joined Date', 'Last Active'];
-        const csvRows = [headers.join(',')];
-
-        // Sanitize against CSV/Formula injection (Excel DDE attacks)
-        const sanitizeCell = (val) => {
-            const str = String(val ?? '');
-            if (/^[=\+\-@\t\r]/.test(str)) {
-                return `'${str}`;
-            }
-            return str;
-        };
-
-        const usersList = Array.isArray(data) ? data : (data?.users || []);
-        for (const u of usersList) {
-            const row = [
-                sanitizeCell(u.name || u.full_name || 'N/A'),
-                sanitizeCell(u.email || 'N/A'),
-                sanitizeCell(u.phone_number || 'N/A'),
-                sanitizeCell(u.role || 'user'),
-                u.balance !== null && u.balance !== undefined ? parseFloat(u.balance).toFixed(2) : '0.00',
-                u.total_spend !== null && u.total_spend !== undefined ? parseFloat(u.total_spend).toFixed(2) : '0.00',
-                u.approved_deposits_count || 0,
-                u.total_orders_count || 0,
-                u.created_at ? new Date(u.created_at).toLocaleDateString() : 'N/A',
-                u.last_active ? new Date(u.last_active).toLocaleString() : 'Never'
-            ];
-            // Escape double quotes and wrap in quotes to prevent CSV parsing injection or syntax bugs
-            const escapedRow = row.map(cell => `"${String(cell).replace(/"/g, '""')}"`);
-            csvRows.push(escapedRow.join(','));
-        }
-
-        const csvContent = csvRows.join('\n');
-
-        // Compress CSV using native Gzip (bypasses Vercel response payload limits)
-        const gzipped = zlib.gzipSync(Buffer.from(csvContent, 'utf-8'));
-
-        res.setHeader('Content-Encoding', 'gzip');
-        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-        res.setHeader('Content-Disposition', `attachment; filename=users_${segment}_export.csv`);
-        
-        return res.status(200).send(gzipped);
-
-    } catch (error) {
-        console.error('[EXPORT API ERROR]:', error);
-        return res.status(error.status || 500).json({
-            error: error.message || 'Internal server error'
-        });
+      authResult = await verifyAdmin(req);
+    } catch (authError) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: authError.message
+      });
     }
+
+    const body = req.method === 'POST' ? req.body : req.query;
+    const {
+      startDate,
+      endDate,
+      dateField = 'created_at', // 'created_at' | 'last_seen_at'
+      roleFilter = 'all',
+      balanceFilter = 'all', // 'all' | 'positive' | 'zero'
+      banFilter = 'all', // 'all' | 'active' | 'banned'
+      activityFilter = 'all', // 'all' | 'active_30d' | 'inactive_30d'
+      depositFilter = 'all', // 'all' | 'has_deposited' | 'no_deposits'
+      exportFormat = 'csv', // 'csv' | 'json' | 'excel'
+      selectedColumns = ['name', 'email', 'phone_number', 'role', 'balance', 'total_spend', 'total_orders', 'created_at', 'last_seen_at'],
+      previewCountOnly = false
+    } = body;
+
+    let supabase;
+    try {
+      supabase = getServiceRoleClient();
+    } catch (e) {
+      supabase = authResult.supabase;
+    }
+
+    // Build Profiles Query
+    let query = supabase.from('profiles').select('*', { count: 'exact' });
+
+    // Date Range Filter
+    if (startDate) {
+      const startIso = new Date(startDate).toISOString();
+      query = query.gte(dateField, startIso);
+    }
+    if (endDate) {
+      const endIso = new Date(endDate + 'T23:59:59.999Z').toISOString();
+      query = query.lte(dateField, endIso);
+    }
+
+    // Role Filter
+    if (roleFilter && roleFilter !== 'all') {
+      query = query.eq('role', roleFilter);
+    }
+
+    // Balance Filter
+    if (balanceFilter === 'positive') {
+      query = query.gt('balance', 0);
+    } else if (balanceFilter === 'zero') {
+      query = query.or('balance.eq.0,balance.is.null');
+    }
+
+    // Activity Filter
+    if (activityFilter === 'active_30d') {
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      query = query.gte('last_seen_at', thirtyDaysAgo);
+    } else if (activityFilter === 'inactive_30d') {
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      query = query.or(`last_seen_at.lt.${thirtyDaysAgo},last_seen_at.is.null`);
+    }
+
+    // Ordering
+    query = query.order('created_at', { ascending: false });
+
+    // If only previewing match count
+    if (previewCountOnly) {
+      const { count, error: countErr } = await query.limit(1);
+      if (countErr) throw countErr;
+      return res.status(200).json({
+        success: true,
+        count: count || 0
+      });
+    }
+
+    // Limit to maximum 100,000 for server action export
+    query = query.limit(100000);
+    const { data: users, error: fetchErr } = await query;
+
+    if (fetchErr) {
+      console.error('Error fetching users for export:', fetchErr);
+      return res.status(500).json({ error: 'Failed to fetch users from database', details: fetchErr.message });
+    }
+
+    let filteredUsers = users || [];
+
+    // Filter by Banned status if specified
+    if (banFilter && banFilter !== 'all') {
+      const { data: bannedList } = await supabase.from('banned_users').select('user_id');
+      const bannedUserIds = new Set((bannedList || []).map(b => b.user_id));
+
+      if (banFilter === 'banned') {
+        filteredUsers = filteredUsers.filter(u => bannedUserIds.has(u.id));
+      } else if (banFilter === 'active') {
+        filteredUsers = filteredUsers.filter(u => !bannedUserIds.has(u.id));
+      }
+    }
+
+    // Batch fetch Orders & Deposits stats for selected users
+    const userIds = filteredUsers.map(u => u.id);
+    const ordersMap = new Map();
+    const depositsMap = new Map();
+
+    if (userIds.length > 0) {
+      const [ordersRes, depositsRes] = await Promise.all([
+        supabase.from('orders').select('user_id, total_cost, status').in('user_id', userIds),
+        supabase.from('transactions').select('user_id, amount, status').eq('type', 'deposit').in('user_id', userIds)
+      ]);
+
+      (ordersRes.data || []).forEach(o => {
+        if (!ordersMap.has(o.user_id)) ordersMap.set(o.user_id, { count: 0, totalSpent: 0 });
+        const entry = ordersMap.get(o.user_id);
+        entry.count += 1;
+        if (o.status !== 'canceled' && o.status !== 'refunded') {
+          entry.totalSpent += Number(o.total_cost || 0);
+        }
+      });
+
+      (depositsRes.data || []).forEach(d => {
+        if (!depositsMap.has(d.user_id)) depositsMap.set(d.user_id, { count: 0, totalDeposited: 0 });
+        const entry = depositsMap.get(d.user_id);
+        entry.count += 1;
+        if (d.status === 'approved' || d.status === 'completed') {
+          entry.totalDeposited += Number(d.amount || 0);
+        }
+      });
+    }
+
+    // Filter by Deposit Status if specified
+    if (depositFilter === 'has_deposited') {
+      filteredUsers = filteredUsers.filter(u => (depositsMap.get(u.id)?.totalDeposited || 0) > 0);
+    } else if (depositFilter === 'no_deposits') {
+      filteredUsers = filteredUsers.filter(u => (depositsMap.get(u.id)?.totalDeposited || 0) === 0);
+    }
+
+    // Map column keys to human labels
+    const columnLabels = {
+      id: 'User ID',
+      name: 'Full Name',
+      email: 'Email Address',
+      phone_number: 'Phone Number',
+      role: 'Role',
+      balance: 'Balance (GHS ₵)',
+      referral_code: 'Referral Code',
+      referred_by: 'Referred By',
+      total_spend: 'Total Spent (GHS ₵)',
+      total_orders: 'Total Orders',
+      total_deposits: 'Total Deposited (GHS ₵)',
+      created_at: 'Date Joined',
+      last_seen_at: 'Last Active Date'
+    };
+
+    const activeCols = Array.isArray(selectedColumns) && selectedColumns.length > 0
+      ? selectedColumns
+      : ['name', 'email', 'phone_number', 'role', 'balance', 'total_spend', 'total_orders', 'created_at', 'last_seen_at'];
+
+    // CSV Formula / DDE Sanitizer against injection
+    const sanitizeCell = (val) => {
+      const str = String(val ?? '');
+      if (/^[=\+\-@\t\r]/.test(str)) {
+        return `'${str}`;
+      }
+      return str;
+    };
+
+    // Format JSON Response
+    if (exportFormat === 'json') {
+      const formattedJson = filteredUsers.map(u => {
+        const orderStats = ordersMap.get(u.id) || { count: 0, totalSpent: 0 };
+        const depositStats = depositsMap.get(u.id) || { count: 0, totalDeposited: 0 };
+
+        const obj = {};
+        activeCols.forEach(col => {
+          if (col === 'total_spend') obj[columnLabels[col]] = Math.round(orderStats.totalSpent * 100) / 100;
+          else if (col === 'total_orders') obj[columnLabels[col]] = orderStats.count;
+          else if (col === 'total_deposits') obj[columnLabels[col]] = Math.round(depositStats.totalDeposited * 100) / 100;
+          else if (col === 'balance') obj[columnLabels[col]] = Math.round(Number(u.balance || 0) * 100) / 100;
+          else if (col === 'created_at') obj[columnLabels[col]] = u.created_at ? new Date(u.created_at).toISOString() : null;
+          else if (col === 'last_seen_at') obj[columnLabels[col]] = u.last_seen_at ? new Date(u.last_seen_at).toISOString() : null;
+          else obj[columnLabels[col]] = u[col] ?? '';
+        });
+        return obj;
+      });
+
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename=users_export_${new Date().toISOString().split('T')[0]}.json`);
+      return res.status(200).json(formattedJson);
+    }
+
+    // Format CSV / Excel TSV Content
+    const delimiter = exportFormat === 'excel' ? '\t' : ',';
+    const headers = activeCols.map(c => columnLabels[c] || c);
+    const csvRows = [headers.join(delimiter)];
+
+    filteredUsers.forEach(u => {
+      const orderStats = ordersMap.get(u.id) || { count: 0, totalSpent: 0 };
+      const depositStats = depositsMap.get(u.id) || { count: 0, totalDeposited: 0 };
+
+      const row = activeCols.map(col => {
+        let cellVal = '';
+        if (col === 'total_spend') cellVal = (Math.round(orderStats.totalSpent * 100) / 100).toFixed(2);
+        else if (col === 'total_orders') cellVal = String(orderStats.count);
+        else if (col === 'total_deposits') cellVal = (Math.round(depositStats.totalDeposited * 100) / 100).toFixed(2);
+        else if (col === 'balance') cellVal = (Math.round(Number(u.balance || 0) * 100) / 100).toFixed(2);
+        else if (col === 'created_at') cellVal = u.created_at ? new Date(u.created_at).toLocaleString() : '';
+        else if (col === 'last_seen_at') cellVal = u.last_seen_at ? new Date(u.last_seen_at).toLocaleString() : 'Never';
+        else cellVal = u[col] ?? '';
+
+        const sanitized = sanitizeCell(cellVal);
+        if (delimiter === ',') {
+          return `"${String(sanitized).replace(/"/g, '""')}"`;
+        }
+        return String(sanitized).replace(/[\t\r\n]/g, ' ');
+      });
+
+      csvRows.push(row.join(delimiter));
+    });
+
+    const fileContent = csvRows.join('\n');
+    const gzipped = zlib.gzipSync(Buffer.from(fileContent, 'utf-8'));
+
+    const fileExt = exportFormat === 'excel' ? 'xls' : 'csv';
+    const mimeType = exportFormat === 'excel' ? 'application/vnd.ms-excel' : 'text/csv; charset=utf-8';
+
+    res.setHeader('Content-Encoding', 'gzip');
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename=users_export_${new Date().toISOString().split('T')[0]}.${fileExt}`);
+
+    return res.status(200).send(gzipped);
+
+  } catch (err) {
+    console.error('Advanced user export endpoint error:', err);
+    return res.status(500).json({
+      error: 'Internal server error during user export',
+      message: err.message
+    });
+  }
 }
