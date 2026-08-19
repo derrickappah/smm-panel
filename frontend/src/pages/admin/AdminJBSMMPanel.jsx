@@ -34,20 +34,14 @@ const AdminJBSMMPanel = () => {
   const [loadingBalance, setLoadingBalance] = useState(false);
   const [syncLogs, setSyncLogs] = useState([]);
 
-  // Load saved API configuration from localStorage
+  // Legacy cleanup: remove any previously stored raw API keys from localStorage
   React.useEffect(() => {
-    const savedApiUrl = localStorage.getItem('jbsmmpanel_api_url');
-    const savedApiKey = localStorage.getItem('jbsmmpanel_api_key');
-    if (savedApiUrl) setApiUrl(savedApiUrl);
-    if (savedApiKey) setApiKey(savedApiKey);
+    localStorage.removeItem('jbsmmpanel_api_key');
   }, []);
 
-  // Save API configuration to localStorage
   const saveConfig = useCallback(() => {
-    localStorage.setItem('jbsmmpanel_api_url', apiUrl);
-    localStorage.setItem('jbsmmpanel_api_key', apiKey);
-    toast.success('API configuration saved');
-  }, [apiUrl, apiKey]);
+    toast.success('Configuration active (Managed via environment variables)');
+  }, []);
 
   // Test API connection
   const testConnection = useCallback(async () => {

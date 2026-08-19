@@ -84,7 +84,7 @@ export async function verifyAuth(req) {
 
   const isLocalHost = (url) => {
     if (!url) return false;
-    return url.includes('localhost') || url.includes('127.0.0.1') || url.includes('::1');
+    return /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:[0-9]+)?(\/|$)/i.test(url);
   };
 
   const hasValidOrigin = reqOrigin && (allowedOrigins.includes(reqOrigin) || isLocalHost(reqOrigin));

@@ -6,6 +6,7 @@
 
 import { verifyAdmin, getServiceRoleClient } from '../utils/auth.js';
 import { logAdminAction } from '../utils/activityLogger.js';
+import { redis } from '../utils/redisClient.js';
 
 export default async function handler(req, res) {
   // CORS Headers
@@ -89,6 +90,15 @@ export default async function handler(req, res) {
     if (updateError) {
       console.error('Failed to update user role:', updateError);
       return res.status(500).json({ error: 'Failed to update user role in database' });
+    }
+
+    // Invalidate and update Redis role cache immediately
+    if (redis) {
+      try {
+        await redis.set(`smm:user:${userId}:role`, newRole.toLowerCase(), { ex: 300 });
+      } catch (cacheErr) {
+        console.warn('Role cache update warning:', cacheErr);
+      }
     }
 
     // 4. Log admin action

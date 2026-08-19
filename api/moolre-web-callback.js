@@ -65,6 +65,13 @@ export default async function handler(req, res) {
       });
     }
 
+    // Defensive validation: ensure reference is clean alphanumeric string
+    if (typeof reference !== 'string' || !/^[a-zA-Z0-9_\-\.]{5,120}$/.test(reference)) {
+      return res.status(400).json({
+        error: 'Invalid reference format'
+      });
+    }
+
     console.log('[MOOLRE WEB CALLBACK] Received callback for reference:', reference, {
       method: req.method,
       query: req.query,

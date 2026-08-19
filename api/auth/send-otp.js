@@ -44,8 +44,8 @@ export default async function handler(req, res) {
       }
     }
 
-    // Generate random 6-digit numeric OTP code
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    // Generate cryptographically secure random 6-digit numeric OTP code
+    const otpCode = crypto.randomInt(100000, 1000000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 mins
 
     const supabase = getServiceRoleClient();
