@@ -19,6 +19,7 @@ import { supabase } from '@/lib/supabase';
 const AdminStats = lazy(() => import('@/pages/admin/AdminStats'));
 const AdminAnalytics = lazy(() => import('@/pages/admin/AdminAnalytics'));
 const AdminUsers = lazy(() => import('@/pages/admin/AdminUsers'));
+const AdminUserSearch = lazy(() => import('@/pages/admin/AdminUserSearch'));
 const AdminOrders = lazy(() => import('@/pages/admin/AdminOrders'));
 const AdminOrderSearch = lazy(() => import('@/pages/admin/AdminOrderSearch'));
 const AdminDeposits = lazy(() => import('@/pages/admin/AdminDeposits'));
@@ -85,6 +86,8 @@ const AdminDashboard = memo(({ user, onLogout }) => {
         'promotion-packages': 'promotion-packages',
         'payment-methods': 'payment-methods',
         'users': 'users',
+        'user-search': 'user-search',
+        'users/search': 'user-search',
         'transactions': 'transactions',
         'support': 'support',
         'balance': 'balance',
@@ -327,6 +330,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     'promotion-packages': 'Promotion Packages',
     'payment-methods': 'Payment Methods',
     users: 'Users',
+    'user-search': 'User Search',
     transactions: 'Transactions',
     support: 'Support',
     balance: 'Balance Check',
@@ -360,6 +364,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     { id: 'promotion-packages', label: 'Promotion Packages', icon: Tag },
     { id: 'payment-methods', label: 'Payment Methods', icon: Wallet },
     { id: 'users', label: 'Users', icon: Users },
+    { id: 'user-search', label: 'User Search', icon: Search },
     { id: 'transactions', label: 'Transactions', icon: Receipt },
     { id: 'support', label: 'Support', icon: MessageSquare, badge: stats.open_tickets },
     { id: 'balance', label: 'Balance', icon: Wallet },
@@ -758,6 +763,13 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                 <TabsContent value="users" className="lg:mt-0 w-full max-w-full">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminUsers onRefresh={handleRefresh} refreshing={refreshing} />
+                  </Suspense>
+                </TabsContent>
+
+                {/* User Search Section */}
+                <TabsContent value="user-search" className="lg:mt-0 w-full max-w-full">
+                  <Suspense fallback={<ComponentLoader />}>
+                    <AdminUserSearch />
                   </Suspense>
                 </TabsContent>
 

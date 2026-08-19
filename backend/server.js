@@ -1185,6 +1185,50 @@ app.post('/api/admin/search-orders', async (req, res) => {
   }
 });
 
+// Admin High-Speed User Search Server Action
+app.post('/api/admin/search-users', async (req, res) => {
+  try {
+    const handler = (await import('../api/admin/search-users.js')).default;
+    await handler(req, res);
+  } catch (error) {
+    console.error('Error in /api/admin/search-users endpoint:', error);
+    res.status(500).json({ error: 'Server action failed', message: error.message });
+  }
+});
+
+// Admin Update User Balance Server Action
+app.post('/api/admin/update-user-balance', async (req, res) => {
+  try {
+    const handler = (await import('../api/admin/update-user-balance.js')).default;
+    await handler(req, res);
+  } catch (error) {
+    console.error('Error in /api/admin/update-user-balance endpoint:', error);
+    res.status(500).json({ error: 'Server action failed', message: error.message });
+  }
+});
+
+// Admin Update User Role Server Action
+app.post('/api/admin/update-user-role', async (req, res) => {
+  try {
+    const handler = (await import('../api/admin/update-user-role.js')).default;
+    await handler(req, res);
+  } catch (error) {
+    console.error('Error in /api/admin/update-user-role endpoint:', error);
+    res.status(500).json({ error: 'Server action failed', message: error.message });
+  }
+});
+
+// Admin Fetch 360 User Details Server Action
+app.post('/api/admin/user-details-full', async (req, res) => {
+  try {
+    const handler = (await import('../api/admin/user-details-full.js')).default;
+    await handler(req, res);
+  } catch (error) {
+    console.error('Error in /api/admin/user-details-full endpoint:', error);
+    res.status(500).json({ error: 'Server action failed', message: error.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 SMM Proxy Server running on port ${PORT}`);
 });
