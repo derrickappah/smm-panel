@@ -39,6 +39,7 @@ const AdminUserExport = () => {
 
   // Format & Columns
   const [exportFormat, setExportFormat] = useState('csv');
+  const [exportLimit, setExportLimit] = useState('10000');
   const [selectedColumns, setSelectedColumns] = useState([
     'name', 'email', 'phone_number', 'role', 'balance', 'total_spend', 'total_orders', 'created_at', 'last_seen_at'
   ]);
@@ -152,7 +153,8 @@ const AdminUserExport = () => {
           activityFilter,
           depositFilter,
           exportFormat,
-          selectedColumns
+          selectedColumns,
+          exportLimit
         })
       });
 
@@ -395,6 +397,23 @@ const AdminUserExport = () => {
                   );
                 })}
               </div>
+            </div>
+
+            <div>
+              <span className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">Export Limit:</span>
+              <Select value={exportLimit} onValueChange={setExportLimit}>
+                <SelectTrigger className="h-9 text-xs w-36 font-semibold">
+                  <SelectValue placeholder="Export Limit" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1000">1,000 Users</SelectItem>
+                  <SelectItem value="5000">5,000 Users</SelectItem>
+                  <SelectItem value="10000">10,000 Users (Default)</SelectItem>
+                  <SelectItem value="25000">25,000 Users</SelectItem>
+                  <SelectItem value="50000">50,000 Users</SelectItem>
+                  <SelectItem value="all">All Matching (Up to 100k)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Live Count Preview */}

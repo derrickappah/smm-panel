@@ -55,6 +55,7 @@ export default async function handler(req, res) {
       depositFilter = 'all', // 'all' | 'has_deposited' | 'no_deposits'
       exportFormat = 'csv', // 'csv' | 'json' | 'excel'
       selectedColumns = ['name', 'email', 'phone_number', 'role', 'balance', 'total_spend', 'total_orders', 'created_at', 'last_seen_at'],
+      exportLimit = 10000, // Default to 10,000 records
       previewCountOnly = false
     } = body;
 
@@ -65,46 +66,36 @@ export default async function handler(req, res) {
       supabase = authResult.supabase;
     }
 
-    // Build Profiles Query
-    let query = supabase.from('profiles').select('*', { count: 'exact' });
-
-    // Date Range Filter
-    if (startDate) {
-      const startIso = new Date(startDate).toISOString();
-      query = query.gte(dateField, startIso);
-    }
-    if (endDate) {
-      const endIso = new Date(endDate + 'T23:59:59.999Z').toISOString();
-      query = query.lte(dateField, endIso);
-    }
-
-    // Role Filter
-    if (roleFilter && roleFilter !== 'all') {
-      query = query.eq('role', roleFilter);
-    }
-
-    // Balance Filter
-    if (balanceFilter === 'positive') {
-      query = query.gt('balance', 0);
-    } else if (balanceFilter === 'zero') {
-      query = query.or('balance.eq.0,balance.is.null');
-    }
-
-    // Activity Filter
-    if (activityFilter === 'active_30d') {
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-      query = query.gte('last_seen_at', thirtyDaysAgo);
-    } else if (activityFilter === 'inactive_30d') {
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-      query = query.or(`last_seen_at.lt.${thirtyDaysAgo},last_seen_at.is.null`);
-    }
-
-    // Ordering
-    query = query.order('created_at', { ascending: false });
+    // Helper builder for profiles query
+    const buildProfilesQuery = () => {
+      let q = supabase.from('profiles').select('*', { count: 'exact' });
+      if (startDate) {
+        q = q.gte(dateField, new Date(startDate).toISOString());
+      }
+      if (endDate) {
+        q = q.lte(dateField, new Date(endDate + 'T23:59:59.999Z').toISOString());
+      }
+      if (roleFilter && roleFilter !== 'all') {
+        q = q.eq('role', roleFilter);
+      }
+      if (balanceFilter === 'positive') {
+        q = q.gt('balance', 0);
+      } else if (balanceFilter === 'zero') {
+        q = q.or('balance.eq.0,balance.is.null');
+      }
+      if (activityFilter === 'active_30d') {
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+        q = q.gte('last_seen_at', thirtyDaysAgo);
+      } else if (activityFilter === 'inactive_30d') {
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+        q = q.or(`last_seen_at.lt.${thirtyDaysAgo},last_seen_at.is.null`);
+      }
+      return q.order('created_at', { ascending: false });
+    };
 
     // If only previewing match count
     if (previewCountOnly) {
-      const { count, error: countErr } = await query.limit(1);
+      const { count, error: countErr } = await buildProfilesQuery().limit(1);
       if (countErr) throw countErr;
       return res.status(200).json({
         success: true,
@@ -112,16 +103,39 @@ export default async function handler(req, res) {
       });
     }
 
-    // Limit to maximum 100,000 for server action export
-    query = query.limit(100000);
-    const { data: users, error: fetchErr } = await query;
-
-    if (fetchErr) {
-      console.error('Error fetching users for export:', fetchErr);
-      return res.status(500).json({ error: 'Failed to fetch users from database', details: fetchErr.message });
+    // Parse requested limit (default 10,000, max 100,000)
+    let maxToFetch = 10000;
+    if (exportLimit === 'all' || exportLimit === 0 || exportLimit === '0') {
+      const { count: totalMatchCount } = await buildProfilesQuery().limit(1);
+      maxToFetch = Math.min(totalMatchCount || 100000, 100000);
+    } else {
+      maxToFetch = Math.min(parseInt(exportLimit, 10) || 10000, 100000);
     }
 
-    let filteredUsers = users || [];
+    const BATCH_SIZE = 1000;
+    let allUsers = [];
+    let from = 0;
+    let hasMore = true;
+
+    while (hasMore && allUsers.length < maxToFetch) {
+      const to = Math.min(from + BATCH_SIZE - 1, maxToFetch - 1);
+      const { data: pageData, error: pageErr } = await buildProfilesQuery().range(from, to);
+
+      if (pageErr) {
+        console.warn(`Export batch warning at offset ${from}:`, pageErr.message);
+        break; // Stop loop and export whatever has been collected
+      }
+
+      if (pageData && pageData.length > 0) {
+        allUsers = allUsers.concat(pageData);
+        hasMore = pageData.length === (to - from + 1) && allUsers.length < maxToFetch;
+        from += pageData.length;
+      } else {
+        hasMore = false;
+      }
+    }
+
+    let filteredUsers = allUsers;
 
     // Filter by Banned status if specified
     if (banFilter && banFilter !== 'all') {
@@ -135,34 +149,43 @@ export default async function handler(req, res) {
       }
     }
 
-    // Batch fetch Orders & Deposits stats for selected users
-    const userIds = filteredUsers.map(u => u.id);
+    // Check if order/deposit statistics are required by selected columns or deposit filter
+    const activeCols = Array.isArray(selectedColumns) && selectedColumns.length > 0 ? selectedColumns : [];
+    const needsStats = activeCols.includes('total_spend') || activeCols.includes('total_orders') || activeCols.includes('total_deposits') || depositFilter !== 'all';
+
     const ordersMap = new Map();
     const depositsMap = new Map();
 
-    if (userIds.length > 0) {
-      const [ordersRes, depositsRes] = await Promise.all([
-        supabase.from('orders').select('user_id, total_cost, status').in('user_id', userIds),
-        supabase.from('transactions').select('user_id, amount, status').eq('type', 'deposit').in('user_id', userIds)
-      ]);
+    if (needsStats && filteredUsers.length > 0) {
+      const userIds = filteredUsers.map(u => u.id);
+      const CHUNK_SIZE = 500;
 
-      (ordersRes.data || []).forEach(o => {
-        if (!ordersMap.has(o.user_id)) ordersMap.set(o.user_id, { count: 0, totalSpent: 0 });
-        const entry = ordersMap.get(o.user_id);
-        entry.count += 1;
-        if (o.status !== 'canceled' && o.status !== 'refunded') {
-          entry.totalSpent += Number(o.total_cost || 0);
-        }
-      });
+      // Process user IDs in chunks of 500 to stay within URL parameter boundaries
+      for (let i = 0; i < userIds.length; i += CHUNK_SIZE) {
+        const chunkUserIds = userIds.slice(i, i + CHUNK_SIZE);
+        const [ordersRes, depositsRes] = await Promise.all([
+          supabase.from('orders').select('user_id, total_cost, status').in('user_id', chunkUserIds),
+          supabase.from('transactions').select('user_id, amount, status').eq('type', 'deposit').in('user_id', chunkUserIds)
+        ]);
 
-      (depositsRes.data || []).forEach(d => {
-        if (!depositsMap.has(d.user_id)) depositsMap.set(d.user_id, { count: 0, totalDeposited: 0 });
-        const entry = depositsMap.get(d.user_id);
-        entry.count += 1;
-        if (d.status === 'approved' || d.status === 'completed') {
-          entry.totalDeposited += Number(d.amount || 0);
-        }
-      });
+        (ordersRes.data || []).forEach(o => {
+          if (!ordersMap.has(o.user_id)) ordersMap.set(o.user_id, { count: 0, totalSpent: 0 });
+          const entry = ordersMap.get(o.user_id);
+          entry.count += 1;
+          if (o.status !== 'canceled' && o.status !== 'refunded') {
+            entry.totalSpent += Number(o.total_cost || 0);
+          }
+        });
+
+        (depositsRes.data || []).forEach(d => {
+          if (!depositsMap.has(d.user_id)) depositsMap.set(d.user_id, { count: 0, totalDeposited: 0 });
+          const entry = depositsMap.get(d.user_id);
+          entry.count += 1;
+          if (d.status === 'approved' || d.status === 'completed') {
+            entry.totalDeposited += Number(d.amount || 0);
+          }
+        });
+      }
     }
 
     // Filter by Deposit Status if specified
@@ -189,8 +212,8 @@ export default async function handler(req, res) {
       last_seen_at: 'Last Active Date'
     };
 
-    const activeCols = Array.isArray(selectedColumns) && selectedColumns.length > 0
-      ? selectedColumns
+    const effectiveCols = activeCols.length > 0
+      ? activeCols
       : ['name', 'email', 'phone_number', 'role', 'balance', 'total_spend', 'total_orders', 'created_at', 'last_seen_at'];
 
     // CSV Formula / DDE Sanitizer against injection
@@ -209,7 +232,7 @@ export default async function handler(req, res) {
         const depositStats = depositsMap.get(u.id) || { count: 0, totalDeposited: 0 };
 
         const obj = {};
-        activeCols.forEach(col => {
+        effectiveCols.forEach(col => {
           if (col === 'total_spend') obj[columnLabels[col]] = Math.round(orderStats.totalSpent * 100) / 100;
           else if (col === 'total_orders') obj[columnLabels[col]] = orderStats.count;
           else if (col === 'total_deposits') obj[columnLabels[col]] = Math.round(depositStats.totalDeposited * 100) / 100;
@@ -228,14 +251,14 @@ export default async function handler(req, res) {
 
     // Format CSV / Excel TSV Content
     const delimiter = exportFormat === 'excel' ? '\t' : ',';
-    const headers = activeCols.map(c => columnLabels[c] || c);
+    const headers = effectiveCols.map(c => columnLabels[c] || c);
     const csvRows = [headers.join(delimiter)];
 
     filteredUsers.forEach(u => {
       const orderStats = ordersMap.get(u.id) || { count: 0, totalSpent: 0 };
       const depositStats = depositsMap.get(u.id) || { count: 0, totalDeposited: 0 };
 
-      const row = activeCols.map(col => {
+      const row = effectiveCols.map(col => {
         let cellVal = '';
         if (col === 'total_spend') cellVal = (Math.round(orderStats.totalSpent * 100) / 100).toFixed(2);
         else if (col === 'total_orders') cellVal = String(orderStats.count);
