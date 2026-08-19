@@ -183,17 +183,17 @@ const AdminUserExport = () => {
   };
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-4 sm:space-y-6 pb-12">
       {/* Filters Box */}
-      <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-md space-y-6">
-        <div className="flex items-center justify-between border-b border-gray-100 pb-4">
-          <div className="flex items-center gap-2 text-gray-900 font-bold text-lg">
-            <Filter className="w-5 h-5 text-indigo-600" />
+      <div className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-6 shadow-md space-y-4 sm:space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+          <div className="flex items-center gap-2 text-gray-900 font-bold text-base sm:text-lg">
+            <Filter className="w-5 h-5 text-indigo-600 shrink-0" />
             <span>Export Criteria & Filters</span>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500 font-semibold">Date Presets:</span>
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+            <span className="text-xs text-gray-500 font-semibold w-full sm:w-auto mb-1 sm:mb-0">Date Presets:</span>
             {[
               { id: 'today', label: 'Today' },
               { id: '7days', label: '7 Days' },
@@ -213,7 +213,7 @@ const AdminUserExport = () => {
         </div>
 
         {/* Date Range Inputs */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
           <div>
             <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Date Field:</label>
             <Select value={dateField} onValueChange={setDateField}>
@@ -249,7 +249,7 @@ const AdminUserExport = () => {
         </div>
 
         {/* Attribute Filters */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 pt-2 border-t border-gray-100">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 pt-2 border-t border-gray-100">
           <div>
             <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Role:</label>
             <Select value={roleFilter} onValueChange={setRoleFilter}>
@@ -325,11 +325,11 @@ const AdminUserExport = () => {
       </div>
 
       {/* Column Picker Box */}
-      <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-md space-y-4">
+      <div className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-6 shadow-md space-y-4">
         <div className="flex items-center justify-between border-b border-gray-100 pb-3">
           <div>
             <h3 className="font-bold text-gray-900 text-base">Select Export Columns</h3>
-            <p className="text-xs text-gray-500">Pick which data attributes to include in your export file.</p>
+            <p className="text-xs text-gray-500">Pick attributes to include in export file.</p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -339,7 +339,7 @@ const AdminUserExport = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3">
           {ALL_COLUMNS.map(col => {
             const isSelected = selectedColumns.includes(col.id);
             return (
@@ -347,7 +347,7 @@ const AdminUserExport = () => {
                 key={col.id}
                 type="button"
                 onClick={() => toggleColumn(col.id)}
-                className={`flex items-center gap-2.5 p-3 rounded-xl border text-xs font-semibold text-left transition-all ${
+                className={`flex items-center gap-2.5 p-2.5 sm:p-3 rounded-xl border text-xs font-semibold text-left transition-all ${
                   isSelected 
                     ? 'bg-indigo-50 text-indigo-900 border-indigo-200 shadow-xs' 
                     : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
@@ -366,12 +366,12 @@ const AdminUserExport = () => {
       </div>
 
       {/* Format & Export Action Bar */}
-      <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-md space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div>
+      <div className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-6 shadow-md space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 w-full lg:w-auto">
+            <div className="w-full sm:w-auto">
               <span className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">Export Format:</span>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {[
                   { id: 'csv', label: 'CSV (.csv)', icon: FileSpreadsheet },
                   { id: 'excel', label: 'Excel (.xls)', icon: FileSpreadsheet },
@@ -398,12 +398,12 @@ const AdminUserExport = () => {
             </div>
 
             {/* Live Count Preview */}
-            <div className="bg-indigo-50 border border-indigo-100 px-4 py-2 rounded-xl">
+            <div className="bg-indigo-50 border border-indigo-100 px-4 py-2 rounded-xl w-full sm:w-auto flex items-center justify-between sm:block">
               <span className="text-[10px] font-bold text-indigo-800 uppercase tracking-wider block">Matching Users:</span>
               {previewLoading ? (
                 <span className="text-sm font-bold text-indigo-600 animate-pulse">Calculating...</span>
               ) : (
-                <span className="text-lg font-extrabold text-indigo-950">{previewCount ?? 0} Users</span>
+                <span className="text-base sm:text-lg font-extrabold text-indigo-950">{previewCount ?? 0} Users</span>
               )}
             </div>
           </div>
@@ -411,17 +411,17 @@ const AdminUserExport = () => {
           <Button
             onClick={handleExportUsers}
             disabled={exporting || selectedColumns.length === 0}
-            className="h-14 px-8 text-base font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-lg hover:shadow-indigo-200 transition-all flex items-center justify-center gap-2"
+            className="w-full lg:w-auto h-12 sm:h-14 px-8 text-sm sm:text-base font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-lg hover:shadow-indigo-200 transition-all flex items-center justify-center gap-2"
           >
             {exporting ? (
               <>
                 <RefreshCw className="w-5 h-5 animate-spin" />
-                <span>Generating & Downloading Export...</span>
+                <span>Downloading Export...</span>
               </>
             ) : (
               <>
                 <Download className="w-5 h-5" />
-                <span>Export {previewCount ? `${previewCount} Users` : 'Data'}</span>
+                <span>Export {previewCount ? `${previewCount} Users` : 'All Data'}</span>
               </>
             )}
           </Button>

@@ -366,15 +366,15 @@ const AdminUserSearch = memo(() => {
 
       {/* Performance Metric Meter */}
       {debouncedSearch.trim() && (
-        <div className="flex items-center justify-between bg-indigo-50/80 border border-indigo-100 rounded-xl px-4 py-2.5 text-xs text-indigo-900 font-medium">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-indigo-50/80 border border-indigo-100 rounded-xl p-3 sm:px-4 sm:py-2.5 text-xs text-indigo-900 font-medium gap-2">
           <div className="flex items-center gap-2">
-            <UserCheck className="w-4 h-4 text-indigo-600" />
-            <span>
+            <UserCheck className="w-4 h-4 text-indigo-600 shrink-0" />
+            <span className="truncate">
               Search for "<strong className="font-semibold text-indigo-950">{debouncedSearch}</strong>" returned <strong className="font-bold text-indigo-950">{searchResult.total}</strong> users
             </span>
           </div>
-          <div className="flex items-center gap-2 font-mono text-[11px] bg-white px-2.5 py-1 rounded-md border border-indigo-200 shadow-xs">
-            <Clock className="w-3 h-3 text-indigo-500" />
+          <div className="flex items-center gap-2 font-mono text-[11px] bg-white px-2.5 py-1 rounded-md border border-indigo-200 shadow-xs self-start sm:self-auto">
+            <Clock className="w-3 h-3 text-indigo-500 shrink-0" />
             <span>Server Action: <strong>{searchTime}ms</strong> ({ (searchTime / 1000).toFixed(2) }s)</span>
           </div>
         </div>
@@ -382,17 +382,17 @@ const AdminUserSearch = memo(() => {
 
       {/* User Search Results */}
       {!debouncedSearch.trim() ? (
-        <div className="bg-white border border-gray-200 rounded-2xl p-12 text-center shadow-sm">
-          <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
-            <User className="w-8 h-8" />
+        <div className="bg-white border border-gray-200 rounded-2xl p-6 sm:p-12 text-center shadow-sm">
+          <div className="w-14 h-14 sm:w-16 sm:h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <User className="w-7 h-7 sm:w-8 sm:h-8" />
           </div>
-          <h3 className="text-xl font-bold text-gray-900 mb-1">Search Users</h3>
-          <p className="text-gray-500 text-sm max-w-md mx-auto mb-6">
+          <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-1">Search Users</h3>
+          <p className="text-gray-500 text-xs sm:text-sm max-w-md mx-auto mb-4 sm:mb-6">
             Enter a user's name, email, phone number, UUID, or referral code to search instantly with full management actions.
           </p>
         </div>
       ) : isLoading ? (
-        <div className="bg-white border border-gray-200 rounded-2xl p-8 space-y-4 shadow-sm">
+        <div className="bg-white border border-gray-200 rounded-2xl p-6 sm:p-8 space-y-4 shadow-sm">
           <div className="flex items-center gap-3 text-indigo-600 font-semibold text-sm">
             <RefreshCw className="w-5 h-5 animate-spin" />
             <span>Executing server action user search...</span>
@@ -404,7 +404,7 @@ const AdminUserSearch = memo(() => {
           </div>
         </div>
       ) : usersList.length === 0 ? (
-        <div className="bg-white border border-gray-200 rounded-2xl p-12 text-center shadow-sm">
+        <div className="bg-white border border-gray-200 rounded-2xl p-6 sm:p-12 text-center shadow-sm">
           <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-3">
             <UserX className="w-7 h-7" />
           </div>
@@ -422,17 +422,17 @@ const AdminUserSearch = memo(() => {
             return (
               <div 
                 key={user.id}
-                className="bg-white border border-gray-200 hover:border-indigo-300 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all space-y-4"
+                className="bg-white border border-gray-200 hover:border-indigo-300 rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-md transition-all space-y-4"
               >
                 {/* User Top Bar */}
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 pb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-bold flex items-center justify-center text-lg shadow-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-bold flex items-center justify-center text-base sm:text-lg shadow-sm shrink-0">
                       {user.name ? user.name.charAt(0).toUpperCase() : (user.email ? user.email.charAt(0).toUpperCase() : 'U')}
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-bold text-gray-900 text-base">{user.name || 'No Name'}</h4>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h4 className="font-bold text-gray-900 text-sm sm:text-base truncate">{user.name || 'No Name'}</h4>
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
                           user.role === 'admin' ? 'bg-purple-100 text-purple-800 border border-purple-200' :
                           user.role === 'reseller' ? 'bg-blue-100 text-blue-800 border border-blue-200' :
@@ -446,25 +446,25 @@ const AdminUserSearch = memo(() => {
                           </span>
                         )}
                       </div>
-                      <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 mt-0.5">
-                        <span className="flex items-center gap-1">
-                          <Mail className="w-3 h-3 text-gray-400" /> {user.email}
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-gray-500 mt-0.5">
+                        <span className="flex items-center gap-1 truncate">
+                          <Mail className="w-3 h-3 text-gray-400 shrink-0" /> {user.email}
                         </span>
                         {user.phone_number && (
                           <span className="flex items-center gap-1">
-                            <Phone className="w-3 h-3 text-gray-400" /> {user.phone_number}
+                            <Phone className="w-3 h-3 text-gray-400 shrink-0" /> {user.phone_number}
                           </span>
                         )}
-                        <span className="font-mono text-[11px] text-gray-400">ID: {user.id}</span>
+                        <span className="font-mono text-[10px] sm:text-[11px] text-gray-400 break-all">ID: {user.id}</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Balance Display Box */}
-                  <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2">
+                  <div className="flex items-center justify-between sm:justify-start gap-3 bg-emerald-50 border border-emerald-200 rounded-xl p-3 sm:px-4 sm:py-2 w-full sm:w-auto">
                     <div>
                       <span className="text-[10px] font-bold uppercase text-emerald-800 tracking-wider block">Wallet Balance</span>
-                      <span className="text-xl font-extrabold text-emerald-900">₵{Number(user.balance || 0).toFixed(2)}</span>
+                      <span className="text-lg sm:text-xl font-extrabold text-emerald-900">₵{Number(user.balance || 0).toFixed(2)}</span>
                     </div>
                     <Button
                       size="sm"
@@ -474,7 +474,7 @@ const AdminUserSearch = memo(() => {
                         setBalanceReason('');
                         setBalanceAction('add');
                       }}
-                      className="h-8 px-3 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-sm"
+                      className="h-8 px-3 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-sm shrink-0"
                     >
                       <Edit3 className="w-3.5 h-3.5 mr-1" /> Adjust
                     </Button>
@@ -482,35 +482,35 @@ const AdminUserSearch = memo(() => {
                 </div>
 
                 {/* User Statistics Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                  <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 text-xs">
+                  <div className="bg-gray-50 p-2.5 sm:p-3 rounded-xl border border-gray-100">
                     <span className="text-gray-400 font-semibold block">Total Orders</span>
-                    <span className="font-bold text-gray-900 text-sm mt-0.5 block">{stats.totalOrders} Orders</span>
-                    <span className="text-indigo-600 font-semibold text-[11px]">Spent: ₵{stats.totalSpent.toFixed(2)}</span>
+                    <span className="font-bold text-gray-900 text-xs sm:text-sm mt-0.5 block">{stats.totalOrders} Orders</span>
+                    <span className="text-indigo-600 font-semibold text-[10px] sm:text-[11px]">Spent: ₵{stats.totalSpent.toFixed(2)}</span>
                   </div>
 
-                  <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+                  <div className="bg-gray-50 p-2.5 sm:p-3 rounded-xl border border-gray-100">
                     <span className="text-gray-400 font-semibold block">Total Deposits</span>
-                    <span className="font-bold text-gray-900 text-sm mt-0.5 block">{stats.approvedDeposits} Approved</span>
-                    <span className="text-emerald-600 font-semibold text-[11px]">Deposited: ₵{stats.totalDeposited.toFixed(2)}</span>
+                    <span className="font-bold text-gray-900 text-xs sm:text-sm mt-0.5 block">{stats.approvedDeposits} Approved</span>
+                    <span className="text-emerald-600 font-semibold text-[10px] sm:text-[11px]">Deposited: ₵{stats.totalDeposited.toFixed(2)}</span>
                   </div>
 
-                  <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+                  <div className="bg-gray-50 p-2.5 sm:p-3 rounded-xl border border-gray-100">
                     <span className="text-gray-400 font-semibold block">Referral Info</span>
-                    <span className="font-mono text-gray-900 font-bold block">{user.referral_code || 'None'}</span>
-                    <span className="text-purple-600 font-semibold text-[11px]">Earned: ₵{(stats.referralTotalEarned || 0).toFixed(2)}</span>
+                    <span className="font-mono text-gray-900 font-bold block truncate">{user.referral_code || 'None'}</span>
+                    <span className="text-purple-600 font-semibold text-[10px] sm:text-[11px]">Earned: ₵{(stats.referralTotalEarned || 0).toFixed(2)}</span>
                   </div>
 
-                  <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+                  <div className="bg-gray-50 p-2.5 sm:p-3 rounded-xl border border-gray-100">
                     <span className="text-gray-400 font-semibold block">Joined Date</span>
-                    <span className="font-semibold text-gray-900 block mt-0.5">{new Date(user.created_at).toLocaleDateString()}</span>
-                    <span className="text-gray-400 text-[11px]">{new Date(user.created_at).toLocaleTimeString()}</span>
+                    <span className="font-semibold text-gray-900 block mt-0.5 text-xs">{new Date(user.created_at).toLocaleDateString()}</span>
+                    <span className="text-gray-400 text-[10px] sm:text-[11px]">{new Date(user.created_at).toLocaleTimeString()}</span>
                   </div>
                 </div>
 
                 {/* Management Action Bar */}
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-100 text-xs">
-                  <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-2 border-t border-gray-100 text-xs">
+                  <div className="grid grid-cols-2 sm:flex items-center gap-2">
                     {/* Change Role Button */}
                     <Button
                       variant="outline"
@@ -519,7 +519,7 @@ const AdminUserSearch = memo(() => {
                         setRoleModalUser(user);
                         setSelectedRole(user.role || 'user');
                       }}
-                      className="h-8 text-xs font-semibold border-gray-300 hover:bg-gray-100"
+                      className="h-9 sm:h-8 text-xs font-semibold border-gray-300 hover:bg-gray-100 justify-center"
                     >
                       <Shield className="w-3.5 h-3.5 mr-1 text-purple-600" />
                       Role ({user.role || 'user'})
@@ -530,7 +530,7 @@ const AdminUserSearch = memo(() => {
                       variant="outline"
                       size="sm"
                       onClick={() => handleToggleBanUser(user)}
-                      className={`h-8 text-xs font-semibold ${
+                      className={`h-9 sm:h-8 text-xs font-semibold justify-center ${
                         isBanned 
                           ? 'border-emerald-300 text-emerald-700 hover:bg-emerald-50' 
                           : 'border-rose-300 text-rose-700 hover:bg-rose-50'
@@ -550,16 +550,14 @@ const AdminUserSearch = memo(() => {
                     </Button>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() => handleOpen360Details(user)}
-                      className="h-8 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5 mr-1" />
-                      View 360 Everything
-                    </Button>
-                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => handleOpen360Details(user)}
+                    className="h-9 sm:h-8 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white w-full sm:w-auto justify-center"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 mr-1" />
+                    View 360 Everything
+                  </Button>
                 </div>
               </div>
             );
