@@ -16,6 +16,7 @@ import { prefetchPaymentSettings } from "@/hooks/usePaymentMethods";
 import * as serviceWorkerRegistration from "./serviceWorkerRegistration";
 import ReferralTracker from "@/components/ReferralTracker";
 import UserPresenceTracker from "@/components/UserPresenceTracker";
+import MetaPixelTracker from "@/components/MetaPixelTracker";
 
 
 // Lazy load all page components for code splitting
@@ -195,6 +196,7 @@ function App() {
           <BrowserRouter>
 
             <div className="min-h-screen bg-background">
+              <MetaPixelTracker />
               <ReferralTracker />
               <UserPresenceTracker />
               {!isConfigured && <SupabaseSetup />}
