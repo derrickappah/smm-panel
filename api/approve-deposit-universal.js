@@ -164,6 +164,23 @@ export default async function handler(req, res) {
       }
     });
 
+    // Check if payment method is enabled in app_settings (unless user is admin)
+    if (!isAdmin) {
+      const { data: settingData } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('key', `payment_method_${method}_enabled`)
+        .maybeSingle();
+
+      if (settingData && settingData.value === 'false') {
+        return res.status(400).json({
+          error: `Payment method '${method}' is currently disabled.`,
+          transaction_id: transaction_id,
+          payment_method: method
+        });
+      }
+    }
+
     // Call the universal atomic database function (v2 hardened)
     const status = payment_status || 'success';
     const { data: result, error: rpcError } = await supabase.rpc('approve_deposit_transaction_universal_v2', {

@@ -52,14 +52,38 @@ export default async function handler(req, res) {
         const { amount, description } = req.body;
 
         const totalAmount = parseFloat(amount);
+        if (isNaN(totalAmount) || totalAmount <= 0) {
+            return res.status(400).json({ error: 'Invalid amount: must be a positive number' });
+        }
 
+        const supabase = getServiceRoleClient();
 
+        // Check if Hubtel is enabled in app_settings
+        const { data: settingsData } = await supabase
+            .from('app_settings')
+            .select('key, value')
+            .in('key', [
+                'payment_method_hubtel_enabled',
+                'payment_method_hubtel_min_deposit'
+            ]);
+
+        const settingsMap = {};
+        settingsData?.forEach(item => {
+            settingsMap[item.key] = item.value;
+        });
+
+        if (settingsMap.payment_method_hubtel_enabled === 'false') {
+            return res.status(400).json({ error: "Payment method 'hubtel' is currently disabled. Please choose another payment method." });
+        }
+
+        const minDeposit = parseFloat(settingsMap.payment_method_hubtel_min_deposit) || 1;
+        if (totalAmount < minDeposit) {
+            return res.status(400).json({ error: `Minimum deposit amount for Hubtel is ₵${minDeposit}` });
+        }
 
         const clientReference = crypto.randomUUID().replace(/-/g, '').substring(0, 32);
 
-
         // 2. Insert transaction into database as 'Pending'
-        const supabase = getServiceRoleClient();
         const { data: transaction, error: insertError } = await supabase
             .from('transactions')
             .insert({

@@ -92,6 +92,29 @@ export default async function handler(req, res) {
       });
     }
 
+    const supabase = getServiceRoleClient();
+
+    // Check payment method status and min deposit in app_settings
+    const { data: settingsData } = await supabase
+      .from('app_settings')
+      .select('key, value')
+      .in('key', [
+        `payment_method_${method}_enabled`,
+        `payment_method_${method}_min_deposit`
+      ]);
+
+    const settingsMap = {};
+    settingsData?.forEach(item => {
+      settingsMap[item.key] = item.value;
+    });
+
+    const isEnabled = settingsMap[`payment_method_${method}_enabled`];
+    if (isEnabled === 'false') {
+      return res.status(400).json({
+        error: `Payment method '${method}' is currently disabled. Please choose an active payment method.`
+      });
+    }
+
     // Parse and validate amount with proper precision handling
     const depositAmount = Math.round(parseFloat(amount) * 100) / 100; // Round to 2 decimal places
     if (isNaN(depositAmount) || depositAmount <= 0) {
@@ -100,12 +123,15 @@ export default async function handler(req, res) {
       });
     }
 
-    // Check deposit limits
+    // Determine min deposit: check app_settings first, then fallback to DEPOSIT_LIMITS
+    const configuredMin = parseFloat(settingsMap[`payment_method_${method}_min_deposit`]);
     const limits = DEPOSIT_LIMITS[method];
-    if (depositAmount < limits.min) {
+    const effectiveMin = !isNaN(configuredMin) && configuredMin > 0 ? configuredMin : limits.min;
+
+    if (depositAmount < effectiveMin) {
       return res.status(400).json({
-        error: `Minimum deposit amount for ${method} is ₵${limits.min}`,
-        min_amount: limits.min,
+        error: `Minimum deposit amount for ${method} is ₵${effectiveMin}`,
+        min_amount: effectiveMin,
         max_amount: limits.max
       });
     }
@@ -113,14 +139,10 @@ export default async function handler(req, res) {
     if (depositAmount > limits.max) {
       return res.status(400).json({
         error: `Maximum deposit amount for ${method} is ₵${limits.max}`,
-        min_amount: limits.min,
+        min_amount: effectiveMin,
         max_amount: limits.max
       });
     }
-
-
-
-    const supabase = getServiceRoleClient();
 
     // For moolre_web, generate a placeholder first — the canonical reference needs the transaction ID.
     // We'll update it server-side after insert so we never need a client-side DB write.

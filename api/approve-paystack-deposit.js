@@ -134,6 +134,21 @@ export default async function handler(req, res) {
 
     // Verify the payment if the caller is not an admin
     if (!isAdmin) {
+      // Check if Paystack is enabled in app_settings
+      const { data: settingData } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('key', 'payment_method_paystack_enabled')
+        .maybeSingle();
+
+      if (settingData && settingData.value === 'false') {
+        return res.status(400).json({
+          error: "Payment method 'paystack' is currently disabled.",
+          transaction_id: transaction_id,
+          reference: reference || null
+        });
+      }
+
       const activeRef = reference || transaction.paystack_reference;
       if (!activeRef) {
         return res.status(400).json({
