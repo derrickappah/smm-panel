@@ -9,6 +9,7 @@ import SEO from '@/components/SEO';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { MessageSquare, FileText, History } from 'lucide-react';
+import { trackMetaEvent } from '@/lib/metaPixel';
 
 const SupportPageContent = ({ user, onLogout }) => {
   const {
@@ -21,6 +22,7 @@ const SupportPageContent = ({ user, onLogout }) => {
   // Automatically get or create conversation on mount
   React.useEffect(() => {
     const initChat = async () => {
+      trackMetaEvent('Contact', { method: 'Live Chat' });
       const conv = await getOrCreateConversation();
       if (conv) {
         selectConversation(conv.id);

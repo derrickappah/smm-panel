@@ -23,6 +23,7 @@ import { useDashboardData } from '@/hooks/useDashboardData';
 import { usePaymentMethods } from '@/hooks/usePaymentMethods';
 import { usePromotionPackages } from '@/hooks/useAdminPromotionPackages';
 import { useDepositPolling } from '@/hooks/useDepositPolling';
+import { trackMetaEvent } from '@/lib/metaPixel';
 // Paystack will be loaded via react-paystack package
 
 const Dashboard = ({ user, onLogout, onUpdateUser }) => {
@@ -1275,6 +1276,14 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
       // Show success toast immediately
       toast.success(`Payment successful! ₵${transactionToUpdate.amount.toFixed(2)} added to your balance.`);
+      
+      // Track Meta Pixel Purchase event
+      trackMetaEvent('Purchase', {
+        value: transactionToUpdate.amount,
+        currency: 'GHS',
+        content_name: 'Wallet Deposit (Paystack)'
+      });
+
       setDepositAmount('');
       setPendingTransaction(null);
 
@@ -1967,6 +1976,12 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       return;
     }
 
+    trackMetaEvent('InitiateCheckout', {
+      value: amount,
+      currency: 'GHS',
+      content_name: 'Hubtel Deposit'
+    });
+
     setLoading(true);
     try {
       // Use our new Hubtel-specific initiation API
@@ -2028,6 +2043,12 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       toast.error(`Minimum deposit amount is ₵${minDepositSettings.korapay_min}`);
       return;
     }
+
+    trackMetaEvent('InitiateCheckout', {
+      value: amount,
+      currency: 'GHS',
+      content_name: 'Korapay Deposit'
+    });
 
     setLoading(true);
     try {
@@ -2923,6 +2944,12 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       return;
     }
 
+    trackMetaEvent('InitiateCheckout', {
+      value: amount,
+      currency: 'GHS',
+      content_name: 'Paystack Deposit'
+    });
+
     setLoading(true);
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -3150,6 +3177,15 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
       // Success
       toast.success('Order placed successfully!');
+
+      // Track Meta Pixel Purchase event for order placed
+      const estimatedCost = parseFloat(document.querySelector('[data-testid="order-estimated-cost"]')?.textContent?.replace('₵', '') || 0);
+      trackMetaEvent('Purchase', {
+        value: estimatedCost > 0 ? estimatedCost : undefined,
+        currency: 'GHS',
+        content_name: orderForm.service_id ? `Service ${orderForm.service_id}` : (orderForm.package_id ? `Package ${orderForm.package_id}` : 'SMM Order'),
+        num_items: parseInt(orderForm.quantity) || 1
+      });
 
       // Update optimistic balance from server response
       if (result.new_balance !== undefined) {

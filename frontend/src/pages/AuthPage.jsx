@@ -16,6 +16,7 @@ import { usePaymentMethods } from '@/hooks/usePaymentMethods';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { ShieldCheck, Mail, RefreshCw } from 'lucide-react';
+import { trackMetaEvent } from '@/lib/metaPixel';
 
 // Email validation function with TLD validation
 const isValidEmail = (email) => {
@@ -458,6 +459,13 @@ const AuthPage = () => {
           }
 
           if (data.user) {
+            // Track Meta Pixel CompleteRegistration event
+            trackMetaEvent('CompleteRegistration', {
+              content_name: 'Sign Up',
+              status: data.session ? 'completed' : 'pending_confirmation',
+              referral: !!getActiveReferralCode()
+            });
+
             // Profile is automatically created by database trigger (handle_new_user)
             // No need to manually create it - this prevents 409 conflicts
             // The trigger also handles referral code and referral relationship creation

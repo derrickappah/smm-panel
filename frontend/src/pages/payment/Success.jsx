@@ -4,6 +4,7 @@ import { CheckCircle, Home, List, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
+import { trackMetaEvent } from '@/lib/metaPixel';
 
 const SuccessPage = ({ onUpdateUser }) => {
     const navigate = useNavigate();
@@ -57,6 +58,11 @@ const SuccessPage = ({ onUpdateUser }) => {
                         if (onUpdateUser) await onUpdateUser();
                         setIsAwaitingBalance(false);
                         toast.success('Payment verified and balance updated!');
+                        trackMetaEvent('Purchase', {
+                            currency: 'GHS',
+                            content_name: 'Wallet Deposit (KoraPay)',
+                            value: data.amount ? parseFloat(data.amount) : undefined
+                        });
                     } else if (data.korapayStatus === 'failed') {
                         setStatusMessage('Payment failed or was declined.');
                         setIsAwaitingBalance(false);
@@ -91,6 +97,11 @@ const SuccessPage = ({ onUpdateUser }) => {
                         if (onUpdateUser) await onUpdateUser();
                         setIsAwaitingBalance(false);
                         toast.success('Payment verified and balance updated!');
+                        trackMetaEvent('Purchase', {
+                            currency: 'GHS',
+                            content_name: 'Wallet Deposit (Hubtel)',
+                            value: data.amount ? parseFloat(data.amount) : undefined
+                        });
                     } else {
                         setStatusMessage(`Transaction is still ${data.status}. This can take a few minutes.`);
                         setIsAwaitingBalance(true);

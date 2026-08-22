@@ -13,6 +13,7 @@ import { generateServiceListSchema } from '@/utils/schema';
 import { generatePlatformMetaTags } from '@/utils/metaTags';
 import { getServiceKeywords, primaryKeywords, longTailKeywords } from '@/data/keywords';
 import { usePromotionPackages } from '@/hooks/useAdminPromotionPackages';
+import { trackMetaEvent } from '@/lib/metaPixel';
 
 const ServicesPage = ({ user, onLogout }) => {
   const navigate = useNavigate();
@@ -48,7 +49,22 @@ const ServicesPage = ({ user, onLogout }) => {
 
   useEffect(() => {
     fetchServices();
+    trackMetaEvent('ViewContent', {
+      content_name: 'Services Catalog',
+      content_category: selectedPlatform
+    });
   }, [selectedPlatform]);
+
+  useEffect(() => {
+    if (searchQuery.trim().length >= 3) {
+      const timer = setTimeout(() => {
+        trackMetaEvent('Search', {
+          search_string: searchQuery.trim()
+        });
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [searchQuery]);
 
   const fetchServices = async () => {
     setLoading(true);

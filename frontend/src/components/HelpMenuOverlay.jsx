@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Wallet, Heart, Users, Headset, MessageCircle, X } from 'lucide-react';
 import VideoModal from './VideoModal';
+import { trackMetaEvent } from '@/lib/metaPixel';
 
 const HelpMenuOverlay = ({ onClose, whatsappUrl }) => {
   const navigate = useNavigate();
@@ -23,6 +24,7 @@ const HelpMenuOverlay = ({ onClose, whatsappUrl }) => {
       onClose();
       navigate(action.path);
     } else if (action.type === 'whatsapp') {
+      trackMetaEvent('Contact', { method: 'WhatsApp Help Menu' });
       onClose();
       window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
     }

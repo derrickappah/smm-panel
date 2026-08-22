@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePaymentMethods } from '@/hooks/usePaymentMethods';
 import { X, MessageCircle, Phone } from 'lucide-react';
+import { trackMetaEvent } from '@/lib/metaPixel';
 import HelpMenuOverlay from './HelpMenuOverlay';
 
 const WhatsAppButton = ({ message, className = "" }) => {
@@ -276,6 +277,7 @@ const WhatsAppButton = ({ message, className = "" }) => {
             onClick={(e) => {
               if (!hasDragged) {
                 setHasBeenTapped(true);
+                trackMetaEvent('Contact', { method: 'Phone Call' });
                 window.open(getCallUrl(), '_self');
               }
             }}

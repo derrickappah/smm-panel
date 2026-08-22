@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { supabase, isConfigured } from '@/lib/supabase';
 import { logLoginAttempt } from '@/lib/activityLogger';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { trackMetaEvent } from '@/lib/metaPixel';
 
 import { Turnstile } from '@/components/ui/turnstile';
 import { usePaymentMethods } from '@/hooks/usePaymentMethods';
@@ -164,6 +165,11 @@ export const LandingForm = () => {
                 }
 
                 if (data.user) {
+                    trackMetaEvent('CompleteRegistration', {
+                        content_name: 'Landing Page Sign Up',
+                        status: data.session ? 'completed' : 'pending_confirmation'
+                    });
+
                     if (data.session) {
                         toast.success('Account created successfully!');
                         navigate('/dashboard');

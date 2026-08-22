@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { trackMetaEvent } from '@/lib/metaPixel';
 
 /**
  * Payment Callback Page
@@ -130,6 +131,14 @@ const PaymentCallback = ({ onUpdateUser }) => {
             setStatus('success');
             setMessage(`Payment successful! ₵${parseFloat(transaction.amount).toFixed(2)} has been added to your account.`);
             toast.success(`Payment successful! ₵${parseFloat(transaction.amount).toFixed(2)} added to your balance.`);
+            
+            // Track Meta Pixel Purchase event
+            trackMetaEvent('Purchase', {
+              value: parseFloat(transaction.amount),
+              currency: 'GHS',
+              content_name: `Wallet Deposit (${paymentMethod})`
+            });
+
             setTimeout(() => navigate('/dashboard'), 3000);
           } else if (paymentStatus === 'failed' || paymentStatus === 'cancelled' || transaction.status === 'rejected') {
             // Mark as rejected via server-side API (no direct client write to transactions)
@@ -231,6 +240,14 @@ const PaymentCallback = ({ onUpdateUser }) => {
             setStatus('success');
             setMessage(`Payment successful! ₵${parseFloat(transaction.amount).toFixed(2)} added.`);
             toast.success(`Payment successful!`);
+            
+            // Track Meta Pixel Purchase event
+            trackMetaEvent('Purchase', {
+              value: parseFloat(transaction.amount),
+              currency: 'GHS',
+              content_name: `Wallet Deposit (${paymentMethod})`
+            });
+
             setTimeout(() => navigate('/dashboard'), 3000);
           } else if (verifyData.status === 'failed' || verifyData.txstatus === 2 || transaction.status === 'rejected') {
             // Mark as rejected via server-side API (no direct client write to transactions)
