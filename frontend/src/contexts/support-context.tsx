@@ -19,6 +19,11 @@ import type {
 
 interface SupportContextType extends SupportContextState, SupportContextMethods { }
 
+const sanitizePlainText = (input?: string | null): string => {
+  if (!input) return '';
+  return input.replace(/<[^>]*>/g, '').trim();
+};
+
 const SupportContext = createContext<SupportContextType | undefined>(undefined);
 
 export const useSupport = () => {
@@ -596,7 +601,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
           ticket_id: currentTicket.id,
           sender_id: userRole.userId,
           sender_role: isAdmin ? 'admin' : 'user',
-          content: content.trim(),
+          content: sanitizePlainText(content),
           attachment_url: attachmentUrl || null,
           attachment_type: attachmentType || null,
         })
@@ -673,7 +678,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
           conversation_id: currentConversation.id,
           sender_id: userRole.userId,
           sender_role: isAdmin ? 'admin' : 'user',
-          content: content.trim(),
+          content: sanitizePlainText(content),
           attachment_url: attachmentUrl || null,
           attachment_type: attachmentType || null,
         })
@@ -717,7 +722,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
       // Build query - admins can edit any message, users can only edit their own
       let query = supabase
         .from('messages')
-        .update({ content: newContent.trim() })
+        .update({ content: sanitizePlainText(newContent) })
         .eq('id', messageId);
 
       // Only restrict to own messages if not admin
@@ -1194,7 +1199,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
           user_id: userRole.userId,
           category,
           subcategory: subcategory || null,
-          order_id: orderId,
+          order_id: sanitizePlainText(orderId) || null,
           status: 'Pending',
         })
         .select()
@@ -1213,7 +1218,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
           ticket_id: ticket.id,
           sender_id: userRole.userId,
           sender_role: 'user',
-          content: message.trim(),
+          content: sanitizePlainText(message),
         });
 
       if (messageError) {

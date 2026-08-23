@@ -88,3 +88,54 @@ BEFORE INSERT OR UPDATE OF name ON public.profiles
 FOR EACH ROW
 EXECUTE FUNCTION public.sanitize_and_limit_profile_name();
 
+-- 6. Support Message and Ticket Field Sanitization Triggers
+CREATE OR REPLACE FUNCTION public.sanitize_message_content()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  IF NEW.content IS NOT NULL THEN
+    -- Strip all HTML/script tags
+    NEW.content := regexp_replace(NEW.content, '<[^>]+>', '', 'g');
+    -- Trim whitespace
+    NEW.content := trim(NEW.content);
+    -- Enforce maximum content length (5000 characters)
+    IF char_length(NEW.content) > 5000 THEN
+      NEW.content := substring(NEW.content FROM 1 FOR 5000);
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_sanitize_message_content ON public.messages;
+CREATE TRIGGER trg_sanitize_message_content
+BEFORE INSERT OR UPDATE OF content ON public.messages
+FOR EACH ROW
+EXECUTE FUNCTION public.sanitize_message_content();
+
+CREATE OR REPLACE FUNCTION public.sanitize_ticket_fields()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  IF NEW.order_id IS NOT NULL THEN
+    NEW.order_id := regexp_replace(NEW.order_id, '<[^>]+>', '', 'g');
+    NEW.order_id := trim(NEW.order_id);
+    IF char_length(NEW.order_id) > 255 THEN
+      NEW.order_id := substring(NEW.order_id FROM 1 FOR 255);
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_sanitize_ticket_fields ON public.tickets;
+CREATE TRIGGER trg_sanitize_ticket_fields
+BEFORE INSERT OR UPDATE OF order_id ON public.tickets
+FOR EACH ROW
+EXECUTE FUNCTION public.sanitize_ticket_fields();
+
+
