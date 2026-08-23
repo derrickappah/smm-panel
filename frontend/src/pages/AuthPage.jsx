@@ -277,6 +277,18 @@ const AuthPage = () => {
         return;
       }
 
+      if (!isLogin && !formData.name.trim()) {
+        toast.error('Name is required');
+        setLoading(false);
+        return;
+      }
+
+      if (!isLogin && formData.name.trim().length > 15) {
+        toast.error('Name must not exceed 15 characters');
+        setLoading(false);
+        return;
+      }
+
       if (!isLogin && !isValidGhanaPhone(formData.phone_number.trim())) {
         toast.error('WhatsApp number must be exactly 10 digits');
         setPhoneError('WhatsApp number must be exactly 10 digits');
@@ -640,9 +652,10 @@ const AuthPage = () => {
                   <Input
                     id="name"
                     type="text"
-                    placeholder="John Doe"
+                    placeholder="John Doe (max 15 chars)"
+                    maxLength={15}
                     value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value.slice(0, 15) })}
                     required={!isLogin}
                     className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   />

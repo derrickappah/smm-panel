@@ -79,6 +79,10 @@ export const LandingForm = () => {
                     toast.error('Please enter your full name');
                     return;
                 }
+                if (formData.name.trim().length > 15) {
+                    toast.error('Name must not exceed 15 characters');
+                    return;
+                }
                 if (!formData.phone_number.trim()) {
                     toast.error('Please enter your WhatsApp number');
                     return;
@@ -215,13 +219,14 @@ export const LandingForm = () => {
                     {!isLogin && (
                         <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
                             <div className="space-y-1.5">
-                                <Label className="text-white/70 text-xs font-bold uppercase tracking-widest ml-1">Full Name</Label>
+                                <Label className="text-white/70 text-xs font-bold uppercase tracking-widest ml-1">Full Name (max 15 chars)</Label>
                                 <Input
                                     type="text"
                                     placeholder="John Doe"
+                                    maxLength={15}
                                     className="bg-white/5 border-white/10 text-white placeholder:text-white/20 h-12 rounded-xl focus:ring-indigo-500/50"
                                     value={formData.name}
-                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                    onChange={(e) => setFormData({ ...formData, name: e.target.value.slice(0, 15) })}
                                     required
                                 />
                             </div>
