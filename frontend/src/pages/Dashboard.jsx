@@ -3158,8 +3158,22 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         throw new Error('Not authenticated - please log in again.');
       }
 
-      // We calculate estimated cost for reference/validation if needed
-      // but the server-side will handle the source of truth for pricing
+      // Compute estimated cost safely from state
+      let calculatedCost = 0;
+      if (orderForm.package_id) {
+        const pkg = promotionPackages.find(p => p.id === orderForm.package_id);
+        if (pkg) calculatedCost = parseFloat(pkg.price || 0);
+      } else if (orderForm.service_id) {
+        const s = services.find(srv => srv.id === orderForm.service_id);
+        if (s && orderForm.quantity) {
+          const qty = parseInt(orderForm.quantity) || 0;
+          const rateUnit = s.rate_unit || 1000;
+          calculatedCost = (qty / rateUnit) * (s.rate || 0);
+        }
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 35000); // 35s timeout safety
 
       const response = await fetch('/api/order/create', {
         method: 'POST',
@@ -3167,16 +3181,18 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`
         },
+        credentials: 'include',
+        signal: controller.signal,
         body: JSON.stringify({
           service_id: orderForm.service_id || null,
           package_id: orderForm.package_id || null,
           link: orderForm.link.trim(),
-          quantity: parseInt(orderForm.quantity),
+          quantity: parseInt(orderForm.quantity) || 1,
           comments: orderForm.comments || '',
-          // total_cost is included for server-side verification against the database rates
-          total_cost: parseFloat(document.querySelector('[data-testid="order-estimated-cost"]')?.textContent?.replace('₵', '') || 0)
+          total_cost: calculatedCost > 0 ? calculatedCost : undefined
         })
       });
+      clearTimeout(timeoutId);
 
       const result = await response.json();
 
@@ -3193,9 +3209,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       toast.success('Order placed successfully!');
 
       // Track Meta Pixel Purchase event for order placed
-      const estimatedCost = parseFloat(document.querySelector('[data-testid="order-estimated-cost"]')?.textContent?.replace('₵', '') || 0);
       trackMetaEvent('Purchase', {
-        value: estimatedCost > 0 ? estimatedCost : undefined,
+        value: calculatedCost > 0 ? calculatedCost : undefined,
         currency: 'GHS',
         content_name: orderForm.service_id ? `Service ${orderForm.service_id}` : (orderForm.package_id ? `Package ${orderForm.package_id}` : 'SMM Order'),
         num_items: parseInt(orderForm.quantity) || 1

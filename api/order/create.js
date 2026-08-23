@@ -41,11 +41,6 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: 'Missing required fields' });
         }
 
-        const numericCost = parseFloat(total_cost);
-        if (isNaN(numericCost) || numericCost <= 0) {
-            return res.status(400).json({ error: 'Invalid total cost. Must be a positive number.' });
-        }
-
         const supabase = getServiceRoleClient();
 
         // ── STEP 1: Clean URL ─────────────────────────────────────────────────
@@ -358,26 +353,7 @@ export default async function handler(req, res) {
             }
         }
 
-        // ── STEP 4: Provider Service Validation (pre-deduction) ───────────────
-        if (!is_combo && provider && provider_service_id) {
-            const serviceValid = await validateProviderService(provider, provider_service_id);
-            if (serviceValid === false) {
-                console.error('[ORDER] Provider service validation failed:', {
-                    provider,
-                    provider_service_id,
-                });
-                await supabase.rpc('log_system_event', {
-                    p_type: 'invalid_provider_service',
-                    p_severity: 'error',
-                    p_source: 'order-create',
-                    p_description: `Provider service ${provider_service_id} not found at ${provider}`,
-                    p_metadata: { provider, provider_service_id, service_id: service_id || null },
-                }).catch(() => {});
-                return res.status(400).json({ error: 'Service temporarily unavailable.' });
-            }
-        }
-
-        // ── STEP 5: Idempotency Check ─────────────────────────────────────────
+        // ── STEP 4: Idempotency Check ─────────────────────────────────────────
         const hashData = `${user.id}-${service_id || package_id}-${cleanedLink}-${quantity}-${Math.floor(Date.now() / 60000)}`;
         const idempotencyHash = crypto.createHash('md5').update(hashData).digest('hex');
 
