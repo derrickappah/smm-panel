@@ -1984,6 +1984,13 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
     setLoading(true);
     try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) {
+        toast.error('Session expired or account suspended. Please log in again.');
+        if (onLogout) onLogout();
+        return;
+      }
+
       // Use our new Hubtel-specific initiation API
       const response = await fetch('/api/payments/hubtel/initiate', {
         method: 'POST',
@@ -2000,8 +2007,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       const data = await response.json();
 
       if (!response.ok) {
-        if (response.status === 401) {
-          toast.error('Session expired. Please log in again.');
+        if (response.status === 401 || response.status === 403) {
+          toast.error(data.error || 'Session expired or account suspended.');
           if (onLogout) onLogout();
           return;
         }
@@ -2052,6 +2059,13 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
     setLoading(true);
     try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) {
+        toast.error('Session expired or account suspended. Please log in again.');
+        if (onLogout) onLogout();
+        return;
+      }
+
       // Use KoraPay Checkout Redirect initiation
       const response = await fetch('/api/payments/korapay/initiate', {
         method: 'POST',
@@ -2068,8 +2082,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       const data = await response.json();
 
       if (!response.ok) {
-        if (response.status === 401) {
-          toast.error('Session expired. Please log in again.');
+        if (response.status === 401 || response.status === 403) {
+          toast.error(data.error || 'Session expired or account suspended.');
           if (onLogout) onLogout();
           return;
         }
