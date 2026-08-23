@@ -88,10 +88,15 @@ export default async function handler(req, res) {
             return res.status(404).json({ error: 'Transaction not found' });
         }
 
-        // 3. Idempotency check
+        // 3. Idempotency and status check
         if (transaction.status === 'approved') {
             console.log(`Transaction ${reference} already approved. Skipping.`);
             return res.status(200).json({ success: true, message: 'Already processed' });
+        }
+
+        if (transaction.status === 'rejected') {
+            console.warn(`Transaction ${reference} was previously rejected. Skipping approval.`);
+            return res.status(400).json({ error: 'Transaction has been rejected' });
         }
 
         // 4. Security — validate amount
@@ -107,6 +112,19 @@ export default async function handler(req, res) {
                 metadata: { payload }
             });
             return res.status(400).json({ error: 'Amount mismatch (underpayment)' });
+        }
+
+        // Check if user is banned
+        const { data: bannedEntry } = await supabase
+            .from('banned_users')
+            .select('user_id')
+            .eq('user_id', transaction.user_id)
+            .maybeSingle();
+
+        if (bannedEntry) {
+            console.warn(`User ${transaction.user_id} is banned. Rejecting KoraPay deposit credit.`);
+            await supabase.from('transactions').update({ status: 'rejected', korapay_status: korapayStatus }).eq('id', transaction.id);
+            return res.status(403).json({ error: 'User is suspended. Deposit rejected.' });
         }
 
         // 5. Determine new status

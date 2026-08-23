@@ -225,9 +225,19 @@ const AdminUserSearch = memo(() => {
       const token = session?.access_token;
 
       if (isCurrentlyBanned) {
-        // Unban
-        const { error } = await supabase.from('banned_users').delete().eq('user_id', user.id);
-        if (error) throw error;
+        // Unban via API
+        const res = await fetch('/api/admin/unban-user', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ userId: user.id })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.message || 'Failed to unban user');
+        }
         toast.success(`Unbanned ${user.name || user.email}`);
       } else {
         // Ban via API or DB

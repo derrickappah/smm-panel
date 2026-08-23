@@ -7,26 +7,12 @@
  * Route: POST /api/reward/claim-reward
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { verifyAuth, getServiceRoleClient } from '../utils/auth.js';
+import { setCorsHeaders } from '../utils/corsHeaders.js';
 
 export default async function handler(req, res) {
     // Enable CORS
-    const origin = req.headers.origin;
-    const allowedOrigins = [
-        'https://boostupgh.com',
-        'https://www.boostupgh.com',
-        'http://localhost:3000'
-    ];
-
-    if (allowedOrigins.includes(origin)) {
-        res.setHeader('Access-Control-Allow-Origin', origin);
-    } else {
-        res.setHeader('Access-Control-Allow-Origin', 'https://boostupgh.com');
-    }
-
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    setCorsHeaders(req, res);
 
     // Handle preflight requests
     if (req.method === 'OPTIONS') {
@@ -39,34 +25,16 @@ export default async function handler(req, res) {
     }
 
     try {
-        // Get authorization token
-        const authHeader = req.headers.authorization;
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            return res.status(401).json({ error: 'Unauthorized - No token provided' });
-        }
-
-        const token = authHeader.replace('Bearer ', '');
-
-        // Initialize Supabase client with user's token
-        const SUPABASE_URL = process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL;
-        const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY;
-
-        if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-            return res.status(500).json({ error: 'Server configuration error' });
-        }
-
-        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-            global: {
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
-            }
-        });
-
-        // Verify user authentication
-        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-        if (authError || !user) {
-            return res.status(401).json({ error: 'Unauthorized - Invalid token' });
+        // Authenticate user via standardized helper
+        let user;
+        try {
+            const authResult = await verifyAuth(req);
+            user = authResult.user;
+        } catch (authError) {
+            return res.status(401).json({
+                error: 'Authentication required',
+                message: authError.message
+            });
         }
 
         // Get and validate request body
@@ -90,6 +58,9 @@ export default async function handler(req, res) {
 
         // Get today's date (server-side, UTC)
         const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+
+        // Service role client for database operations (table mutation revoked from unprivileged JWTs in Migration 254)
+        const supabase = getServiceRoleClient();
 
         // RE-CHECK ELIGIBILITY (never trust frontend)
         // 1. Fetch current reward settings

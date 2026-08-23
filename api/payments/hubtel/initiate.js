@@ -58,6 +58,17 @@ export default async function handler(req, res) {
 
         const supabase = getServiceRoleClient();
 
+        // Check if user is banned
+        const { data: bannedUser } = await supabase
+            .from('banned_users')
+            .select('user_id')
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+        if (bannedUser) {
+            return res.status(403).json({ error: 'Account suspended. Deposit initiation is disabled for banned accounts.' });
+        }
+
         // Check if Hubtel is enabled in app_settings
         const { data: settingsData } = await supabase
             .from('app_settings')

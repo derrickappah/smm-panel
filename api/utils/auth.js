@@ -73,6 +73,47 @@ export async function verifyAuth(req) {
     throw new Error('Invalid or expired token (and cookie fallback failed)');
   }
 
+  // Ban Check: Ensure banned users are immediately blocked even if their JWT is still valid locally
+  const banCacheKey = `smm:user:${user.id}:banned`;
+  let isBanned = await getCached(banCacheKey);
+
+  if (isBanned === null || isBanned === undefined) {
+    try {
+      const adminClient = getServiceRoleClient();
+      const { data: bannedEntry } = await adminClient
+        .from('banned_users')
+        .select('user_id, reason')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (bannedEntry) {
+        isBanned = 'true';
+        await setCached(banCacheKey, 'true', 300);
+      } else {
+        const { data: authUserData } = await adminClient.auth.admin.getUserById(user.id);
+        const bannedUntil = authUserData?.user?.banned_until;
+        if (bannedUntil && new Date(bannedUntil) > new Date()) {
+          isBanned = 'true';
+          await setCached(banCacheKey, 'true', 300);
+          await adminClient.from('banned_users').upsert({
+            user_id: user.id,
+            reason: 'Account suspended by admin',
+            banned_at: new Date().toISOString()
+          }, { onConflict: 'user_id' }).catch(() => {});
+        } else {
+          isBanned = 'false';
+          await setCached(banCacheKey, 'false', 60);
+        }
+      }
+    } catch (checkErr) {
+      console.warn('Error checking ban status in verifyAuth:', checkErr.message);
+    }
+  }
+
+  if (isBanned === 'true') {
+    throw new Error('Account suspended: Your account has been banned. Please contact support if you believe this is an error.');
+  }
+
   // Enforce origin and referer check: only accept requests originating from the official website
   const reqOrigin = req.headers.origin;
   const reqReferer = req.headers.referer;

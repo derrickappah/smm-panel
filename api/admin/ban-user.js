@@ -6,6 +6,7 @@
 
 import { verifyAdmin, getServiceRoleClient } from '../utils/auth.js';
 import { logAdminAction } from '../utils/activityLogger.js';
+import { setCached } from '../utils/redisClient.js';
 
 export default async function handler(req, res) {
   // CORS
@@ -90,9 +91,28 @@ export default async function handler(req, res) {
       });
     }
 
+    // 4. Record ban in banned_users table for dashboard and query consistency
+    try {
+      await supabase.from('banned_users').upsert({
+        user_id: userId,
+        reason: banReason,
+        banned_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+    } catch (bannedTableErr) {
+      console.error('Error inserting into banned_users table:', bannedTableErr);
+    }
 
+    // 5. Invalidate active sessions and update Redis ban cache immediately
+    try {
+      await supabase.auth.admin.signOut(userId);
+    } catch (signOutErr) {
+      console.warn('Could not revoke active sessions for user:', signOutErr.message);
+    }
 
-    // 5. Reject pending transactions if requested
+    const banCacheKey = `smm:user:${userId}:banned`;
+    await setCached(banCacheKey, 'true', 86400 * 30);
+
+    // 6. Reject pending transactions if requested
     let rejectedCount = 0;
     if (rejectPending) {
       // Find all pending deposit transactions for this user
@@ -116,6 +136,8 @@ export default async function handler(req, res) {
             updatePayload.moolre_status = 'failed';
           } else if (method === 'paystack') {
             updatePayload.paystack_status = 'failed';
+          } else if (method === 'hubtel') {
+            updatePayload.hubtel_status = 'failed';
           }
 
           await supabase

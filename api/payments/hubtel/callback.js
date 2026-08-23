@@ -59,6 +59,11 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true, message: 'Already processed' });
         }
 
+        if (transaction.status === 'rejected') {
+            console.warn(`Transaction ${clientReference} was previously rejected (e.g. user banned). Skipping approval.`);
+            return res.status(400).json({ error: 'Transaction has been rejected' });
+        }
+
         // 3. Mandatory Server-to-Server Verification with Hubtel RMSC Status API
         const clientId = (process.env.HUBTEL_API_ID || process.env.HUBTEL_CLIENT_ID || '').trim();
         const clientSecret = (process.env.HUBTEL_API_KEY || process.env.HUBTEL_CLIENT_SECRET || '').trim();
@@ -179,7 +184,20 @@ export default async function handler(req, res) {
             return res.status(500).json({ error: 'Internal update error' });
         }
 
-        // 6. Update user balance atomically
+        // 6. Check if user is banned before crediting wallet
+        const { data: bannedEntry } = await supabase
+            .from('banned_users')
+            .select('user_id')
+            .eq('user_id', transaction.user_id)
+            .maybeSingle();
+
+        if (bannedEntry) {
+            console.warn(`User ${transaction.user_id} is banned. Rejecting Hubtel deposit credit.`);
+            await supabase.from('transactions').update({ status: 'rejected' }).eq('id', transaction.id);
+            return res.status(403).json({ error: 'User is suspended. Deposit rejected.' });
+        }
+
+        // 7. Update user balance atomically
         const { data: profile } = await supabase
             .from('profiles')
             .select('balance')
