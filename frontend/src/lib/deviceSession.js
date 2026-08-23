@@ -66,10 +66,16 @@ export async function initDeviceSession(explicitToken = null) {
  */
 export async function checkDeviceAllowed() {
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
+
     const res = await fetch('/api/auth/check-device', {
       method: 'GET',
-      credentials: 'include'
+      credentials: 'include',
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
+
     const data = await res.json();
     return data.allowed !== false && !data.isBanned;
   } catch (e) {
@@ -84,12 +90,18 @@ export async function checkDeviceAllowed() {
  */
 export async function checkLoginAllowed(email) {
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
+
     const res = await fetch('/api/auth/check-login-account', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ email })
+      body: JSON.stringify({ email }),
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
+
     const data = await res.json();
     return data.allowed !== false && !data.isBanned;
   } catch (e) {

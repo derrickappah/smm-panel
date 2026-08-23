@@ -367,43 +367,37 @@ const AuthPage = () => {
         }
 
         if (data.user) {
-          // Log successful login
-          await logLoginAttempt({
+          // Log successful login (non-blocking)
+          logLoginAttempt({
             success: true,
             email: formData.email.trim()
-          });
+          }).catch(() => {});
 
           toast.success('Welcome back!');
 
-
-
           // Create profile if it doesn't exist (non-blocking)
-          try {
-            const { error: profileError } = await supabase.from('profiles').insert({
-              id: data.user.id,
-              email: data.user.email,
-              name: data.user.email.split('@')[0],
-              balance: 0.0,
-              role: 'user',
-            });
-
-            // Ignore errors - profile might already exist or table might not exist
+          supabase.from('profiles').insert({
+            id: data.user.id,
+            email: data.user.email,
+            name: data.user.email.split('@')[0],
+            balance: 0.0,
+            role: 'user',
+          }).then(({ error: profileError }) => {
             if (profileError && !profileError.message?.includes('duplicate')) {
               console.warn('Profile creation warning:', profileError);
             }
-          } catch (err) {
-            // Ignore profile errors
-          }
+          }).catch(() => {});
 
           // Synchronize device session with authenticated user
-          const syncResult = await initDeviceSession();
-          if (syncResult?.isBanned) {
-            await supabase.auth.signOut();
-            toast.error('Access to this service is currently unavailable.');
-            setLoading(false);
-            return;
-          }
+          const accessToken = data.session?.access_token;
+          initDeviceSession(accessToken).then(async (syncResult) => {
+            if (syncResult?.isBanned) {
+              await supabase.auth.signOut();
+              toast.error('Access to this service is currently unavailable.');
+            }
+          }).catch(() => {});
 
+          setLoading(false);
           // Navigate - auth state change will handle user loading
           navigate('/dashboard');
         }

@@ -9,7 +9,8 @@
  */
 
 import { setCorsHeaders } from '../utils/corsHeaders.js';
-import { resolveDevice, getServiceRoleClient, banDeviceInDatabase } from '../utils/deviceAuth.js';
+import { getServiceRoleClient } from '../utils/auth.js';
+import { resolveDevice, banDeviceInDatabase } from '../utils/deviceAuth.js';
 
 export default async function handler(req, res) {
   setCorsHeaders(req, res);
