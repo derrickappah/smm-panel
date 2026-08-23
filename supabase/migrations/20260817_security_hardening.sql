@@ -61,7 +61,7 @@ DROP POLICY IF EXISTS "Authenticated users can upload support files" ON storage.
 DROP POLICY IF EXISTS "Authenticated users can update support files" ON storage.objects;
 DROP POLICY IF EXISTS "Authenticated users can delete support files" ON storage.objects;
 
--- 5. Profile Name Sanitization and 15-Character Limit Trigger
+-- 5. Profile Name Sanitization and 25-Character Limit Trigger
 CREATE OR REPLACE FUNCTION public.sanitize_and_limit_profile_name()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -73,9 +73,9 @@ BEGIN
     NEW.name := regexp_replace(NEW.name, '<[^>]+>', '', 'g');
     -- Trim whitespace
     NEW.name := trim(NEW.name);
-    -- Enforce max 15 characters
-    IF char_length(NEW.name) > 15 THEN
-      NEW.name := substring(NEW.name FROM 1 FOR 15);
+    -- Enforce max 25 characters
+    IF char_length(NEW.name) > 25 THEN
+      NEW.name := substring(NEW.name FROM 1 FOR 25);
     END IF;
   END IF;
   RETURN NEW;

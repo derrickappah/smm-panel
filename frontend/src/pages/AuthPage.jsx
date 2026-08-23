@@ -283,8 +283,8 @@ const AuthPage = () => {
         return;
       }
 
-      if (!isLogin && formData.name.trim().length > 15) {
-        toast.error('Name must not exceed 15 characters');
+      if (!isLogin && formData.name.trim().length > 25) {
+        toast.error('Name must not exceed 25 characters');
         setLoading(false);
         return;
       }
@@ -652,10 +652,10 @@ const AuthPage = () => {
                   <Input
                     id="name"
                     type="text"
-                    placeholder="John Doe (max 15 chars)"
-                    maxLength={15}
+                    placeholder="John Doe (max 25 chars)"
+                    maxLength={25}
                     value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value.slice(0, 15) })}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value.slice(0, 25) })}
                     required={!isLogin}
                     className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   />

@@ -21,11 +21,11 @@ const UserEditForm = ({ user, onSave, onCancel }) => {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <Label className="text-sm font-medium">Name (max 15 chars)</Label>
+        <Label className="text-sm font-medium">Name (max 25 chars)</Label>
         <Input
           value={formData.name}
-          maxLength={15}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value.slice(0, 15) })}
+          maxLength={25}
+          onChange={(e) => setFormData({ ...formData, name: e.target.value.slice(0, 25) })}
           required
           className="h-12 text-base"
           autoComplete="name"
