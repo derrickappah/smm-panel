@@ -112,6 +112,20 @@ export default async function handler(req, res) {
     const banCacheKey = `smm:user:${userId}:banned`;
     await setCached(banCacheKey, 'true', 86400 * 30);
 
+    // 5b. Restrict all devices associated with this user
+    let bannedDevicesCount = 0;
+    try {
+      const { banDeviceInDatabase } = await import('../utils/deviceAuth.js');
+      const deviceBanResult = await banDeviceInDatabase({
+        userId,
+        reason: banReason,
+        adminId: adminUser.id
+      });
+      bannedDevicesCount = deviceBanResult.updatedCount || 0;
+    } catch (deviceBanErr) {
+      console.warn('Notice: Device ban error in ban-user:', deviceBanErr.message);
+    }
+
     // 6. Reject pending transactions if requested
     let rejectedCount = 0;
     if (rejectPending) {
@@ -148,17 +162,18 @@ export default async function handler(req, res) {
       }
     }
 
-    // 6. Log the action
+    // 7. Log the action
     await logAdminAction({
       user_id: adminUser.id,
       action_type: 'admin_banned_user',
       entity_type: 'user',
       entity_id: userId,
-      description: `Banned user ${profile.name} (${profile.email || userId}) for: ${banReason}. Rejected ${rejectedCount} pending deposit(s).`,
+      description: `Banned user ${profile.name} (${profile.email || userId}) for: ${banReason}. Restricted ${bannedDevicesCount} device(s). Rejected ${rejectedCount} pending deposit(s).`,
       metadata: {
         banned_user_id: userId,
         banned_user_email: profile.email,
         reason: banReason,
+        banned_devices_count: bannedDevicesCount,
         rejected_transactions_count: rejectedCount
       },
       req
@@ -166,7 +181,8 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       success: true,
-      message: `Successfully banned user and rejected ${rejectedCount} pending deposit(s).`,
+      message: `Successfully banned user, restricted ${bannedDevicesCount} device(s), and rejected ${rejectedCount} pending deposit(s).`,
+      banned_devices_count: bannedDevicesCount,
       rejected_transactions_count: rejectedCount
     });
 

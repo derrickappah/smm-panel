@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { ShieldCheck, Mail, RefreshCw } from 'lucide-react';
 import { trackMetaEvent } from '@/lib/metaPixel';
+import { initDeviceSession, checkDeviceAllowed } from '@/lib/deviceSession';
 
 // Email validation function with TLD validation
 const isValidEmail = (email) => {
@@ -231,6 +232,14 @@ const AuthPage = () => {
         return;
       }
 
+      // Pre-check device restriction
+      const isDeviceAllowed = await checkDeviceAllowed();
+      if (!isDeviceAllowed) {
+        toast.error('Access to this service is currently unavailable.');
+        setLoading(false);
+        return;
+      }
+
       // Validate inputs
       if (!formData.email.trim()) {
         toast.error('Please enter your email');
@@ -377,6 +386,9 @@ const AuthPage = () => {
             // Ignore profile errors
           }
 
+          // Synchronize device session with authenticated user
+          initDeviceSession().catch(() => {});
+
           // Navigate - auth state change will handle user loading
           navigate('/dashboard');
         }
@@ -481,6 +493,9 @@ const AuthPage = () => {
             // Profile is automatically created by database trigger (handle_new_user)
             // No need to manually create it - this prevents 409 conflicts
             // The trigger also handles referral code and referral relationship creation
+
+            // Synchronize device session with authenticated user
+            initDeviceSession().catch(() => {});
 
             if (data.session) {
               // User is automatically logged in

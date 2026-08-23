@@ -44,7 +44,7 @@ export default async function handler(req, res) {
       });
     }
 
-    const { userId } = req.body;
+    const { userId, unbanDevices = false } = req.body;
 
     if (!userId) {
       return res.status(400).json({ error: 'Missing required field: userId' });
@@ -77,23 +77,41 @@ export default async function handler(req, res) {
     await deleteCached(banCacheKey);
     await setCached(banCacheKey, 'false', 60);
 
+    // 5b. Unban devices if requested
+    let unbannedDevicesCount = 0;
+    if (unbanDevices) {
+      try {
+        const { unbanDeviceInDatabase } = await import('../utils/deviceAuth.js');
+        const unbanDevResult = await unbanDeviceInDatabase({
+          userId,
+          adminId: adminUser.id
+        });
+        unbannedDevicesCount = unbanDevResult.updatedCount || 0;
+      } catch (devErr) {
+        console.warn('Notice: Error unbanning devices:', devErr.message);
+      }
+    }
+
     // 6. Log the action
     await logAdminAction({
       user_id: adminUser.id,
       action_type: 'admin_unbanned_user',
       entity_type: 'user',
       entity_id: userId,
-      description: `Unbanned user ${profile?.name || ''} (${profile?.email || userId})`,
+      description: `Unbanned user ${profile?.name || ''} (${profile?.email || userId})${unbanDevices ? `. Restored ${unbannedDevicesCount} device(s).` : ''}`,
       metadata: {
         unbanned_user_id: userId,
-        unbanned_user_email: profile?.email
+        unbanned_user_email: profile?.email,
+        unbanned_devices: unbanDevices,
+        unbanned_devices_count: unbannedDevicesCount
       },
       req
     });
 
     return res.status(200).json({
       success: true,
-      message: `Successfully unbanned user.`
+      message: `Successfully unbanned user.${unbanDevices ? ` Restored ${unbannedDevicesCount} device(s).` : ''}`,
+      unbanned_devices_count: unbannedDevicesCount
     });
 
   } catch (error) {

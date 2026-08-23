@@ -60,6 +60,17 @@ const fetchUserDetails = async (userId) => {
     // Don't throw, just log - we can still show other data
   }
 
+  // Fetch devices
+  const { data: devices, error: devicesError } = await supabase
+    .from('user_devices')
+    .select('id, user_id, device_id_hash, first_seen_at, last_seen_at, is_banned, banned_at, ban_reason, user_agent, ip_address, created_at')
+    .eq('user_id', userId)
+    .order('last_seen_at', { ascending: false });
+
+  if (devicesError) {
+    console.warn('Notice: Error fetching user devices:', devicesError.message);
+  }
+
   // Calculate totals
   const totalDeposits = (deposits || [])
     .filter(t => t.status === 'approved')
@@ -74,6 +85,10 @@ const fetchUserDetails = async (userId) => {
     deposits: deposits || [],
     orders: orders || [],
     transactions: transactions || [],
+    devices: (devices || []).map(dev => ({
+      ...dev,
+      device_preview: dev.device_id_hash ? `${dev.device_id_hash.substring(0, 8)}...${dev.device_id_hash.substring(dev.device_id_hash.length - 6)}` : 'N/A'
+    })),
     totals: {
       deposits: totalDeposits,
       orders: totalOrdersPrice,

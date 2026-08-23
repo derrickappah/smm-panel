@@ -1,20 +1,124 @@
 import React, { useMemo, useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useUserDetails } from '@/hooks/useUserDetails';
-import { Wallet, ShoppingCart, Receipt, User, Mail, Phone, Calendar, DollarSign } from 'lucide-react';
+import { Wallet, ShoppingCart, Receipt, User, Mail, Phone, Calendar, DollarSign, Laptop, Smartphone, ShieldAlert, ShieldCheck, Ban, CheckCircle2, LogOut, Clock, AlertTriangle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/lib/supabase';
 import OrderDetailsDialog from './OrderDetailsDialog';
 
 const UserDetailsDialog = ({ userId, open, onOpenChange }) => {
+  const queryClient = useQueryClient();
   const { data, isLoading, error } = useUserDetails(userId, { enabled: open && !!userId });
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [isOrderDetailsOpen, setIsOrderDetailsOpen] = useState(false);
+  const [deviceBanModalOpen, setDeviceBanModalOpen] = useState(false);
+  const [deviceToBan, setDeviceToBan] = useState(null);
+  const [deviceBanReason, setDeviceBanReason] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
 
   const user = data?.profile;
   const deposits = data?.deposits || [];
   const orders = data?.orders || [];
   const transactions = data?.transactions || [];
+  const devices = data?.devices || [];
   const totals = data?.totals || { deposits: 0, orders: 0, balance: 0 };
+
+  const handleRevokeSessions = async () => {
+    if (!window.confirm('Are you sure you want to revoke all active sessions for this user? They will be logged out immediately.')) {
+      return;
+    }
+    setActionLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/admin/revoke-user-sessions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token || ''}`
+        },
+        body: JSON.stringify({ userId })
+      });
+      const result = await res.json();
+      if (res.ok && result.success) {
+        toast.success('All active sessions revoked successfully');
+      } else {
+        toast.error(result.error || 'Failed to revoke sessions');
+      }
+    } catch (err) {
+      toast.error('Network error revoking sessions');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleBanDeviceSubmit = async (e) => {
+    e.preventDefault();
+    if (!deviceToBan) return;
+    setActionLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/admin/ban-device', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token || ''}`
+        },
+        body: JSON.stringify({
+          deviceId: deviceToBan.id,
+          reason: deviceBanReason || 'Restricted by admin',
+          userId
+        })
+      });
+      const result = await res.json();
+      if (res.ok && result.success) {
+        toast.success('Device restricted successfully');
+        setDeviceBanModalOpen(false);
+        setDeviceToBan(null);
+        setDeviceBanReason('');
+        queryClient.invalidateQueries({ queryKey: ['admin', 'user-details', userId] });
+      } else {
+        toast.error(result.error || 'Failed to restrict device');
+      }
+    } catch (err) {
+      toast.error('Error restricting device');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleUnbanDevice = async (device) => {
+    setActionLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/admin/unban-device', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token || ''}`
+        },
+        body: JSON.stringify({
+          deviceId: device.id,
+          userId
+        })
+      });
+      const result = await res.json();
+      if (res.ok && result.success) {
+        toast.success('Device restriction lifted');
+        queryClient.invalidateQueries({ queryKey: ['admin', 'user-details', userId] });
+      } else {
+        toast.error(result.error || 'Failed to unban device');
+      }
+    } catch (err) {
+      toast.error('Error lifting device restriction');
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   const formatCurrency = (amount) => {
     return `₵${parseFloat(amount || 0).toFixed(2)}`;
@@ -202,6 +306,10 @@ const UserDetailsDialog = ({ userId, open, onOpenChange }) => {
                     <TabsTrigger value="transactions" className="flex-1 min-w-0 data-[state=active]:bg-white data-[state=active]:shadow-sm text-xs sm:text-sm px-2 sm:px-3">
                       <Receipt className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 flex-shrink-0" />
                       <span className="truncate">Transactions ({transactions.length})</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="devices" className="flex-1 min-w-0 data-[state=active]:bg-white data-[state=active]:shadow-sm text-xs sm:text-sm px-2 sm:px-3">
+                      <Laptop className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 flex-shrink-0" />
+                      <span className="truncate">Devices ({devices.length})</span>
                     </TabsTrigger>
                   </TabsList>
 
@@ -463,6 +571,159 @@ const UserDetailsDialog = ({ userId, open, onOpenChange }) => {
                       )}
                     </div>
                   </TabsContent>
+
+                  {/* Devices Tab */}
+                  <TabsContent value="devices" className="mt-0">
+                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm p-4 sm:p-6 space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100">
+                        <div>
+                          <h4 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                            <Laptop className="w-5 h-5 text-indigo-600" />
+                            Registered Browsers & Devices
+                          </h4>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            Persistent browser installations associated with this account.
+                          </p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={actionLoading}
+                          onClick={handleRevokeSessions}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 flex items-center gap-1.5 self-start sm:self-auto"
+                        >
+                          <LogOut className="w-4 h-4" />
+                          Revoke Active Sessions
+                        </Button>
+                      </div>
+
+                      {devices.length === 0 ? (
+                        <div className="p-8 text-center text-gray-500">
+                          <Laptop className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                          <p className="text-sm font-medium">No recorded devices found for this user</p>
+                          <p className="text-xs text-gray-400 mt-1">Devices will appear here upon visitor login or activity</p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {devices.map((device) => {
+                            const isRestricted = !!device.is_banned;
+                            return (
+                              <div
+                                key={device.id}
+                                className={`rounded-xl border p-4 transition-all ${
+                                  isRestricted
+                                    ? 'bg-red-50/50 border-red-200'
+                                    : 'bg-gray-50/70 border-gray-200 hover:border-indigo-200 hover:bg-indigo-50/20'
+                                }`}
+                              >
+                                <div className="flex items-start justify-between gap-3 mb-2.5">
+                                  <div className="flex items-center gap-2">
+                                    <div className={`p-2 rounded-lg ${isRestricted ? 'bg-red-100 text-red-700' : 'bg-indigo-100 text-indigo-700'}`}>
+                                      {device.user_agent?.toLowerCase().includes('mobile') ? (
+                                        <Smartphone className="w-4 h-4" />
+                                      ) : (
+                                        <Laptop className="w-4 h-4" />
+                                      )}
+                                    </div>
+                                    <div>
+                                      <div className="text-xs font-mono font-semibold text-gray-800">
+                                        ID: {device.device_preview || device.id.slice(0, 8)}
+                                      </div>
+                                      <span
+                                        className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full mt-0.5 ${
+                                          isRestricted
+                                            ? 'bg-red-100 text-red-700 border border-red-200'
+                                            : 'bg-green-100 text-green-700 border border-green-200'
+                                        }`}
+                                      >
+                                        {isRestricted ? (
+                                          <>
+                                            <Ban className="w-3 h-3" />
+                                            Restricted
+                                          </>
+                                        ) : (
+                                          <>
+                                            <CheckCircle2 className="w-3 h-3" />
+                                            Active
+                                          </>
+                                        )}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div>
+                                    {isRestricted ? (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={actionLoading}
+                                        onClick={() => handleUnbanDevice(device)}
+                                        className="h-8 text-xs text-green-700 border-green-300 hover:bg-green-50"
+                                      >
+                                        Unban Device
+                                      </Button>
+                                    ) : (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={actionLoading}
+                                        onClick={() => {
+                                          setDeviceToBan(device);
+                                          setDeviceBanReason('Suspicious activity / terms violation');
+                                          setDeviceBanModalOpen(true);
+                                        }}
+                                        className="h-8 text-xs text-red-600 border-red-200 hover:bg-red-50"
+                                      >
+                                        <Ban className="w-3.5 h-3.5 mr-1" />
+                                        Ban Device
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="space-y-1.5 text-xs text-gray-600 pt-2 border-t border-gray-200/60">
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-400">First Seen:</span>
+                                    <span className="font-medium text-gray-700">{formatDate(device.first_seen_at)}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-400">Last Active:</span>
+                                    <span className="font-medium text-gray-700">{formatDate(device.last_seen_at)}</span>
+                                  </div>
+                                  {device.ip_address && device.ip_address !== 'N/A' && (
+                                    <div className="flex justify-between">
+                                      <span className="text-gray-400">Network IP:</span>
+                                      <span className="font-mono text-gray-600">{device.ip_address}</span>
+                                    </div>
+                                  )}
+                                  {device.user_agent && (
+                                    <div className="pt-1">
+                                      <p className="text-gray-400 text-[10px]">Browser / OS:</p>
+                                      <p className="text-gray-600 text-[11px] truncate font-mono bg-white/70 rounded p-1 border border-gray-100">
+                                        {device.user_agent}
+                                      </p>
+                                    </div>
+                                  )}
+                                  {isRestricted && (
+                                    <div className="mt-2 p-2 bg-red-100/60 rounded border border-red-200 text-red-800 text-[11px]">
+                                      <p className="font-semibold flex items-center gap-1">
+                                        <AlertTriangle className="w-3 h-3 text-red-600" />
+                                        Ban Reason:
+                                      </p>
+                                      <p className="mt-0.5">{device.ban_reason || 'Restricted by admin'}</p>
+                                      {device.banned_at && (
+                                        <p className="text-[10px] text-red-600 mt-1">Banned on: {formatDate(device.banned_at)}</p>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </TabsContent>
                 </Tabs>
               </div>
             ) : (
@@ -472,6 +733,65 @@ const UserDetailsDialog = ({ userId, open, onOpenChange }) => {
               </div>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Ban Device Dialog */}
+      <Dialog open={deviceBanModalOpen} onOpenChange={setDeviceBanModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Ban className="w-5 h-5" />
+              Restrict Browser / Device
+            </DialogTitle>
+            <DialogDescription>
+              Restricting this device will prevent it from accessing the application and creating new accounts.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleBanDeviceSubmit} className="space-y-4 pt-2">
+            <div>
+              <Label htmlFor="device-id-preview" className="text-xs text-gray-500">Device Reference</Label>
+              <Input
+                id="device-id-preview"
+                value={deviceToBan?.device_preview || deviceToBan?.id || ''}
+                readOnly
+                disabled
+                className="font-mono text-xs bg-gray-50 mt-1"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="ban-reason-input" className="text-xs font-semibold text-gray-700">Restriction Reason</Label>
+              <Input
+                id="ban-reason-input"
+                placeholder="e.g. Account abuse, fraudulent deposits, terms violation"
+                value={deviceBanReason}
+                onChange={(e) => setDeviceBanReason(e.target.value)}
+                required
+                className="mt-1 text-sm"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setDeviceBanModalOpen(false)}
+                disabled={actionLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="destructive"
+                disabled={actionLoading}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                {actionLoading ? 'Restricting...' : 'Confirm Device Restriction'}
+              </Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
 

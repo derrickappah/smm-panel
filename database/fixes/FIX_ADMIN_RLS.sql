@@ -1,5 +1,5 @@
--- Fix Admin RLS Policies
--- This script fixes the circular dependency issue with admin policies
+-- Fix Admin RLS Policies & Grants
+-- This script fixes the circular dependency issue with admin policies and restores table permissions
 -- Run this in your Supabase SQL Editor
 
 -- Step 1: Create a function to check if user is admin (bypasses RLS)
@@ -13,15 +13,29 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Step 2: Drop existing admin policies
+-- Step 2: Grant execute permission on the function
+GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.is_admin() TO anon;
+
+-- Step 3: Grant table-level permissions to authenticated role
+GRANT SELECT, INSERT, UPDATE ON public.profiles TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.transactions TO authenticated;
+
+-- Step 4: Drop existing admin policies
 DROP POLICY IF EXISTS "Admins can view all profiles" ON profiles;
 DROP POLICY IF EXISTS "Admins can update all profiles" ON profiles;
 DROP POLICY IF EXISTS "Admins can view all orders" ON orders;
 DROP POLICY IF EXISTS "Admins can update orders" ON orders;
 DROP POLICY IF EXISTS "Admins can view all transactions" ON transactions;
+DROP POLICY IF EXISTS "Admins can insert transactions" ON transactions;
 DROP POLICY IF EXISTS "Admins can update transactions" ON transactions;
+DROP POLICY IF EXISTS "rls_transactions_insert_admin" ON transactions;
+DROP POLICY IF EXISTS "rls_transactions_update_admin" ON transactions;
+DROP POLICY IF EXISTS "rls_transactions_select_admin" ON transactions;
+DROP POLICY IF EXISTS "rls_profiles_update_admin" ON profiles;
+DROP POLICY IF EXISTS "rls_profiles_select_admin" ON profiles;
 
--- Step 3: Recreate admin policies using the function
+-- Step 5: Recreate admin policies using the function
 CREATE POLICY "Admins can view all profiles" 
     ON profiles FOR SELECT 
     USING (public.is_admin());
@@ -42,13 +56,14 @@ CREATE POLICY "Admins can view all transactions"
     ON transactions FOR SELECT 
     USING (public.is_admin());
 
+CREATE POLICY "Admins can insert transactions" 
+    ON transactions FOR INSERT 
+    WITH CHECK (public.is_admin());
+
 CREATE POLICY "Admins can update transactions" 
     ON transactions FOR UPDATE 
-    USING (public.is_admin());
-
--- Step 4: Grant execute permission on the function
-GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.is_admin() TO anon;
+    USING (public.is_admin())
+    WITH CHECK (public.is_admin());
 
 -- Verify policies were created
 SELECT 
@@ -60,4 +75,3 @@ WHERE schemaname = 'public'
 AND tablename IN ('profiles', 'orders', 'transactions')
 AND policyname LIKE '%Admin%'
 ORDER BY tablename, policyname;
-

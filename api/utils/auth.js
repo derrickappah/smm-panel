@@ -114,6 +114,18 @@ export async function verifyAuth(req) {
     throw new Error('Account suspended: Your account has been banned. Please contact support if you believe this is an error.');
   }
 
+  // Device Ban Check: Ensure request device is not restricted
+  try {
+    const { enforceDeviceNotBanned } = await import('./deviceAuth.js');
+    await enforceDeviceNotBanned(req, null, user.id);
+  } catch (deviceErr) {
+    if (deviceErr.code === 'DEVICE_RESTRICTED' || deviceErr.message?.includes('currently unavailable')) {
+      throw new Error('Access to this service is currently unavailable.');
+    }
+    // Allow non-critical device resolution errors to not block valid user tokens unless strictly banned
+    console.warn('Device verification notice in verifyAuth:', deviceErr.message);
+  }
+
   // Enforce origin and referer check: only accept requests originating from the official website
   const reqOrigin = req.headers.origin;
   const reqReferer = req.headers.referer;

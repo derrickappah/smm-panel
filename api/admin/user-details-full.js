@@ -54,19 +54,34 @@ export default async function handler(req, res) {
       supabase = authResult.supabase;
     }
 
-    // Parallel fetch profile, orders, transactions, tickets, banned status, referral wallet
-    const [profileRes, ordersRes, txRes, ticketsRes, banRes, refRes] = await Promise.all([
+    // Parallel fetch profile, orders, transactions, tickets, banned status, referral wallet, devices
+    const [profileRes, ordersRes, txRes, ticketsRes, banRes, refRes, devicesRes] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', userId).single(),
       supabase.from('orders').select('id, link, quantity, total_cost, status, smmgen_order_id, jbsmmpanel_order_id, created_at, services(name)').eq('user_id', userId).order('created_at', { ascending: false }).limit(20),
       supabase.from('transactions').select('id, amount, type, status, description, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(20),
       supabase.from('tickets').select('id, subject, status, priority, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(10),
       supabase.from('banned_users').select('*').eq('user_id', userId).maybeSingle(),
-      supabase.from('referral_wallets').select('*').eq('user_id', userId).maybeSingle()
+      supabase.from('referral_wallets').select('*').eq('user_id', userId).maybeSingle(),
+      supabase.from('user_devices').select('id, user_id, device_id_hash, first_seen_at, last_seen_at, is_banned, banned_at, ban_reason, user_agent, ip_address, created_at').eq('user_id', userId).order('last_seen_at', { ascending: false }).limit(10)
     ]);
 
     if (profileRes.error || !profileRes.data) {
       return res.status(404).json({ error: 'User profile not found' });
     }
+
+    const sanitizedDevices = (devicesRes.data || []).map((dev) => ({
+      id: dev.id,
+      user_id: dev.user_id,
+      device_preview: dev.device_id_hash ? `${dev.device_id_hash.substring(0, 8)}...${dev.device_id_hash.substring(dev.device_id_hash.length - 6)}` : 'N/A',
+      first_seen_at: dev.first_seen_at,
+      last_seen_at: dev.last_seen_at,
+      is_banned: dev.is_banned,
+      banned_at: dev.banned_at,
+      ban_reason: dev.ban_reason,
+      user_agent: dev.user_agent,
+      ip_address: dev.ip_address ? dev.ip_address.split('.').slice(0, 3).join('.') + '.*' : 'N/A',
+      created_at: dev.created_at
+    }));
 
     return res.status(200).json({
       success: true,
@@ -75,7 +90,8 @@ export default async function handler(req, res) {
       transactions: txRes.data || [],
       tickets: ticketsRes.data || [],
       banInfo: banRes.data || null,
-      referralWallet: refRes.data || null
+      referralWallet: refRes.data || null,
+      devices: sanitizedDevices
     });
 
   } catch (err) {

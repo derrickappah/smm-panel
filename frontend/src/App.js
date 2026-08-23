@@ -13,6 +13,7 @@ import WhatsAppButton from "@/components/WhatsAppButton";
 import { supabase, isConfigured } from "@/lib/supabase";
 import { queryClient } from "@/lib/queryClient";
 import { prefetchPaymentSettings } from "@/hooks/usePaymentMethods";
+import { initDeviceSession } from "@/lib/deviceSession";
 import * as serviceWorkerRegistration from "./serviceWorkerRegistration";
 import ReferralTracker from "@/components/ReferralTracker";
 import UserPresenceTracker from "@/components/UserPresenceTracker";
@@ -86,6 +87,9 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Initialize persistent device session
+    initDeviceSession();
+
     // Pre-fetch payment settings as early as possible
     prefetchPaymentSettings();
 

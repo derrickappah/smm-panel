@@ -2,6 +2,7 @@
   "name": "boostup-gh-api",
   "version": "1.0.0",
   "description": "React app - NOT Next.js. API serverless functions for BoostUp GH",
+  "type": "module",
   "scripts": {
     "build": "cd frontend && npm install --legacy-peer-deps && npm run build",
     "pages:build": "cd frontend && npm install --legacy-peer-deps && npm run build"
