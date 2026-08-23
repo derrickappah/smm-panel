@@ -71,8 +71,28 @@ export async function checkDeviceAllowed() {
       credentials: 'include'
     });
     const data = await res.json();
-    return data.allowed !== false;
+    return data.allowed !== false && !data.isBanned;
   } catch (e) {
     return true; // Fail open for network glitches on client pre-check; backend verifyAuth strictly enforces
+  }
+}
+
+/**
+ * Pre-login verification to check if target account or current device is banned
+ * @param {string} email - Email being logged into
+ * @returns {Promise<boolean>} true if allowed, false if restricted
+ */
+export async function checkLoginAllowed(email) {
+  try {
+    const res = await fetch('/api/auth/check-login-account', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ email })
+    });
+    const data = await res.json();
+    return data.allowed !== false && !data.isBanned;
+  } catch (e) {
+    return true;
   }
 }

@@ -121,7 +121,15 @@ function App() {
       }
 
       if (session?.user) {
-        console.log('Session user present, loading profile...');
+        console.log('Session user present, checking device session and loading profile...');
+        const deviceResult = await initDeviceSession();
+        if (deviceResult?.isBanned) {
+          console.warn('[SECURITY] Device is restricted, signing out');
+          await supabase.auth.signOut();
+          setUser(null);
+          setLoading(false);
+          return;
+        }
         loadUserProfile(session.user.id);
       } else {
         console.log('No session user, clearing user state');

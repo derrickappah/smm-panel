@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { ShieldCheck, Mail, RefreshCw } from 'lucide-react';
 import { trackMetaEvent } from '@/lib/metaPixel';
-import { initDeviceSession, checkDeviceAllowed } from '@/lib/deviceSession';
+import { initDeviceSession, checkDeviceAllowed, checkLoginAllowed } from '@/lib/deviceSession';
 
 // Email validation function with TLD validation
 const isValidEmail = (email) => {
@@ -232,12 +232,21 @@ const AuthPage = () => {
         return;
       }
 
-      // Pre-check device restriction
-      const isDeviceAllowed = await checkDeviceAllowed();
-      if (!isDeviceAllowed) {
-        toast.error('Access to this service is currently unavailable.');
-        setLoading(false);
-        return;
+      // Pre-check device & account restriction
+      if (isLogin) {
+        const isAllowed = await checkLoginAllowed(formData.email.trim());
+        if (!isAllowed) {
+          toast.error('Access to this service is currently unavailable.');
+          setLoading(false);
+          return;
+        }
+      } else {
+        const isAllowed = await checkDeviceAllowed();
+        if (!isAllowed) {
+          toast.error('Access to this service is currently unavailable.');
+          setLoading(false);
+          return;
+        }
       }
 
       // Validate inputs
@@ -387,7 +396,13 @@ const AuthPage = () => {
           }
 
           // Synchronize device session with authenticated user
-          initDeviceSession().catch(() => {});
+          const syncResult = await initDeviceSession();
+          if (syncResult?.isBanned) {
+            await supabase.auth.signOut();
+            toast.error('Access to this service is currently unavailable.');
+            setLoading(false);
+            return;
+          }
 
           // Navigate - auth state change will handle user loading
           navigate('/dashboard');

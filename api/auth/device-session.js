@@ -44,10 +44,10 @@ export default async function handler(req, res) {
     // Resolve or generate device identity
     const { deviceId, deviceHash, isBanned, deviceRecord, isNew } = await resolveDevice(req, res, { userId });
 
-    // Ensure cookie is always explicitly set/refreshed
+    // Ensure cookies are always explicitly set/refreshed
     const isSecure = isRequestSecure(req);
-    const cookieStr = serializeDeviceCookie(deviceId, isSecure);
-    appendSetCookie(res, cookieStr);
+    const cookies = serializeDeviceCookies(deviceId, isSecure);
+    appendSetCookie(res, cookies);
 
     if (isBanned) {
       return res.status(403).json({

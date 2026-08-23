@@ -119,44 +119,62 @@ export function isRequestSecure(req) {
 }
 
 /**
- * Serialize device cookie with strict security flags
+ * Serialize device cookies with strict security flags.
+ * Sets both device_id and __Host-device_id for maximum browser & proxy compatibility.
  * @param {string} deviceId
  * @param {boolean} isSecure
- * @returns {string}
+ * @returns {string[]} Array of Set-Cookie header strings
  */
-export function serializeDeviceCookie(deviceId, isSecure = true) {
-  // __Host- cookies REQUIRE Secure=true, Path=/, and no Domain attribute
-  const cookieName = isSecure ? DEVICE_ID_COOKIE_NAME : DEVICE_ID_COOKIE_FALLBACK;
-  const parts = [
-    `${cookieName}=${encodeURIComponent(deviceId)}`,
+export function serializeDeviceCookies(deviceId, isSecure = true) {
+  const cookies = [];
+
+  if (isSecure) {
+    cookies.push([
+      `__Host-device_id=${encodeURIComponent(deviceId)}`,
+      `Path=/`,
+      `Max-Age=${COOKIE_MAX_AGE_SECONDS}`,
+      `SameSite=Lax`,
+      `HttpOnly`,
+      `Secure`
+    ].join('; '));
+  }
+
+  const baseCookie = [
+    `device_id=${encodeURIComponent(deviceId)}`,
     `Path=/`,
     `Max-Age=${COOKIE_MAX_AGE_SECONDS}`,
     `SameSite=Lax`,
     `HttpOnly`
   ];
+  if (isSecure) baseCookie.push('Secure');
+  cookies.push(baseCookie.join('; '));
 
-  if (isSecure) {
-    parts.push('Secure');
-  }
+  return cookies;
+}
 
-  return parts.join('; ');
+export function serializeDeviceCookie(deviceId, isSecure = true) {
+  const cookies = serializeDeviceCookies(deviceId, isSecure);
+  return cookies[0];
 }
 
 /**
- * Append Set-Cookie header safely to response without clobbering existing cookies
+ * Append Set-Cookie headers safely to response
  * @param {Object} res
- * @param {string} cookieString
+ * @param {string|string[]} cookieInput
  */
-export function appendSetCookie(res, cookieString) {
-  if (!res || !cookieString) return;
+export function appendSetCookie(res, cookieInput) {
+  if (!res || !cookieInput) return;
+  const newCookies = Array.isArray(cookieInput) ? cookieInput : [cookieInput];
   const existing = res.getHeader('Set-Cookie');
-  if (!existing) {
-    res.setHeader('Set-Cookie', cookieString);
-  } else if (Array.isArray(existing)) {
-    res.setHeader('Set-Cookie', [...existing, cookieString]);
-  } else {
-    res.setHeader('Set-Cookie', [existing, cookieString]);
+  let combined = [];
+
+  if (existing) {
+    if (Array.isArray(existing)) combined = [...existing];
+    else combined = [existing];
   }
+
+  combined.push(...newCookies);
+  res.setHeader('Set-Cookie', combined);
 }
 
 /**
@@ -179,8 +197,8 @@ export async function resolveDevice(req, res = null, options = {}) {
     deviceId = generateDeviceId();
     isNew = true;
     if (res) {
-      const cookieStr = serializeDeviceCookie(deviceId, isSecure);
-      appendSetCookie(res, cookieStr);
+      const cookies = serializeDeviceCookies(deviceId, isSecure);
+      appendSetCookie(res, cookies);
     }
   }
 
@@ -220,9 +238,42 @@ export async function resolveDevice(req, res = null, options = {}) {
       console.warn('Error querying user_devices:', selectError.message);
     }
 
+    // Check if target user is banned
+    let targetUserIsBanned = false;
+    const checkUserId = userId || existingDevice?.user_id;
+    if (checkUserId) {
+      const { data: bannedEntry } = await supabase
+        .from('banned_users')
+        .select('user_id')
+        .eq('user_id', checkUserId)
+        .maybeSingle();
+
+      if (bannedEntry) {
+        targetUserIsBanned = true;
+      } else {
+        const { data: authUser } = await supabase.auth.admin.getUserById(checkUserId);
+        if (authUser?.user?.banned_until && new Date(authUser.user.banned_until) > new Date()) {
+          targetUserIsBanned = true;
+        }
+      }
+    }
+
     if (existingDevice) {
       deviceRecord = existingDevice;
-      isBanned = !!existingDevice.is_banned;
+      isBanned = !!existingDevice.is_banned || targetUserIsBanned;
+
+      if (targetUserIsBanned && !existingDevice.is_banned) {
+        // Enforce ban on device record immediately
+        await supabase
+          .from('user_devices')
+          .update({
+            is_banned: true,
+            banned_at: new Date().toISOString(),
+            ban_reason: 'Associated account suspended'
+          })
+          .eq('id', existingDevice.id)
+          .catch(() => {});
+      }
 
       // Update Redis cache
       await setCached(banCacheKey, isBanned ? 'true' : 'false', isBanned ? 86400 * 7 : 300);
@@ -249,12 +300,15 @@ export async function resolveDevice(req, res = null, options = {}) {
       }
     } else {
       // Create new device record (atomic upsert on device_id_hash)
+      isBanned = targetUserIsBanned;
       const newDevicePayload = {
         device_id_hash: deviceHash,
         user_id: userId || null,
         first_seen_at: new Date().toISOString(),
         last_seen_at: new Date().toISOString(),
-        is_banned: false,
+        is_banned: isBanned,
+        banned_at: isBanned ? new Date().toISOString() : null,
+        ban_reason: isBanned ? 'Associated account suspended' : null,
         ip_address: ipAddress,
         user_agent: userAgent
       };
@@ -270,7 +324,7 @@ export async function resolveDevice(req, res = null, options = {}) {
         isBanned = !!inserted.is_banned;
       }
 
-      await setCached(banCacheKey, isBanned ? 'true' : 'false', 300);
+      await setCached(banCacheKey, isBanned ? 'true' : 'false', isBanned ? 86400 * 7 : 300);
     }
   } catch (dbErr) {
     console.error('Database exception in resolveDevice:', dbErr.message);
