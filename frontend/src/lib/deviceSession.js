@@ -11,19 +11,18 @@ const CLIENT_DEVICE_SIGNAL_KEY = 'device_id_client';
 
 /**
  * Initialize or synchronize device session with backend
+ * @param {string} [explicitToken=null] - Optional access token
  * @returns {Promise<{ success: boolean, isBanned: boolean, clientSignal?: string }>}
  */
-export async function initDeviceSession() {
+export async function initDeviceSession(explicitToken = null) {
   try {
     let authHeader = {};
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.access_token) {
-        authHeader = { Authorization: `Bearer ${session.access_token}` };
-      }
-    } catch (e) {
-      // Session unavailable
+    if (explicitToken) {
+      authHeader = { Authorization: `Bearer ${explicitToken}` };
     }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3500); // 3.5s timeout safety
 
     const response = await fetch('/api/auth/device-session', {
       method: 'POST',
@@ -31,8 +30,10 @@ export async function initDeviceSession() {
         'Content-Type': 'application/json',
         ...authHeader
       },
-      credentials: 'include' // Crucial: send & receive HttpOnly cookies
+      credentials: 'include', // Crucial: send & receive HttpOnly cookies
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
 
     const data = await response.json();
 
@@ -43,7 +44,6 @@ export async function initDeviceSession() {
     if (data.clientSignal) {
       const previousSignal = localStorage.getItem(CLIENT_DEVICE_SIGNAL_KEY);
       if (previousSignal && previousSignal !== data.clientSignal) {
-        // Device signal refreshed or rotated
         console.debug('[DeviceSession] Client signal synchronized');
       }
       localStorage.setItem(CLIENT_DEVICE_SIGNAL_KEY, data.clientSignal);
@@ -55,7 +55,7 @@ export async function initDeviceSession() {
       clientSignal: data.clientSignal
     };
   } catch (error) {
-    console.warn('[DeviceSession] Non-blocking init error:', error.message);
+    console.warn('[DeviceSession] Non-blocking init warning:', error.message);
     return { success: false, isBanned: false };
   }
 }

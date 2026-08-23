@@ -93,14 +93,25 @@ function App() {
     // Pre-fetch payment settings as early as possible
     prefetchPaymentSettings();
 
+    // Safety fallback timeout: ensure loading state resolves within 3.5s max
+    const fallbackTimeout = setTimeout(() => {
+      setLoading((prev) => {
+        if (prev) {
+          console.warn('[App] Auth resolution fallback timeout triggered');
+          return false;
+        }
+        return false;
+      });
+    }, 3500);
+
     // Skip if Supabase is not configured
     if (!isConfigured) {
       console.warn("Supabase not configured, skipping auth setup");
       setLoading(false);
+      clearTimeout(fallbackTimeout);
       return;
     }
 
-    let isInitialCheck = true;
     console.log('Setting up auth listener...');
 
     // Listen for auth state changes
@@ -116,31 +127,34 @@ function App() {
         if (window.location.pathname !== '/reset-password') {
           window.location.href = '/reset-password';
         }
+        clearTimeout(fallbackTimeout);
         setLoading(false);
         return;
       }
 
       if (session?.user) {
-        console.log('Session user present, checking device session and loading profile...');
-        const deviceResult = await initDeviceSession();
-        if (deviceResult?.isBanned) {
-          console.warn('[SECURITY] Device is restricted, signing out');
-          await supabase.auth.signOut();
-          setUser(null);
-          setLoading(false);
-          return;
-        }
+        console.log('Session user present, loading profile...');
+        // Load user profile without blocking on device session
         loadUserProfile(session.user.id);
+
+        // Verify device session in parallel with access token
+        initDeviceSession(session.access_token).then((deviceResult) => {
+          if (deviceResult?.isBanned) {
+            console.warn('[SECURITY] Device is restricted, signing out');
+            supabase.auth.signOut();
+            setUser(null);
+          }
+        }).catch(() => {});
       } else {
         console.log('No session user, clearing user state');
         setUser(null);
+        clearTimeout(fallbackTimeout);
         setLoading(false);
       }
-      
-      isInitialCheck = false;
     });
 
     return () => {
+      clearTimeout(fallbackTimeout);
       if (subscription) {
         console.log('Unsubscribing from auth listener');
         subscription.unsubscribe();
