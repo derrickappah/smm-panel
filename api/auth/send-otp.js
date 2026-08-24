@@ -2,6 +2,21 @@ import { getServiceRoleClient } from '../utils/auth.js';
 import { setCorsHeaders } from '../utils/corsHeaders.js';
 import { redis } from '../utils/redisClient.js';
 import crypto from 'crypto';
+// In-memory fallback tracking for when Redis is unavailable
+const memoryOtpCounts = new Map();
+
+// Periodic cleanup of stale memory entries (older than 10 minutes)
+if (typeof setInterval !== 'undefined') {
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, record] of memoryOtpCounts.entries()) {
+      if (now - record.firstAttempt > 600000) {
+        memoryOtpCounts.delete(key);
+      }
+    }
+  }, 60000);
+}
+
 // Format phone number for Moolre SMS Gateway (e.g., converts 024XXXXXXX to 23324XXXXXXX)
 function formatPhoneForMoolre(phone) {
   let cleaned = (phone || '').replace(/\D/g, '');
@@ -26,6 +41,8 @@ export default async function handler(req, res) {
     }
 
     // SECURITY: Rate limit OTP sends — max 3 per identifier per 10 minutes
+    let rateLimitExceeded = false;
+
     if (redis) {
       try {
         const rateLimitKey = `smm:otp:send:${identifier}`;
@@ -34,14 +51,38 @@ export default async function handler(req, res) {
           await redis.expire(rateLimitKey, 600); // 10 minute window
         }
         if (currentCount > 3) {
+          rateLimitExceeded = true;
           console.warn(`[OTP RATE LIMIT] Blocked OTP send for ${identifier} (${currentCount} attempts)`);
-          return res.status(429).json({
-            error: 'Too many OTP requests. Please wait 10 minutes before trying again.'
-          });
         }
       } catch (redisErr) {
-        console.error('[OTP RATE LIMIT] Redis error, proceeding without rate limit:', redisErr.message);
+        console.warn('[OTP RATE LIMIT] Redis error, activating in-memory fallback:', redisErr.message);
       }
+    }
+
+    // In-memory rate limiting fallback if Redis was unavailable or not configured
+    if (!redis || !rateLimitExceeded) {
+      const now = Date.now();
+      const memRecord = memoryOtpCounts.get(identifier);
+
+      if (memRecord) {
+        if (now - memRecord.firstAttempt > 600000) {
+          memoryOtpCounts.set(identifier, { count: 1, firstAttempt: now });
+        } else {
+          memRecord.count += 1;
+          if (memRecord.count > 3) {
+            rateLimitExceeded = true;
+            console.warn(`[OTP RATE LIMIT] Blocked OTP send via in-memory fallback for ${identifier} (${memRecord.count} attempts)`);
+          }
+        }
+      } else {
+        memoryOtpCounts.set(identifier, { count: 1, firstAttempt: now });
+      }
+    }
+
+    if (rateLimitExceeded) {
+      return res.status(429).json({
+        error: 'Too many OTP requests. Please wait 10 minutes before trying again.'
+      });
     }
 
     // Generate cryptographically secure random 6-digit numeric OTP code

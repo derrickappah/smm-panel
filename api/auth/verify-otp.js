@@ -2,6 +2,21 @@ import { getServiceRoleClient } from '../utils/auth.js';
 import { setCorsHeaders } from '../utils/corsHeaders.js';
 import { redis } from '../utils/redisClient.js';
 import crypto from 'crypto';
+// In-memory fallback tracking for when Redis is unavailable
+const memoryVerifyCounts = new Map();
+
+// Periodic cleanup of stale memory entries (older than 10 minutes)
+if (typeof setInterval !== 'undefined') {
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, record] of memoryVerifyCounts.entries()) {
+      if (now - record.firstAttempt > 600000) {
+        memoryVerifyCounts.delete(key);
+      }
+    }
+  }, 60000);
+}
+
 export default async function handler(req, res) {
   setCorsHeaders(req, res);
 
@@ -19,6 +34,8 @@ export default async function handler(req, res) {
     }
 
     // SECURITY: Brute-force protection — max 5 verify attempts per identifier per 10 minutes
+    let isBruteForced = false;
+
     if (redis) {
       try {
         const bruteForceKey = `smm:otp:verify:${rawIdentifier}`;
@@ -27,14 +44,38 @@ export default async function handler(req, res) {
           await redis.expire(bruteForceKey, 600); // 10 minute window
         }
         if (attempts > 5) {
+          isBruteForced = true;
           console.warn(`[OTP BRUTE FORCE] Blocked verify for ${rawIdentifier} (${attempts} attempts)`);
-          return res.status(429).json({
-            error: 'Too many verification attempts. Your OTP has been invalidated. Please request a new code.'
-          });
         }
       } catch (redisErr) {
-        console.error('[OTP BRUTE FORCE] Redis error, proceeding without protection:', redisErr.message);
+        console.warn('[OTP BRUTE FORCE] Redis error, activating in-memory fallback:', redisErr.message);
       }
+    }
+
+    // In-memory brute force fallback if Redis is unavailable or unconfigured
+    if (!redis || !isBruteForced) {
+      const now = Date.now();
+      const memRecord = memoryVerifyCounts.get(rawIdentifier);
+
+      if (memRecord) {
+        if (now - memRecord.firstAttempt > 600000) {
+          memoryVerifyCounts.set(rawIdentifier, { count: 1, firstAttempt: now });
+        } else {
+          memRecord.count += 1;
+          if (memRecord.count > 5) {
+            isBruteForced = true;
+            console.warn(`[OTP BRUTE FORCE] Blocked verify via in-memory fallback for ${rawIdentifier} (${memRecord.count} attempts)`);
+          }
+        }
+      } else {
+        memoryVerifyCounts.set(rawIdentifier, { count: 1, firstAttempt: now });
+      }
+    }
+
+    if (isBruteForced) {
+      return res.status(429).json({
+        error: 'Too many verification attempts. Your OTP has been invalidated. Please request a new code.'
+      });
     }
 
     const supabase = getServiceRoleClient();
