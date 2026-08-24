@@ -1,7 +1,9 @@
 /**
- * Admin API Endpoint to Fetch Banned Users List
+ * Admin API Endpoint to Fetch ALL Banned Users
  * 
  * Path: /api/admin/banned-users
+ * Description: High-speed server action endpoint returning 100% of banned accounts from the database.
+ * Uses range batching to bypass PostgREST's default row limit.
  */
 
 import { verifyAdmin, getServiceRoleClient } from '../utils/auth.js';
@@ -44,7 +46,6 @@ export default async function handler(req, res) {
     }
 
     const searchTerm = req.method === 'POST' ? req.body.searchTerm : req.query.searchTerm || req.query.q || '';
-    const limit = Math.min(parseInt((req.method === 'POST' ? req.body.limit : req.query.limit) || '100', 10), 500);
 
     let supabase;
     try {
@@ -53,19 +54,18 @@ export default async function handler(req, res) {
       supabase = authResult.supabase;
     }
 
-    // 2. Fetch all rows from banned_users table
-    const { data: bannedRecords, error: banErr, count } = await supabase
+    // 2. Fetch total count of banned records first
+    const { count: totalBannedCount, error: countErr } = await supabase
       .from('banned_users')
-      .select('*', { count: 'exact' })
-      .order('banned_at', { ascending: false })
-      .limit(limit);
+      .select('*', { count: 'exact', head: true });
 
-    if (banErr) {
-      console.error('Fetch banned users DB error:', banErr);
-      return res.status(500).json({ error: 'Failed to fetch banned users from database', details: banErr.message });
+    if (countErr) {
+      console.error('Count banned users error:', countErr);
+      return res.status(500).json({ error: 'Failed to count banned users', details: countErr.message });
     }
 
-    if (!bannedRecords || bannedRecords.length === 0) {
+    const totalToFetch = totalBannedCount || 0;
+    if (totalToFetch === 0) {
       return res.status(200).json({
         success: true,
         bannedUsers: [],
@@ -74,41 +74,75 @@ export default async function handler(req, res) {
       });
     }
 
+    // 3. Fetch ALL banned_users rows in range-based batches of 1,000 to bypass PostgREST row caps
+    const BATCH_SIZE = 1000;
+    let allBannedRecords = [];
+    let from = 0;
+    let hasMore = true;
+
+    while (hasMore && allBannedRecords.length < totalToFetch) {
+      const to = Math.min(from + BATCH_SIZE - 1, totalToFetch - 1);
+      const { data: pageData, error: pageErr } = await supabase
+        .from('banned_users')
+        .select('*')
+        .order('banned_at', { ascending: false })
+        .range(from, to);
+
+      if (pageErr) {
+        console.error('Error fetching banned users page batch:', pageErr);
+        break;
+      }
+
+      if (pageData && pageData.length > 0) {
+        allBannedRecords = allBannedRecords.concat(pageData);
+        hasMore = pageData.length === (to - from + 1) && allBannedRecords.length < totalToFetch;
+        from += pageData.length;
+      } else {
+        hasMore = false;
+      }
+    }
+
     // Extract User IDs
-    const userIds = bannedRecords.map(b => b.user_id);
+    const userIds = allBannedRecords.map(b => b.user_id);
 
-    // 3. Batch fetch profiles, admin logs, and stats in parallel
-    const [profilesRes, ordersRes, depositsRes] = await Promise.all([
-      supabase.from('profiles').select('*').in('id', userIds),
-      supabase.from('orders').select('user_id, total_cost, status').in('user_id', userIds),
-      supabase.from('transactions').select('user_id, amount, status').eq('type', 'deposit').in('user_id', userIds)
-    ]);
-
+    // 4. Chunked fetch of profiles, orders, and deposits in batches of 500
+    const CHUNK_SIZE = 500;
     const profilesMap = new Map();
-    (profilesRes.data || []).forEach(p => profilesMap.set(p.id, p));
-
     const ordersMap = new Map();
-    (ordersRes.data || []).forEach(o => {
-      if (!ordersMap.has(o.user_id)) ordersMap.set(o.user_id, { count: 0, totalSpent: 0 });
-      const entry = ordersMap.get(o.user_id);
-      entry.count += 1;
-      if (o.status !== 'canceled' && o.status !== 'refunded') {
-        entry.totalSpent += Number(o.total_cost || 0);
-      }
-    });
-
     const depositsMap = new Map();
-    (depositsRes.data || []).forEach(d => {
-      if (!depositsMap.has(d.user_id)) depositsMap.set(d.user_id, { count: 0, totalDeposited: 0 });
-      const entry = depositsMap.get(d.user_id);
-      entry.count += 1;
-      if (d.status === 'approved' || d.status === 'completed') {
-        entry.totalDeposited += Number(d.amount || 0);
-      }
-    });
 
-    // 4. Combine banned info with profiles
-    let combinedBannedUsers = bannedRecords.map(b => {
+    for (let i = 0; i < userIds.length; i += CHUNK_SIZE) {
+      const chunkIds = userIds.slice(i, i + CHUNK_SIZE);
+
+      const [profilesRes, ordersRes, depositsRes] = await Promise.all([
+        supabase.from('profiles').select('id, name, email, phone_number, balance, role, created_at, referral_code').in('id', chunkIds),
+        supabase.from('orders').select('user_id, total_cost, status').in('user_id', chunkIds),
+        supabase.from('transactions').select('user_id, amount, status').eq('type', 'deposit').in('user_id', chunkIds)
+      ]);
+
+      (profilesRes.data || []).forEach(p => profilesMap.set(p.id, p));
+
+      (ordersRes.data || []).forEach(o => {
+        if (!ordersMap.has(o.user_id)) ordersMap.set(o.user_id, { count: 0, totalSpent: 0 });
+        const entry = ordersMap.get(o.user_id);
+        entry.count += 1;
+        if (o.status !== 'canceled' && o.status !== 'refunded') {
+          entry.totalSpent += Number(o.total_cost || 0);
+        }
+      });
+
+      (depositsRes.data || []).forEach(d => {
+        if (!depositsMap.has(d.user_id)) depositsMap.set(d.user_id, { count: 0, totalDeposited: 0 });
+        const entry = depositsMap.get(d.user_id);
+        entry.count += 1;
+        if (d.status === 'approved' || d.status === 'completed') {
+          entry.totalDeposited += Number(d.amount || 0);
+        }
+      });
+    }
+
+    // 5. Combine banned info with profiles
+    let combinedBannedUsers = allBannedRecords.map(b => {
       const profile = profilesMap.get(b.user_id) || {};
       const orderStats = ordersMap.get(b.user_id) || { count: 0, totalSpent: 0 };
       const depositStats = depositsMap.get(b.user_id) || { count: 0, totalDeposited: 0 };
@@ -116,7 +150,7 @@ export default async function handler(req, res) {
       return {
         banId: b.id,
         userId: b.user_id,
-        reason: b.reason || 'No reason provided',
+        reason: b.reason || 'No reason specified',
         bannedAt: b.banned_at,
         bannedBy: b.banned_by,
         user: {
@@ -138,7 +172,7 @@ export default async function handler(req, res) {
       };
     });
 
-    // 5. Filter by search term if provided
+    // 6. Filter by search term if provided
     if (searchTerm && searchTerm.trim()) {
       const clean = searchTerm.trim().toLowerCase();
       combinedBannedUsers = combinedBannedUsers.filter(item => 
