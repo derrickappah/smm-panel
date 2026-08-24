@@ -42,10 +42,12 @@ export async function verifyAuth(req) {
 
   // Verify token
   let user = null;
+  let tokenIat = null;
   if (jwtSecret) {
     try {
       const decoded = jwt.verify(token, jwtSecret, { algorithms: ['HS256'] });
       if (decoded && decoded.sub) {
+        tokenIat = decoded.iat || null;
         user = {
           id: decoded.sub,
           email: decoded.email,
@@ -53,7 +55,8 @@ export async function verifyAuth(req) {
           app_metadata: decoded.app_metadata,
           user_metadata: decoded.user_metadata,
           aud: decoded.aud,
-          created_at: decoded.created_at
+          created_at: decoded.created_at,
+          iat: decoded.iat
         };
       }
     } catch (jwtError) {
@@ -71,6 +74,17 @@ export async function verifyAuth(req) {
 
   if (!user) {
     throw new Error('Invalid or expired token (and cookie fallback failed)');
+  }
+
+  // Session Revocation Check: Ensure tokens issued before session revocation are rejected
+  const revokedAtCacheKey = `smm:user:${user.id}:sessions_revoked_at`;
+  const sessionsRevokedAt = await getCached(revokedAtCacheKey);
+  if (sessionsRevokedAt) {
+    const revokedTimestamp = parseInt(sessionsRevokedAt, 10);
+    const iat = tokenIat || user.iat || (jwt.decode(token)?.iat);
+    if (iat && iat < revokedTimestamp) {
+      throw new Error('Session has been revoked. Please log in again.');
+    }
   }
 
   // Ban Check: Ensure banned users are immediately blocked even if their JWT is still valid locally

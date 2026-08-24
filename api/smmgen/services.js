@@ -1,5 +1,6 @@
 import { getCached, setCached } from '../utils/redisClient.js';
 import { setCorsHeaders } from '../utils/corsHeaders.js';
+import { verifyAdmin } from '../utils/auth.js';
 
 export default async function handler(req, res) {
   setCorsHeaders(req, res);
@@ -14,9 +15,13 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const cacheKey = 'smm:provider:smmgen:services';
-
   try {
+    const { isAdmin } = await verifyAdmin(req).catch(() => ({ isAdmin: false }));
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Unauthorized: Direct provider access restricted to admins' });
+    }
+
+    const cacheKey = 'smm:provider:smmgen:services';
     const cachedServices = await getCached(cacheKey);
     if (cachedServices) {
       return res.status(200).json(cachedServices);

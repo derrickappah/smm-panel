@@ -7,6 +7,7 @@
 import { verifyAdmin, getServiceRoleClient } from '../utils/auth.js';
 import { setCorsHeaders } from '../utils/corsHeaders.js';
 import { logAdminAction } from '../utils/activityLogger.js';
+import { setCached } from '../utils/redisClient.js';
 
 export default async function handler(req, res) {
   setCorsHeaders(req, res);
@@ -24,7 +25,11 @@ export default async function handler(req, res) {
 
     const supabase = getServiceRoleClient();
 
-    // 1. Sign out all sessions for the target user in Supabase Auth
+    // 1. Invalidate active token sessions immediately in cache
+    const currentUnix = Math.floor(Date.now() / 1000);
+    await setCached(`smm:user:${userId}:sessions_revoked_at`, currentUnix.toString(), 3600);
+
+    // 2. Sign out all sessions for the target user in Supabase Auth
     const { error: signOutError } = await supabase.auth.admin.signOut(userId);
 
     if (signOutError) {

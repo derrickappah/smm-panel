@@ -12,6 +12,7 @@ function escapeHtml(str) {
 }
 
 import { setCorsHeaders } from './utils/corsHeaders.js';
+import { verifyAdmin } from './utils/auth.js';
 
 export default async function handler(req, res) {
   // Enable CORS
@@ -28,6 +29,11 @@ export default async function handler(req, res) {
   }
 
   try {
+    const { isAdmin } = await verifyAdmin(req).catch(() => ({ isAdmin: false }));
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Unauthorized: Admin access required to dispatch support emails' });
+    }
+
     const { to, subject, message, ticketId, userName } = req.body;
 
     if (!to || !subject || !message) {

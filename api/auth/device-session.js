@@ -8,7 +8,7 @@
  */
 
 import { setCorsHeaders } from '../utils/corsHeaders.js';
-import { resolveDevice, isRequestSecure, serializeDeviceCookie, appendSetCookie, hashDeviceId } from '../utils/deviceAuth.js';
+import { resolveDevice, isRequestSecure, serializeDeviceCookies, appendSetCookie, hashDeviceId } from '../utils/deviceAuth.js';
 import jwt from 'jsonwebtoken';
 
 export default async function handler(req, res) {

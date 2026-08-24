@@ -57,12 +57,52 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Invalid or expired OTP code. Please check and try again.' });
     }
     const meta = matchingEvent.metadata || {};
-    const storedHash = meta.otp_hash;
-    const storedSalt = meta.salt;
+    const storedHash = meta.otp_hash || '';
+    const storedSalt = meta.salt || '';
+    const dbAttempts = Number(meta.attempts || 0);
+
+    // If already invalidated or max attempts reached in DB
+    if (meta.invalidated || dbAttempts >= 5) {
+      return res.status(429).json({
+        error: 'Too many verification attempts. Your OTP has been invalidated. Please request a new code.'
+      });
+    }
+
     const computedHash = crypto.createHash('sha256').update(storedSalt + userCode).digest('hex');
     const notExpired = new Date(meta.expires_at) > new Date();
     const notVerified = !meta.verified;
-    if (computedHash !== storedHash || !notExpired || !notVerified) {
+
+    // Timing-safe constant time comparison
+    let hashesMatch = false;
+    try {
+      const computedBuf = Buffer.from(computedHash, 'hex');
+      const storedBuf = Buffer.from(storedHash, 'hex');
+      if (computedBuf.length === storedBuf.length && computedBuf.length > 0) {
+        hashesMatch = crypto.timingSafeEqual(computedBuf, storedBuf);
+      }
+    } catch (cmpErr) {
+      hashesMatch = false;
+    }
+
+    if (!hashesMatch || !notExpired || !notVerified) {
+      const newAttempts = dbAttempts + 1;
+      const isNowInvalidated = newAttempts >= 5;
+      
+      // Update DB record with incremented attempt count
+      await supabase.from('system_events').update({
+        metadata: {
+          ...meta,
+          attempts: newAttempts,
+          invalidated: isNowInvalidated
+        }
+      }).eq('id', matchingEvent.id).catch(() => {});
+
+      if (isNowInvalidated) {
+        return res.status(429).json({
+          error: 'Too many verification attempts. Your OTP has been invalidated. Please request a new code.'
+        });
+      }
+
       return res.status(400).json({ error: 'Invalid or expired OTP code. Please check and try again.' });
     }
 
