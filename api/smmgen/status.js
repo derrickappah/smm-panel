@@ -1,5 +1,6 @@
 // Vercel Serverless Function for SMMGen Order Status
 import { setCorsHeaders } from '../utils/corsHeaders.js';
+import { verifyAdmin } from '../utils/auth.js';
 
 const REQUEST_TIMEOUT = 20000; // 20 seconds
 
@@ -46,6 +47,11 @@ export default async function handler(req, res) {
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const { isAdmin } = await verifyAdmin(req).catch(() => ({ isAdmin: false }));
+  if (!isAdmin) {
+    return res.status(403).json({ error: 'Unauthorized: Direct provider status access restricted to admins' });
   }
 
   const startTime = Date.now();

@@ -1,4 +1,4 @@
-import { getServiceRoleClient } from './utils/auth.js';
+import { getServiceRoleClient, verifyAdmin } from './utils/auth.js';
 import { dispatchProviderOrder, fetchProviderOrderStatus } from './utils/providerClient.js';
 import { setCorsHeaders } from './utils/corsHeaders.js';
 
@@ -8,6 +8,18 @@ export default async function handler(req, res) {
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
+  }
+
+  // Authorization: Enforce admin session or valid CRON_SECRET token
+  const cronSecret = req.headers['x-cron-secret'] || (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.replace('Bearer ', '') : null);
+  const configuredCronSecret = process.env.CRON_SECRET;
+  const isCronAuthorized = configuredCronSecret && cronSecret === configuredCronSecret;
+
+  if (!isCronAuthorized) {
+    const { isAdmin } = await verifyAdmin(req).catch(() => ({ isAdmin: false }));
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Unauthorized: Admin privileges or valid CRON secret required.' });
+    }
   }
 
   const supabase = getServiceRoleClient();
