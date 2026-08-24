@@ -7,7 +7,8 @@ BEGIN;
 
 -- ============================================================================
 -- 1. Universal Atomic Deposit Approval Function (Hardened v2.1)
--- ============================================================================
+-- Ensure hubtel_status column exists on transactions table
+ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS hubtel_status TEXT;
 
 CREATE OR REPLACE FUNCTION public.approve_deposit_transaction_universal_v2(
     p_transaction_id UUID,
