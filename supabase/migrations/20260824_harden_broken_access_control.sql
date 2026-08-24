@@ -50,8 +50,17 @@ CREATE OR REPLACE FUNCTION public.get_pending_service_notifications(p_user_id UU
 RETURNS TABLE (
     notification_id UUID,
     order_id TEXT,
+    provider_order_id TEXT,
     service_id UUID,
     message TEXT,
+    title TEXT,
+    subtitle TEXT,
+    show_order_id BOOLEAN,
+    instructions_title TEXT,
+    instructions_steps JSONB,
+    show_instructions BOOLEAN,
+    video_url TEXT,
+    show_video BOOLEAN,
     image_url TEXT,
     created_at TIMESTAMPTZ
 ) AS $$
@@ -65,8 +74,25 @@ BEGIN
     SELECT 
         sn.id as notification_id,
         o.id as order_id,
+        -- Priority matching OrderHistory.jsx: G1618 > World of SMM > SMMCost > JB SMM Panel > SMMGen
+        COALESCE(
+            NULLIF(o.g1618_order_id, 'order not placed at g1618'),
+            NULLIF(o.worldofsmm_order_id, 'order not placed at worldofsmm'),
+            NULLIF(o.smmcost_order_id, 'order not placed at smmcost'),
+            NULLIF(o.jbsmmpanel_order_id::text, '0'),
+            NULLIF(NULLIF(o.smmgen_order_id, 'order not placed at smm gen'), o.id),
+            o.id
+        ) as provider_order_id,
         sn.service_id,
         sn.message,
+        sn.title,
+        sn.subtitle,
+        sn.show_order_id,
+        sn.instructions_title,
+        sn.instructions_steps,
+        sn.show_instructions,
+        sn.video_url,
+        sn.show_video,
         sn.image_url,
         sn.created_at
     FROM public.service_notifications sn
@@ -78,7 +104,7 @@ BEGIN
     WHERE sn.is_active = true
       AND o.user_id = p_user_id
       AND sna.id IS NULL
-    ORDER BY sn.created_at DESC;
+    ORDER BY sn.created_at DESC, o.created_at DESC;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
