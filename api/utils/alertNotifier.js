@@ -11,7 +11,7 @@ import { getServiceRoleClient } from './auth.js';
 // Resend API configuration - set RESEND_API_KEY in Vercel or your environment variables
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'BoostUp GH Security <onboarding@resend.dev>';
-const DEFAULT_ADMIN_EMAIL = process.env.ADMIN_ALERT_EMAIL || 'support@boostupgh.com';
+const DEFAULT_ADMIN_EMAIL = process.env.ADMIN_ALERT_EMAIL || 'derrickappah17@gmail.com';
 
 // In-memory deduplication cache if Redis is not configured
 const localAlertDedupe = new Map();
