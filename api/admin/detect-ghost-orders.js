@@ -1,5 +1,6 @@
 import { getServiceRoleClient } from '../utils/auth.js';
 import { fetchProviderOrders } from '../utils/providers.js';
+import { sendSecurityAlertEmail } from '../utils/alertNotifier.js';
 
 /**
  * Main Reconciliation Function
@@ -103,10 +104,22 @@ export async function runGhostOrderDetection() {
             p_source: 'ghost-detection-job',
             p_description: `Detected ${totalGhostOrders} orders at providers with no local record.`,
             p_metadata: { count: totalGhostOrders }
-        });
+        }).catch(err => console.warn('Failed to log system event:', err.message));
+
+        await sendSecurityAlertEmail({
+            subject: `Ghost Orders Detected: ${totalGhostOrders} Unlinked Orders`,
+            title: 'Ghost Orders Detected',
+            description: `Automated provider reconciliation detected ${totalGhostOrders} orders placed on upstream providers (SMMGen/SMMCost/JBSMM) with no matching local order records in the database.`,
+            severity: 'critical',
+            metadata: {
+                total_ghost_orders: totalGhostOrders,
+                checked_providers: PROVIDERS.join(', '),
+                action: 'Review in Security Dashboard'
+            },
+            dedupeKey: `ghost_orders:${totalGhostOrders}`
+        }).catch(err => console.warn('Failed to dispatch ghost order alert email:', err.message));
     }
 
-    console.log(`[RECON] Complete. Found ${totalGhostOrders} ghost orders.`);
     console.log(`[RECON] Complete. Found ${totalGhostOrders} ghost orders.`);
     return {
         ghost_orders: totalGhostOrders,

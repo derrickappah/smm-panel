@@ -50,14 +50,17 @@ export default async function handler(req, res) {
     // 3. Log the admin action
     await logAdminAction({
       user_id: adminUser.id,
-      action_type: 'admin_revoked_sessions',
+      action_type: 'USER_SESSION_REVOCATION',
       entity_type: 'user',
       entity_id: userId,
-      description: `Revoked all active sessions for ${profile?.name || ''} (${profile?.email || userId})`,
+      description: `Revoked all active sessions and refresh tokens for ${profile?.name || ''} (${profile?.email || userId})`,
       metadata: {
+        action: 'USER_SESSION_REVOCATION',
         target_user_id: userId,
-        target_user_email: profile?.email
+        target_user_email: profile?.email || null,
+        revoked_by: adminUser.email || adminUser.id
       },
+      severity: 'security',
       req
     });
 

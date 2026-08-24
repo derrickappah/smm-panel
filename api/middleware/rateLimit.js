@@ -1,8 +1,25 @@
 import { redis } from '../utils/redisClient.js';
+import { getServiceRoleClient } from '../utils/auth.js';
 
 // Fallback in-memory maps for when Redis is unavailable or unconfigured
 const ipRequestCounts = new Map();
 const userRequestCounts = new Map();
+
+// Helper to log rate limit event asynchronously
+function logRateLimitViolation(ip, userId, count, limitType) {
+    try {
+        const supabase = getServiceRoleClient();
+        supabase.from('system_events').insert({
+            event_type: 'rate_limit_exceeded',
+            severity: 'warning',
+            source: 'rateLimit_middleware',
+            description: `Rate limit exceeded by ${limitType}: ${limitType === 'ip' ? ip : userId} (${count} reqs/min)`,
+            metadata: { ip, userId, count, limitType, timestamp: new Date().toISOString() },
+            entity_type: limitType === 'user' ? 'user' : 'ip',
+            entity_id: limitType === 'user' ? String(userId) : String(ip)
+        }).catch(() => {});
+    } catch (e) {}
+}
 
 // Cleanup interval for in-memory fallback (every minute)
 if (typeof setInterval !== 'undefined') {
@@ -17,7 +34,7 @@ if (typeof setInterval !== 'undefined') {
  * Performs IP rate limiting (30 req/min) and User rate limiting (10 req/min)
  */
 export async function rateLimit(req, res, authenticatedUserId = null) {
-    const rawIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown';
+    const rawIp = req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || req.socket?.remoteAddress || 'unknown';
     const ip = typeof rawIp === 'string' ? rawIp.split(',')[0].trim() : 'unknown';
     const userId = authenticatedUserId || (req.user ? req.user.id : null);
 
@@ -31,6 +48,9 @@ export async function rateLimit(req, res, authenticatedUserId = null) {
             }
 
             if (currentIpCount > 30) {
+                if (currentIpCount === 31) {
+                    logRateLimitViolation(ip, userId, currentIpCount, 'ip');
+                }
                 return {
                     blocked: true,
                     message: 'Too many requests from this IP. Please try again later.'
@@ -45,6 +65,9 @@ export async function rateLimit(req, res, authenticatedUserId = null) {
                 }
 
                 if (currentUserCount > 10) {
+                    if (currentUserCount === 11) {
+                        logRateLimitViolation(ip, userId, currentUserCount, 'user');
+                    }
                     return {
                         blocked: true,
                         message: 'Too many order requests. Limit is 10 per minute.'
@@ -61,6 +84,9 @@ export async function rateLimit(req, res, authenticatedUserId = null) {
     // In-memory fallback if Redis is unavailable
     const currentIpCount = ipRequestCounts.get(ip) || 0;
     if (currentIpCount >= 30) {
+        if (currentIpCount === 30) {
+            logRateLimitViolation(ip, userId, currentIpCount + 1, 'ip');
+        }
         return {
             blocked: true,
             message: 'Too many requests from this IP. Please try again later.'
@@ -71,6 +97,9 @@ export async function rateLimit(req, res, authenticatedUserId = null) {
     if (userId) {
         const currentUserCount = userRequestCounts.get(userId) || 0;
         if (currentUserCount >= 10) {
+            if (currentUserCount === 10) {
+                logRateLimitViolation(ip, userId, currentUserCount + 1, 'user');
+            }
             return {
                 blocked: true,
                 message: 'Too many order requests. Limit is 10 per minute.'

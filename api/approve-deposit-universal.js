@@ -66,8 +66,8 @@ export default async function handler(req, res) {
     } catch (authError) {
       // Log failed authentication attempt
       await logSecurityEvent({
-        action_type: 'deposit_approval_failed',
-        description: `Failed deposit approval attempt: ${authError.message}`,
+        action_type: 'UNAUTHORIZED_DEPOSIT_APPROVAL',
+        description: `Unauthorized deposit approval attempt: ${authError.message}`,
         metadata: {
           transaction_id,
           payment_method: payment_method || null,
@@ -110,6 +110,18 @@ export default async function handler(req, res) {
 
     // Only admins can approve deposits - users cannot approve their own deposits
     if (!isAdmin) {
+      await logSecurityEvent({
+        action_type: 'UNAUTHORIZED_DEPOSIT_APPROVAL',
+        description: `Non-admin user (${user?.email || user?.id}) attempted to approve deposit transaction ${transaction_id}`,
+        metadata: {
+          transaction_id,
+          user_id: user?.id,
+          user_email: user?.email,
+          payment_method: payment_method || null
+        },
+        req
+      });
+
       return res.status(403).json({
         error: 'Admin access required to approve deposits',
         message: 'Users cannot approve their own deposits. Please contact support if you believe this is an error.',

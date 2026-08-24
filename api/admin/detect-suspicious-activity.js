@@ -1,4 +1,5 @@
 import { getServiceRoleClient } from '../utils/auth.js';
+import { sendSecurityAlertEmail } from '../utils/alertNotifier.js';
 
 /**
  * Traffic Analysis & Abuse Detection
@@ -82,6 +83,21 @@ export async function runSuspiciousActivityDetection() {
             p_description: `Detected ${detectedSpam} spam clusters and ${detectedSpikes} volume spikes.`,
             p_metadata: { spam: detectedSpam, spikes: detectedSpikes }
         });
+
+        // Dispatch real-time security alert email to admins
+        sendSecurityAlertEmail({
+            subject: `Abuse Alert: ${detectedSpam} Spam Clusters / ${detectedSpikes} Volume Spikes`,
+            title: 'Suspicious Activity Detected',
+            description: `Automated abuse scanner detected anomalous order patterns: ${detectedSpam} duplicate spam clusters and ${detectedSpikes} high-volume order spikes in the last 10 minutes.`,
+            severity: 'warning',
+            metadata: {
+                spam_clusters: detectedSpam,
+                volume_spikes: detectedSpikes,
+                timeframe: '10m'
+            },
+            dedupeKey: 'suspicious_activity_scan',
+            dedupeWindow: 600
+        }).catch(err => console.warn('[ABUSE DETECTION] Alert email dispatch error:', err.message));
     }
 
     console.log(`[SECURITY] Complete. Spam: ${detectedSpam}, Spikes: ${detectedSpikes}`);

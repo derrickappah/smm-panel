@@ -23,6 +23,7 @@
 import * as crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders } from './utils/corsHeaders.js';
+import { logSecurityEvent } from './utils/activityLogger.js';
 
 // Payment provider configurations
 const PAYMENT_CONFIGS = {
@@ -337,10 +338,24 @@ export default async function handler(req, res) {
         timestamp: new Date().toISOString()
       });
 
-      // SECURITY DECISION: Reject the transaction if amounts don't match
-      // This prevents hackers from manipulating client-side amounts to get more than they paid
-      // Example: User requests 15 Cedis but payment gateway only processes 10 Pesewas (0.1 Cedis)
-      // System will reject and user gets neither amount - must contact support for manual review
+      // Log security event to dispatch real-time alert email to admins
+      await logSecurityEvent({
+        user_id: transaction.user_id,
+        action_type: 'PAYMENT_AMOUNT_MISMATCH',
+        entity_type: 'transaction',
+        entity_id: transaction.id,
+        description: `Payment amount mismatch on ${provider}: Paid ₵${gatewayAmount}, Expected ₵${storedAmount}`,
+        metadata: {
+          transaction_id: transaction.id,
+          provider: provider,
+          reference: transactionDetails.reference,
+          expected_amount: `₵${storedAmount}`,
+          paid_amount: `₵${gatewayAmount}`,
+          difference: `₵${Math.abs(gatewayAmount - storedAmount).toFixed(2)}`,
+          user_id: transaction.user_id
+        },
+        req
+      }).catch(err => console.error('Failed to log PAYMENT_AMOUNT_MISMATCH security event:', err));
 
       const { error: rejectError } = await supabase
         .from('transactions')

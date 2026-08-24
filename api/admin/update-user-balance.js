@@ -118,13 +118,29 @@ export default async function handler(req, res) {
 
     // 5. Log activity
     try {
-      await logAdminAction(
-        authResult.user.id,
-        'UPDATE_USER_BALANCE',
-        `Adjusted balance for ${targetProfile.name || targetProfile.email} (${action} ₵${parsedAmount}). Previous: ₵${currentBalance}, New: ₵${newBalance}`,
-        { userId, targetEmail: targetProfile.email, action, parsedAmount, previousBalance: currentBalance, newBalance, reason }
-      );
-    } catch (logErr) {}
+      await logAdminAction({
+        user_id: authResult.user.id,
+        action_type: 'ADMIN_BALANCE_OVERRIDE',
+        entity_type: 'profile',
+        entity_id: userId,
+        description: `Admin balance adjustment for ${targetProfile.name || targetProfile.email}: ${action} ₵${parsedAmount} (Previous: ₵${currentBalance}, New: ₵${newBalance})`,
+        metadata: {
+          action: 'ADMIN_BALANCE_OVERRIDE',
+          user_id: userId,
+          target_email: targetProfile.email,
+          adjustment_type: action,
+          amount_changed: parsedAmount,
+          previous_balance: `₵${currentBalance}`,
+          new_balance: `₵${newBalance}`,
+          reason: reason || 'Manual Admin Adjustment',
+          performed_by: authResult.user.email || authResult.user.id
+        },
+        severity: 'security',
+        req
+      });
+    } catch (logErr) {
+      console.error('Failed to log admin balance update:', logErr);
+    }
 
     return res.status(200).json({
       success: true,

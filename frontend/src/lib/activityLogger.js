@@ -64,11 +64,6 @@ export async function logUserActivity({
 
     // Get current user
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      // Silently fail if user is not authenticated
-      // This allows logging to work even during login flows
-      return { success: false, error: 'User not authenticated' };
-    }
 
     // Get client-side metadata
     const clientMetadata = getClientMetadata();
@@ -79,7 +74,28 @@ export async function logUserActivity({
       ...clientMetadata
     };
 
-    // Insert activity log
+    // If user is not authenticated, send to server-side logging endpoint
+    if (!user) {
+      try {
+        const res = await fetch('/api/auth/log-event', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action_type,
+            description,
+            metadata: enrichedMetadata,
+            severity,
+            email: metadata?.email || null
+          })
+        });
+        return { success: res.ok };
+      } catch (postErr) {
+        console.warn('Failed to dispatch unauthenticated log event:', postErr);
+        return { success: false, error: postErr.message };
+      }
+    }
+
+    // Insert activity log for authenticated user
     const { error } = await supabase
       .from('activity_logs')
       .insert({
@@ -142,8 +158,6 @@ export async function logLoginAttempt({
   error = null
 }) {
   if (success) {
-    // For successful logins, we need to wait for user to be set
-    // This will be called after successful authentication
     return logUserActivity({
       action_type: 'login_success',
       description: 'User logged in successfully',
@@ -153,8 +167,6 @@ export async function logLoginAttempt({
       severity: 'info'
     });
   } else {
-    // For failed logins, we may not have a user yet
-    // Try to log anyway, but it might fail silently if not authenticated
     return logSecurityEvent({
       action_type: 'login_failed',
       description: `Failed login attempt${email ? ` for ${email}` : ''}`,

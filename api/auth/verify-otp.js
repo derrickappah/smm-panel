@@ -1,6 +1,7 @@
 import { getServiceRoleClient } from '../utils/auth.js';
 import { setCorsHeaders } from '../utils/corsHeaders.js';
 import { redis } from '../utils/redisClient.js';
+import { logSecurityEvent } from '../utils/activityLogger.js';
 import crypto from 'crypto';
 // In-memory fallback tracking for when Redis is unavailable
 const memoryVerifyCounts = new Map();
@@ -139,6 +140,13 @@ export default async function handler(req, res) {
       }).eq('id', matchingEvent.id).catch(() => {});
 
       if (isNowInvalidated) {
+        logSecurityEvent({
+          action_type: 'otp_brute_force_detected',
+          description: `OTP brute-force threshold exceeded for ${rawIdentifier} (5 failed attempts).`,
+          metadata: { identifier: rawIdentifier, attempts: newAttempts },
+          req
+        }).catch(() => {});
+
         return res.status(429).json({
           error: 'Too many verification attempts. Your OTP has been invalidated. Please request a new code.'
         });

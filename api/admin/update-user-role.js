@@ -103,13 +103,20 @@ export default async function handler(req, res) {
 
     // 4. Log admin action
     try {
-      await logAdminAction(
-        authResult.user.id,
-        'UPDATE_USER_ROLE',
-        `Changed role for ${targetProfile.name || targetProfile.email} from ${oldRole} to ${newRole}`,
-        { userId, targetEmail: targetProfile.email, oldRole, newRole }
-      );
-    } catch (logErr) {}
+      const isPrivilegeEscalation = newRole.toLowerCase() === 'admin' && oldRole.toLowerCase() !== 'admin';
+      await logAdminAction({
+        user_id: authResult.user.id,
+        action_type: isPrivilegeEscalation ? 'PRIVILEGE_ESCALATION_ADMIN' : 'UPDATE_USER_ROLE',
+        entity_type: 'profile',
+        entity_id: userId,
+        description: `Changed role for ${targetProfile.name || targetProfile.email} from ${oldRole} to ${newRole}`,
+        metadata: { userId, targetEmail: targetProfile.email, oldRole, newRole, escalatedBy: authResult.user.email },
+        severity: isPrivilegeEscalation ? 'security' : 'info',
+        req
+      });
+    } catch (logErr) {
+      console.error('Failed to log admin role update:', logErr);
+    }
 
     return res.status(200).json({
       success: true,

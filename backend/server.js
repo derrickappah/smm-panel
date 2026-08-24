@@ -1170,7 +1170,19 @@ app.post('/api/admin/update-reward-limit', async (req, res) => {
 
     res.json({ success: true, message: 'Limit updated' });
   } catch (error) {
-    res.status(500).json({ error: 'Internal server error', details: error.message });
+    console.error('Error updating reward limit:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Server-Side Auth & Security Event Logger Server Action
+app.post('/api/auth/log-event', async (req, res) => {
+  try {
+    const handler = (await import('../api/auth/log-event.js')).default;
+    await handler(req, res);
+  } catch (error) {
+    console.error('Error in /api/auth/log-event endpoint:', error);
+    res.status(500).json({ error: 'Server action failed' });
   }
 });
 
@@ -1181,7 +1193,7 @@ app.post('/api/admin/search-orders', async (req, res) => {
     await handler(req, res);
   } catch (error) {
     console.error('Error in /api/admin/search-orders endpoint:', error);
-    res.status(500).json({ error: 'Server action failed', message: error.message });
+    res.status(500).json({ error: 'Server action failed' });
   }
 });
 
@@ -1192,7 +1204,7 @@ app.post('/api/admin/search-users', async (req, res) => {
     await handler(req, res);
   } catch (error) {
     console.error('Error in /api/admin/search-users endpoint:', error);
-    res.status(500).json({ error: 'Server action failed', message: error.message });
+    res.status(500).json({ error: 'Server action failed' });
   }
 });
 
@@ -1203,7 +1215,7 @@ app.post('/api/admin/update-user-balance', async (req, res) => {
     await handler(req, res);
   } catch (error) {
     console.error('Error in /api/admin/update-user-balance endpoint:', error);
-    res.status(500).json({ error: 'Server action failed', message: error.message });
+    res.status(500).json({ error: 'Server action failed' });
   }
 });
 
@@ -1214,7 +1226,7 @@ app.post('/api/admin/update-user-role', async (req, res) => {
     await handler(req, res);
   } catch (error) {
     console.error('Error in /api/admin/update-user-role endpoint:', error);
-    res.status(500).json({ error: 'Server action failed', message: error.message });
+    res.status(500).json({ error: 'Server action failed' });
   }
 });
 
@@ -1225,7 +1237,7 @@ app.post('/api/admin/user-details-full', async (req, res) => {
     await handler(req, res);
   } catch (error) {
     console.error('Error in /api/admin/user-details-full endpoint:', error);
-    res.status(500).json({ error: 'Server action failed', message: error.message });
+    res.status(500).json({ error: 'Server action failed' });
   }
 });
 
@@ -1236,7 +1248,7 @@ app.post('/api/admin/export-users', async (req, res) => {
     await handler(req, res);
   } catch (error) {
     console.error('Error in /api/admin/export-users endpoint:', error);
-    res.status(500).json({ error: 'Server action failed', message: error.message });
+    res.status(500).json({ error: 'Server action failed' });
   }
 });
 
@@ -1247,8 +1259,36 @@ app.post('/api/admin/banned-users', async (req, res) => {
     await handler(req, res);
   } catch (error) {
     console.error('Error in /api/admin/banned-users endpoint:', error);
-    res.status(500).json({ error: 'Server action failed', message: error.message });
+    res.status(500).json({ error: 'Server action failed' });
   }
+});
+
+// Global Centralized Express Error Handler (OWASP A09 Information Leak Prevention)
+app.use((err, req, res, next) => {
+  console.error('[UNHANDLED EXPRESS ERROR]', {
+    message: err.message,
+    stack: err.stack,
+    url: req.originalUrl,
+    method: req.method,
+    ip: req.ip
+  });
+
+  if (res.headersSent) {
+    return next(err);
+  }
+
+  res.status(500).json({
+    error: 'An internal error occurred. Please try again later.'
+  });
+});
+
+// Process-level unhandled exception & rejection monitors
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[SECURITY MONITOR] Unhandled Promise Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[SECURITY MONITOR] Uncaught Exception:', err);
 });
 
 app.listen(PORT, () => {
