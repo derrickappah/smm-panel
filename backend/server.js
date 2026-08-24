@@ -1240,6 +1240,17 @@ app.post('/api/admin/export-users', async (req, res) => {
   }
 });
 
+// Admin Banned Users Server Action
+app.post('/api/admin/banned-users', async (req, res) => {
+  try {
+    const handler = (await import('../api/admin/banned-users.js')).default;
+    await handler(req, res);
+  } catch (error) {
+    console.error('Error in /api/admin/banned-users endpoint:', error);
+    res.status(500).json({ error: 'Server action failed', message: error.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 SMM Proxy Server running on port ${PORT}`);
 });
