@@ -5,10 +5,12 @@
  * Import this in every API handler instead of manually setting headers.
  */
 
+const isDevelopment = process.env.NODE_ENV !== 'production' && process.env.VERCEL_ENV !== 'production';
+
 const ALLOWED_ORIGINS = [
   'https://boostupgh.com',
   'https://www.boostupgh.com',
-  'http://localhost:3000'
+  ...(isDevelopment ? ['http://localhost:3000', 'http://localhost:5173', 'http://127.0.0.1:3000'] : [])
 ];
 
 /**

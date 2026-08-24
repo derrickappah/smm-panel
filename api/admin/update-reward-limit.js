@@ -128,8 +128,7 @@ export default async function handler(req, res) {
     } catch (error) {
         console.error('Error in update-reward-limit:', error);
         return res.status(500).json({
-            error: 'Internal server error',
-            details: error.message
+            error: 'Internal server error while updating reward limit'
         });
     }
 }

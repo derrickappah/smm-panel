@@ -43,6 +43,6 @@ export default async function handler(req, res) {
 
     } catch (error) {
         console.error('Ignore Anomaly API Error:', error);
-        return res.status(500).json({ error: 'Internal server error', details: error.message });
+        return res.status(500).json({ error: 'Internal server error while processing request' });
     }
 }

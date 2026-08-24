@@ -1,5 +1,6 @@
 import { getServiceRoleClient } from '../../utils/auth.js';
 import { logUserAction, logSecurityEvent } from '../../utils/activityLogger.js';
+import { redis } from '../../utils/redisClient.js';
 
 /**
  * Hubtel Online Checkout Callback (Webhook)
@@ -62,6 +63,18 @@ export default async function handler(req, res) {
         if (transaction.status === 'rejected') {
             console.warn(`Transaction ${clientReference} was previously rejected (e.g. user banned). Skipping approval.`);
             return res.status(400).json({ error: 'Transaction has been rejected' });
+        }
+
+        // Atomic Redis Lock for 30s to prevent concurrent execution races
+        if (redis) {
+            const lockKey = `smm:lock:deposit:${transaction.id}`;
+            const acquired = await redis.set(lockKey, 'locked', { nx: true, ex: 30 });
+            if (!acquired) {
+                return res.status(409).json({
+                    error: 'Deposit approval for this transaction is currently being processed. Please wait.',
+                    transaction_id: transaction.id
+                });
+            }
         }
 
         // 3. Mandatory Server-to-Server Verification with Hubtel RMSC Status API
@@ -165,26 +178,7 @@ export default async function handler(req, res) {
             });
         }
 
-        // 5. Payment verified genuine: Update transaction and credit wallet balance
-        const { error: updateError } = await supabase
-            .from('transactions')
-            .update({
-                status: 'approved',
-                hubtel_transaction_id: verifiedTransactionId || payload.transactionId || payload.TransactionId,
-                external_transaction_id: payload.externalTransactionId || payload.ExternalTransactionId || responseData.externalTransactionId,
-                payment_method: payload.PaymentDetails?.Channel || responseData.PaymentDetails?.Channel || transaction.payment_method,
-                raw_callback: payload,
-                raw_status_check: hubtelVerifiedData,
-                updated_at: new Date().toISOString()
-            })
-            .eq('id', transaction.id);
-
-        if (updateError) {
-            console.error('Error updating transaction in callback:', updateError);
-            return res.status(500).json({ error: 'Internal update error' });
-        }
-
-        // 6. Check if user is banned before crediting wallet
+        // 5. Check if user is banned before crediting wallet
         const { data: bannedEntry } = await supabase
             .from('banned_users')
             .select('user_id')
@@ -197,45 +191,69 @@ export default async function handler(req, res) {
             return res.status(403).json({ error: 'User is suspended. Deposit rejected.' });
         }
 
-        // 7. Update user balance atomically
-        const { data: profile } = await supabase
-            .from('profiles')
-            .select('balance')
-            .eq('id', transaction.user_id)
-            .single();
+        // 6. Update metadata fields before atomic approval
+        const resolvedEventId = verifiedTransactionId || payload.transactionId || payload.TransactionId || null;
+        await supabase
+            .from('transactions')
+            .update({
+                external_transaction_id: payload.externalTransactionId || payload.ExternalTransactionId || responseData.externalTransactionId || null,
+                payment_method: payload.PaymentDetails?.Channel || responseData.PaymentDetails?.Channel || transaction.payment_method || 'hubtel',
+                raw_callback: payload,
+                raw_status_check: hubtelVerifiedData,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', transaction.id);
 
-        if (profile) {
-            const currentBal = parseFloat(profile.balance || 0);
-            const depositAmt = parseFloat(transaction.amount);
-            const newBalance = currentBal + depositAmt;
+        // 7. Atomic approval via PostgreSQL function (v2 hardened)
+        const creditAmount = verifiedAmount > 0 ? verifiedAmount : parseFloat(transaction.amount);
+        const { data: result, error: rpcError } = await supabase.rpc('approve_deposit_transaction_universal_v2', {
+            p_transaction_id: transaction.id,
+            p_payment_method: 'hubtel',
+            p_payment_status: 'Paid',
+            p_payment_reference: clientReference,
+            p_actual_amount: creditAmount,
+            p_provider_event_id: resolvedEventId ? String(resolvedEventId) : null
+        });
 
-            const { error: balanceError } = await supabase
-                .from('profiles')
-                .update({ balance: newBalance })
-                .eq('id', transaction.user_id);
-
-            if (balanceError) {
-                console.error('Error updating balance in Hubtel callback:', balanceError);
-            } else {
-                await logUserAction({
-                    user_id: transaction.user_id,
-                    action_type: 'deposit_completed',
-                    entity_type: 'transaction',
-                    entity_id: transaction.id,
-                    description: `Hubtel deposit verified and completed: ₵${transaction.amount}`,
-                    metadata: {
-                        hubtel_transaction_id: verifiedTransactionId,
-                        clientReference
-                    },
-                    req
-                });
-            }
+        if (rpcError) {
+            console.error('[HUBTEL CALLBACK] Database function error:', rpcError);
+            return res.status(500).json({ error: 'Failed to approve transaction', details: rpcError.message });
         }
 
-        return res.status(200).json({ success: true, message: 'Deposit verified and credited' });
+        const approvalResult = result && result.length > 0 ? result[0] : null;
+
+        if (!approvalResult || !approvalResult.success) {
+            if (approvalResult?.message?.includes('already approved')) {
+                return res.status(200).json({ success: true, message: 'Already approved' });
+            }
+            return res.status(400).json({ error: approvalResult?.message || 'Transaction approval failed' });
+        }
+
+        await logUserAction({
+            user_id: transaction.user_id,
+            action_type: 'deposit_completed',
+            entity_type: 'transaction',
+            entity_id: transaction.id,
+            description: `Hubtel deposit verified and completed: ₵${creditAmount}`,
+            metadata: {
+                hubtel_transaction_id: verifiedTransactionId,
+                clientReference,
+                old_balance: approvalResult.old_balance,
+                new_balance: approvalResult.new_balance
+            },
+            req
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Deposit verified and credited',
+            transaction_id: transaction.id,
+            new_balance: approvalResult.new_balance
+        });
 
     } catch (error) {
         console.error('Error in Hubtel callback handler:', error);
         return res.status(500).json({ error: 'Internal server error' });
     }
 }
+

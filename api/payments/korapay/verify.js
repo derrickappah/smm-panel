@@ -1,5 +1,6 @@
 import { verifyAuth, getServiceRoleClient } from '../../utils/auth.js';
 import { logUserAction } from '../../utils/activityLogger.js';
+import { redis } from '../../utils/redisClient.js';
 
 /**
  * KoraPay Transaction Verify
@@ -11,7 +12,7 @@ import { logUserAction } from '../../utils/activityLogger.js';
  *  1. Frontend reads `?reference=` from the redirect URL
  *  2. POSTs here with { reference }
  *  3. We query KoraPay's verify endpoint
- *  4. If successful and not yet approved, we approve + credit balance
+ *  4. If successful and not yet approved, we approve + credit balance atomically
  *
  * This is the fallback/confirmation step — the webhook (webhook.js)
  * is the primary mechanism and may already have completed the transaction.
@@ -84,6 +85,18 @@ export default async function handler(req, res) {
             });
         }
 
+        // Atomic Redis Lock for 30s
+        if (redis) {
+            const lockKey = `smm:lock:deposit:${transaction.id}`;
+            const acquired = await redis.set(lockKey, 'locked', { nx: true, ex: 30 });
+            if (!acquired) {
+                return res.status(409).json({
+                    error: 'Deposit verification for this transaction is currently being processed. Please wait.',
+                    transaction_id: transaction.id
+                });
+            }
+        }
+
         // 4. Check KoraPay credentials
         const korapaySecretKey = (process.env.KORAPAY_SECRET_KEY || '').trim();
         if (!korapaySecretKey) {
@@ -124,60 +137,79 @@ export default async function handler(req, res) {
         const chargeData = korapayData.data || {};
         const korapayStatus = chargeData.status;
         const isSuccessful = korapayStatus === 'success';
+        const gatewayAmount = parseFloat(chargeData.amount || 0);
 
-        // 6. Update transaction
-        let newStatus = transaction.status;
+        // 6. Update transaction and atomic balance crediting if successful
         if (isSuccessful) {
-            newStatus = 'approved';
-        } else if (korapayStatus === 'failed') {
-            newStatus = 'rejected';
-        }
+            const creditAmount = gatewayAmount > 0 ? gatewayAmount : parseFloat(transaction.amount);
+            const { data: result, error: rpcError } = await supabase.rpc('approve_deposit_transaction_universal_v2', {
+                p_transaction_id: transaction.id,
+                p_payment_method: 'korapay',
+                p_payment_status: korapayStatus || 'success',
+                p_payment_reference: reference,
+                p_actual_amount: creditAmount,
+                p_provider_event_id: reference
+            });
 
-        await supabase
-            .from('transactions')
-            .update({
-                status: newStatus,
-                korapay_reference: reference,
-                korapay_status: korapayStatus,
-                raw_status_check: korapayData,
-                updated_at: new Date().toISOString()
-            })
-            .eq('id', transaction.id);
-
-        // 7. Credit user balance if now approved (and wasn't already)
-        if (newStatus === 'approved' && transaction.status !== 'approved') {
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('balance')
-                .eq('id', user.id)
-                .single();
-
-            if (profile) {
-                const newBalance = (parseFloat(profile.balance) || 0) + parseFloat(transaction.amount);
-                const { error: balanceError } = await supabase
-                    .from('profiles')
-                    .update({ balance: newBalance })
-                    .eq('id', user.id);
-
-                if (balanceError) {
-                    console.error('Error updating balance in KoraPay verify:', balanceError);
-                } else {
-                    await logUserAction({
-                        user_id: user.id,
-                        action_type: 'deposit_completed',
-                        entity_type: 'transaction',
-                        entity_id: transaction.id,
-                        description: `KoraPay deposit completed via redirect verify: ₵${transaction.amount}`,
-                        metadata: { reference, korapayData },
-                        req
-                    });
-                }
+            if (rpcError) {
+                console.error('[KORAPAY VERIFY] Database function error:', rpcError);
+                return res.status(500).json({ error: 'Failed to approve transaction', details: rpcError.message });
             }
+
+            const approvalResult = result && result.length > 0 ? result[0] : null;
+
+            await supabase
+                .from('transactions')
+                .update({
+                    korapay_reference: reference,
+                    korapay_status: korapayStatus,
+                    raw_status_check: korapayData,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', transaction.id);
+
+            await logUserAction({
+                user_id: user.id,
+                action_type: 'deposit_completed',
+                entity_type: 'transaction',
+                entity_id: transaction.id,
+                description: `KoraPay deposit completed via redirect verify: ₵${creditAmount}`,
+                metadata: { reference, korapayData },
+                req
+            });
+
+            return res.status(200).json({
+                success: true,
+                status: 'approved',
+                amount: creditAmount,
+                new_balance: approvalResult?.new_balance,
+                korapayStatus,
+                reference
+            });
+        } else if (korapayStatus === 'failed') {
+            await supabase
+                .from('transactions')
+                .update({
+                    status: 'rejected',
+                    korapay_reference: reference,
+                    korapay_status: korapayStatus,
+                    raw_status_check: korapayData,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', transaction.id);
+
+            return res.status(200).json({
+                success: false,
+                status: 'rejected',
+                amount: transaction.amount,
+                korapayStatus,
+                reference
+            });
         }
 
         return res.status(200).json({
             success: true,
-            status: newStatus,
+            status: transaction.status,
             amount: transaction.amount,
             korapayStatus,
             reference
@@ -188,3 +220,4 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: 'Internal server error', message: error.message });
     }
 }
+

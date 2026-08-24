@@ -38,6 +38,6 @@ export default async function handler(req, res) {
 
     } catch (error) {
         console.error('Security Scan Error:', error);
-        return res.status(500).json({ error: 'Internal server error', details: error.message });
+        return res.status(500).json({ error: 'Internal server error while executing security scan' });
     }
 }

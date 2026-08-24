@@ -107,7 +107,7 @@ export default async function handler(req, res) {
     const { count: totalMatchCount, error: countErr } = await buildProfilesQuery().limit(1);
     if (countErr) {
       console.error('Count query error:', countErr);
-      return res.status(500).json({ error: 'Failed to count matching users', details: countErr.message });
+      return res.status(500).json({ error: 'Failed to count matching users' });
     }
 
     const totalToFetch = totalMatchCount || 0;
@@ -293,8 +293,7 @@ export default async function handler(req, res) {
   } catch (err) {
     console.error('Advanced user export endpoint error:', err);
     return res.status(500).json({
-      error: 'Internal server error during user export',
-      message: err.message
+      error: 'Internal server error during user export'
     });
   }
 }

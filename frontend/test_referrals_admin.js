@@ -1,8 +1,13 @@
 const { createClient } = require('@supabase/supabase-js');
 const jwt = require('jsonwebtoken');
 
-const supabaseUrl = 'https://spihsvdchouynfbsotwq.supabase.co';
-const jwtSecret = '4kXETj0h9xjbPsFNxLDskivDueSxOgSWrA7MQ4AcJglV+wwzPlii66ecPqMoUaT9JU98DfwbaKCpes+rEzJGDw==';
+const supabaseUrl = process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL || 'https://spihsvdchouynfbsotwq.supabase.co';
+const jwtSecret = process.env.SUPABASE_JWT_SECRET;
+
+if (!jwtSecret) {
+  console.error("Error: SUPABASE_JWT_SECRET environment variable is not set.");
+  process.exit(1);
+}
 
 const payload = {
   role: 'service_role',

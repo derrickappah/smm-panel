@@ -161,19 +161,8 @@ export default async function handler(req, res) {
       code: error.code
     });
 
-    // Check for network-related errors
-    if (error.message?.includes('fetch failed') || error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
-      return res.status(500).json({ 
-        error: `Network error: Failed to connect to JB SMM Panel API. Please verify JBSMMPANEL_API_URL is correct.`,
-        networkError: true,
-        details: error.message
-      });
-    }
-
     return res.status(500).json({ 
-      error: error.message || 'Failed to fetch services',
-      errorName: error.name,
-      details: error.code || error.message
+      error: 'Failed to fetch services from provider. Please try again later.'
     });
   }
 }

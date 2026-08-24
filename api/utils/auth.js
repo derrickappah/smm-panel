@@ -135,8 +135,9 @@ export async function verifyAuth(req) {
     'https://www.boostupgh.com'
   ];
 
+  const isDevEnvironment = process.env.NODE_ENV !== 'production' && process.env.VERCEL_ENV !== 'production';
   const isLocalHost = (url) => {
-    if (!url) return false;
+    if (!url || !isDevEnvironment) return false;
     return /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:[0-9]+)?(\/|$)/i.test(url);
   };
 

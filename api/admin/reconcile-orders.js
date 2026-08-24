@@ -144,6 +144,6 @@ export default async function handler(req, res) {
 
     } catch (error) {
         console.error('Reconciliation API Error:', error);
-        return res.status(500).json({ error: 'Internal server error', details: error.message });
+        return res.status(500).json({ error: 'Internal server error during order reconciliation' });
     }
 }

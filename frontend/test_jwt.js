@@ -1,10 +1,13 @@
 const { createClient } = require('@supabase/supabase-js');
 const jwt = require('jsonwebtoken');
 
-const supabaseUrl = 'https://spihsvdchouynfbsotwq.supabase.co';
-const jwtSecretBase64 = '4kXETj0h9xjbPsFNxLDskivDueSxOgSWrA7MQ4AcJglV+wwzPlii66ecPqMoUaT9JU98DfwbaKCpes+rEzJGDw==';
-// Sometimes secrets are base64 encoded, sometimes they are utf8. Let's try both if needed.
-const secret = Buffer.from(jwtSecretBase64, 'base64'); // base64 decode it? Wait, maybe just jwtSecretBase64.
+const supabaseUrl = process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL || 'https://spihsvdchouynfbsotwq.supabase.co';
+const jwtSecret = process.env.SUPABASE_JWT_SECRET;
+
+if (!jwtSecret) {
+  console.error("Error: SUPABASE_JWT_SECRET environment variable is not set.");
+  process.exit(1);
+}
 
 const payload = {
   role: 'service_role',
@@ -13,8 +16,7 @@ const payload = {
   exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24)
 };
 
-// Try with plain string first, if invalid try base64
-let serviceRoleKey = jwt.sign(payload, jwtSecretBase64);
+let serviceRoleKey = jwt.sign(payload, jwtSecret);
 let supabase = createClient(supabaseUrl, serviceRoleKey);
 
 async function test(client, desc) {

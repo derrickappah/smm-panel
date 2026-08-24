@@ -203,7 +203,7 @@ export default async function handler(req, res) {
 
     if (error) {
       console.error('Server Action Order Search DB Error:', error);
-      return res.status(500).json({ error: 'Database search failed', details: error.message });
+      return res.status(500).json({ error: 'Database search failed' });
     }
 
     const searchTimeMs = Math.round(performance.now() - startTime);
@@ -218,8 +218,7 @@ export default async function handler(req, res) {
   } catch (err) {
     console.error('Server Action Order Search Internal Error:', err);
     return res.status(500).json({
-      error: 'Internal server error during order search',
-      message: err.message
+      error: 'Internal server error during order search'
     });
   }
 }

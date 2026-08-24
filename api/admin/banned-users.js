@@ -61,7 +61,7 @@ export default async function handler(req, res) {
 
     if (countErr) {
       console.error('Count banned users error:', countErr);
-      return res.status(500).json({ error: 'Failed to count banned users', details: countErr.message });
+      return res.status(500).json({ error: 'Failed to count banned users' });
     }
 
     const totalToFetch = totalBannedCount || 0;
@@ -196,8 +196,7 @@ export default async function handler(req, res) {
   } catch (err) {
     console.error('Fetch banned users endpoint error:', err);
     return res.status(500).json({
-      error: 'Internal server error fetching banned users',
-      message: err.message
+      error: 'Internal server error fetching banned users'
     });
   }
 }

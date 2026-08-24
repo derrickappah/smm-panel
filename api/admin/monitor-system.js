@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { verifyAdmin, getServiceRoleClient } from '../utils/auth.js';
 
 export default async function handler(req, res) {
@@ -6,24 +7,30 @@ export default async function handler(req, res) {
     // SECURITY: Multi-layer protection
     let authorized = false;
 
-    // 1. Check for Secret Header Key
+    // 1. Check for Secret Header Key using constant-time comparison
     const devMonitorKey = process.env.DEV_MONITOR_KEY;
     const clientKey = req.headers['x-dev-monitor-key'];
 
-    if (devMonitorKey && clientKey === devMonitorKey) {
-        authorized = true;
-    } else {
+    if (devMonitorKey && clientKey && typeof clientKey === 'string') {
+        const keyBuffer = Buffer.from(devMonitorKey, 'utf8');
+        const clientBuffer = Buffer.from(clientKey, 'utf8');
+        if (keyBuffer.length === clientBuffer.length && crypto.timingSafeEqual(keyBuffer, clientBuffer)) {
+            authorized = true;
+        }
+    }
+
+    if (!authorized) {
         // 2. Fallback to Admin Authentication
         try {
             const { isAdmin } = await verifyAdmin(req);
             if (isAdmin) authorized = true;
         } catch (e) {
-            // Ignore auth error if already authorized via key
+            // Ignore auth error if unauthorized
         }
     }
 
     if (!authorized) {
-        return res.status(403).json({ error: 'Unauthorized. Requires admin access or dev monitor key.' });
+        return res.status(403).json({ error: 'Unauthorized. Requires admin access or valid monitor key.' });
     }
 
     try {
@@ -93,6 +100,6 @@ export default async function handler(req, res) {
 
     } catch (error) {
         console.error('Monitoring API Error:', error);
-        return res.status(500).json({ error: 'Internal server error', details: error.message });
+        return res.status(500).json({ error: 'Internal server error while fetching monitoring metrics' });
     }
 }

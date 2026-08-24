@@ -1,5 +1,6 @@
 import { verifyAuth, getServiceRoleClient } from '../../utils/auth.js';
 import { logUserAction } from '../../utils/activityLogger.js';
+import { redis } from '../../utils/redisClient.js';
 
 
 /**
@@ -77,6 +78,18 @@ export default async function handler(req, res) {
             });
         }
 
+        // Atomic Redis Lock for 30s
+        if (redis) {
+            const lockKey = `smm:lock:deposit:${transaction.id}`;
+            const acquired = await redis.set(lockKey, 'locked', { nx: true, ex: 30 });
+            if (!acquired) {
+                return res.status(409).json({
+                    error: 'Deposit check for this transaction is currently being processed. Please wait.',
+                    transaction_id: transaction.id
+                });
+            }
+        }
+
         // 3. Call Mandatory Hubtel Status API (Public RMSC Endpoint)
         // Hubtel credentials
         const clientId = (process.env.HUBTEL_API_ID || process.env.HUBTEL_CLIENT_ID || '').trim();
@@ -98,132 +111,119 @@ export default async function handler(req, res) {
         const hubtelUrl = `https://rmsc.hubtel.com/v1/merchantaccount/merchants/${posId}/transactions/status?clientReference=${clientReference}`;
         
         try {
-            console.log('Querying Hubtel RMSC Status API:', hubtelUrl);
-            const response = await fetch(hubtelUrl, {
+            const statusResponse = await fetch(hubtelUrl, {
                 method: 'GET',
-                headers: { 
-                    'Authorization': authHeader, 
-                    'Content-Type': 'application/json' 
+                headers: {
+                    'Authorization': authHeader,
+                    'Content-Type': 'application/json'
                 }
             });
 
-            if (response.ok) {
-                hubtelData = await response.json();
-                console.log('Hubtel API Response:', JSON.stringify(hubtelData));
+            if (statusResponse.ok) {
+                hubtelData = await statusResponse.json();
+                console.log('Hubtel status check response:', JSON.stringify(hubtelData));
             } else {
-                const errorText = await response.text();
-                console.error('Hubtel status API error:', response.status, errorText);
-                return res.status(200).json({ 
-                    success: false, 
-                    error: 'Hubtel API Error',
-                    message: `Hubtel returned ${response.status}: ${errorText.substring(0, 160) || 'No error message provided'}.`,
-                    details: { status: response.status, bodySnippet: errorText.substring(0, 200), url: hubtelUrl }
-                });
+                const errText = await statusResponse.text();
+                console.warn(`Hubtel Status API returned status ${statusResponse.status}: ${errText}`);
             }
-        } catch (apiError) {
-            console.error('Network error during Hubtel status check:', apiError);
-            return res.status(500).json({ error: 'Failed to reach Hubtel API', message: apiError.message });
+        } catch (apiErr) {
+            console.error('Error calling Hubtel Status API for status check:', apiErr);
+            return res.status(502).json({ error: 'Failed to verify with payment provider' });
         }
 
-        // 4. Evaluate authoritative status from Hubtel API response
-        let responseData = {};
+        // Parse authoritative status from Hubtel
         let transactionStatus = null;
-        let responseCode = null;
+        let responseData = {};
+        let verifiedAmount = 0;
 
         if (hubtelData) {
-            responseCode = hubtelData.responseCode || hubtelData.ResponseCode;
-            if (hubtelData.data) {
-                responseData = Array.isArray(hubtelData.data) && hubtelData.data.length > 0 ? hubtelData.data[0] : hubtelData.data;
-            } else if (hubtelData.Data) {
-                responseData = Array.isArray(hubtelData.Data) && hubtelData.Data.length > 0 ? hubtelData.Data[0] : hubtelData.Data;
-            } else {
-                responseData = hubtelData;
+            let apiData = hubtelData.data || hubtelData.Data || hubtelData;
+            if (Array.isArray(apiData) && apiData.length > 0) {
+                apiData = apiData[0];
             }
-            transactionStatus = responseData.TransactionStatus || responseData.InvoiceStatus || responseData.status || responseData.Status || hubtelData.status || hubtelData.Status;
+            responseData = apiData;
 
-            const verifiedAmount = parseFloat(responseData.AmountAfterFees || responseData.TransactionAmount || responseData.amount || responseData.Amount || responseData.amountPaid || responseData.AmountPaid || 0);
-            const expectedAmount = parseFloat(transaction.amount || 0);
-            const amountMatches = verifiedAmount >= expectedAmount * 0.99;
+            transactionStatus = apiData.TransactionStatus || apiData.InvoiceStatus || apiData.status || apiData.Status || hubtelData.status || hubtelData.Status;
+            const responseCode = hubtelData.responseCode || hubtelData.ResponseCode;
+            verifiedAmount = parseFloat(apiData.AmountAfterFees || apiData.TransactionAmount || apiData.amount || apiData.Amount || apiData.amountPaid || apiData.AmountPaid || 0);
+
+            const expectedAmount = parseFloat(transaction.amount);
+            const amountMatches = verifiedAmount >= expectedAmount * 0.99; // 1% tolerance for processing fee rounding
 
             isSuccessful = (
-                responseData.isSuccessful === true ||
+                apiData.isSuccessful === true ||
                 transactionStatus === 'Paid' ||
                 transactionStatus === 'Success' ||
                 (responseCode === '0000' && transactionStatus && transactionStatus !== 'Unpaid' && transactionStatus !== 'Failed')
             ) && amountMatches;
         }
 
-        // 5. Determine new status and update DB
-        let newStatus = transaction.status;
+        // 4. Update transaction & atomic balance crediting if successful
+        const eventId = responseData.transactionId || responseData.TransactionId || responseData.checkoutId || responseData.CheckoutId || responseData.InvoiceToken || hubtelData?.transactionId || null;
+
         if (isSuccessful) {
-            newStatus = 'approved';
-        } else if (transactionStatus === 'Failed' || transactionStatus === 'Unpaid' || responseCode === '2001') {
-            newStatus = 'rejected';
-        }
+            const creditAmount = verifiedAmount > 0 ? verifiedAmount : parseFloat(transaction.amount);
+            const { data: result, error: rpcError } = await supabase.rpc('approve_deposit_transaction_universal_v2', {
+                p_transaction_id: transaction.id,
+                p_payment_method: 'hubtel',
+                p_payment_status: 'Paid',
+                p_payment_reference: clientReference,
+                p_actual_amount: creditAmount,
+                p_provider_event_id: eventId ? String(eventId) : null
+            });
 
-        // Update transaction record
-        const { error: updateError } = await supabase
-            .from('transactions')
-            .update({
-                status: newStatus,
-                hubtel_transaction_id: responseData.transactionId || responseData.TransactionId || responseData.checkoutId || responseData.CheckoutId || responseData.InvoiceToken || hubtelData.transactionId || hubtelData.TransactionId,
-                payment_method: responseData.PaymentMethod || responseData.MobileChannelName || transaction.payment_method,
-                raw_status_check: hubtelData,
-                updated_at: new Date().toISOString()
-            })
-            .eq('id', transaction.id);
-
-
-        if (updateError) {
-            console.error('Error updating transaction status:', updateError);
-        }
-
-        // If payment was success and we changed status, increment user balance
-        console.log(`Updating status to ${newStatus}. Current status: ${transaction.status}`);
-        if (newStatus === 'approved' && transaction.status !== 'approved') {
-            const { data: profile, error: profileError } = await supabase
-                .from('profiles')
-                .select('balance')
-                .eq('id', user.id)
-                .single();
-
-            if (profileError) {
-                console.error('Error fetching profile for balance update:', profileError);
+            if (rpcError) {
+                console.error('[HUBTEL STATUS CHECK] Database function error:', rpcError);
+                return res.status(500).json({ error: 'Failed to approve transaction', details: rpcError.message });
             }
 
-            if (profile) {
-                const currentBalance = parseFloat(profile.balance || 0);
-                const depositAmount = parseFloat(transaction.amount || 0);
-                const newBalance = currentBalance + depositAmount;
+            const approvalResult = result && result.length > 0 ? result[0] : null;
 
-                console.log(`Updating balance for user ${user.id}: ${currentBalance} + ${depositAmount} = ${newBalance}`);
+            await supabase
+                .from('transactions')
+                .update({
+                    payment_method: responseData.PaymentMethod || responseData.MobileChannelName || transaction.payment_method,
+                    raw_status_check: hubtelData,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', transaction.id);
 
-                const { error: profileUpdateError } = await supabase
-                    .from('profiles')
-                    .update({ balance: newBalance })
-                    .eq('id', user.id);
+            await logUserAction({
+                user_id: user.id,
+                action_type: 'deposit_completed',
+                entity_type: 'transaction',
+                entity_id: transaction.id,
+                description: `Hubtel deposit completed via status check: ₵${creditAmount}`,
+                metadata: { hubtelData },
+                req
+            });
 
-                if (profileUpdateError) {
-                    console.error('Error updating profile balance:', profileUpdateError);
-                } else {
-                    console.log('Balance updated successfully');
-                }
+            return res.status(200).json({
+                success: true,
+                status: 'approved',
+                new_balance: approvalResult?.new_balance,
+                hubtelResponse: hubtelData
+            });
+        } else if (transactionStatus === 'Failed' || transactionStatus === 'Unpaid') {
+            await supabase
+                .from('transactions')
+                .update({
+                    status: 'rejected',
+                    raw_status_check: hubtelData,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', transaction.id);
 
-                await logUserAction({
-                    user_id: user.id,
-                    action_type: 'deposit_completed',
-                    entity_type: 'transaction',
-                    entity_id: transaction.id,
-                    description: `Hubtel deposit completed via status check: ₵${transaction.amount}`,
-                    metadata: { hubtelData },
-                    req
-                });
-            }
+            return res.status(200).json({
+                success: false,
+                status: 'rejected',
+                hubtelResponse: hubtelData
+            });
         }
 
         return res.status(200).json({
             success: true,
-            status: newStatus,
+            status: transaction.status,
             hubtelResponse: hubtelData
         });
 
