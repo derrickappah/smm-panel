@@ -138,14 +138,16 @@ export async function logActivity(arg1, arg2, arg3, arg4, arg5, arg6) {
       ...(user_agent && !metadata.user_agent ? { user_agent } : {})
     };
     
-    // Dispatch security alert email for security/critical severity events
+    // Dispatch security alert email for critical security events only
     if (severity === 'security' || severity === 'critical') {
       sendSecurityAlertEmail({
         subject: `Security Alert: ${action_type}`,
         title: action_type.replace(/_/g, ' '),
         description: description,
         severity: severity,
+        eventType: action_type,
         metadata: {
+          action_type,
           user_id: user_id || 'unauthenticated',
           ip_address: ip_address || 'unknown',
           ...enrichedMetadata

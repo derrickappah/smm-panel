@@ -29,22 +29,25 @@ const SECURITY_EVENT_CATEGORIES = [
             {
                 name: 'PRIVILEGE_ESCALATION_ADMIN',
                 severity: 'security',
+                channel: 'email',
                 sourceFile: 'api/admin/update-user-role.js',
-                status: 'Wired & Verified',
+                status: 'Email Alert (Critical)',
                 triggerCondition: 'Any user account is promoted or assigned the admin role by an administrator.'
             },
             {
                 name: 'ADMIN_BALANCE_OVERRIDE',
                 severity: 'security',
+                channel: 'email',
                 sourceFile: 'api/admin/update-user-balance.js',
-                status: 'Wired & Verified',
+                status: 'Email Alert (Critical)',
                 triggerCondition: "An administrator manually credits, debits, or overwrites a user's wallet balance."
             },
             {
                 name: 'USER_SESSION_REVOCATION',
                 severity: 'security',
+                channel: 'log',
                 sourceFile: 'api/admin/revoke-user-sessions.js',
-                status: 'Wired & Verified',
+                status: 'Dashboard Log (Audited)',
                 triggerCondition: 'An admin forces the revocation of all active sessions and refresh tokens for a user.'
             }
         ]
@@ -59,29 +62,33 @@ const SECURITY_EVENT_CATEGORIES = [
             {
                 name: 'PAYMENT_AMOUNT_MISMATCH',
                 severity: 'critical',
+                channel: 'email',
                 sourceFile: 'api/secure-payment-callback.js',
-                status: 'Wired & Verified',
+                status: 'Email Alert (Critical)',
                 triggerCondition: 'A gateway webhook (Paystack, KoraPay, Hubtel, Moolre) reports an amount paid that differs from the registered deposit amount.'
             },
             {
                 name: 'UNAUTHORIZED_DEPOSIT_APPROVAL',
                 severity: 'security',
+                channel: 'email',
                 sourceFile: 'api/approve-deposit-universal.js',
-                status: 'Wired & Verified',
+                status: 'Email Alert (Critical)',
                 triggerCondition: 'An unauthenticated caller or non-admin attempts to approve or force a deposit transaction.'
             },
             {
                 name: 'LEDGER_BALANCE_DISCREPANCY',
                 severity: 'critical',
+                channel: 'email',
                 sourceFile: 'database/migrations/SYSTEM_HARDENING.sql',
-                status: 'Wired & Verified',
+                status: 'Email Alert (Critical)',
                 triggerCondition: 'The automated ledger verifier detects a difference between a user balance and their audited transaction history.'
             },
             {
                 name: 'MANUAL_PAYMENT_VERIFY_FAILURE',
                 severity: 'security',
+                channel: 'log',
                 sourceFile: 'api/manual-verify-paystack-deposit.js',
-                status: 'Wired & Verified',
+                status: 'Dashboard Log (Audited)',
                 triggerCondition: 'An administrator or system fails manual gateway verification due to mismatched external references.'
             }
         ]
@@ -96,22 +103,25 @@ const SECURITY_EVENT_CATEGORIES = [
             {
                 name: 'DUPLICATE_SPAM_CLUSTER',
                 severity: 'warning',
+                channel: 'log',
                 sourceFile: 'api/admin/detect-suspicious-activity.js',
-                status: 'Wired & Verified',
+                status: 'Dashboard Log (Audited)',
                 triggerCondition: '4 or more orders for the exact same target link and service are placed within 10 minutes.'
             },
             {
                 name: 'ORDER_VOLUME_SPIKE',
                 severity: 'warning',
+                channel: 'log',
                 sourceFile: 'api/admin/detect-suspicious-activity.js',
-                status: 'Wired & Verified',
+                status: 'Dashboard Log (Audited)',
                 triggerCondition: 'A single user account submits more than 20 orders within 10 minutes.'
             },
             {
                 name: 'GHOST_ORDER_DETECTED',
                 severity: 'critical',
+                channel: 'email',
                 sourceFile: 'api/admin/detect-ghost-orders.js',
-                status: 'Wired & Verified',
+                status: 'Email Alert (Critical)',
                 triggerCondition: 'Automated reconciliation finds orders on external providers (SMMGen, SMMCost, etc.) that do not match local records.'
             }
         ]
@@ -126,29 +136,33 @@ const SECURITY_EVENT_CATEGORIES = [
             {
                 name: 'OTP_BRUTE_FORCE_DETECTED',
                 severity: 'security',
+                channel: 'email',
                 sourceFile: 'api/auth/verify-otp.js',
-                status: 'Wired & Verified',
+                status: 'Email Alert (Critical)',
                 triggerCondition: '5 consecutive failed OTP code entries are made against a phone number or email (code gets invalidated).'
             },
             {
                 name: 'BANNED_DEVICE_LOGIN_ATTEMPT',
                 severity: 'security',
+                channel: 'log',
                 sourceFile: 'api/utils/deviceAuth.js',
-                status: 'Wired & Verified',
+                status: 'Dashboard Log (Audited)',
                 triggerCondition: 'A device or IP fingerprint previously marked as banned attempts to access account endpoints.'
             },
             {
                 name: 'HIGH_VELOCITY_LOGIN_FAILURES',
                 severity: 'security',
+                channel: 'email',
                 sourceFile: 'api/auth/log-event.js',
-                status: 'Wired & Verified',
+                status: 'Email Alert (Critical)',
                 triggerCondition: 'Repeated failed login attempts (5+) against accounts from the same source IP within 5 minutes.'
             },
             {
                 name: 'RATE_LIMIT_SUSTAINED_BURST',
                 severity: 'warning',
+                channel: 'log',
                 sourceFile: 'api/middleware/rateLimit.js',
-                status: 'Wired & Verified',
+                status: 'Dashboard Log (Audited)',
                 triggerCondition: 'Rapid automated requests exceeding 30 req/min (IP) or 10 req/min (user order rate limit).'
             }
         ]
@@ -538,26 +552,26 @@ const AdminAudit = memo(({ onRefresh, refreshing = false }) => {
                 <Card className="border-emerald-200 bg-emerald-50/40">
                     <CardHeader className="pb-2">
                         <div className="flex items-center justify-between">
-                            <CardTitle className="text-sm font-semibold text-emerald-900">Active Alert Triggers</CardTitle>
+                            <CardTitle className="text-sm font-semibold text-emerald-900">Active Alert Rules</CardTitle>
                             <CheckCircle2 className="w-5 h-5 text-emerald-600" />
                         </div>
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold text-emerald-800">{totalTriggersCount} Rules</div>
-                        <p className="text-xs text-emerald-600 mt-1">100% verified across 4 security layers</p>
+                        <p className="text-xs text-emerald-600 mt-1">8 Critical Email • 6 Dashboard Audited</p>
                     </CardContent>
                 </Card>
 
                 <Card className="border-blue-200 bg-blue-50/40">
                     <CardHeader className="pb-2">
                         <div className="flex items-center justify-between">
-                            <CardTitle className="text-sm font-semibold text-blue-900">Email Dispatcher</CardTitle>
+                            <CardTitle className="text-sm font-semibold text-blue-900">Resend Quota Guard</CardTitle>
                             <Mail className="w-5 h-5 text-blue-600" />
                         </div>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-blue-800">Resend API</div>
-                        <p className="text-xs text-blue-600 mt-1">Real-time admin notification engine</p>
+                        <div className="text-2xl font-bold text-blue-800">Critical Only</div>
+                        <p className="text-xs text-blue-600 mt-1">Max 70 emails/day budget (100 cap protected)</p>
                     </CardContent>
                 </Card>
 
@@ -717,7 +731,7 @@ const AdminAudit = memo(({ onRefresh, refreshing = false }) => {
                                                     <TableHead className="w-[240px] text-xs font-semibold text-gray-700">Event Name</TableHead>
                                                     <TableHead className="w-[100px] text-xs font-semibold text-gray-700">Severity</TableHead>
                                                     <TableHead className="w-[220px] text-xs font-semibold text-gray-700">Source File</TableHead>
-                                                    <TableHead className="w-[140px] text-xs font-semibold text-gray-700">Status</TableHead>
+                                                    <TableHead className="w-[170px] text-xs font-semibold text-gray-700">Alert Channel</TableHead>
                                                     <TableHead className="text-xs font-semibold text-gray-700">What Triggers It</TableHead>
                                                 </TableRow>
                                             </TableHeader>
@@ -726,7 +740,7 @@ const AdminAudit = memo(({ onRefresh, refreshing = false }) => {
                                                     <TableRow key={ev.name} className="hover:bg-gray-50/60 transition-colors">
                                                         <TableCell className="font-mono text-xs font-bold text-gray-900">
                                                             <div className="flex items-center gap-2">
-                                                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                                                <span className={`w-2 h-2 rounded-full ${ev.channel === 'email' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
                                                                 <span>{ev.name}</span>
                                                             </div>
                                                         </TableCell>
@@ -739,10 +753,17 @@ const AdminAudit = memo(({ onRefresh, refreshing = false }) => {
                                                             </code>
                                                         </TableCell>
                                                         <TableCell>
-                                                            <div className="flex items-center gap-1.5 text-xs text-emerald-700 font-semibold">
-                                                                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                                                                <span>{ev.status}</span>
-                                                            </div>
+                                                            {ev.channel === 'email' ? (
+                                                                <div className="flex items-center gap-1.5 text-xs text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 w-fit">
+                                                                    <Mail className="w-3.5 h-3.5 text-emerald-600" />
+                                                                    <span>Email (Critical)</span>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex items-center gap-1.5 text-xs text-slate-600 font-medium bg-slate-50 px-2 py-0.5 rounded border border-slate-200 w-fit">
+                                                                    <FileText className="w-3.5 h-3.5 text-slate-500" />
+                                                                    <span>Dashboard Log</span>
+                                                                </div>
+                                                            )}
                                                         </TableCell>
                                                         <TableCell className="text-xs text-gray-600 leading-relaxed">
                                                             {ev.triggerCondition}

@@ -13,8 +13,27 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'BoostUp GH Security <onboarding@resend.dev>';
 const DEFAULT_ADMIN_EMAIL = process.env.ADMIN_ALERT_EMAIL || 'derrickappah17@gmail.com';
 
-// In-memory deduplication cache if Redis is not configured
+// Maximum daily email alerts to strictly preserve the 100 emails/day Resend quota
+const DAILY_EMAIL_BUDGET = parseInt(process.env.DAILY_ALERT_EMAIL_LIMIT || '70', 10);
+
+// Whitelist of ABSOLUTELY CRITICAL events permitted to dispatch email alerts
+export const CRITICAL_EMAIL_EVENTS = new Set([
+  'PAYMENT_AMOUNT_MISMATCH',
+  'LEDGER_BALANCE_DISCREPANCY',
+  'PRIVILEGE_ESCALATION_ADMIN',
+  'GHOST_ORDER_DETECTED',
+  'UNAUTHORIZED_DEPOSIT_APPROVAL',
+  'ADMIN_BALANCE_OVERRIDE',
+  'OTP_BRUTE_FORCE_DETECTED',
+  'HIGH_VELOCITY_LOGIN_FAILURES'
+]);
+
+// In-memory deduplication & quota cache if Redis is not configured
 const localAlertDedupe = new Map();
+const localDailyQuota = {
+  date: new Date().toISOString().slice(0, 10),
+  count: 0
+};
 
 // Periodic cleanup of in-memory dedupe map (every 10m)
 if (typeof setInterval !== 'undefined') {
@@ -26,6 +45,46 @@ if (typeof setInterval !== 'undefined') {
       }
     }
   }, 60000);
+}
+
+/**
+ * Check and increment daily email quota to prevent exceeding Resend free tier limits
+ * @returns {Promise<boolean>} - true if under budget and email allowed, false if quota reached
+ */
+async function checkAndIncrementDailyQuota() {
+  const today = new Date().toISOString().slice(0, 10);
+
+  if (redis) {
+    try {
+      const quotaKey = `smm:alert:daily_quota:${today}`;
+      const current = await redis.incr(quotaKey);
+      if (current === 1) {
+        // Set key to expire in 48 hours
+        await redis.expire(quotaKey, 172800);
+      }
+      if (current > DAILY_EMAIL_BUDGET) {
+        console.warn(`[ALERT NOTIFIER] Daily email limit reached (${current}/${DAILY_EMAIL_BUDGET}). Alert suppressed.`);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.warn('[ALERT NOTIFIER] Redis quota check error, using local tracker:', err.message);
+    }
+  }
+
+  // Local in-memory quota tracking
+  if (localDailyQuota.date !== today) {
+    localDailyQuota.date = today;
+    localDailyQuota.count = 0;
+  }
+
+  if (localDailyQuota.count >= DAILY_EMAIL_BUDGET) {
+    console.warn(`[ALERT NOTIFIER] Local daily email budget reached (${localDailyQuota.count}/${DAILY_EMAIL_BUDGET}). Alert suppressed.`);
+    return false;
+  }
+
+  localDailyQuota.count += 1;
+  return true;
 }
 
 /**
@@ -108,35 +167,57 @@ async function isAlertThrottled(dedupeKey, windowSeconds = 600) {
 }
 
 /**
- * Send a real-time security alert email via Resend API
+ * Send a real-time security alert email via Resend API (Critical Events Only)
  * @param {Object} options
  * @param {string} options.subject - Email subject line
  * @param {string} options.title - Header title inside the email
  * @param {string} options.description - Main event description
  * @param {string} [options.severity='warning'] - 'info' | 'warning' | 'security' | 'critical'
+ * @param {string} [options.eventType] - Event action type (e.g. 'PAYMENT_AMOUNT_MISMATCH')
+ * @param {boolean} [options.forceEmail=false] - Explicitly force email if needed
  * @param {Object} [options.metadata={}] - Detailed event payload / context
  * @param {string[]} [options.recipients] - Optional specific recipient array
  * @param {string} [options.dedupeKey] - Unique key to prevent duplicate alert storms
  * @param {number} [options.dedupeWindow=600] - Dedupe window in seconds
- * @returns {Promise<{success: boolean, messageId?: string, results?: Array, error?: string}>}
+ * @returns {Promise<{success: boolean, messageId?: string, skipped?: string, error?: string}>}
  */
 export async function sendSecurityAlertEmail({
   subject,
   title,
   description,
   severity = 'warning',
+  eventType = null,
+  forceEmail = false,
   metadata = {},
   recipients = null,
   dedupeKey = null,
   dedupeWindow = 600
 }) {
   try {
+    // 1. Enforce Critical-Only Filter: Only send emails for whitelisted critical events or 'critical' severity
+    const isCriticalEvent = severity === 'critical' || 
+      (eventType && CRITICAL_EMAIL_EVENTS.has(eventType)) ||
+      (metadata?.action_type && CRITICAL_EMAIL_EVENTS.has(metadata.action_type)) ||
+      forceEmail;
+
+    if (!isCriticalEvent) {
+      // Non-critical events are logged to database but not emailed to conserve daily quota
+      console.log(`[ALERT NOTIFIER] Event '${eventType || title}' is not in critical whitelist. Suppressing email to protect 100/day quota.`);
+      return { success: true, skipped: 'Non-critical event suppressed to preserve email quota' };
+    }
+
     if (!RESEND_API_KEY) {
       console.warn('[ALERT NOTIFIER] Resend API key is missing. Skipping email dispatch.');
       return { success: false, error: 'Resend API key not configured' };
     }
 
-    // Check deduplication
+    // 2. Daily Quota Guard (Never breach Resend 100/day limit)
+    const withinBudget = await checkAndIncrementDailyQuota();
+    if (!withinBudget) {
+      return { success: false, error: 'Daily email alert budget exceeded' };
+    }
+
+    // 3. Deduplication (Prevent email storms from rapid repeat triggers)
     if (dedupeKey) {
       const throttled = await isAlertThrottled(dedupeKey, dedupeWindow);
       if (throttled) {
