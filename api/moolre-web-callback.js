@@ -17,6 +17,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders } from './utils/corsHeaders.js';
+import { logSecurityEvent } from './utils/activityLogger.js';
 
 export default async function handler(req, res) {
   // Enable CORS
@@ -33,23 +34,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    const SUPABASE_URL = process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL;
-    const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      console.error('Supabase credentials not configured');
-      return res.status(500).json({
-        error: 'Server configuration error'
-      });
-    }
-
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    });
-
     // Get reference from query params (GET), body (POST format 1), or Moolre Webhook payload format
     let reference = req.query.ref || req.query.reference || req.query.externalref;
     
@@ -71,6 +55,23 @@ export default async function handler(req, res) {
         error: 'Invalid reference format'
       });
     }
+
+    const SUPABASE_URL = process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL;
+    const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      console.error('Supabase credentials not configured');
+      return res.status(500).json({
+        error: 'Server configuration error'
+      });
+    }
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    });
 
     console.log('[MOOLRE WEB CALLBACK] Received callback for reference:', reference, {
       method: req.method,
@@ -263,6 +264,27 @@ export default async function handler(req, res) {
             user_id: transaction.user_id,
             timestamp: new Date().toISOString()
           });
+
+          // Log security event to dispatch real-time alert email to admins
+          await logSecurityEvent({
+            user_id: transaction.user_id,
+            action_type: 'PAYMENT_AMOUNT_MISMATCH',
+            entity_type: 'transaction',
+            entity_id: transaction.id,
+            description: `Payment amount mismatch on Moolre: Paid ₵${moolreAmount}, Expected ₵${storedAmount}`,
+            metadata: {
+              transaction_id: transaction.id,
+              provider: 'moolre_web',
+              reference: reference,
+              expected_amount: `₵${storedAmount}`,
+              paid_amount: `₵${moolreAmount}`,
+              difference: `₵${difference.toFixed(2)}`,
+              user_id: transaction.user_id,
+              moolre_id: moolreId
+            },
+            severity: 'critical',
+            req
+          }).catch(err => console.warn('Failed to log security event in moolre-web-callback:', err.message));
 
           // LOG CRITICAL EVENT
           await supabase.rpc('log_system_event', {

@@ -9,7 +9,7 @@ import {
   Users, ShoppingCart, DollarSign, Package, Wallet, Receipt,
   MessageSquare, UserPlus, RefreshCw, BarChart3, Menu, X, LayoutDashboard, Tag,
   ChevronLeft, ChevronRight, FileText, Server, HelpCircle, CreditCard, Scale, Bell, Video,
-  Gift, Settings, Layers, Search, Download, ShieldAlert
+  Gift, Settings, Layers, Search, Download, ShieldAlert, ShieldCheck
 } from 'lucide-react';
 import { useReferralStats } from '@/hooks/useAdminReferrals';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -48,6 +48,7 @@ const AdminUpdates = lazy(() => import('@/pages/admin/AdminUpdates'));
 const AdminVideoTutorials = lazy(() => import('@/pages/admin/AdminVideoTutorials'));
 const AdminServiceNotifications = lazy(() => import('@/pages/admin/AdminServiceNotifications'));
 const AdminRateCatcher = lazy(() => import('@/pages/admin/AdminRateCatcher'));
+const AdminAudit = lazy(() => import('@/pages/admin/AdminAudit'));
 import AdminRewards from '@/pages/admin/AdminRewards';
 import AdminRewardSettings from '@/pages/admin/AdminRewardSettings';
 
@@ -115,7 +116,8 @@ const AdminDashboard = memo(({ user, onLogout }) => {
         'notifications': 'notifications',
         'rewards': 'rewards',
         'rewards-settings': 'rewards-settings',
-        'rate-catcher': 'rate-catcher'
+        'rate-catcher': 'rate-catcher',
+        'audit': 'audit'
       };
       return sectionMap[section] || 'dashboard';
     }
@@ -357,7 +359,8 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     moolre: 'Moolre Transactions',
     rewards: 'Reward Claims',
     'rewards-settings': 'Reward Settings',
-    'rate-catcher': 'Rate Catcher'
+    'rate-catcher': 'Rate Catcher',
+    'audit': 'Security & Balance Audit'
   };
 
   // Navigation items configuration
@@ -396,6 +399,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     { id: 'rewards', label: 'Rewards', icon: Gift },
     { id: 'rewards-settings', label: 'Reward Settings', icon: Settings },
     { id: 'rate-catcher', label: 'Rate Catcher', icon: Scale },
+    { id: 'audit', label: 'Security & Audit', icon: ShieldCheck },
   ];
 
   // Show skeleton loader while initial data is loading
@@ -946,6 +950,13 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                 <TabsContent value="rewards-settings" className="lg:mt-0 w-full max-w-full">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminRewardSettings />
+                  </Suspense>
+                </TabsContent>
+
+                {/* Security & Balance Audit Section */}
+                <TabsContent value="audit" className="lg:mt-0 w-full max-w-full">
+                  <Suspense fallback={<ComponentLoader />}>
+                    <AdminAudit onRefresh={handleRefresh} refreshing={refreshing} />
                   </Suspense>
                 </TabsContent>
               </div>

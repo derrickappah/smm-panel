@@ -11,6 +11,7 @@
 import { setCorsHeaders } from '../utils/corsHeaders.js';
 import { getServiceRoleClient } from '../utils/auth.js';
 import { resolveDevice, banDeviceInDatabase } from '../utils/deviceAuth.js';
+import { logSecurityEvent } from '../utils/activityLogger.js';
 
 export default async function handler(req, res) {
   setCorsHeaders(req, res);
@@ -26,6 +27,17 @@ export default async function handler(req, res) {
     const { deviceId, deviceHash, isBanned, deviceRecord } = await resolveDevice(req, res);
 
     if (isBanned) {
+      await logSecurityEvent({
+        user_id: deviceRecord?.user_id || null,
+        action_type: 'BANNED_DEVICE_PRELOGIN_BLOCKED',
+        description: 'Pre-login access blocked for restricted device',
+        metadata: {
+          device_id_hash_prefix: deviceHash ? deviceHash.substring(0, 12) + '...' : null,
+          attempted_email: cleanEmail || null
+        },
+        req
+      }).catch(() => {});
+
       return res.status(403).json({
         allowed: false,
         isBanned: true,
@@ -74,6 +86,18 @@ export default async function handler(req, res) {
         userId: targetUserId,
         reason: 'Attempted login with suspended account'
       });
+
+      await logSecurityEvent({
+        user_id: targetUserId || null,
+        action_type: 'BANNED_ACCOUNT_LOGIN_BLOCKED',
+        description: `Login attempt on suspended account ${cleanEmail}, associated device was restricted.`,
+        metadata: {
+          user_id: targetUserId,
+          email: cleanEmail,
+          device_id_hash_prefix: deviceHash ? deviceHash.substring(0, 12) + '...' : null
+        },
+        req
+      }).catch(() => {});
 
       return res.status(403).json({
         allowed: false,

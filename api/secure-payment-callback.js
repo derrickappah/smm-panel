@@ -253,6 +253,20 @@ export default async function handler(req, res) {
         clientIP,
         provider
       });
+
+      await logSecurityEvent({
+        action_type: 'WEBHOOK_VERIFICATION_FAILED',
+        description: `Unauthorized payment webhook attempt on ${provider} (Signature Valid: ${signatureValid}, IP Valid: ${ipValid})`,
+        metadata: {
+          provider,
+          signature_valid: signatureValid,
+          ip_valid: ipValid,
+          client_ip: clientIP || 'unknown'
+        },
+        severity: 'critical',
+        req
+      }).catch(err => console.warn('Failed to log webhook security event:', err.message));
+
       return res.status(401).json({
         error: 'Webhook verification failed',
         signature_valid: signatureValid,
