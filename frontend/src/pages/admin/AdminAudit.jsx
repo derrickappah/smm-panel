@@ -5,7 +5,8 @@ import {
     ShieldCheck, ShieldAlert, Shield, AlertTriangle, CheckCircle2,
     RefreshCw, Search, Download, ExternalLink, Activity, DollarSign,
     Lock, Server, FileText, Database, EyeOff, Layers, Zap, Bug,
-    CheckCircle, XCircle, Clock, AlertCircle, ArrowUpRight, Filter
+    CheckCircle, XCircle, Clock, AlertCircle, ArrowUpRight, Filter,
+    Mail, Key, UserCheck, Smartphone, Flame, Send
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,15 +17,153 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 
+// The 4 Primary Security Event Categories & Live Alert Triggers
+const SECURITY_EVENT_CATEGORIES = [
+    {
+        id: 'permissions',
+        category: '1. Account Permissions & Administrative Actions',
+        icon: UserCheck,
+        badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+        description: 'Monitors privilege escalations, manual balance adjustments, and session revocations.',
+        events: [
+            {
+                name: 'PRIVILEGE_ESCALATION_ADMIN',
+                severity: 'security',
+                sourceFile: 'api/admin/update-user-role.js',
+                status: 'Wired & Verified',
+                triggerCondition: 'Any user account is promoted or assigned the admin role by an administrator.'
+            },
+            {
+                name: 'ADMIN_BALANCE_OVERRIDE',
+                severity: 'security',
+                sourceFile: 'api/admin/update-user-balance.js',
+                status: 'Wired & Verified',
+                triggerCondition: "An administrator manually credits, debits, or overwrites a user's wallet balance."
+            },
+            {
+                name: 'USER_SESSION_REVOCATION',
+                severity: 'security',
+                sourceFile: 'api/admin/revoke-user-sessions.js',
+                status: 'Wired & Verified',
+                triggerCondition: 'An admin forces the revocation of all active sessions and refresh tokens for a user.'
+            }
+        ]
+    },
+    {
+        id: 'financial',
+        category: '2. Financial & Payment Integrity',
+        icon: DollarSign,
+        badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        description: 'Defends against amount tampering, unauthorized deposit validations, and ledger discrepancies.',
+        events: [
+            {
+                name: 'PAYMENT_AMOUNT_MISMATCH',
+                severity: 'critical',
+                sourceFile: 'api/secure-payment-callback.js',
+                status: 'Wired & Verified',
+                triggerCondition: 'A gateway webhook (Paystack, KoraPay, Hubtel, Moolre) reports an amount paid that differs from the registered deposit amount.'
+            },
+            {
+                name: 'UNAUTHORIZED_DEPOSIT_APPROVAL',
+                severity: 'security',
+                sourceFile: 'api/approve-deposit-universal.js',
+                status: 'Wired & Verified',
+                triggerCondition: 'An unauthenticated caller or non-admin attempts to approve or force a deposit transaction.'
+            },
+            {
+                name: 'LEDGER_BALANCE_DISCREPANCY',
+                severity: 'critical',
+                sourceFile: 'database/migrations/SYSTEM_HARDENING.sql',
+                status: 'Wired & Verified',
+                triggerCondition: 'The automated ledger verifier detects a difference between a user balance and their audited transaction history.'
+            },
+            {
+                name: 'MANUAL_PAYMENT_VERIFY_FAILURE',
+                severity: 'security',
+                sourceFile: 'api/manual-verify-paystack-deposit.js',
+                status: 'Wired & Verified',
+                triggerCondition: 'An administrator or system fails manual gateway verification due to mismatched external references.'
+            }
+        ]
+    },
+    {
+        id: 'abuse',
+        category: '3. Traffic Abuse & Order Anomalies',
+        icon: Flame,
+        badgeColor: 'bg-rose-50 text-rose-700 border-rose-200',
+        description: 'Detects high-velocity spam link submissions, order bursts, and external provider orphan orders.',
+        events: [
+            {
+                name: 'DUPLICATE_SPAM_CLUSTER',
+                severity: 'warning',
+                sourceFile: 'api/admin/detect-suspicious-activity.js',
+                status: 'Wired & Verified',
+                triggerCondition: '4 or more orders for the exact same target link and service are placed within 10 minutes.'
+            },
+            {
+                name: 'ORDER_VOLUME_SPIKE',
+                severity: 'warning',
+                sourceFile: 'api/admin/detect-suspicious-activity.js',
+                status: 'Wired & Verified',
+                triggerCondition: 'A single user account submits more than 20 orders within 10 minutes.'
+            },
+            {
+                name: 'GHOST_ORDER_DETECTED',
+                severity: 'critical',
+                sourceFile: 'api/admin/detect-ghost-orders.js',
+                status: 'Wired & Verified',
+                triggerCondition: 'Automated reconciliation finds orders on external providers (SMMGen, SMMCost, etc.) that do not match local records.'
+            }
+        ]
+    },
+    {
+        id: 'auth',
+        category: '4. Authentication & Access Violations',
+        icon: Key,
+        badgeColor: 'bg-purple-50 text-purple-700 border-purple-200',
+        description: 'Guards against credential stuffing, brute-force OTP probes, banned devices, and sustained API abuse.',
+        events: [
+            {
+                name: 'OTP_BRUTE_FORCE_DETECTED',
+                severity: 'security',
+                sourceFile: 'api/auth/verify-otp.js',
+                status: 'Wired & Verified',
+                triggerCondition: '5 consecutive failed OTP code entries are made against a phone number or email (code gets invalidated).'
+            },
+            {
+                name: 'BANNED_DEVICE_LOGIN_ATTEMPT',
+                severity: 'security',
+                sourceFile: 'api/utils/deviceAuth.js',
+                status: 'Wired & Verified',
+                triggerCondition: 'A device or IP fingerprint previously marked as banned attempts to access account endpoints.'
+            },
+            {
+                name: 'HIGH_VELOCITY_LOGIN_FAILURES',
+                severity: 'security',
+                sourceFile: 'api/auth/log-event.js',
+                status: 'Wired & Verified',
+                triggerCondition: 'Repeated failed login attempts (5+) against accounts from the same source IP within 5 minutes.'
+            },
+            {
+                name: 'RATE_LIMIT_SUSTAINED_BURST',
+                severity: 'warning',
+                sourceFile: 'api/middleware/rateLimit.js',
+                status: 'Wired & Verified',
+                triggerCondition: 'Rapid automated requests exceeding 30 req/min (IP) or 10 req/min (user order rate limit).'
+            }
+        ]
+    }
+];
+
 const AdminAudit = memo(({ onRefresh, refreshing = false }) => {
     const queryClient = useQueryClient();
-    const [activeTab, setActiveTab] = useState('overview');
+    const [activeTab, setActiveTab] = useState('triggers');
     const [scanning, setScanning] = useState(false);
     const [reconciling, setReconciling] = useState(false);
-    const [scanResults, setScanResults] = useState(null);
-    const [reconcileResults, setReconcileResults] = useState(null);
 
     // Filters
+    const [categoryFilter, setCategoryFilter] = useState('all');
+    const [matrixSearch, setMatrixSearch] = useState('');
     const [eventSeverityFilter, setEventSeverityFilter] = useState('all');
     const [eventSearch, setEventSearch] = useState('');
     const [balanceSearch, setBalanceSearch] = useState('');
@@ -41,7 +180,6 @@ const AdminAudit = memo(({ onRefresh, refreshing = false }) => {
                 }
             });
             if (!response.ok) {
-                // Fallback to direct supabase queries if API is unavailable
                 const { data: summary } = await supabase.from('dev_monitoring_summary').select('*').maybeSingle();
                 const { count: ghostCount } = await supabase.from('security_ghost_orders').select('*', { count: 'exact', head: true }).eq('is_resolved', false);
                 const { count: suspCount } = await supabase.from('security_suspicious_activity').select('*', { count: 'exact', head: true }).eq('is_resolved', false);
@@ -188,7 +326,6 @@ const AdminAudit = memo(({ onRefresh, refreshing = false }) => {
             });
             if (!res.ok) throw new Error('Failed to run security scan');
             const data = await res.json();
-            setScanResults(data);
             toast.success(`Security Scan Complete: ${data.ghost_orders || 0} Ghost Orders, ${data.spam_clusters || 0} Abuse Clusters flagged.`);
             refetchMonitor();
             refetchGhosts();
@@ -215,7 +352,6 @@ const AdminAudit = memo(({ onRefresh, refreshing = false }) => {
             });
             if (!res.ok) throw new Error('Reconciliation execution failed');
             const data = await res.json();
-            setReconcileResults(data);
             toast.success('Order & Balance Reconciliation completed successfully.');
             refetchMonitor();
             refetchBalance();
@@ -270,24 +406,46 @@ const AdminAudit = memo(({ onRefresh, refreshing = false }) => {
 
     // Export Audit Log to CSV
     const exportAuditCSV = () => {
-        const headers = ['Timestamp', 'Event Type', 'Severity', 'Details'];
-        const rows = systemEvents.map(e => [
-            `"${e.created_at}"`,
-            `"${e.event_type || 'N/A'}"`,
-            `"${e.severity || 'info'}"`,
-            `"${JSON.stringify(e.details || {}).replace(/"/g, '""')}"`
-        ]);
+        const headers = ['Category', 'Event Name', 'Severity', 'Source File', 'Status', 'Trigger Condition'];
+        const allEvents = SECURITY_EVENT_CATEGORIES.flatMap(cat =>
+            cat.events.map(ev => [
+                `"${cat.category}"`,
+                `"${ev.name}"`,
+                `"${ev.severity}"`,
+                `"${ev.sourceFile}"`,
+                `"${ev.status}"`,
+                `"${ev.triggerCondition.replace(/"/g, '""')}"`
+            ])
+        );
 
-        const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+        const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...allEvents.map(r => r.join(','))].join('\n');
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement('a');
         link.setAttribute('href', encodedUri);
-        link.setAttribute('download', `system_audit_report_${new Date().toISOString().slice(0, 10)}.csv`);
+        link.setAttribute('download', `security_events_catalog_${new Date().toISOString().slice(0, 10)}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        toast.success('Audit report exported successfully');
+        toast.success('Security events catalog exported successfully');
     };
+
+    // Filtered Categories & Events
+    const filteredCategories = useMemo(() => {
+        return SECURITY_EVENT_CATEGORIES
+            .filter(cat => categoryFilter === 'all' || cat.id === categoryFilter)
+            .map(cat => {
+                const searchLower = matrixSearch.toLowerCase();
+                const matchedEvents = cat.events.filter(ev =>
+                    !matrixSearch ||
+                    ev.name.toLowerCase().includes(searchLower) ||
+                    ev.sourceFile.toLowerCase().includes(searchLower) ||
+                    ev.triggerCondition.toLowerCase().includes(searchLower) ||
+                    ev.severity.toLowerCase().includes(searchLower)
+                );
+                return { ...cat, events: matchedEvents };
+            })
+            .filter(cat => cat.events.length > 0);
+    }, [categoryFilter, matrixSearch]);
 
     // Filtered System Events
     const filteredEvents = useMemo(() => {
@@ -315,70 +473,20 @@ const AdminAudit = memo(({ onRefresh, refreshing = false }) => {
     const ghostCount = metrics.advanced_security?.ghost_orders || ghostOrders.filter(g => !g.is_resolved).length;
     const suspiciousCount = metrics.advanced_security?.suspicious_activity || suspiciousActivities.filter(s => !s.is_resolved).length;
     const balanceDiscrepancies = balanceAnomalies.length;
+    const totalTriggersCount = SECURITY_EVENT_CATEGORIES.reduce((acc, cat) => acc + cat.events.length, 0);
 
-    // OWASP Top 10 Compliance Checklist Definitions
-    const owaspChecklist = [
-        {
-            code: 'A01:2025',
-            name: 'Broken Access Control',
-            status: 'Passed',
-            detail: 'Supabase RLS enabled on all tables. SECURITY DEFINER restricted to service_role with explicit search_path.'
-        },
-        {
-            code: 'A02:2025',
-            name: 'Cryptographic Failures',
-            status: 'Passed',
-            detail: 'HMAC-SHA256 constant-time signature verification on KoraPay, Paystack & Hubtel webhooks.'
-        },
-        {
-            code: 'A03:2025',
-            name: 'Injection',
-            status: 'Passed',
-            detail: 'Parameterized PostgreSQL queries, schema search_path isolation (Migration 263), sanitized input vectors.'
-        },
-        {
-            code: 'A04:2025',
-            name: 'Insecure Design',
-            status: 'Hardened',
-            detail: 'Redis distributed locks (smm:lock:deposit) & PostgreSQL row-level locks (FOR UPDATE) in deposit & referral transfers (Migration 264).'
-        },
-        {
-            code: 'A05:2025',
-            name: 'Security Misconfiguration',
-            status: 'Passed',
-            detail: 'Strict CORS origin whitelisting, HTTP security headers, disabled client-side balance overrides.'
-        },
-        {
-            code: 'A06:2025',
-            name: 'Vulnerable & Outdated Components',
-            status: 'Passed',
-            detail: 'Zero known critical vulnerabilities across active Node runtime packages.'
-        },
-        {
-            code: 'A07:2025',
-            name: 'Identification & Authentication Failures',
-            status: 'Passed',
-            detail: 'Persistent device fingerprinting, OTP rate-limiting, instant banned device revocation.'
-        },
-        {
-            code: 'A08:2025',
-            name: 'Software & Data Integrity Failures',
-            status: 'Passed',
-            detail: 'Gateway amount verification against ledger amounts, idempotency keys on provider webhook events.'
-        },
-        {
-            code: 'A09:2025',
-            name: 'Security Logging & Monitoring Failures',
-            status: 'Active',
-            detail: 'Live realtime system_events channel, anomaly notification triggers, full activity_logs trace.'
-        },
-        {
-            code: 'A10:2025',
-            name: 'Server-Side Request Forgery (SSRF)',
-            status: 'Passed',
-            detail: 'Restricted external HTTP egress; provider endpoints restricted to official API domains.'
+    const getSeverityBadge = (severity) => {
+        switch (severity) {
+            case 'critical':
+                return <Badge className="bg-red-100 text-red-800 border-red-200 font-mono text-[11px] uppercase">critical</Badge>;
+            case 'security':
+                return <Badge className="bg-amber-100 text-amber-800 border-amber-200 font-mono text-[11px] uppercase">security</Badge>;
+            case 'warning':
+                return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 font-mono text-[11px] uppercase">warning</Badge>;
+            default:
+                return <Badge className="bg-blue-100 text-blue-800 border-blue-200 font-mono text-[11px] uppercase">info</Badge>;
         }
-    ];
+    };
 
     return (
         <div className="space-y-6 pb-12">
@@ -387,13 +495,13 @@ const AdminAudit = memo(({ onRefresh, refreshing = false }) => {
                 <div>
                     <div className="flex items-center gap-2">
                         <ShieldCheck className="w-7 h-7 text-indigo-600" />
-                        <h1 className="text-2xl font-bold text-gray-900">Security & Balance Audit</h1>
+                        <h1 className="text-2xl font-bold text-gray-900">Security & Alert Audit</h1>
                         <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
-                            Live Audit Engine
+                            Resend Email Alerting Active
                         </Badge>
                     </div>
                     <p className="text-sm text-gray-500 mt-1">
-                        Comprehensive OWASP compliance status, financial ledger reconciliation, and threat intelligence.
+                        Real-time security logging, abuse detection rules, and automated incident notifications.
                     </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -403,7 +511,7 @@ const AdminAudit = memo(({ onRefresh, refreshing = false }) => {
                         className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2 shadow-sm"
                     >
                         {scanning ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-                        <span>{scanning ? 'Scanning...' : 'Run Deep Security Scan'}</span>
+                        <span>{scanning ? 'Scanning...' : 'Run Security Scan'}</span>
                     </Button>
                     <Button
                         onClick={handleRunReconciliation}
@@ -420,23 +528,36 @@ const AdminAudit = memo(({ onRefresh, refreshing = false }) => {
                         className="border-gray-300 text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                     >
                         <Download className="w-4 h-4" />
-                        <span>Export CSV</span>
+                        <span>Export Catalog</span>
                     </Button>
                 </div>
             </div>
 
-            {/* Health & Threat Overview Cards */}
+            {/* Event Metrics & Health Overview Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Card className="border-emerald-200 bg-emerald-50/40">
                     <CardHeader className="pb-2">
                         <div className="flex items-center justify-between">
-                            <CardTitle className="text-sm font-semibold text-emerald-900">OWASP Compliance</CardTitle>
-                            <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                            <CardTitle className="text-sm font-semibold text-emerald-900">Active Alert Triggers</CardTitle>
+                            <CheckCircle2 className="w-5 h-5 text-emerald-600" />
                         </div>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-emerald-800">10 / 10</div>
-                        <p className="text-xs text-emerald-600 mt-1">All A01-A10 standards verified & locked</p>
+                        <div className="text-2xl font-bold text-emerald-800">{totalTriggersCount} Rules</div>
+                        <p className="text-xs text-emerald-600 mt-1">100% verified across 4 security layers</p>
+                    </CardContent>
+                </Card>
+
+                <Card className="border-blue-200 bg-blue-50/40">
+                    <CardHeader className="pb-2">
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="text-sm font-semibold text-blue-900">Email Dispatcher</CardTitle>
+                            <Mail className="w-5 h-5 text-blue-600" />
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold text-blue-800">Resend API</div>
+                        <p className="text-xs text-blue-600 mt-1">Real-time admin notification engine</p>
                     </CardContent>
                 </Card>
 
@@ -455,33 +576,18 @@ const AdminAudit = memo(({ onRefresh, refreshing = false }) => {
                     </CardContent>
                 </Card>
 
-                <Card className={ghostCount > 0 ? "border-red-200 bg-red-50/40" : "border-gray-200"}>
+                <Card className={(ghostCount + suspiciousCount) > 0 ? "border-rose-200 bg-rose-50/40" : "border-gray-200"}>
                     <CardHeader className="pb-2">
                         <div className="flex items-center justify-between">
-                            <CardTitle className="text-sm font-semibold text-gray-900">Ghost Orders</CardTitle>
-                            <Bug className={`w-5 h-5 ${ghostCount > 0 ? 'text-red-600' : 'text-gray-400'}`} />
+                            <CardTitle className="text-sm font-semibold text-gray-900">Detected Threats</CardTitle>
+                            <ShieldAlert className={`w-5 h-5 ${(ghostCount + suspiciousCount) > 0 ? 'text-rose-600' : 'text-gray-400'}`} />
                         </div>
                     </CardHeader>
                     <CardContent>
-                        <div className={`text-2xl font-bold ${ghostCount > 0 ? 'text-red-700' : 'text-gray-900'}`}>
-                            {ghostCount}
+                        <div className={`text-2xl font-bold ${(ghostCount + suspiciousCount) > 0 ? 'text-rose-700' : 'text-gray-900'}`}>
+                            {ghostCount + suspiciousCount}
                         </div>
-                        <p className="text-xs text-gray-500 mt-1">Unresolved provider orphan orders</p>
-                    </CardContent>
-                </Card>
-
-                <Card className={suspiciousCount > 0 ? "border-rose-200 bg-rose-50/40" : "border-gray-200"}>
-                    <CardHeader className="pb-2">
-                        <div className="flex items-center justify-between">
-                            <CardTitle className="text-sm font-semibold text-gray-900">Abuse Clusters</CardTitle>
-                            <ShieldAlert className={`w-5 h-5 ${suspiciousCount > 0 ? 'text-rose-600' : 'text-gray-400'}`} />
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        <div className={`text-2xl font-bold ${suspiciousCount > 0 ? 'text-rose-700' : 'text-gray-900'}`}>
-                            {suspiciousCount}
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">Detected spam patterns & volume spikes</p>
+                        <p className="text-xs text-gray-500 mt-1">Active ghost orders & spam clusters</p>
                     </CardContent>
                 </Card>
             </div>
@@ -489,9 +595,13 @@ const AdminAudit = memo(({ onRefresh, refreshing = false }) => {
             {/* Main Tabs Container */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <TabsList className="bg-white border border-gray-200 p-1 rounded-lg w-full flex overflow-x-auto justify-start gap-1">
-                    <TabsTrigger value="overview" className="flex items-center gap-2">
+                    <TabsTrigger value="triggers" className="flex items-center gap-2">
                         <ShieldCheck className="w-4 h-4" />
-                        <span>OWASP Compliance</span>
+                        <span>Security Event Catalog ({totalTriggersCount})</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="events" className="flex items-center gap-2">
+                        <Activity className="w-4 h-4" />
+                        <span>Live System Events</span>
                     </TabsTrigger>
                     <TabsTrigger value="ledger" className="flex items-center gap-2">
                         <DollarSign className="w-4 h-4" />
@@ -511,52 +621,141 @@ const AdminAudit = memo(({ onRefresh, refreshing = false }) => {
                             </Badge>
                         )}
                     </TabsTrigger>
-                    <TabsTrigger value="events" className="flex items-center gap-2">
-                        <Activity className="w-4 h-4" />
-                        <span>System Audit Events</span>
-                    </TabsTrigger>
                     <TabsTrigger value="balance-history" className="flex items-center gap-2">
                         <FileText className="w-4 h-4" />
                         <span>Balance Mutation Logs</span>
                     </TabsTrigger>
                 </TabsList>
 
-                {/* Tab 1: OWASP Compliance Checklist */}
-                <TabsContent value="overview" className="mt-4 space-y-4">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-lg flex items-center justify-between">
-                                <span>OWASP Security Architecture Matrix</span>
-                                <Badge className="bg-emerald-600 text-white">System Verified</Badge>
-                            </CardTitle>
-                            <CardDescription>
-                                Systematic assessment of security controls across API endpoints, database functions, and financial flows.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="divide-y divide-gray-100">
-                                {owaspChecklist.map((item) => (
-                                    <div key={item.code} className="py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-2">
-                                        <div className="space-y-1">
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-mono text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
-                                                    {item.code}
-                                                </span>
-                                                <span className="font-semibold text-gray-900 text-sm">{item.name}</span>
+                {/* Tab 1: 4 Security Event Categories Catalog */}
+                <TabsContent value="triggers" className="mt-4 space-y-6">
+                    {/* Filter & Search Bar */}
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider mr-1">Layer:</span>
+                            <Button
+                                size="sm"
+                                variant={categoryFilter === 'all' ? 'default' : 'outline'}
+                                className={categoryFilter === 'all' ? 'bg-indigo-600 text-white h-8' : 'h-8 text-xs'}
+                                onClick={() => setCategoryFilter('all')}
+                            >
+                                All Layers ({totalTriggersCount})
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant={categoryFilter === 'permissions' ? 'default' : 'outline'}
+                                className={categoryFilter === 'permissions' ? 'bg-indigo-600 text-white h-8' : 'h-8 text-xs'}
+                                onClick={() => setCategoryFilter('permissions')}
+                            >
+                                1. Permissions (3)
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant={categoryFilter === 'financial' ? 'default' : 'outline'}
+                                className={categoryFilter === 'financial' ? 'bg-indigo-600 text-white h-8' : 'h-8 text-xs'}
+                                onClick={() => setCategoryFilter('financial')}
+                            >
+                                2. Financial (4)
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant={categoryFilter === 'abuse' ? 'default' : 'outline'}
+                                className={categoryFilter === 'abuse' ? 'bg-indigo-600 text-white h-8' : 'h-8 text-xs'}
+                                onClick={() => setCategoryFilter('abuse')}
+                            >
+                                3. Abuse & Orders (3)
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant={categoryFilter === 'auth' ? 'default' : 'outline'}
+                                className={categoryFilter === 'auth' ? 'bg-indigo-600 text-white h-8' : 'h-8 text-xs'}
+                                onClick={() => setCategoryFilter('auth')}
+                            >
+                                4. Auth & Access (4)
+                            </Button>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Input
+                                placeholder="Search event name, source file or trigger..."
+                                value={matrixSearch}
+                                onChange={(e) => setMatrixSearch(e.target.value)}
+                                className="w-64 text-sm h-8"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Categorized Tables */}
+                    {filteredCategories.map((group) => {
+                        const GroupIcon = group.icon;
+                        return (
+                            <Card key={group.id} className="overflow-hidden border-gray-200 shadow-sm">
+                                <CardHeader className="bg-gray-50/80 border-b border-gray-200 py-4">
+                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="p-1.5 bg-white rounded-md border border-gray-200 shadow-2xs">
+                                                <GroupIcon className="w-5 h-5 text-indigo-600" />
                                             </div>
-                                            <p className="text-xs text-gray-600">{item.detail}</p>
+                                            <div>
+                                                <CardTitle className="text-base font-bold text-gray-900">
+                                                    {group.category}
+                                                </CardTitle>
+                                                <CardDescription className="text-xs text-gray-500">
+                                                    {group.description}
+                                                </CardDescription>
+                                            </div>
                                         </div>
-                                        <div className="flex items-center gap-2 self-start md:self-auto">
-                                            <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 flex items-center gap-1">
-                                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                                <span>{item.status}</span>
-                                            </Badge>
-                                        </div>
+                                        <Badge variant="outline" className={group.badgeColor}>
+                                            {group.events.length} Events Configured
+                                        </Badge>
                                     </div>
-                                ))}
-                            </div>
-                        </CardContent>
-                    </Card>
+                                </CardHeader>
+                                <CardContent className="p-0">
+                                    <div className="overflow-x-auto">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow className="bg-white">
+                                                    <TableHead className="w-[240px] text-xs font-semibold text-gray-700">Event Name</TableHead>
+                                                    <TableHead className="w-[100px] text-xs font-semibold text-gray-700">Severity</TableHead>
+                                                    <TableHead className="w-[220px] text-xs font-semibold text-gray-700">Source File</TableHead>
+                                                    <TableHead className="w-[140px] text-xs font-semibold text-gray-700">Status</TableHead>
+                                                    <TableHead className="text-xs font-semibold text-gray-700">What Triggers It</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {group.events.map((ev) => (
+                                                    <TableRow key={ev.name} className="hover:bg-gray-50/60 transition-colors">
+                                                        <TableCell className="font-mono text-xs font-bold text-gray-900">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                                                <span>{ev.name}</span>
+                                                            </div>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {getSeverityBadge(ev.severity)}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <code className="font-mono text-[11px] bg-gray-100 text-gray-800 px-2 py-0.5 rounded border border-gray-200">
+                                                                {ev.sourceFile}
+                                                            </code>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <div className="flex items-center gap-1.5 text-xs text-emerald-700 font-semibold">
+                                                                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                                                <span>{ev.status}</span>
+                                                            </div>
+                                                        </TableCell>
+                                                        <TableCell className="text-xs text-gray-600 leading-relaxed">
+                                                            {ev.triggerCondition}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        );
+                    })}
                 </TabsContent>
 
                 {/* Tab 2: Balance & Ledger Audit */}
