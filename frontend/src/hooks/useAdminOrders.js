@@ -68,6 +68,55 @@ const fetchOrders = async ({
   statusFilter = 'all',
   dateFilter = ''
 }) => {
+  // Execute high-speed Server Action endpoint
+  try {
+    const sessionRes = await supabase.auth.getSession();
+    const token = sessionRes.data.session?.access_token;
+
+    if (token) {
+      const response = await fetch('/api/admin/orders-list', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          page: pageParam,
+          limit: PAGE_SIZE,
+          statusFilter,
+          dateFilter,
+          searchTerm,
+          searchType
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          const finalOrders = result.orders || [];
+          const totalCount = result.total || 0;
+
+          // Check SMMGen status if requested (non-blocking in background)
+          if (checkSMMGenStatus && finalOrders.length > 0) {
+            const ordersToCheck = finalOrders.filter(order => shouldCheckOrder(order, 5));
+            if (ordersToCheck.length > 0) {
+              checkSMMGenStatusesInBackground(ordersToCheck).catch(err => console.warn(err));
+            }
+          }
+
+          return {
+            data: finalOrders,
+            nextPage: finalOrders.length === PAGE_SIZE ? pageParam + 1 : undefined,
+            total: totalCount,
+            statusCounts: result.statusCounts
+          };
+        }
+      }
+    }
+  } catch (serverActionErr) {
+    console.warn('[Server Action Fallback] /api/admin/orders-list failed, using Supabase fallback:', serverActionErr);
+  }
+
   const from = pageParam * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
 

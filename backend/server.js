@@ -1263,6 +1263,17 @@ app.post('/api/admin/banned-users', async (req, res) => {
   }
 });
 
+// Admin Orders List Server Action
+app.post('/api/admin/orders-list', async (req, res) => {
+  try {
+    const handler = (await import('../api/admin/orders-list.js')).default;
+    await handler(req, res);
+  } catch (error) {
+    console.error('Error in /api/admin/orders-list endpoint:', error);
+    res.status(500).json({ error: 'Server action failed', message: error.message });
+  }
+});
+
 // Global Centralized Express Error Handler (OWASP A09 Information Leak Prevention)
 app.use((err, req, res, next) => {
   console.error('[UNHANDLED EXPRESS ERROR]', {
