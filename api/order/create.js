@@ -480,13 +480,54 @@ export default async function handler(req, res) {
 
             await supabase.from('orders').update(updateData).eq('id', order_id);
 
-            // ── Handle Success ────────────────────────────────────────────────
+            // ── Handle Success & Partial Failures ─────────────────────────────
             if (someSuccess) {
+                let currentBalance = rpcResult.new_balance;
+                const failedComponents = componentResults.filter(r => r.status === 'failed');
+
+                // If some components failed in a combo order, automatically issue a partial refund
+                if (failedComponents.length > 0 && combo_components.length > 0) {
+                    const failedFraction = failedComponents.length / combo_components.length;
+                    const partialRefundAmount = Math.round((calculatedTotalCost * failedFraction + Number.EPSILON) * 100) / 100;
+
+                    if (partialRefundAmount > 0) {
+                        console.log(`[ORDER] Processing partial auto-refund for order ${order_id}: ${partialRefundAmount} GHS (${failedComponents.length}/${combo_components.length} components failed)`);
+
+                        const partialRefundResult = await supabase.rpc('process_automatic_refund', {
+                            p_order_id:       String(order_id),
+                            p_refund_amount:  partialRefundAmount,
+                            p_refund_type:    'partial',
+                            p_remains:        0,
+                            p_provider_error: lastError || 'Partial combo component placement failure',
+                            p_error_details:  JSON.stringify({
+                                components: componentResults,
+                                failed_count: failedComponents.length,
+                                total_count: combo_components.length,
+                                refund_amount: partialRefundAmount,
+                            }),
+                        });
+
+                        if (partialRefundResult.data?.success) {
+                            currentBalance = partialRefundResult.data.new_balance;
+                            console.log('[ORDER] Partial auto-refund successful for combo order:', {
+                                order_id,
+                                amount: partialRefundAmount,
+                                new_balance: currentBalance,
+                            });
+                        } else {
+                            console.error('[ORDER] Partial auto-refund failed for combo order:', {
+                                order_id,
+                                error: partialRefundResult.data?.error || partialRefundResult.error,
+                            });
+                        }
+                    }
+                }
+
                 return res.status(200).json({
                     success: true,
                     order_id,
                     components: componentResults,
-                    new_balance: rpcResult.new_balance,
+                    new_balance: currentBalance,
                 });
             }
 
