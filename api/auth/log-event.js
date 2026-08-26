@@ -100,7 +100,7 @@ export default async function handler(req, res) {
     }
 
     if (isHighVelocity) {
-      await logSecurityEvent({
+      await logActivity({
         user_id: null,
         action_type: 'HIGH_VELOCITY_LOGIN_FAILURES',
         description: `Multiple consecutive failed logins (5+) detected from IP ${ip} targeting account ${sanitizedMetadata.email || 'unknown'}`,
@@ -110,6 +110,7 @@ export default async function handler(req, res) {
           consecutive_failures: 5,
           timestamp: new Date().toISOString()
         },
+        severity: 'warning',
         req
       });
     } else {
@@ -118,7 +119,7 @@ export default async function handler(req, res) {
         action_type,
         description,
         metadata: sanitizedMetadata,
-        severity: severity === 'info' ? 'info' : 'security',
+        severity: severity === 'info' ? 'info' : 'warning',
         req
       });
     }

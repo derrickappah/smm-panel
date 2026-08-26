@@ -24,8 +24,7 @@ export const CRITICAL_EMAIL_EVENTS = new Set([
   'GHOST_ORDER_DETECTED',
   'UNAUTHORIZED_DEPOSIT_APPROVAL',
   'ADMIN_BALANCE_OVERRIDE',
-  'OTP_BRUTE_FORCE_DETECTED',
-  'HIGH_VELOCITY_LOGIN_FAILURES'
+  'OTP_BRUTE_FORCE_DETECTED'
 ]);
 
 // In-memory deduplication & quota cache if Redis is not configured
@@ -194,6 +193,13 @@ export async function sendSecurityAlertEmail({
   dedupeWindow = 600
 }) {
   try {
+    // 0. Explicitly suppress all login failures and auth retry bursts from email (audit logged only)
+    const ev = (eventType || metadata?.action_type || title || '').toUpperCase();
+    if (ev.includes('LOGIN') || ev.includes('AUTH_FAIL') || ev === 'HIGH_VELOCITY_LOGIN_FAILURES' || ev === 'LOGIN_FAILED') {
+      console.log(`[ALERT NOTIFIER] Login event '${ev}' suppressed from email dispatch (audit logged only).`);
+      return { success: true, skipped: 'Login failure email suppressed to preserve quota' };
+    }
+
     // 1. Enforce Critical-Only Filter: Only send emails for whitelisted critical events or 'critical' severity
     const isCriticalEvent = severity === 'critical' || 
       (eventType && CRITICAL_EMAIL_EVENTS.has(eventType)) ||
