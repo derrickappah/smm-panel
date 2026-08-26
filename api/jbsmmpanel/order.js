@@ -3,6 +3,7 @@
 import { verifyAdmin } from '../utils/auth.js';
 import { rateLimit } from '../middleware/rateLimit.js';
 import { setCorsHeaders } from '../utils/corsHeaders.js';
+import { getConfig } from '../utils/config.js';
 
 const REQUEST_TIMEOUT = 30000; // 30 seconds
 
@@ -44,7 +45,7 @@ export default async function handler(req, res) {
 
     if (typeof service !== 'number' && typeof service !== 'string') {
       return res.status(400).json({
-        error: 'Invalid service: must be a number or numeric string',
+        error: 'Invalid service ID format: must be a number or string',
         field: 'service',
         received: typeof service
       });
@@ -53,9 +54,8 @@ export default async function handler(req, res) {
     const serviceId = typeof service === 'string' ? parseInt(service, 10) : service;
     if (isNaN(serviceId) || serviceId <= 0) {
       return res.status(400).json({
-        error: 'Invalid service ID: must be a positive integer',
-        field: 'service',
-        received: service
+        error: `Invalid service ID: ${service}`,
+        field: 'service'
       });
     }
 
@@ -91,13 +91,13 @@ export default async function handler(req, res) {
       });
     }
 
-    const JBSMMPANEL_API_URL = process.env.JBSMMPANEL_API_URL || 'https://jbsmmpanel.com/api/v2';
-    const JBSMMPANEL_API_KEY = process.env.JBSMMPANEL_API_KEY;
+    const JBSMMPANEL_API_URL = await getConfig('JBSMMPANEL_API_URL', 'https://jbsmmpanel.com/api/v2');
+    const JBSMMPANEL_API_KEY = await getConfig('JBSMMPANEL_API_KEY');
 
     if (!JBSMMPANEL_API_KEY) {
       console.error('JB SMM Panel API key not configured');
       return res.status(500).json({
-        error: 'JB SMM Panel API key not configured. Set JBSMMPANEL_API_KEY in Vercel environment variables.',
+        error: 'JB SMM Panel API key not configured. Set JBSMMPANEL_API_KEY in environment settings.',
         configIssue: true
       });
     }

@@ -1,6 +1,7 @@
 import { getCached, setCached } from '../utils/redisClient.js';
 import { setCorsHeaders } from '../utils/corsHeaders.js';
 import { verifyAdmin } from '../utils/auth.js';
+import { getConfig } from '../utils/config.js';
 
 const REQUEST_TIMEOUT = 20000; // 20 seconds
 
@@ -29,13 +30,13 @@ export default async function handler(req, res) {
     if (cachedBalance) {
       return res.status(200).json(cachedBalance);
     }
-    const JBSMMPANEL_API_URL = process.env.JBSMMPANEL_API_URL || 'https://jbsmmpanel.com/api/v2';
-    const JBSMMPANEL_API_KEY = process.env.JBSMMPANEL_API_KEY;
+    const JBSMMPANEL_API_URL = await getConfig('JBSMMPANEL_API_URL', 'https://jbsmmpanel.com/api/v2');
+    const JBSMMPANEL_API_KEY = await getConfig('JBSMMPANEL_API_KEY');
 
     if (!JBSMMPANEL_API_KEY) {
       console.error('JB SMM Panel API key not configured');
       return res.status(500).json({ 
-        error: 'JB SMM Panel API key not configured. Set JBSMMPANEL_API_KEY in Vercel environment variables.',
+        error: 'JB SMM Panel API key not configured. Set JBSMMPANEL_API_KEY in environment settings.',
         configIssue: true
       });
     }

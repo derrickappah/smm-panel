@@ -261,16 +261,19 @@ export default async function handler(req, res) {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 12000);
 
+          // Standard SMM panels (including JBSMMPanel, SMMCost, WorldOfSMM, etc.) strictly require application/x-www-form-urlencoded
+          const formData = new URLSearchParams({
+            key: apiKey,
+            action: 'balance'
+          });
+
           const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
-              'Content-Type': 'application/json',
+              'Content-Type': 'application/x-www-form-urlencoded',
               'User-Agent': 'BoostUp-Admin-ConfigTester/1.0'
             },
-            body: JSON.stringify({
-              key: apiKey,
-              action: 'balance'
-            }),
+            body: formData.toString(),
             signal: controller.signal
           });
           clearTimeout(timeoutId);
