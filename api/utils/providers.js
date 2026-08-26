@@ -5,8 +5,16 @@
  */
 
 import { getCached, setCached } from './redisClient.js';
+import { getConfig } from './config.js';
 
 const REQUEST_TIMEOUT = 30000;
+
+async function getProviderCredentials(provider, defaultUrl = 'https://smmgen.com/api/v2') {
+    const p = provider.toUpperCase();
+    const url = await getConfig(`${p}_API_URL`, defaultUrl);
+    const key = await getConfig(`${p}_API_KEY`, '');
+    return { url, key };
+}
 
 /**
  * Places an order with a specific provider
@@ -163,8 +171,7 @@ export async function fetchProviderOrders(provider, limit = 100) {
 }
 
 async function fetchSMMGenRecentOrders(limit) {
-    const SMMGEN_API_URL = process.env.SMMGEN_API_URL || 'https://smmgen.com/api/v2';
-    const SMMGEN_API_KEY = process.env.SMMGEN_API_KEY;
+    const { url: SMMGEN_API_URL, key: SMMGEN_API_KEY } = await getProviderCredentials('smmgen', 'https://smmgen.com/api/v2');
 
     if (!SMMGEN_API_KEY) return [];
 
@@ -198,8 +205,7 @@ async function fetchSMMGenRecentOrders(limit) {
 }
 
 async function fetchJBSMMPanelRecentOrders(limit) {
-    const JBSMMPANEL_API_URL = process.env.JBSMMPANEL_API_URL || 'https://jbsmmpanel.com/api/v2';
-    const JBSMMPANEL_API_KEY = process.env.JBSMMPANEL_API_KEY;
+    const { url: JBSMMPANEL_API_URL, key: JBSMMPANEL_API_KEY } = await getProviderCredentials('jbsmmpanel', 'https://jbsmmpanel.com/api/v2');
 
     if (!JBSMMPANEL_API_KEY) return [];
 
@@ -234,8 +240,7 @@ async function fetchJBSMMPanelRecentOrders(limit) {
 }
 
 async function fetchSMMCostRecentOrders(limit) {
-    const SMMCOST_API_URL = process.env.SMMCOST_API_URL || 'https://smmcost.com/api/v2';
-    const SMMCOST_API_KEY = process.env.SMMCOST_API_KEY;
+    const { url: SMMCOST_API_URL, key: SMMCOST_API_KEY } = await getProviderCredentials('smmcost', 'https://api.smmcost.com');
 
     if (!SMMCOST_API_KEY) return [];
 
@@ -270,8 +275,7 @@ async function fetchSMMCostRecentOrders(limit) {
 }
 
 async function fetchSMMGenStatus(providerOrderId) {
-    const SMMGEN_API_URL = process.env.SMMGEN_API_URL || 'https://smmgen.com/api/v2';
-    const SMMGEN_API_KEY = process.env.SMMGEN_API_KEY;
+    const { url: SMMGEN_API_URL, key: SMMGEN_API_KEY } = await getProviderCredentials('smmgen', 'https://smmgen.com/api/v2');
 
     if (!SMMGEN_API_KEY) throw new Error('SMMGen API key not configured');
 
@@ -290,8 +294,7 @@ async function fetchSMMGenStatus(providerOrderId) {
 }
 
 async function fetchJBSMMPanelStatus(providerOrderId) {
-    const JBSMMPANEL_API_URL = process.env.JBSMMPANEL_API_URL || 'https://jbsmmpanel.com/api/v2';
-    const JBSMMPANEL_API_KEY = process.env.JBSMMPANEL_API_KEY;
+    const { url: JBSMMPANEL_API_URL, key: JBSMMPANEL_API_KEY } = await getProviderCredentials('jbsmmpanel', 'https://jbsmmpanel.com/api/v2');
 
     if (!JBSMMPANEL_API_KEY) throw new Error('JBSMMPanel API key not configured');
 
@@ -312,8 +315,7 @@ async function fetchJBSMMPanelStatus(providerOrderId) {
 }
 
 async function fetchSMMCostStatus(providerOrderId) {
-    const SMMCOST_API_URL = process.env.SMMCOST_API_URL || 'https://smmcost.com/api/v2';
-    const SMMCOST_API_KEY = process.env.SMMCOST_API_KEY;
+    const { url: SMMCOST_API_URL, key: SMMCOST_API_KEY } = await getProviderCredentials('smmcost', 'https://api.smmcost.com');
 
     if (!SMMCOST_API_KEY) throw new Error('SMMCost API key not configured');
 
@@ -334,8 +336,7 @@ async function fetchSMMCostStatus(providerOrderId) {
 }
 
 async function placeSMMGenOrder(service, link, quantity, comments) {
-    const SMMGEN_API_URL = process.env.SMMGEN_API_URL || 'https://smmgen.com/api/v2';
-    const SMMGEN_API_KEY = process.env.SMMGEN_API_KEY;
+    const { url: SMMGEN_API_URL, key: SMMGEN_API_KEY } = await getProviderCredentials('smmgen', 'https://smmgen.com/api/v2');
 
     if (!SMMGEN_API_KEY) throw new Error('SMMGen API key not configured');
 
@@ -374,14 +375,10 @@ async function placeSMMGenOrder(service, link, quantity, comments) {
 }
 
 async function placeJBSMMPanelOrder(service, link, quantity, comments) {
-    const JBSMMPANEL_API_URL = process.env.JBSMMPANEL_API_URL || 'https://jbsmmpanel.com/api/v2';
-    const JBSMMPANEL_API_KEY = process.env.JBSMMPANEL_API_KEY;
+    const { url: JBSMMPANEL_API_URL, key: JBSMMPANEL_API_KEY } = await getProviderCredentials('jbsmmpanel', 'https://jbsmmpanel.com/api/v2');
 
     if (!JBSMMPANEL_API_KEY) throw new Error('JBSMMPanel API key not configured');
 
-    // Remove undefined comments from params if URLSearchParams includes "undefined" string
-    // URLSearchParams doesn't handle undefined values well (converts to "undefined" string)
-    // We need to construct the object carefully first
     const params = {
         key: JBSMMPANEL_API_KEY,
         action: 'add',
@@ -423,8 +420,7 @@ async function placeJBSMMPanelOrder(service, link, quantity, comments) {
 }
 
 async function placeSMMCostOrder(service, link, quantity, comments) {
-    const SMMCOST_API_URL = process.env.SMMCOST_API_URL || 'https://smmcost.com/api/v2';
-    const SMMCOST_API_KEY = process.env.SMMCOST_API_KEY;
+    const { url: SMMCOST_API_URL, key: SMMCOST_API_KEY } = await getProviderCredentials('smmcost', 'https://api.smmcost.com');
 
     if (!SMMCOST_API_KEY) throw new Error('SMMCost API key not configured');
 
@@ -469,8 +465,7 @@ async function placeSMMCostOrder(service, link, quantity, comments) {
 }
 
 async function fetchWorldOfSMMRecentOrders(limit) {
-    const WORLDOFSMM_API_URL = process.env.WORLDOFSMM_API_URL || 'https://worldofsmm.com/api/v2';
-    const WORLDOFSMM_API_KEY = process.env.WORLDOFSMM_API_KEY;
+    const { url: WORLDOFSMM_API_URL, key: WORLDOFSMM_API_KEY } = await getProviderCredentials('worldofsmm', 'https://worldofsmm.com/api/v2');
 
     if (!WORLDOFSMM_API_KEY) return [];
 
@@ -505,8 +500,7 @@ async function fetchWorldOfSMMRecentOrders(limit) {
 }
 
 async function fetchWorldOfSMMStatus(providerOrderId) {
-    const WORLDOFSMM_API_URL = process.env.WORLDOFSMM_API_URL || 'https://worldofsmm.com/api/v2';
-    const WORLDOFSMM_API_KEY = process.env.WORLDOFSMM_API_KEY;
+    const { url: WORLDOFSMM_API_URL, key: WORLDOFSMM_API_KEY } = await getProviderCredentials('worldofsmm', 'https://worldofsmm.com/api/v2');
 
     if (!WORLDOFSMM_API_KEY) throw new Error('World of SMM API key not configured');
 
@@ -527,8 +521,7 @@ async function fetchWorldOfSMMStatus(providerOrderId) {
 }
 
 async function placeWorldOfSMMOrder(service, link, quantity, comments) {
-    const WORLDOFSMM_API_URL = process.env.WORLDOFSMM_API_URL || 'https://worldofsmm.com/api/v2';
-    const WORLDOFSMM_API_KEY = process.env.WORLDOFSMM_API_KEY;
+    const { url: WORLDOFSMM_API_URL, key: WORLDOFSMM_API_KEY } = await getProviderCredentials('worldofsmm', 'https://worldofsmm.com/api/v2');
 
     if (!WORLDOFSMM_API_KEY) throw new Error('World of SMM API key not configured');
 
@@ -586,8 +579,7 @@ export function extractOrderId(providerOrResponse, maybeResponse) {
 }
 
 async function fetchG1618RecentOrders(limit) {
-    const G1618_API_URL = process.env.G1618_API_URL || 'https://g1618.com/api/v2';
-    const G1618_API_KEY = process.env.G1618_API_KEY;
+    const { url: G1618_API_URL, key: G1618_API_KEY } = await getProviderCredentials('g1618', 'https://g1618.com/api/v2');
 
     if (!G1618_API_KEY) return [];
 
@@ -622,8 +614,7 @@ async function fetchG1618RecentOrders(limit) {
 }
 
 async function fetchG1618Status(providerOrderId) {
-    const G1618_API_URL = process.env.G1618_API_URL || 'https://g1618.com/api/v2';
-    const G1618_API_KEY = process.env.G1618_API_KEY;
+    const { url: G1618_API_URL, key: G1618_API_KEY } = await getProviderCredentials('g1618', 'https://g1618.com/api/v2');
 
     if (!G1618_API_KEY) throw new Error('G1618 API key not configured');
 
@@ -644,8 +635,7 @@ async function fetchG1618Status(providerOrderId) {
 }
 
 async function placeG1618Order(service, link, quantity, comments) {
-    const G1618_API_URL = process.env.G1618_API_URL || 'https://g1618.com/api/v2';
-    const G1618_API_KEY = process.env.G1618_API_KEY;
+    const { url: G1618_API_URL, key: G1618_API_KEY } = await getProviderCredentials('g1618', 'https://g1618.com/api/v2');
 
     if (!G1618_API_KEY) throw new Error('G1618 API key not configured');
 
@@ -690,8 +680,7 @@ async function placeG1618Order(service, link, quantity, comments) {
 }
 
 async function fetchOldSMMRecentOrders(limit) {
-    const OLDSMM_API_URL = process.env.OLDSMM_API_URL || 'https://oldsmm.com/api/v2';
-    const OLDSMM_API_KEY = process.env.OLDSMM_API_KEY;
+    const { url: OLDSMM_API_URL, key: OLDSMM_API_KEY } = await getProviderCredentials('oldsmm', 'https://oldsmm.com/api/v2');
 
     if (!OLDSMM_API_KEY) return [];
 
@@ -726,8 +715,7 @@ async function fetchOldSMMRecentOrders(limit) {
 }
 
 async function fetchOldSMMStatus(providerOrderId) {
-    const OLDSMM_API_URL = process.env.OLDSMM_API_URL || 'https://oldsmm.com/api/v2';
-    const OLDSMM_API_KEY = process.env.OLDSMM_API_KEY;
+    const { url: OLDSMM_API_URL, key: OLDSMM_API_KEY } = await getProviderCredentials('oldsmm', 'https://oldsmm.com/api/v2');
 
     if (!OLDSMM_API_KEY) throw new Error('OldSMM API key not configured');
 
@@ -748,8 +736,7 @@ async function fetchOldSMMStatus(providerOrderId) {
 }
 
 async function placeOldSMMOrder(service, link, quantity, comments) {
-    const OLDSMM_API_URL = process.env.OLDSMM_API_URL || 'https://oldsmm.com/api/v2';
-    const OLDSMM_API_KEY = process.env.OLDSMM_API_KEY;
+    const { url: OLDSMM_API_URL, key: OLDSMM_API_KEY } = await getProviderCredentials('oldsmm', 'https://oldsmm.com/api/v2');
 
     if (!OLDSMM_API_KEY) throw new Error('OldSMM API key not configured');
 
@@ -794,8 +781,7 @@ async function placeOldSMMOrder(service, link, quantity, comments) {
 }
 
 async function fetchApiOwnerRecentOrders(limit) {
-    const APIOWNER_API_URL = process.env.APIOWNER_API_URL || 'https://apiowner.com/api/v2';
-    const APIOWNER_API_KEY = process.env.APIOWNER_API_KEY;
+    const { url: APIOWNER_API_URL, key: APIOWNER_API_KEY } = await getProviderCredentials('apiowner', 'https://apiowner.com/api/v2');
 
     if (!APIOWNER_API_KEY) return [];
 
@@ -830,8 +816,7 @@ async function fetchApiOwnerRecentOrders(limit) {
 }
 
 async function fetchApiOwnerStatus(providerOrderId) {
-    const APIOWNER_API_URL = process.env.APIOWNER_API_URL || 'https://apiowner.com/api/v2';
-    const APIOWNER_API_KEY = process.env.APIOWNER_API_KEY;
+    const { url: APIOWNER_API_URL, key: APIOWNER_API_KEY } = await getProviderCredentials('apiowner', 'https://apiowner.com/api/v2');
 
     if (!APIOWNER_API_KEY) throw new Error('ApiOwner API key not configured');
 
@@ -852,8 +837,7 @@ async function fetchApiOwnerStatus(providerOrderId) {
 }
 
 async function placeApiOwnerOrder(service, link, quantity, comments) {
-    const APIOWNER_API_URL = process.env.APIOWNER_API_URL || 'https://apiowner.com/api/v2';
-    const APIOWNER_API_KEY = process.env.APIOWNER_API_KEY;
+    const { url: APIOWNER_API_URL, key: APIOWNER_API_KEY } = await getProviderCredentials('apiowner', 'https://apiowner.com/api/v2');
 
     if (!APIOWNER_API_KEY) throw new Error('ApiOwner API key not configured');
 

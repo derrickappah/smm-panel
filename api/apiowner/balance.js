@@ -1,6 +1,7 @@
 import { getCached, setCached } from '../utils/redisClient.js';
 import { setCorsHeaders } from '../utils/corsHeaders.js';
 import { verifyAdmin } from '../utils/auth.js';
+import { getConfig } from '../utils/config.js';
 
 export default async function handler(req, res) {
     setCorsHeaders(req, res);
@@ -25,8 +26,8 @@ export default async function handler(req, res) {
             return res.status(200).json(cachedBalance);
         }
 
-        const APIOWNER_API_URL = process.env.APIOWNER_API_URL || 'https://apiowner.com/api/v2';
-        const APIOWNER_API_KEY = process.env.APIOWNER_API_KEY;
+        const APIOWNER_API_URL = await getConfig('APIOWNER_API_URL', 'https://apiowner.com/api/v2');
+        const APIOWNER_API_KEY = await getConfig('APIOWNER_API_KEY');
 
         if (!APIOWNER_API_KEY || APIOWNER_API_KEY.includes('PLACEHOLDER')) {
             return res.status(400).json({ error: 'ApiOwner API key not configured' });
