@@ -55,6 +55,50 @@ const ServicesPage = ({ user, onLogout }) => {
     });
   }, [selectedPlatform]);
 
+  // Real-time synchronization for services on ServicesPage
+  useEffect(() => {
+    const channel = supabase
+      .channel('services-realtime-servicespage')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'services'
+        },
+        () => {
+          fetchServices();
+        }
+      )
+      .on(
+        'broadcast',
+        { event: 'services_changed' },
+        () => {
+          fetchServices();
+        }
+      )
+      .subscribe();
+
+    let bc;
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        bc = new BroadcastChannel('services_sync');
+        bc.onmessage = () => {
+          fetchServices();
+        };
+      }
+    } catch {
+      // Ignore
+    }
+
+    return () => {
+      supabase.removeChannel(channel);
+      if (bc) {
+        bc.close();
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (searchQuery.trim().length >= 3) {
       const timer = setTimeout(() => {

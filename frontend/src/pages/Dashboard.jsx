@@ -93,6 +93,16 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     }
   }, [user?.balance, optimisticBalance]);
 
+  // Clear selected service_id if it was disabled or removed by an admin
+  useEffect(() => {
+    if (orderForm.service_id && services && services.length > 0) {
+      const exists = services.some(s => s.id === orderForm.service_id);
+      if (!exists) {
+        setOrderForm(prev => ({ ...prev, service_id: '' }));
+      }
+    }
+  }, [services, orderForm.service_id]);
+
   // Automatic deposit polling - polls transaction status and updates balance automatically
   const [isPollingDeposit, setIsPollingDeposit] = useState(false);
 

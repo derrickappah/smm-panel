@@ -51,6 +51,23 @@ export const useAdminServices = (options = {}) => {
   });
 };
 
+const broadcastServicesChange = () => {
+  try {
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      const bc = new BroadcastChannel('services_sync');
+      bc.postMessage({ type: 'services_changed', timestamp: Date.now() });
+      bc.close();
+    }
+    supabase.channel('services-realtime-dashboard').send({
+      type: 'broadcast',
+      event: 'services_changed',
+      payload: { timestamp: Date.now() }
+    });
+  } catch (e) {
+    // Best effort broadcast
+  }
+};
+
 export const useCreateService = () => {
   const queryClient = useQueryClient();
 
@@ -82,6 +99,7 @@ export const useCreateService = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'services'] });
       queryClient.invalidateQueries({ queryKey: ['services'] }); // Also invalidate user-facing services
+      broadcastServicesChange();
       toast.success('Service created successfully');
     },
     onError: (error) => {
@@ -108,6 +126,7 @@ export const useUpdateService = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'services'] });
       queryClient.invalidateQueries({ queryKey: ['services'] }); // Also invalidate user-facing services
+      broadcastServicesChange();
       toast.success('Service updated successfully');
     },
     onError: (error) => {
@@ -131,6 +150,7 @@ export const useDeleteService = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'services'] });
       queryClient.invalidateQueries({ queryKey: ['services'] }); // Also invalidate user-facing services
+      broadcastServicesChange();
       toast.success('Service deleted successfully');
     },
     onError: (error) => {
@@ -172,6 +192,7 @@ export const useReorderServices = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'services'] });
       queryClient.invalidateQueries({ queryKey: ['services'] }); // Also invalidate user-facing services
+      broadcastServicesChange();
       toast.success('Services reordered successfully');
     },
     onError: (error) => {

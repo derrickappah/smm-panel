@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { checkOrdersStatusBatch } from '@/lib/orderStatusCheck';
 import { toast } from 'sonner';
@@ -297,6 +297,52 @@ export const useDashboardData = () => {
     }
   }, [queryClient]);
 
+  // Real-time synchronization for services changes
+  useEffect(() => {
+    // 1. Supabase realtime postgres_changes subscription on services
+    const channel = supabase
+      .channel('services-realtime-dashboard')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'services'
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['services'] });
+        }
+      )
+      .on(
+        'broadcast',
+        { event: 'services_changed' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['services'] });
+        }
+      )
+      .subscribe();
+
+    // 2. BroadcastChannel for cross-tab sync in the browser
+    let bc;
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        bc = new BroadcastChannel('services_sync');
+        bc.onmessage = () => {
+          queryClient.invalidateQueries({ queryKey: ['services'] });
+        };
+      }
+    } catch {
+      // Ignore BroadcastChannel errors
+    }
+
+    return () => {
+      supabase.removeChannel(channel);
+      if (bc) {
+        bc.close();
+      }
+    };
+  }, [queryClient]);
+
   // Services query with React Query
   const {
     data: services = [],
@@ -306,8 +352,9 @@ export const useDashboardData = () => {
   } = useQuery({
     queryKey: ['services'],
     queryFn: fetchServices,
-    staleTime: 0, // 1 hour - services change very rarely
-    gcTime: 0, // 24 hours
+    staleTime: 0,
+    refetchInterval: 15000, // 15s polling fallback
+    refetchOnWindowFocus: true,
     retry: 1,
     onError: (error) => {
       if (!error.message?.includes('500') && !error.message?.includes('Internal Server Error')) {
