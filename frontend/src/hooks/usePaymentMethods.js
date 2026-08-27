@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { queryClient as defaultQueryClient } from '@/lib/queryClient';
 
 export const PAYMENT_SETTINGS_QUERY_KEY = ['payment-settings'];
 
@@ -34,6 +35,28 @@ export const DEFAULT_PAYMENT_SETTINGS = {
   requirePhoneVerification: false, // Default to false (Admins can toggle on/off via Moolre SMS)
   moolreSenderId: 'Boostupgh',
   depositMethod: 'moolre_web' // Default method
+};
+
+export const isPaymentMethodEnabled = (method, paymentMethodSettings) => {
+  if (!method || !paymentMethodSettings) return false;
+  if (method === 'paystack') return !!paymentMethodSettings.paystack_enabled;
+  if (method === 'manual') return !!paymentMethodSettings.manual_enabled;
+  if (method === 'hubtel') return !!paymentMethodSettings.hubtel_enabled;
+  if (method === 'korapay') return !!paymentMethodSettings.korapay_enabled;
+  if (method === 'moolre') return !!paymentMethodSettings.moolre_enabled;
+  if (method === 'moolre_web') return !!paymentMethodSettings.moolre_web_enabled;
+  return false;
+};
+
+export const getFirstEnabledPaymentMethod = (paymentMethodSettings) => {
+  if (!paymentMethodSettings) return null;
+  if (paymentMethodSettings.moolre_web_enabled) return 'moolre_web';
+  if (paymentMethodSettings.moolre_enabled) return 'moolre';
+  if (paymentMethodSettings.paystack_enabled) return 'paystack';
+  if (paymentMethodSettings.manual_enabled) return 'manual';
+  if (paymentMethodSettings.hubtel_enabled) return 'hubtel';
+  if (paymentMethodSettings.korapay_enabled) return 'korapay';
+  return null;
 };
 
 // Fetcher function that can be used by useQuery
@@ -140,22 +163,21 @@ export const fetchPaymentSettingsFn = async () => {
   settings.moolreSenderId = getString('moolre_sender_id', DEFAULT_PAYMENT_SETTINGS.moolreSenderId);
 
   // Determine Deposit Method
-  let depositMethod = null;
-  const pm = settings.paymentMethodSettings;
+  settings.depositMethod = getFirstEnabledPaymentMethod(settings.paymentMethodSettings);
 
-  if (pm.moolre_web_enabled) depositMethod = 'moolre_web';
-  else if (pm.moolre_enabled) depositMethod = 'moolre';
-  else if (pm.paystack_enabled) depositMethod = 'paystack';
-  else if (pm.manual_enabled) depositMethod = 'manual';
-  else if (pm.hubtel_enabled) depositMethod = 'hubtel';
-  else if (pm.korapay_enabled) depositMethod = 'korapay';
-
-  return { ...settings, depositMethod };
+  return settings;
 };
 
-// Legacy support for prefetch (now uses queryClient if available or direct fetch)
+// Prefetch function to populate cache
 export const prefetchPaymentSettings = async () => {
-  return fetchPaymentSettingsFn();
+  try {
+    return await defaultQueryClient.prefetchQuery({
+      queryKey: PAYMENT_SETTINGS_QUERY_KEY,
+      queryFn: fetchPaymentSettingsFn
+    });
+  } catch (err) {
+    console.warn('Error prefetching payment settings:', err);
+  }
 };
 
 export const usePaymentMethods = () => {
@@ -165,9 +187,56 @@ export const usePaymentMethods = () => {
     queryKey: PAYMENT_SETTINGS_QUERY_KEY,
     queryFn: fetchPaymentSettingsFn,
     staleTime: 0, // always consider data stale
+    refetchInterval: 10000, // Poll every 10s to guarantee sync
     refetchOnWindowFocus: true, // refetch when window gains focus
     placeholderData: DEFAULT_PAYMENT_SETTINGS // Use defaults while loading
   });
+
+  // Real-time synchronization for app_settings changes
+  useEffect(() => {
+    // 1. Supabase realtime postgres_changes subscription
+    const channel = supabase
+      .channel('payment-settings-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'app_settings'
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: PAYMENT_SETTINGS_QUERY_KEY });
+        }
+      )
+      .on(
+        'broadcast',
+        { event: 'payment_settings_changed' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: PAYMENT_SETTINGS_QUERY_KEY });
+        }
+      )
+      .subscribe();
+
+    // 2. BroadcastChannel for cross-tab sync in the browser
+    let bc;
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        bc = new BroadcastChannel('payment_settings_sync');
+        bc.onmessage = () => {
+          queryClient.invalidateQueries({ queryKey: PAYMENT_SETTINGS_QUERY_KEY });
+        };
+      }
+    } catch {
+      // Ignore BroadcastChannel errors
+    }
+
+    return () => {
+      supabase.removeChannel(channel);
+      if (bc) {
+        bc.close();
+      }
+    };
+  }, [queryClient]);
 
   // Load from localStorage or use data default
   const getInitialMethod = () => {
@@ -176,49 +245,49 @@ export const usePaymentMethods = () => {
   };
 
   // Manage selected deposit method state locally to allow UI switching
-  const [depositMethod, setInternalDepositMethod] = useState(getInitialMethod);
+  const [internalDepositMethod, setInternalDepositMethod] = useState(getInitialMethod);
+
+  const currentSettings = data?.paymentMethodSettings || DEFAULT_PAYMENT_SETTINGS.paymentMethodSettings;
+
+  // Compute effective deposit method synchronously so that if the current selection
+  // is turned off by admins, it immediately resolves to an enabled method (or null)
+  const effectiveDepositMethod = useMemo(() => {
+    // If internal state is an enabled method, keep using it
+    if (internalDepositMethod && isPaymentMethodEnabled(internalDepositMethod, currentSettings)) {
+      return internalDepositMethod;
+    }
+    // Otherwise fallback to first enabled method from settings
+    return getFirstEnabledPaymentMethod(currentSettings);
+  }, [internalDepositMethod, currentSettings]);
+
+  // Synchronize internal state and localStorage whenever effective method changes
+  useEffect(() => {
+    if (internalDepositMethod !== effectiveDepositMethod) {
+      setInternalDepositMethod(effectiveDepositMethod);
+    }
+    if (typeof window !== 'undefined') {
+      if (effectiveDepositMethod) {
+        localStorage.setItem('last_deposit_method', effectiveDepositMethod);
+      } else {
+        localStorage.removeItem('last_deposit_method');
+      }
+    }
+  }, [effectiveDepositMethod, internalDepositMethod]);
 
   // Wrapper for setDepositMethod to persist in localStorage
   const setDepositMethod = (method) => {
-    setInternalDepositMethod(method);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('last_deposit_method', method);
+    if (isPaymentMethodEnabled(method, currentSettings)) {
+      setInternalDepositMethod(method);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('last_deposit_method', method);
+      }
     }
   };
 
-  // Update local state when data loads or when settings change
-  // Ensure the currently selected method is actually enabled
-  useEffect(() => {
-    const saved = typeof window !== 'undefined' ? localStorage.getItem('last_deposit_method') : null;
-
-    if (data?.paymentMethodSettings && data?.depositMethod) {
-      const pm = data.paymentMethodSettings;
-      const isEnabled = (method) => {
-        if (!method) return false;
-        if (method === 'paystack') return pm.paystack_enabled;
-        if (method === 'manual') return pm.manual_enabled;
-        if (method === 'hubtel') return pm.hubtel_enabled;
-        if (method === 'korapay') return pm.korapay_enabled;
-        if (method === 'moolre') return pm.moolre_enabled;
-        if (method === 'moolre_web') return pm.moolre_web_enabled;
-        return false;
-      };
-
-      const currentMethod = depositMethod || saved;
-
-      // Update method if:
-      // 1. We don't have a saved preference
-      // 2. The current method (from state or saved) is now disabled
-      if (!saved || !isEnabled(currentMethod)) {
-        setInternalDepositMethod(data.depositMethod);
-      }
-    }
-  }, [data?.depositMethod, data?.paymentMethodSettings, depositMethod]);
-
   return {
-    depositMethod: depositMethod || data?.depositMethod || DEFAULT_PAYMENT_SETTINGS.depositMethod,
+    depositMethod: effectiveDepositMethod,
     setDepositMethod,
-    paymentMethodSettings: data?.paymentMethodSettings || DEFAULT_PAYMENT_SETTINGS.paymentMethodSettings,
+    paymentMethodSettings: currentSettings,
     minDepositSettings: data?.minDepositSettings || DEFAULT_PAYMENT_SETTINGS.minDepositSettings,
     manualDepositDetails: data?.manualDepositDetails || DEFAULT_PAYMENT_SETTINGS.manualDepositDetails,
     whatsappNumber: data?.whatsappNumber || DEFAULT_PAYMENT_SETTINGS.whatsappNumber,

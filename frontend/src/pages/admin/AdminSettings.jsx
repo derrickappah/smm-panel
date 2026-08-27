@@ -280,6 +280,22 @@ const AdminSettings = memo(() => {
       queryClient.invalidateQueries({ queryKey: ['payment-settings'] });
       queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
 
+      // Broadcast update across tabs and realtime clients
+      try {
+        if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+          const bc = new BroadcastChannel('payment_settings_sync');
+          bc.postMessage({ type: 'payment_settings_changed', timestamp: Date.now() });
+          bc.close();
+        }
+        supabase.channel('payment-settings-realtime').send({
+          type: 'broadcast',
+          event: 'payment_settings_changed',
+          payload: { timestamp: Date.now() }
+        });
+      } catch (e) {
+        // Broadcast best effort
+      }
+
       // Log settings change
       try {
         const { data: { user } } = await supabase.auth.getUser();

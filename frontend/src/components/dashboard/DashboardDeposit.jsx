@@ -275,15 +275,15 @@ const DashboardDeposit = React.memo(({
         </div>
       )}
 
-      {depositMethod === null ? (
-        <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-          <p className="text-sm text-gray-600 text-center">Loading payment methods...</p>
-        </div>
-      ) : allMethodsDisabled ? (
+      {allMethodsDisabled ? (
         <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
           <p className="text-sm text-yellow-800 text-center">
             All payment methods are currently disabled. Please contact support.
           </p>
+        </div>
+      ) : depositMethod === null ? (
+        <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+          <p className="text-sm text-gray-600 text-center">Loading payment methods...</p>
         </div>
       ) : depositMethod === 'paystack' && paymentMethodSettings.paystack_enabled ? (
         <form onSubmit={handleDeposit} className="space-y-4">
