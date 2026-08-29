@@ -6,6 +6,7 @@
  */
 
 import { verifyAdmin, getServiceRoleClient } from '../utils/auth.js';
+import { getConfig } from '../utils/config.js';
 import {
     mapSMMGenStatus,
     mapSMMCostStatus,
@@ -150,237 +151,251 @@ export default async function handler(req, res) {
 
         // 4. Process SMMGen orders
         if (groups.smmgen.length > 0) {
-            const API_URL = process.env.SMMGEN_API_URL || 'https://smmgen.com/api/v2';
-            const API_KEY = process.env.SMMGEN_API_KEY;
+            const API_URL = await getConfig('SMMGEN_API_URL', 'https://smmgen.com/api/v2');
+            const API_KEY = await getConfig('SMMGEN_API_KEY');
 
-            const smmgenTasks = groups.smmgen.map(async (order) => {
-                results.checked++;
-                try {
-                    console.log(`[SMMGen] Checking status for order ${order.id} (Provider ID: ${order.smmgen_order_id})`);
-                    const response = await fetch(API_URL, {
-                        method: 'POST',
-                        body: new URLSearchParams({ key: API_KEY, action: 'status', order: order.smmgen_order_id })
-                    });
-                    const data = await response.json();
+            if (API_KEY && !API_KEY.includes('PLACEHOLDER')) {
+                const smmgenTasks = groups.smmgen.map(async (order) => {
+                    results.checked++;
+                    try {
+                        console.log(`[SMMGen] Checking status for order ${order.id} (Provider ID: ${order.smmgen_order_id})`);
+                        const response = await fetch(API_URL, {
+                            method: 'POST',
+                            body: new URLSearchParams({ key: API_KEY, action: 'status', order: order.smmgen_order_id })
+                        });
+                        const data = await response.json();
 
-                    const rawStatus = data.status || data.Status;
-                    const mappedStatus = mapSMMGenStatus(rawStatus);
+                        const rawStatus = data.status || data.Status;
+                        const mappedStatus = mapSMMGenStatus(rawStatus);
 
-                    if (mappedStatus && mappedStatus !== order.status) {
-                        const success = await updateOrder(order, mappedStatus, data, 'smmgen');
-                        if (success) {
-                            results.updated++;
-                            results.details.push({ id: order.id, old: order.status, new: mappedStatus, provider: 'smmgen' });
+                        if (mappedStatus && mappedStatus !== order.status) {
+                            const success = await updateOrder(order, mappedStatus, data, 'smmgen');
+                            if (success) {
+                                results.updated++;
+                                results.details.push({ id: order.id, old: order.status, new: mappedStatus, provider: 'smmgen' });
+                            }
                         }
+                    } catch (err) {
+                        console.error(`[SMMGen] Error checking order ${order.id}:`, err.message);
+                        results.errors.push({ id: order.id, provider: 'smmgen', error: err.message });
                     }
-                } catch (err) {
-                    console.error(`[SMMGen] Error checking order ${order.id}:`, err.message);
-                    results.errors.push({ id: order.id, provider: 'smmgen', error: err.message });
-                }
-            });
-            await Promise.all(smmgenTasks);
+                });
+                await Promise.all(smmgenTasks);
+            }
         }
 
         // 5. Process SMMCost orders
         if (groups.smmcost.length > 0) {
-            const API_URL = process.env.SMMCOST_API_URL || 'https://api.smmcost.com';
-            const API_KEY = process.env.SMMCOST_API_KEY;
+            const API_URL = await getConfig('SMMCOST_API_URL', 'https://api.smmcost.com');
+            const API_KEY = await getConfig('SMMCOST_API_KEY');
 
-            const smmcostTasks = groups.smmcost.map(async (order) => {
-                results.checked++;
-                try {
-                    console.log(`[SMMCost] Checking status for order ${order.id} (Provider ID: ${order.smmcost_order_id})`);
-                    const response = await fetch(API_URL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ key: API_KEY, action: 'status', order: parseInt(order.smmcost_order_id, 10) })
-                    });
-                    const data = await response.json();
+            if (API_KEY && !API_KEY.includes('PLACEHOLDER')) {
+                const smmcostTasks = groups.smmcost.map(async (order) => {
+                    results.checked++;
+                    try {
+                        console.log(`[SMMCost] Checking status for order ${order.id} (Provider ID: ${order.smmcost_order_id})`);
+                        const response = await fetch(API_URL, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ key: API_KEY, action: 'status', order: parseInt(order.smmcost_order_id, 10) })
+                        });
+                        const data = await response.json();
 
-                    const rawStatus = data.status || data.Status;
-                    const mappedStatus = mapSMMCostStatus(rawStatus);
+                        const rawStatus = data.status || data.Status;
+                        const mappedStatus = mapSMMCostStatus(rawStatus);
 
-                    if (mappedStatus && mappedStatus !== order.status) {
-                        const success = await updateOrder(order, mappedStatus, data, 'smmcost');
-                        if (success) {
-                            results.updated++;
-                            results.details.push({ id: order.id, old: order.status, new: mappedStatus, provider: 'smmcost' });
+                        if (mappedStatus && mappedStatus !== order.status) {
+                            const success = await updateOrder(order, mappedStatus, data, 'smmcost');
+                            if (success) {
+                                results.updated++;
+                                results.details.push({ id: order.id, old: order.status, new: mappedStatus, provider: 'smmcost' });
+                            }
                         }
+                    } catch (err) {
+                        console.error(`[SMMCost] Error checking order ${order.id}:`, err.message);
+                        results.errors.push({ id: order.id, provider: 'smmcost', error: err.message });
                     }
-                } catch (err) {
-                    console.error(`[SMMCost] Error checking order ${order.id}:`, err.message);
-                    results.errors.push({ id: order.id, provider: 'smmcost', error: err.message });
-                }
-            });
-            await Promise.all(smmcostTasks);
+                });
+                await Promise.all(smmcostTasks);
+            }
         }
 
         // 6. Process JB SMM Panel orders
         if (groups.jbsmmpanel.length > 0) {
-            const API_URL = process.env.JBSMMPANEL_API_URL || 'https://jbsmmpanel.com/api/v2';
-            const API_KEY = process.env.JBSMMPANEL_API_KEY;
+            const API_URL = await getConfig('JBSMMPANEL_API_URL', 'https://jbsmmpanel.com/api/v2');
+            const API_KEY = await getConfig('JBSMMPANEL_API_KEY');
 
-            const jbTasks = groups.jbsmmpanel.map(async (order) => {
-                results.checked++;
-                try {
-                    console.log(`[JBSMMPanel] Checking status for order ${order.id} (Provider ID: ${order.jbsmmpanel_order_id})`);
-                    const response = await fetch(API_URL, {
-                        method: 'POST',
-                        body: new URLSearchParams({ key: API_KEY, action: 'status', order: order.jbsmmpanel_order_id.toString() })
-                    });
-                    const data = await response.json();
+            if (API_KEY && !API_KEY.includes('PLACEHOLDER')) {
+                const jbTasks = groups.jbsmmpanel.map(async (order) => {
+                    results.checked++;
+                    try {
+                        console.log(`[JBSMMPanel] Checking status for order ${order.id} (Provider ID: ${order.jbsmmpanel_order_id})`);
+                        const response = await fetch(API_URL, {
+                            method: 'POST',
+                            body: new URLSearchParams({ key: API_KEY, action: 'status', order: order.jbsmmpanel_order_id.toString() })
+                        });
+                        const data = await response.json();
 
-                    // Robust parsing for JBSMMPanel (handle arrays and nested objects)
-                    let rawStatus = data.status || data.Status || data.order?.status;
-                    if (rawStatus === undefined && Array.isArray(data) && data.length > 0) {
-                        rawStatus = data[0]?.status || data[0]?.Status;
-                    }
-
-                    const mappedStatus = mapJBSMMPanelStatus(rawStatus);
-
-                    if (mappedStatus && mappedStatus !== order.status) {
-                        const success = await updateOrder(order, mappedStatus, data, 'jbsmmpanel');
-                        if (success) {
-                            results.updated++;
-                            results.details.push({ id: order.id, old: order.status, new: mappedStatus, provider: 'jbsmmpanel' });
+                        // Robust parsing for JBSMMPanel (handle arrays and nested objects)
+                        let rawStatus = data.status || data.Status || data.order?.status;
+                        if (rawStatus === undefined && Array.isArray(data) && data.length > 0) {
+                            rawStatus = data[0]?.status || data[0]?.Status;
                         }
+
+                        const mappedStatus = mapJBSMMPanelStatus(rawStatus);
+
+                        if (mappedStatus && mappedStatus !== order.status) {
+                            const success = await updateOrder(order, mappedStatus, data, 'jbsmmpanel');
+                            if (success) {
+                                results.updated++;
+                                results.details.push({ id: order.id, old: order.status, new: mappedStatus, provider: 'jbsmmpanel' });
+                            }
+                        }
+                    } catch (err) {
+                        console.error(`[JBSMMPanel] Error checking order ${order.id}:`, err.message);
+                        results.errors.push({ id: order.id, provider: 'jbsmmpanel', error: err.message });
                     }
-                } catch (err) {
-                    console.error(`[JBSMMPanel] Error checking order ${order.id}:`, err.message);
-                    results.errors.push({ id: order.id, provider: 'jbsmmpanel', error: err.message });
-                }
-            });
-            await Promise.all(jbTasks);
+                });
+                await Promise.all(jbTasks);
+            }
         }
 
         // 7. Process World of SMM orders
         if (groups.worldofsmm.length > 0) {
-            const API_URL = process.env.WORLDOFSMM_API_URL || 'https://worldofsmm.com/api/v2';
-            const API_KEY = process.env.WORLDOFSMM_API_KEY;
+            const API_URL = await getConfig('WORLDOFSMM_API_URL', 'https://worldofsmm.com/api/v2');
+            const API_KEY = await getConfig('WORLDOFSMM_API_KEY');
 
-            const worldTasks = groups.worldofsmm.map(async (order) => {
-                results.checked++;
-                try {
-                    const response = await fetch(API_URL, {
-                        method: 'POST',
-                        body: new URLSearchParams({ key: API_KEY, action: 'status', order: order.worldofsmm_order_id.toString() })
-                    });
-                    const data = await response.json();
-                    const rawStatus = data.status || data.Status;
-                    const mappedStatus = mapWorldOfSMMStatus(rawStatus);
+            if (API_KEY && !API_KEY.includes('PLACEHOLDER')) {
+                const worldTasks = groups.worldofsmm.map(async (order) => {
+                    results.checked++;
+                    try {
+                        const response = await fetch(API_URL, {
+                            method: 'POST',
+                            body: new URLSearchParams({ key: API_KEY, action: 'status', order: order.worldofsmm_order_id.toString() })
+                        });
+                        const data = await response.json();
+                        const rawStatus = data.status || data.Status;
+                        const mappedStatus = mapWorldOfSMMStatus(rawStatus);
 
-                    if (mappedStatus && mappedStatus !== order.status) {
-                        const success = await updateOrder(order, mappedStatus, data, 'worldofsmm');
-                        if (success) {
-                            results.updated++;
-                            results.details.push({ id: order.id, old: order.status, new: mappedStatus, provider: 'worldofsmm' });
+                        if (mappedStatus && mappedStatus !== order.status) {
+                            const success = await updateOrder(order, mappedStatus, data, 'worldofsmm');
+                            if (success) {
+                                results.updated++;
+                                results.details.push({ id: order.id, old: order.status, new: mappedStatus, provider: 'worldofsmm' });
+                            }
                         }
+                    } catch (err) {
+                        console.error(`[WorldOfSMM] Error checking order ${order.id}:`, err.message);
+                        results.errors.push({ id: order.id, provider: 'worldofsmm', error: err.message });
                     }
-                } catch (err) {
-                    console.error(`[WorldOfSMM] Error checking order ${order.id}:`, err.message);
-                    results.errors.push({ id: order.id, provider: 'worldofsmm', error: err.message });
-                }
-            });
-            await Promise.all(worldTasks);
+                });
+                await Promise.all(worldTasks);
+            }
         }
 
         // 8. Process G1618 orders
         if (groups.g1618.length > 0) {
-            const API_URL = process.env.G1618_API_URL || 'https://g1618.com/api/v2';
-            const API_KEY = process.env.G1618_API_KEY;
+            const API_URL = await getConfig('G1618_API_URL', 'https://g1618.com/api/v2');
+            const API_KEY = await getConfig('G1618_API_KEY');
 
-            const gTasks = groups.g1618.map(async (order) => {
-                results.checked++;
-                try {
-                    const response = await fetch(API_URL, {
-                        method: 'POST',
-                        body: new URLSearchParams({ key: API_KEY, action: 'status', order: order.g1618_order_id.toString() })
-                    });
-                    const data = await response.json();
-                    const rawStatus = data.status || data.Status;
-                    const mappedStatus = mapG1618Status(rawStatus);
+            if (API_KEY && !API_KEY.includes('PLACEHOLDER')) {
+                const gTasks = groups.g1618.map(async (order) => {
+                    results.checked++;
+                    try {
+                        const response = await fetch(API_URL, {
+                            method: 'POST',
+                            body: new URLSearchParams({ key: API_KEY, action: 'status', order: order.g1618_order_id.toString() })
+                        });
+                        const data = await response.json();
+                        const rawStatus = data.status || data.Status;
+                        const mappedStatus = mapG1618Status(rawStatus);
 
-                    if (mappedStatus && mappedStatus !== order.status) {
-                        const success = await updateOrder(order, mappedStatus, data, 'g1618');
-                        if (success) {
-                            results.updated++;
-                            results.details.push({ id: order.id, old: order.status, new: mappedStatus, provider: 'g1618' });
+                        if (mappedStatus && mappedStatus !== order.status) {
+                            const success = await updateOrder(order, mappedStatus, data, 'g1618');
+                            if (success) {
+                                results.updated++;
+                                results.details.push({ id: order.id, old: order.status, new: mappedStatus, provider: 'g1618' });
+                            }
                         }
+                    } catch (err) {
+                        console.error(`[G1618] Error checking order ${order.id}:`, err.message);
+                        results.errors.push({ id: order.id, provider: 'g1618', error: err.message });
                     }
-                } catch (err) {
-                    console.error(`[G1618] Error checking order ${order.id}:`, err.message);
-                    results.errors.push({ id: order.id, provider: 'g1618', error: err.message });
-                }
-            });
-            await Promise.all(gTasks);
+                });
+                await Promise.all(gTasks);
+            }
         }
 
         // 9. Process OldSMM orders
         if (groups.oldsmm.length > 0) {
-            const API_URL = process.env.OLDSMM_API_URL || 'https://oldsmm.com/api/v2';
-            const API_KEY = process.env.OLDSMM_API_KEY;
+            const API_URL = await getConfig('OLDSMM_API_URL', 'https://oldsmm.com/api/v2');
+            const API_KEY = await getConfig('OLDSMM_API_KEY');
 
-            const oldsmmTasks = groups.oldsmm.map(async (order) => {
-                results.checked++;
-                try {
-                    const response = await fetch(API_URL, {
-                        method: 'POST',
-                        body: new URLSearchParams({ key: API_KEY, action: 'status', order: order.oldsmm_order_id.toString() })
-                    });
-                    const data = await response.json();
-                    const rawStatus = data.status || data.Status;
-                    const mappedStatus = mapOldSMMStatus(rawStatus);
+            if (API_KEY && !API_KEY.includes('PLACEHOLDER')) {
+                const oldsmmTasks = groups.oldsmm.map(async (order) => {
+                    results.checked++;
+                    try {
+                        const response = await fetch(API_URL, {
+                            method: 'POST',
+                            body: new URLSearchParams({ key: API_KEY, action: 'status', order: order.oldsmm_order_id.toString() })
+                        });
+                        const data = await response.json();
+                        const rawStatus = data.status || data.Status;
+                        const mappedStatus = mapOldSMMStatus(rawStatus);
 
-                    if (mappedStatus && mappedStatus !== order.status) {
-                        const success = await updateOrder(order, mappedStatus, data, 'oldsmm');
-                        if (success) {
-                            results.updated++;
-                            results.details.push({ id: order.id, old: order.status, new: mappedStatus, provider: 'oldsmm' });
+                        if (mappedStatus && mappedStatus !== order.status) {
+                            const success = await updateOrder(order, mappedStatus, data, 'oldsmm');
+                            if (success) {
+                                results.updated++;
+                                results.details.push({ id: order.id, old: order.status, new: mappedStatus, provider: 'oldsmm' });
+                            }
                         }
+                    } catch (err) {
+                        console.error(`[OldSMM] Error checking order ${order.id}:`, err.message);
+                        results.errors.push({ id: order.id, provider: 'oldsmm', error: err.message });
                     }
-                } catch (err) {
-                    console.error(`[OldSMM] Error checking order ${order.id}:`, err.message);
-                    results.errors.push({ id: order.id, provider: 'oldsmm', error: err.message });
-                }
-            });
-            await Promise.all(oldsmmTasks);
+                });
+                await Promise.all(oldsmmTasks);
+            }
         }
 
         // 10. Process ApiOwner orders
         if (groups.apiowner.length > 0) {
-            const API_URL = process.env.APIOWNER_API_URL || 'https://apiowner.com/api/v2';
-            const API_KEY = process.env.APIOWNER_API_KEY;
+            const API_URL = await getConfig('APIOWNER_API_URL', 'https://apiowner.com/api/v2');
+            const API_KEY = await getConfig('APIOWNER_API_KEY');
 
-            const apiOwnerTasks = groups.apiowner.map(async (order) => {
-                results.checked++;
-                try {
-                    console.log(`[ApiOwner] Checking status for order ${order.id} (Provider ID: ${order.apiowner_order_id})`);
-                    const response = await fetch(API_URL, {
-                        method: 'POST',
-                        body: new URLSearchParams({ key: API_KEY, action: 'status', order: order.apiowner_order_id.toString() })
-                    });
-                    const data = await response.json();
+            if (API_KEY && !API_KEY.includes('PLACEHOLDER')) {
+                const apiOwnerTasks = groups.apiowner.map(async (order) => {
+                    results.checked++;
+                    try {
+                        console.log(`[ApiOwner] Checking status for order ${order.id} (Provider ID: ${order.apiowner_order_id})`);
+                        const response = await fetch(API_URL, {
+                            method: 'POST',
+                            body: new URLSearchParams({ key: API_KEY, action: 'status', order: order.apiowner_order_id.toString() })
+                        });
+                        const data = await response.json();
 
-                    let rawStatus = data.status || data.Status || data.order?.status;
-                    if (rawStatus === undefined && Array.isArray(data) && data.length > 0) {
-                        rawStatus = data[0]?.status || data[0]?.Status;
-                    }
-
-                    const mappedStatus = mapApiOwnerStatus(rawStatus);
-
-                    if (mappedStatus && mappedStatus !== order.status) {
-                        const success = await updateOrder(order, mappedStatus, data, 'apiowner');
-                        if (success) {
-                            results.updated++;
-                            results.details.push({ id: order.id, old: order.status, new: mappedStatus, provider: 'apiowner' });
+                        let rawStatus = data.status || data.Status || data.order?.status;
+                        if (rawStatus === undefined && Array.isArray(data) && data.length > 0) {
+                            rawStatus = data[0]?.status || data[0]?.Status;
                         }
+
+                        const mappedStatus = mapApiOwnerStatus(rawStatus);
+
+                        if (mappedStatus && mappedStatus !== order.status) {
+                            const success = await updateOrder(order, mappedStatus, data, 'apiowner');
+                            if (success) {
+                                results.updated++;
+                                results.details.push({ id: order.id, old: order.status, new: mappedStatus, provider: 'apiowner' });
+                            }
+                        }
+                    } catch (err) {
+                        console.error(`[ApiOwner] Error checking order ${order.id}:`, err.message);
+                        results.errors.push({ id: order.id, provider: 'apiowner', error: err.message });
                     }
-                } catch (err) {
-                    console.error(`[ApiOwner] Error checking order ${order.id}:`, err.message);
-                    results.errors.push({ id: order.id, provider: 'apiowner', error: err.message });
-                }
-            });
-            await Promise.all(apiOwnerTasks);
+                });
+                await Promise.all(apiOwnerTasks);
+            }
         }
 
         const duration = Date.now() - startTime;

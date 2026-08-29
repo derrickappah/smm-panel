@@ -1,5 +1,6 @@
 import { verifyAuth, getServiceRoleClient } from '../utils/auth.js';
 import { placeProviderOrder, extractOrderId } from '../utils/providers.js';
+import { getConfig } from '../utils/config.js';
 import comboHandler from './place-combo-order.js';
 import {
     cleanUrl,
@@ -635,7 +636,7 @@ export default async function handler(req, res) {
 // ─────────────────────────────────────────────────────────────────────────────
 async function validateProviderService(provider, providerServiceId) {
     try {
-        const apiConfig = getProviderApiConfig(provider);
+        const apiConfig = await getProviderApiConfig(provider);
         if (!apiConfig) return null; // Unknown provider — skip
 
         const { url, key, useJson } = apiConfig;
@@ -684,43 +685,44 @@ async function validateProviderService(provider, providerServiceId) {
 /**
  * Returns API config for a given provider, or null if unknown.
  */
-function getProviderApiConfig(provider) {
+async function getProviderApiConfig(provider) {
+    const p = provider.toLowerCase();
     const configs = {
         smmgen: {
-            url: process.env.SMMGEN_API_URL || 'https://smmgen.com/api/v2',
-            key: process.env.SMMGEN_API_KEY,
+            url: await getConfig('SMMGEN_API_URL', 'https://smmgen.com/api/v2'),
+            key: await getConfig('SMMGEN_API_KEY'),
             useJson: true,
         },
         smmcost: {
-            url: process.env.SMMCOST_API_URL || 'https://smmcost.com/api/v2',
-            key: process.env.SMMCOST_API_KEY,
+            url: await getConfig('SMMCOST_API_URL', 'https://api.smmcost.com'),
+            key: await getConfig('SMMCOST_API_KEY'),
             useJson: false,
         },
         jbsmmpanel: {
-            url: process.env.JBSMMPANEL_API_URL || 'https://jbsmmpanel.com/api/v2',
-            key: process.env.JBSMMPANEL_API_KEY,
+            url: await getConfig('JBSMMPANEL_API_URL', 'https://jbsmmpanel.com/api/v2'),
+            key: await getConfig('JBSMMPANEL_API_KEY'),
             useJson: false,
         },
         worldofsmm: {
-            url: process.env.WORLDOFSMM_API_URL || 'https://worldofsmm.com/api/v2',
-            key: process.env.WORLDOFSMM_API_KEY,
+            url: await getConfig('WORLDOFSMM_API_URL', 'https://worldofsmm.com/api/v2'),
+            key: await getConfig('WORLDOFSMM_API_KEY'),
             useJson: false,
         },
         g1618: {
-            url: process.env.G1618_API_URL || 'https://g1618.com/api/v2',
-            key: process.env.G1618_API_KEY,
+            url: await getConfig('G1618_API_URL', 'https://g1618.com/api/v2'),
+            key: await getConfig('G1618_API_KEY'),
             useJson: false,
         },
         oldsmm: {
-            url: process.env.OLDSMM_API_URL || 'https://oldsmm.com/api/v2',
-            key: process.env.OLDSMM_API_KEY,
+            url: await getConfig('OLDSMM_API_URL', 'https://oldsmm.com/api/v2'),
+            key: await getConfig('OLDSMM_API_KEY'),
             useJson: false,
         },
         apiowner: {
-            url: process.env.APIOWNER_API_URL || 'https://apiowner.com/api/v2',
-            key: process.env.APIOWNER_API_KEY,
+            url: await getConfig('APIOWNER_API_URL', 'https://apiowner.com/api/v2'),
+            key: await getConfig('APIOWNER_API_KEY'),
             useJson: false,
         },
     };
-    return configs[provider.toLowerCase()] || null;
+    return configs[p] || null;
 }

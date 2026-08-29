@@ -1,6 +1,7 @@
 import { getCached, setCached } from '../utils/redisClient.js';
 import { setCorsHeaders } from '../utils/corsHeaders.js';
 import { verifyAdmin } from '../utils/auth.js';
+import { getConfig } from '../utils/config.js';
 
 export default async function handler(req, res) {
     setCorsHeaders(req, res);
@@ -26,8 +27,8 @@ export default async function handler(req, res) {
             return res.status(200).json(cachedServices);
         }
 
-        const OLDSMM_API_URL = process.env.OLDSMM_API_URL || 'https://oldsmm.com/api/v2';
-        const OLDSMM_API_KEY = process.env.OLDSMM_API_KEY;
+        const OLDSMM_API_URL = await getConfig('OLDSMM_API_URL', 'https://oldsmm.com/api/v2');
+        const OLDSMM_API_KEY = await getConfig('OLDSMM_API_KEY');
 
         if (!OLDSMM_API_KEY || OLDSMM_API_KEY.includes('PLACEHOLDER')) {
             return res.status(400).json({ error: 'OldSMM API key not configured' });

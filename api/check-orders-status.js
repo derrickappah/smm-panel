@@ -7,6 +7,7 @@
  */
 
 import { verifyAuth, getServiceRoleClient } from './utils/auth.js';
+import { getConfig } from './utils/config.js';
 import {
     mapSMMGenStatus,
     mapSMMCostStatus,
@@ -195,6 +196,14 @@ export default async function handler(req, res) {
         const processProviderBatch = async (providerName, providerOrders, apiUrl, apiKey, mapper, orderIdField, isJson = false) => {
             if (providerOrders.length === 0) return;
 
+            if (!apiKey || apiKey.includes('PLACEHOLDER')) {
+                console.warn(`[StatusCheck] ${providerName} API key not configured. Skipping ${providerOrders.length} orders.`);
+                for (const order of providerOrders) {
+                    results.errors.push({ id: order.id, provider: providerName, error: `${providerName} API key not configured` });
+                }
+                return;
+            }
+
             const ids = providerOrders.map(o => o[orderIdField]).join(',');
             console.log(`[StatusCheck] Checking ${providerName} batch: ${ids}`);
 
@@ -258,6 +267,11 @@ export default async function handler(req, res) {
                                     refunded: !!refundResult?.success
                                 });
                             }
+                        } else {
+                            // Even if status unchanged, update last_status_check
+                            await dbClient.from('orders').update({
+                                last_status_check: new Date().toISOString()
+                            }).eq('id', order.id);
                         }
                     } else {
                         // If not in batch response, fall back to individual check if only one order
@@ -293,6 +307,10 @@ export default async function handler(req, res) {
                                         refunded: !!refundResult?.success
                                     });
                                 }
+                            } else {
+                                await dbClient.from('orders').update({
+                                    last_status_check: new Date().toISOString()
+                                }).eq('id', order.id);
                             }
                         } else {
                             results.errors.push({ id: order.id, provider: providerName, error: 'Status not found in batch response' });
@@ -307,15 +325,41 @@ export default async function handler(req, res) {
             }
         };
 
-        // 4-8. Process all providers in parallel batches
+        // 4. Resolve provider URLs & Keys dynamically from app_settings / env
+        const [
+            smmgenUrl, smmgenKey,
+            smmcostUrl, smmcostKey,
+            jbsmmpanelUrl, jbsmmpanelKey,
+            worldofsmmUrl, worldofsmmKey,
+            g1618Url, g1618Key,
+            oldsmmUrl, oldsmmKey,
+            apiownerUrl, apiownerKey
+        ] = await Promise.all([
+            getConfig('SMMGEN_API_URL', 'https://smmgen.com/api/v2'),
+            getConfig('SMMGEN_API_KEY'),
+            getConfig('SMMCOST_API_URL', 'https://api.smmcost.com'),
+            getConfig('SMMCOST_API_KEY'),
+            getConfig('JBSMMPANEL_API_URL', 'https://jbsmmpanel.com/api/v2'),
+            getConfig('JBSMMPANEL_API_KEY'),
+            getConfig('WORLDOFSMM_API_URL', 'https://worldofsmm.com/api/v2'),
+            getConfig('WORLDOFSMM_API_KEY'),
+            getConfig('G1618_API_URL', 'https://g1618.com/api/v2'),
+            getConfig('G1618_API_KEY'),
+            getConfig('OLDSMM_API_URL', 'https://oldsmm.com/api/v2'),
+            getConfig('OLDSMM_API_KEY'),
+            getConfig('APIOWNER_API_URL', 'https://apiowner.com/api/v2'),
+            getConfig('APIOWNER_API_KEY')
+        ]);
+
+        // 5-11. Process all providers in parallel batches
         await Promise.all([
-            processProviderBatch('smmgen', groups.smmgen, process.env.SMMGEN_API_URL || 'https://smmgen.com/api/v2', process.env.SMMGEN_API_KEY, mapSMMGenStatus, 'smmgen_order_id'),
-            processProviderBatch('smmcost', groups.smmcost, process.env.SMMCOST_API_URL || 'https://api.smmcost.com', process.env.SMMCOST_API_KEY, mapSMMCostStatus, 'smmcost_order_id', true),
-            processProviderBatch('jbsmmpanel', groups.jbsmmpanel, process.env.JBSMMPANEL_API_URL || 'https://jbsmmpanel.com/api/v2', process.env.JBSMMPANEL_API_KEY, mapJBSMMPanelStatus, 'jbsmmpanel_order_id'),
-            processProviderBatch('worldofsmm', groups.worldofsmm, process.env.WORLDOFSMM_API_URL || 'https://worldofsmm.com/api/v2', process.env.WORLDOFSMM_API_KEY, mapWorldOfSMMStatus, 'worldofsmm_order_id'),
-            processProviderBatch('g1618', groups.g1618, process.env.G1618_API_URL || 'https://g1618.com/api/v2', process.env.G1618_API_KEY, mapG1618Status, 'g1618_order_id'),
-            processProviderBatch('oldsmm', groups.oldsmm, process.env.OLDSMM_API_URL || 'https://oldsmm.com/api/v2', process.env.OLDSMM_API_KEY, mapOldSMMStatus, 'oldsmm_order_id'),
-            processProviderBatch('apiowner', groups.apiowner, process.env.APIOWNER_API_URL || 'https://apiowner.com/api/v2', process.env.APIOWNER_API_KEY, mapApiOwnerStatus, 'apiowner_order_id')
+            processProviderBatch('smmgen', groups.smmgen, smmgenUrl, smmgenKey, mapSMMGenStatus, 'smmgen_order_id'),
+            processProviderBatch('smmcost', groups.smmcost, smmcostUrl, smmcostKey, mapSMMCostStatus, 'smmcost_order_id', true),
+            processProviderBatch('jbsmmpanel', groups.jbsmmpanel, jbsmmpanelUrl, jbsmmpanelKey, mapJBSMMPanelStatus, 'jbsmmpanel_order_id'),
+            processProviderBatch('worldofsmm', groups.worldofsmm, worldofsmmUrl, worldofsmmKey, mapWorldOfSMMStatus, 'worldofsmm_order_id'),
+            processProviderBatch('g1618', groups.g1618, g1618Url, g1618Key, mapG1618Status, 'g1618_order_id'),
+            processProviderBatch('oldsmm', groups.oldsmm, oldsmmUrl, oldsmmKey, mapOldSMMStatus, 'oldsmm_order_id'),
+            processProviderBatch('apiowner', groups.apiowner, apiownerUrl, apiownerKey, mapApiOwnerStatus, 'apiowner_order_id')
         ]);
 
         return res.status(200).json({ success: true, ...results });
