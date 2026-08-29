@@ -32,7 +32,8 @@ async function handleAutomaticRefund(supabase, order, statusInfo, mappedStatus) 
         let refundType = 'full';
         let remains = 0;
 
-        if (mappedStatus === 'canceled' || mappedStatus === 'refunded') {
+        const isFullRefundStatus = ['canceled', 'cancelled', 'refunded', 'refunds'].includes(mappedStatus);
+        if (isFullRefundStatus) {
             refundAmount = order.total_cost;
             refundType = 'full';
         } else if (mappedStatus === 'partial') {
@@ -228,7 +229,7 @@ export default async function handler(req, res) {
                         if (mappedStatus && mappedStatus !== order.status) {
                             // Check if automatic refund is needed (only if not already refunded)
                             let refundResult = null;
-                            const shouldRefund = (mappedStatus === 'canceled' || mappedStatus === 'refunded' || mappedStatus === 'partial') && 
+                            const shouldRefund = ['canceled', 'cancelled', 'refunded', 'refunds', 'partial'].includes(mappedStatus) && 
                                                order.status !== 'refunded';
 
                             if (shouldRefund) {
@@ -266,7 +267,7 @@ export default async function handler(req, res) {
                             if (mappedStatus && mappedStatus !== order.status) {
                                 // Individual order refund logic
                                 let refundResult = null;
-                                const shouldRefund = (mappedStatus === 'canceled' || mappedStatus === 'refunded' || mappedStatus === 'partial') && 
+                                const shouldRefund = ['canceled', 'cancelled', 'refunded', 'refunds', 'partial'].includes(mappedStatus) && 
                                                    order.status !== 'refunded';
 
                                 if (shouldRefund) {

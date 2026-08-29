@@ -21,7 +21,7 @@ const mapSMMGenStatus = (smmgenStatus) => {
     if (statusLower === 'partial' || statusLower.includes('partial')) return 'partial';
     if (statusLower === 'processing' || statusLower.includes('processing')) return 'processing';
     if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower.includes('cancel')) return 'canceled';
-    if (statusLower === 'refunds' || statusLower.includes('refund')) return 'refunds';
+    if (statusLower === 'refunds' || statusLower === 'refunded' || statusLower.includes('refund')) return 'refunded';
 
     return null;
 };
@@ -43,7 +43,7 @@ const mapSMMCostStatus = (smmcostStatus) => {
     if (statusLower === 'partial' || statusLower.includes('partial')) return 'partial';
     if (statusLower === 'processing' || statusLower.includes('processing')) return 'processing';
     if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower.includes('cancel')) return 'canceled';
-    if (statusLower === 'refunds' || statusLower.includes('refund')) return 'refunds';
+    if (statusLower === 'refunds' || statusLower === 'refunded' || statusLower.includes('refund')) return 'refunded';
 
     return null;
 };
@@ -84,7 +84,7 @@ const mapJBSMMPanelStatus = (jbsmmpanelStatus) => {
     if (statusLower === 'partial') return 'partial';
     if (statusLower === 'processing' || statusLower === 'process') return 'processing';
     if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower === 'cancel') return 'canceled';
-    if (statusLower === 'refunds' || statusLower === 'refunded' || statusLower === 'refund') return 'refunds';
+    if (statusLower === 'refunds' || statusLower === 'refunded' || statusLower === 'refund') return 'refunded';
 
     // Partial matches
     if (statusLower.includes('in progress') || statusLower.includes('in-progress')) return 'in progress';
@@ -92,7 +92,7 @@ const mapJBSMMPanelStatus = (jbsmmpanelStatus) => {
     if (statusLower.includes('partial')) return 'partial';
     if (statusLower.includes('processing') || statusLower.includes('process')) return 'processing';
     if (statusLower.includes('cancel')) return 'canceled';
-    if (statusLower.includes('refund')) return 'refunds';
+    if (statusLower.includes('refund')) return 'refunded';
     if (statusLower.includes('pending')) return 'pending';
 
     return null;
@@ -115,7 +115,7 @@ const mapWorldOfSMMStatus = (worldofsmmStatus) => {
     if (statusLower === 'partial' || statusLower.includes('partial')) return 'partial';
     if (statusLower === 'processing' || statusLower.includes('processing')) return 'processing';
     if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower.includes('cancel')) return 'canceled';
-    if (statusLower === 'refunds' || statusLower.includes('refund')) return 'refunds';
+    if (statusLower === 'refunds' || statusLower === 'refunded' || statusLower.includes('refund')) return 'refunded';
 
     return null;
 };
@@ -137,7 +137,7 @@ const mapG1618Status = (g1618Status) => {
     if (statusLower === 'partial' || statusLower.includes('partial')) return 'partial';
     if (statusLower === 'processing' || statusLower.includes('processing')) return 'processing';
     if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower.includes('cancel')) return 'canceled';
-    if (statusLower === 'refunds' || statusLower.includes('refund')) return 'refunds';
+    if (statusLower === 'refunds' || statusLower === 'refunded' || statusLower.includes('refund')) return 'refunded';
 
     return null;
 };
@@ -159,7 +159,7 @@ const mapOldSMMStatus = (oldsmmStatus) => {
     if (statusLower === 'partial' || statusLower.includes('partial')) return 'partial';
     if (statusLower === 'processing' || statusLower.includes('processing')) return 'processing';
     if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower.includes('cancel')) return 'canceled';
-    if (statusLower === 'refunds' || statusLower.includes('refund')) return 'refunds';
+    if (statusLower === 'refunds' || statusLower === 'refunded' || statusLower.includes('refund')) return 'refunded';
 
     return null;
 };

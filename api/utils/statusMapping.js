@@ -20,7 +20,7 @@ export const mapSMMGenStatus = (smmgenStatus) => {
     if (statusLower === 'partial' || statusLower.includes('partial')) return 'partial';
     if (statusLower === 'processing' || statusLower.includes('processing')) return 'processing';
     if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower.includes('cancel')) return 'canceled';
-    if (statusLower === 'refunds' || statusLower.includes('refund')) return 'refunds';
+    if (statusLower === 'refunds' || statusLower === 'refunded' || statusLower.includes('refund')) return 'refunded';
 
     return null;
 };
@@ -42,7 +42,7 @@ export const mapSMMCostStatus = (smmcostStatus) => {
     if (statusLower === 'partial' || statusLower.includes('partial')) return 'partial';
     if (statusLower === 'processing' || statusLower.includes('processing')) return 'processing';
     if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower.includes('cancel')) return 'canceled';
-    if (statusLower === 'refunds' || statusLower.includes('refund')) return 'refunds';
+    if (statusLower === 'refunds' || statusLower === 'refunded' || statusLower.includes('refund')) return 'refunded';
 
     return null;
 };
@@ -85,7 +85,7 @@ export const mapJBSMMPanelStatus = (jbsmmpanelStatus) => {
     if (statusLower === 'partial') return 'partial';
     if (statusLower === 'processing' || statusLower === 'process') return 'processing';
     if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower === 'cancel') return 'canceled';
-    if (statusLower === 'refunds' || statusLower === 'refunded' || statusLower === 'refund') return 'refunds';
+    if (statusLower === 'refunds' || statusLower === 'refunded' || statusLower === 'refund') return 'refunded';
 
     // Partial matches (less specific, check after exact matches)
     if (statusLower.includes('in progress') || statusLower.includes('in-progress')) return 'in progress';
@@ -93,7 +93,7 @@ export const mapJBSMMPanelStatus = (jbsmmpanelStatus) => {
     if (statusLower.includes('partial')) return 'partial';
     if (statusLower.includes('processing') || statusLower.includes('process')) return 'processing';
     if (statusLower.includes('cancel')) return 'canceled';
-    if (statusLower.includes('refund')) return 'refunds';
+    if (statusLower.includes('refund')) return 'refunded';
     if (statusLower.includes('pending')) return 'pending';
 
     return null;
@@ -116,7 +116,7 @@ export const mapWorldOfSMMStatus = (worldofsmmStatus) => {
     if (statusLower === 'partial' || statusLower.includes('partial')) return 'partial';
     if (statusLower === 'processing' || statusLower.includes('processing')) return 'processing';
     if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower.includes('cancel')) return 'canceled';
-    if (statusLower === 'refunds' || statusLower.includes('refund')) return 'refunds';
+    if (statusLower === 'refunds' || statusLower === 'refunded' || statusLower.includes('refund')) return 'refunded';
 
     return null;
 };
@@ -138,7 +138,7 @@ export const mapG1618Status = (g1618Status) => {
     if (statusLower === 'partial' || statusLower.includes('partial')) return 'partial';
     if (statusLower === 'processing' || statusLower.includes('processing')) return 'processing';
     if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower.includes('cancel')) return 'canceled';
-    if (statusLower === 'refunds' || statusLower.includes('refund')) return 'refunds';
+    if (statusLower === 'refunds' || statusLower === 'refunded' || statusLower.includes('refund')) return 'refunded';
 
     return null;
 };
@@ -160,7 +160,7 @@ export const mapOldSMMStatus = (oldsmmStatus) => {
     if (statusLower === 'partial' || statusLower.includes('partial')) return 'partial';
     if (statusLower === 'processing' || statusLower.includes('processing')) return 'processing';
     if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower.includes('cancel')) return 'canceled';
-    if (statusLower === 'refunds' || statusLower.includes('refund')) return 'refunds';
+    if (statusLower === 'refunds' || statusLower === 'refunded' || statusLower.includes('refund')) return 'refunded';
 
     return null;
 };
@@ -184,14 +184,14 @@ export const mapApiOwnerStatus = (apiownerStatus) => {
     if (statusLower === 'partial') return 'partial';
     if (statusLower === 'processing' || statusLower === 'process') return 'processing';
     if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower === 'cancel') return 'canceled';
-    if (statusLower === 'refunds' || statusLower === 'refunded' || statusLower === 'refund') return 'refunds';
+    if (statusLower === 'refunds' || statusLower === 'refunded' || statusLower === 'refund') return 'refunded';
 
     if (statusLower.includes('in progress') || statusLower.includes('in-progress')) return 'in progress';
     if (statusLower.includes('completed') || statusLower.includes('complete')) return 'completed';
     if (statusLower.includes('partial')) return 'partial';
     if (statusLower.includes('processing') || statusLower.includes('process')) return 'processing';
     if (statusLower.includes('cancel')) return 'canceled';
-    if (statusLower.includes('refund')) return 'refunds';
+    if (statusLower.includes('refund')) return 'refunded';
     if (statusLower.includes('pending')) return 'pending';
 
     return null;

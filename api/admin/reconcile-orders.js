@@ -40,27 +40,27 @@ export default async function handler(req, res) {
             let provider = null;
             let providerId = null;
 
-            if (order.smmgen_order_id) {
-                provider = 'smmgen';
-                providerId = order.smmgen_order_id;
-            } else if (order.smmcost_order_id) {
-                provider = 'smmcost';
-                providerId = order.smmcost_order_id;
-            } else if (order.jbsmmpanel_order_id) {
-                provider = 'jbsmmpanel';
-                providerId = order.jbsmmpanel_order_id;
-            } else if (order.worldofsmm_order_id) {
-                provider = 'worldofsmm';
-                providerId = order.worldofsmm_order_id;
-            } else if (order.g1618_order_id) {
-                provider = 'g1618';
-                providerId = order.g1618_order_id;
-            } else if (order.oldsmm_order_id) {
+            if (order.oldsmm_order_id && String(order.oldsmm_order_id).toLowerCase() !== "order not placed at oldsmm") {
                 provider = 'oldsmm';
                 providerId = order.oldsmm_order_id;
-            } else if (order.apiowner_order_id) {
+            } else if (order.apiowner_order_id && String(order.apiowner_order_id).toLowerCase() !== "order not placed at apiowner") {
                 provider = 'apiowner';
                 providerId = order.apiowner_order_id;
+            } else if (order.worldofsmm_order_id && String(order.worldofsmm_order_id).toLowerCase() !== "order not placed at worldofsmm") {
+                provider = 'worldofsmm';
+                providerId = order.worldofsmm_order_id;
+            } else if (order.g1618_order_id && String(order.g1618_order_id).toLowerCase() !== "order not placed at g1618") {
+                provider = 'g1618';
+                providerId = order.g1618_order_id;
+            } else if (order.smmcost_order_id && String(order.smmcost_order_id).toLowerCase() !== "order not placed at smmcost") {
+                provider = 'smmcost';
+                providerId = order.smmcost_order_id;
+            } else if (order.jbsmmpanel_order_id && Number(order.jbsmmpanel_order_id) > 0) {
+                provider = 'jbsmmpanel';
+                providerId = order.jbsmmpanel_order_id;
+            } else if (order.smmgen_order_id && order.smmgen_order_id !== order.id && order.smmgen_order_id !== "order not placed at smm gen") {
+                provider = 'smmgen';
+                providerId = order.smmgen_order_id;
             }
 
             if (!provider || !providerId || String(providerId).toLowerCase().startsWith("order not placed")) {
