@@ -81,51 +81,7 @@ const VideoModal = ({ videoUrl, title = 'Video Guide', onClose }) => {
 
   const videoInfo = useMemo(() => parseVideoUrl(videoUrl), [videoUrl]);
 
-  // Generate self-contained HTML document for direct video files to guarantee native player execution
-  const directVideoDoc = useMemo(() => {
-    if (!videoUrl || videoInfo?.type !== 'direct') return null;
-    const cleanUrl = videoInfo?.url || videoUrl;
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body {
-      width: 100%;
-      height: 100%;
-      background-color: #000000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
-    }
-    video {
-      width: 100%;
-      height: 100%;
-      max-width: 100%;
-      max-height: 100%;
-      object-fit: contain;
-      background: #000000;
-    }
-  </style>
-</head>
-<body>
-  <video 
-    src="${cleanUrl}" 
-    controls 
-    autoplay 
-    playsinline 
-    webkit-playsinline="true"
-    preload="auto"
-  >
-    <source src="${cleanUrl}">
-    Your browser does not support playing this video.
-  </video>
-</body>
-</html>`;
-  }, [videoUrl, videoInfo]);
+  const playerSrc = videoInfo?.embedUrl || videoInfo?.url || videoUrl;
 
   return createPortal(
     <div 
@@ -154,30 +110,19 @@ const VideoModal = ({ videoUrl, title = 'Video Guide', onClose }) => {
         </button>
       </header>
 
-      {/* Video Player Center Area - Isolated sandbox iframe container */}
+      {/* Video Player Center Area - Direct iframe player container */}
       <main className="relative z-10 flex-1 flex flex-col items-center justify-center p-3 sm:p-6 min-h-0 w-full overflow-hidden my-auto">
         <div className={`w-full ${videoInfo?.isShort ? 'max-w-[340px] aspect-[9/16] max-h-[65dvh]' : 'max-w-3xl aspect-video max-h-[65dvh] sm:max-h-[75dvh]'} mx-auto flex flex-col items-center justify-center`}>
           <div className="relative w-full h-full rounded-2xl sm:rounded-3xl overflow-hidden bg-black shadow-2xl ring-1 ring-white/20 animate-in zoom-in-95 duration-200">
-            {videoInfo?.type === 'direct' ? (
-              <iframe
-                srcDoc={directVideoDoc}
-                title={title}
-                className="absolute inset-0 w-full h-full border-0 bg-black"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-                allowFullScreen
-                loading="eager"
-              />
-            ) : (
-              <iframe
-                src={videoInfo?.embedUrl}
-                title={title}
-                className="absolute inset-0 w-full h-full border-0 bg-black"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen; web-share"
-                allowFullScreen
-                referrerPolicy="strict-origin-when-cross-origin"
-                loading="eager"
-              />
-            )}
+            <iframe
+              src={playerSrc}
+              title={title}
+              className="absolute inset-0 w-full h-full border-0 bg-black"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen; web-share"
+              allowFullScreen
+              referrerPolicy="strict-origin-when-cross-origin"
+              loading="eager"
+            />
           </div>
 
           {videoInfo?.type === 'youtube' && (
