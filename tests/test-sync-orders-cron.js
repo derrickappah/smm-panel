@@ -70,11 +70,11 @@ async function runTests() {
         console.error(`  Failed: Expected 405, got ${putRes.statusCode}\n`);
     }
 
-    // Test 3: Authorized execution via x-vercel-cron header
-    console.log('Test 3: Execute authorized sync via x-vercel-cron header');
+    // Test 3: Authorized execution via Vercel Cron GET request with User-Agent
+    console.log('Test 3: Execute authorized sync via Vercel Cron GET + User-Agent');
     const authReq = {
-        method: 'POST',
-        headers: { 'x-vercel-cron': '1' }
+        method: 'GET',
+        headers: { 'user-agent': 'vercel-cron/1.0' }
     };
     const authRes = createMockRes();
     await handler(authReq, authRes);
@@ -82,7 +82,7 @@ async function runTests() {
     console.log('  Response summary:', JSON.stringify(authRes.body?.summary || authRes.body, null, 2));
 
     if (authRes.statusCode === 200 && authRes.body?.success) {
-        console.log('\n  Passed: Successfully executed automated status synchronization!');
+        console.log('\n  Passed: Successfully executed automated status synchronization via vercel-cron user agent!');
     } else {
         console.error('\n  Failed: Sync execution returned error:', authRes.body);
     }

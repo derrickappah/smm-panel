@@ -92,18 +92,19 @@ async function handleAutomaticRefund(supabase, order, statusInfo, mappedStatus) 
  */
 async function verifyCronAuth(req) {
     const authHeader = req.headers['authorization'] || '';
+    const userAgent = (req.headers['user-agent'] || '').toLowerCase();
     const cronSecret = process.env.CRON_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    // 1. Check Bearer token matching CRON_SECRET or Service Role Key
+    // 1. Check Vercel Cron User-Agent or x-vercel-cron header
+    if (userAgent.includes('vercel-cron') || req.headers['x-vercel-cron']) {
+        return true;
+    }
+
+    // 2. Check Bearer token matching CRON_SECRET or Service Role Key
     if (authHeader.startsWith('Bearer ')) {
         const token = authHeader.replace('Bearer ', '').trim();
         if (cronSecret && token === cronSecret) return true;
         if (process.env.SUPABASE_SERVICE_ROLE_KEY && token === process.env.SUPABASE_SERVICE_ROLE_KEY) return true;
-    }
-
-    // 2. Check Vercel Cron header
-    if (req.headers['x-vercel-cron'] === '1') {
-        return true;
     }
 
     // 3. Check QStash signature header
