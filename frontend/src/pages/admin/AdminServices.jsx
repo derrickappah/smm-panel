@@ -282,36 +282,46 @@ const AdminServices = memo(() => {
 
     try {
       const cleanFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-      const filePath = `service-guides/${Date.now()}_${cleanFileName}`;
+      const fileName = `${Date.now()}_${cleanFileName}`;
 
       let publicUrl = '';
       let uploadSuccess = false;
-      const bucketsToTry = ['service-videos', 'storage', 'support-attachments'];
+      let lastErrorMsg = '';
 
-      for (const bucket of bucketsToTry) {
+      const uploadTargets = [
+        { bucket: 'service-videos', path: fileName },
+        { bucket: 'service-videos', path: `service-guides/${fileName}` },
+        { bucket: 'storage', path: `video-tutorials/${fileName}` },
+        { bucket: 'storage', path: fileName }
+      ];
+
+      for (const target of uploadTargets) {
         setCreateVideoProgress(40);
         const { error: uploadError } = await supabase.storage
-          .from(bucket)
-          .upload(filePath, file, {
+          .from(target.bucket)
+          .upload(target.path, file, {
             cacheControl: '3600',
-            upsert: true,
+            upsert: false,
           });
 
         if (!uploadError) {
           const { data: urlData } = supabase.storage
-            .from(bucket)
-            .getPublicUrl(filePath);
+            .from(target.bucket)
+            .getPublicUrl(target.path);
 
           if (urlData?.publicUrl) {
             publicUrl = urlData.publicUrl;
             uploadSuccess = true;
             break;
           }
+        } else {
+          lastErrorMsg = uploadError.message;
+          console.warn(`Storage upload attempt failed for ${target.bucket}/${target.path}:`, uploadError);
         }
       }
 
       if (!uploadSuccess) {
-        throw new Error('Failed to upload video to storage bucket. Please check Supabase storage settings or paste direct URL.');
+        throw new Error(lastErrorMsg || 'Failed to upload video to storage bucket. Please check Supabase storage settings or paste direct URL.');
       }
 
       setCreateVideoProgress(100);
