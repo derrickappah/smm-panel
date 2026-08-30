@@ -12,8 +12,10 @@ const parseVideoUrl = (rawUrl) => {
     const videoId = ytShortsMatch[1];
     return {
       type: 'youtube',
+      videoId,
       isShort: true,
-      embedUrl: `https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1&rel=0&modestbranding=1`
+      directUrl: `https://www.youtube.com/watch?v=${videoId}`,
+      embedUrl: `https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1&rel=0&enablejsapi=1`
     };
   }
 
@@ -23,8 +25,10 @@ const parseVideoUrl = (rawUrl) => {
     const videoId = ytMatch[1];
     return {
       type: 'youtube',
+      videoId,
       isShort: false,
-      embedUrl: `https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1&rel=0&modestbranding=1`
+      directUrl: `https://www.youtube.com/watch?v=${videoId}`,
+      embedUrl: `https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1&rel=0&enablejsapi=1`
     };
   }
 
@@ -107,10 +111,10 @@ const VideoModal = ({ videoUrl, title = 'Video Guide', onClose }) => {
       </header>
 
       {/* Video Player Center Area - Contained and isolated to prevent overlap */}
-      <main className="relative z-10 flex-1 flex items-center justify-center p-3 sm:p-6 min-h-0 w-full overflow-hidden my-auto">
+      <main className="relative z-10 flex-1 flex flex-col items-center justify-center p-3 sm:p-6 min-h-0 w-full overflow-hidden my-auto">
         {videoInfo && !videoError ? (
           videoInfo.type === 'youtube' || videoInfo.type === 'vimeo' || videoInfo.type === 'loom' ? (
-            <div className={`w-full ${videoInfo.isShort ? 'max-w-[320px] aspect-[9/16] max-h-[60dvh]' : 'max-w-3xl aspect-video max-h-[60dvh] sm:max-h-[70dvh]'} mx-auto flex items-center justify-center`}>
+            <div className={`w-full ${videoInfo.isShort ? 'max-w-[320px] aspect-[9/16] max-h-[60dvh]' : 'max-w-3xl aspect-video max-h-[60dvh] sm:max-h-[70dvh]'} mx-auto flex flex-col items-center justify-center`}>
               <div className="relative w-full h-full rounded-2xl sm:rounded-3xl overflow-hidden bg-black shadow-2xl ring-1 ring-white/20 animate-in zoom-in-95 duration-200">
                 <iframe
                   src={videoInfo.embedUrl}
@@ -118,9 +122,21 @@ const VideoModal = ({ videoUrl, title = 'Video Guide', onClose }) => {
                   className="absolute inset-0 w-full h-full border-0"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   allowFullScreen
+                  referrerPolicy="strict-origin-when-cross-origin"
                   loading="eager"
                 />
               </div>
+              {videoInfo.type === 'youtube' && (
+                <a
+                  href={videoInfo.directUrl || videoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2.5 inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-white/10 hover:bg-white/20 active:bg-white/30 text-white/90 hover:text-white text-[11px] sm:text-xs font-medium rounded-full transition-all border border-white/15"
+                >
+                  <ExternalLink size={12} />
+                  <span>Tap here if video is blocked by YouTube</span>
+                </a>
+              )}
             </div>
           ) : (
             <div className="w-full max-w-xl mx-auto flex items-center justify-center max-h-[60dvh] sm:max-h-[70dvh]">
