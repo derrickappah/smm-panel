@@ -1,6 +1,12 @@
 {
   "buildCommand": "cd frontend && npm install --legacy-peer-deps && npm run build",
   "outputDirectory": "frontend/build",
+  "crons": [
+    {
+      "path": "/api/cron/sync-orders",
+      "schedule": "*/5 * * * *"
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/(.*)",
