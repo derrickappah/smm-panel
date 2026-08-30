@@ -59,6 +59,7 @@ const parseVideoUrl = (rawUrl) => {
 
 const VideoModal = ({ videoUrl, title = 'Video Guide', onClose }) => {
   const [videoError, setVideoError] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
   const videoRef = useRef(null);
 
   // Prevent background scrolling on body when modal is open
@@ -84,21 +85,32 @@ const VideoModal = ({ videoUrl, title = 'Video Guide', onClose }) => {
 
   const videoInfo = useMemo(() => parseVideoUrl(videoUrl), [videoUrl]);
 
-  // Attempt smooth play on mount without throwing fatal errors on autoplay blocks
+  // Attempt initial play
   useEffect(() => {
     if (videoInfo?.type === 'html5' && videoRef.current) {
+      videoRef.current.load();
       const playPromise = videoRef.current.play();
       if (playPromise !== undefined) {
-        playPromise.catch(() => {
-          // Autoplay was blocked by browser policy (e.g. unmuted on mobile).
-          // Video controls remain available for user to tap and play.
-        });
+        playPromise
+          .then(() => setIsPlaying(true))
+          .catch(() => {
+            setIsPlaying(false);
+          });
       }
     }
   }, [videoInfo]);
 
+  const handlePlayToggle = () => {
+    if (!videoRef.current) return;
+    if (videoRef.current.paused) {
+      videoRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
+    } else {
+      videoRef.current.pause();
+      setIsPlaying(false);
+    }
+  };
+
   const handleVideoError = () => {
-    // Only treat as fatal error if the video element has a genuine fatal network/decode error
     const err = videoRef.current?.error;
     if (err && (err.code === 4 || err.code === 3)) {
       setVideoError(true);
@@ -162,23 +174,35 @@ const VideoModal = ({ videoUrl, title = 'Video Guide', onClose }) => {
             </div>
           ) : (
             <div className="w-full max-w-xl mx-auto flex flex-col items-center justify-center max-h-[65dvh] sm:max-h-[75dvh]">
-              <div className="relative w-full max-h-[65dvh] sm:max-h-[75dvh] rounded-2xl sm:rounded-3xl overflow-hidden bg-black shadow-2xl ring-1 ring-white/20 flex items-center justify-center">
+              <div className="relative w-full max-h-[65dvh] sm:max-h-[75dvh] rounded-2xl sm:rounded-3xl overflow-hidden bg-black shadow-2xl ring-1 ring-white/20 flex items-center justify-center group">
                 <video
                   ref={videoRef}
+                  src={videoInfo.url}
                   controls
+                  autoPlay
                   playsInline
                   webkit-playsinline="true"
-                  preload="metadata"
-                  crossOrigin="anonymous"
+                  preload="auto"
+                  onPlay={() => setIsPlaying(true)}
+                  onPause={() => setIsPlaying(false)}
                   onError={handleVideoError}
-                  className="w-full max-h-[65dvh] sm:max-h-[75dvh] object-contain rounded-2xl bg-black"
+                  className="w-full max-h-[65dvh] sm:max-h-[75dvh] object-contain rounded-2xl bg-black cursor-pointer"
+                  onClick={handlePlayToggle}
                 >
-                  <source src={videoInfo.url} type="video/mp4" />
-                  <source src={videoInfo.url} type="video/quicktime" />
-                  <source src={videoInfo.url} type="video/webm" />
-                  <source src={videoInfo.url} />
                   Your browser does not support the video tag.
                 </video>
+
+                {/* Big Tap to Play Button when paused */}
+                {!isPlaying && (
+                  <button
+                    type="button"
+                    onClick={handlePlayToggle}
+                    className="absolute inset-0 m-auto w-16 h-16 sm:w-18 sm:h-18 rounded-full bg-indigo-600/90 hover:bg-indigo-600 text-white flex items-center justify-center shadow-2xl shadow-indigo-500/50 hover:scale-110 active:scale-90 transition-all cursor-pointer z-20 pointer-events-auto"
+                    aria-label="Play video"
+                  >
+                    <Play className="w-8 h-8 sm:w-9 sm:h-9 fill-current ml-1" />
+                  </button>
+                )}
               </div>
             </div>
           )
