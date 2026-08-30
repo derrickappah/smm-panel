@@ -1,4 +1,4 @@
-import React, { memo, useState, useMemo, useCallback, useEffect } from 'react';
+import React, { memo, useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useAdminServices, useCreateService, useUpdateService, useDeleteService, useReorderServices } from '@/hooks/useAdminServices';
 import { useDebounce } from '@/hooks/useDebounce';
 import ServiceEditForm from '@/components/admin/ServiceEditForm';
@@ -7,9 +7,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, RefreshCw, Edit, Trash2, Power, PowerOff, Layers, CheckCircle, GripVertical } from 'lucide-react';
+import { Search, RefreshCw, Edit, Trash2, Power, PowerOff, Layers, CheckCircle, GripVertical, Video, UploadCloud, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/lib/supabase';
+import ServiceVideoGuideCard from '@/components/dashboard/ServiceVideoGuideCard';
 import {
   DndContext,
   closestCenter,
@@ -105,6 +107,12 @@ const SortableServiceItem = memo(({ service, editingService, onEdit, onToggle, o
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-700 text-xs font-medium rounded-full border border-red-300">
                     <PowerOff className="w-3 h-3" />
                     Disabled
+                  </span>
+                )}
+                {service.video_url && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full border border-purple-200">
+                    <Video className="w-3 h-3" />
+                    Video Guide
                   </span>
                 )}
                 {service.is_combo && (
@@ -231,6 +239,7 @@ const AdminServices = memo(() => {
     min_quantity: '',
     max_quantity: '',
     description: '',
+    video_url: '',
     smmgen_service_id: '',
     smmcost_service_id: '',
     jbsmmpanel_service_id: '',
@@ -244,6 +253,81 @@ const AdminServices = memo(() => {
     seller_only: false,
     enabled: true
   });
+
+  const createFileInputRef = useRef(null);
+  const [isUploadingCreateVideo, setIsUploadingCreateVideo] = useState(false);
+  const [createVideoProgress, setCreateVideoProgress] = useState(0);
+
+  const handleCreateVideoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validVideoTypes = ['video/mp4', 'video/quicktime', 'video/webm', 'video/mkv', 'video/x-matroska'];
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    const isValidExtension = ['mp4', 'mov', 'webm', 'mkv'].includes(extension || '');
+
+    if (!validVideoTypes.includes(file.type) && !isValidExtension) {
+      toast.error('Please upload a valid video file (.mp4, .mov, .webm)');
+      return;
+    }
+
+    const maxSize = 100 * 1024 * 1024;
+    if (file.size > maxSize) {
+      toast.error('Video file size must be less than 100MB');
+      return;
+    }
+
+    setIsUploadingCreateVideo(true);
+    setCreateVideoProgress(10);
+
+    try {
+      const cleanFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const filePath = `service-guides/${Date.now()}_${cleanFileName}`;
+
+      let publicUrl = '';
+      let uploadSuccess = false;
+      const bucketsToTry = ['service-videos', 'storage', 'support-attachments'];
+
+      for (const bucket of bucketsToTry) {
+        setCreateVideoProgress(40);
+        const { error: uploadError } = await supabase.storage
+          .from(bucket)
+          .upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: true,
+          });
+
+        if (!uploadError) {
+          const { data: urlData } = supabase.storage
+            .from(bucket)
+            .getPublicUrl(filePath);
+
+          if (urlData?.publicUrl) {
+            publicUrl = urlData.publicUrl;
+            uploadSuccess = true;
+            break;
+          }
+        }
+      }
+
+      if (!uploadSuccess) {
+        throw new Error('Failed to upload video to storage bucket. Please check Supabase storage settings or paste direct URL.');
+      }
+
+      setCreateVideoProgress(100);
+      setServiceForm(prev => ({ ...prev, video_url: publicUrl }));
+      toast.success('Video uploaded successfully!');
+    } catch (err) {
+      console.error('Video upload error:', err);
+      toast.error(err.message || 'Failed to upload video file');
+    } finally {
+      setIsUploadingCreateVideo(false);
+      setCreateVideoProgress(0);
+      if (createFileInputRef.current) {
+        createFileInputRef.current.value = '';
+      }
+    }
+  };
 
   const debouncedSearch = useDebounce(serviceSearch, 300);
 
@@ -291,10 +375,10 @@ const AdminServices = memo(() => {
         rate_unit: parseInt(serviceForm.rate_unit) || 1000,
         min_quantity: parseInt(serviceForm.min_quantity),
         max_quantity: parseInt(serviceForm.max_quantity),
-        description: serviceForm.description,
+        description: serviceForm.description || null,
+        video_url: serviceForm.video_url?.trim() || null,
         smmgen_service_id: serviceForm.smmgen_service_id || null,
         smmcost_service_id: serviceForm.smmcost_service_id ? parseInt(serviceForm.smmcost_service_id, 10) : null,
-        jbsmmpanel_service_id: serviceForm.jbsmmpanel_service_id ? parseInt(serviceForm.jbsmmpanel_service_id, 10) : null,
         jbsmmpanel_service_id: serviceForm.jbsmmpanel_service_id ? parseInt(serviceForm.jbsmmpanel_service_id, 10) : null,
         worldofsmm_service_id: serviceForm.worldofsmm_service_id || null,
         g1618_service_id: serviceForm.g1618_service_id || null,
@@ -320,9 +404,9 @@ const AdminServices = memo(() => {
         min_quantity: '',
         max_quantity: '',
         description: '',
+        video_url: '',
         smmgen_service_id: '',
         smmcost_service_id: '',
-        jbsmmpanel_service_id: '',
         jbsmmpanel_service_id: '',
         worldofsmm_service_id: '',
         g1618_service_id: '',
@@ -545,15 +629,110 @@ const AdminServices = memo(() => {
             </div>
           </div>
           <div>
-            <Label>Description</Label>
+            <div className="flex justify-between items-center mb-1">
+              <Label>Description</Label>
+              <span className="text-xs text-gray-500">Supports markdown **bold**, *italic*, and `[video]` tag</span>
+            </div>
             <Textarea
-              placeholder="Service description"
+              placeholder="Service instructions and details. You can insert [video] anywhere to position the video guide card."
               value={serviceForm.description}
               onChange={(e) => setServiceForm({ ...serviceForm, description: e.target.value })}
               rows={4}
               className="resize-y"
-              required
             />
+          </div>
+
+          {/* Video Guide Section */}
+          <div className="p-4 border-2 border-purple-200/80 rounded-xl bg-purple-50/40 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-purple-600 text-white rounded-lg">
+                  <Video className="w-4 h-4" />
+                </div>
+                <div>
+                  <Label className="text-sm font-semibold text-purple-950">Service Video Guide</Label>
+                  <p className="text-xs text-purple-700">Attach a video tutorial to display the "Watch Video Guide" card in description</p>
+                </div>
+              </div>
+              {serviceForm.video_url && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 border border-green-300">
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  Video Active
+                </span>
+              )}
+            </div>
+
+            {/* Upload and URL input */}
+            <div className="grid md:grid-cols-2 gap-3 pt-1">
+              <div>
+                <Label className="text-xs font-medium text-gray-700 mb-1 block">Upload Video File</Label>
+                <input
+                  type="file"
+                  ref={createFileInputRef}
+                  accept="video/mp4,video/quicktime,video/webm,video/mkv"
+                  onChange={handleCreateVideoUpload}
+                  className="hidden"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isUploadingCreateVideo}
+                  onClick={() => createFileInputRef.current?.click()}
+                  className="w-full bg-white border-purple-200 hover:bg-purple-100/60 text-purple-900 flex items-center justify-center gap-2"
+                >
+                  {isUploadingCreateVideo ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
+                      <span>Uploading video ({createVideoProgress}%)...</span>
+                    </>
+                  ) : (
+                    <>
+                      <UploadCloud className="w-4 h-4 text-purple-600" />
+                      <span>Choose Video File (.mp4, .mov)</span>
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              <div>
+                <Label className="text-xs font-medium text-gray-700 mb-1 block">Or Paste Video URL</Label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="https://.../video.mp4"
+                    value={serviceForm.video_url || ''}
+                    onChange={(e) => setServiceForm({ ...serviceForm, video_url: e.target.value })}
+                    className="bg-white text-xs"
+                  />
+                  {serviceForm.video_url && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setServiceForm({ ...serviceForm, video_url: '' })}
+                      className="text-red-600 hover:bg-red-50 border-red-200 px-2.5 shrink-0"
+                      title="Remove video"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Live Preview if video is set */}
+            {serviceForm.video_url && (
+              <div className="pt-2 border-t border-purple-200/60">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-purple-900 mb-1.5">
+                  Live Customer Preview:
+                </p>
+                <div className="bg-white p-3 rounded-xl border border-purple-100 shadow-inner">
+                  <ServiceVideoGuideCard
+                    videoUrl={serviceForm.video_url}
+                    serviceName={serviceForm.name}
+                  />
+                </div>
+              </div>
+            )}
           </div>
           <div className="grid md:grid-cols-3 gap-4">
             <div>

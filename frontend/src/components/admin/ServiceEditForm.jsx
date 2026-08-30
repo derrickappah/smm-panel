@@ -1,9 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Video, UploadCloud, Trash2, Play, CheckCircle, Loader2 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
+import ServiceVideoGuideCard from '@/components/dashboard/ServiceVideoGuideCard';
 
 const normalizeComboServices = (comboServiceIds) => {
   if (!Array.isArray(comboServiceIds)) return [];
@@ -19,6 +23,10 @@ const normalizeComboServices = (comboServiceIds) => {
 };
 
 const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
+  const fileInputRef = useRef(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
   const [formData, setFormData] = useState({
     platform: service.platform,
     service_type: service.service_type,
@@ -28,6 +36,7 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
     min_quantity: service.min_quantity,
     max_quantity: service.max_quantity,
     description: service.description || '',
+    video_url: service.video_url || '',
     smmgen_service_id: service.smmgen_service_id || '',
     smmcost_service_id: service.smmcost_service_id || '',
     jbsmmpanel_service_id: service.jbsmmpanel_service_id || '',
@@ -42,6 +51,81 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
     seller_only: service.seller_only || false,
     enabled: service.enabled === true // Explicitly check for true, default to false if null/undefined
   });
+
+  const handleVideoFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const validVideoTypes = ['video/mp4', 'video/quicktime', 'video/webm', 'video/mkv', 'video/x-matroska'];
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    const isValidExtension = ['mp4', 'mov', 'webm', 'mkv'].includes(extension || '');
+
+    if (!validVideoTypes.includes(file.type) && !isValidExtension) {
+      toast.error('Please upload a valid video file (.mp4, .mov, .webm)');
+      return;
+    }
+
+    // Validate size (max 100MB)
+    const maxSize = 100 * 1024 * 1024;
+    if (file.size > maxSize) {
+      toast.error('Video file size must be less than 100MB');
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadProgress(10);
+
+    try {
+      const cleanFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const filePath = `service-guides/${Date.now()}_${cleanFileName}`;
+
+      let publicUrl = '';
+      let uploadSuccess = false;
+
+      // Try uploading to 'service-videos' bucket first, fallback to 'storage' or 'support-attachments'
+      const bucketsToTry = ['service-videos', 'storage', 'support-attachments'];
+
+      for (const bucket of bucketsToTry) {
+        setUploadProgress(40);
+        const { error: uploadError } = await supabase.storage
+          .from(bucket)
+          .upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: true,
+          });
+
+        if (!uploadError) {
+          const { data: urlData } = supabase.storage
+            .from(bucket)
+            .getPublicUrl(filePath);
+
+          if (urlData?.publicUrl) {
+            publicUrl = urlData.publicUrl;
+            uploadSuccess = true;
+            break;
+          }
+        }
+      }
+
+      if (!uploadSuccess) {
+        throw new Error('Failed to upload video to storage bucket. Please check Supabase storage settings or paste direct URL.');
+      }
+
+      setUploadProgress(100);
+      setFormData(prev => ({ ...prev, video_url: publicUrl }));
+      toast.success('Video uploaded successfully!');
+    } catch (err) {
+      console.error('Video upload error:', err);
+      toast.error(err.message || 'Failed to upload video file');
+    } finally {
+      setIsUploading(false);
+      setUploadProgress(0);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -76,6 +160,7 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
       min_quantity: parseInt(formData.min_quantity),
       max_quantity: parseInt(formData.max_quantity),
       description: formData.description || null,
+      video_url: formData.video_url?.trim() || null,
       smmgen_service_id: formData.smmgen_service_id || null,
       smmcost_service_id: formData.smmcost_service_id ? parseInt(formData.smmcost_service_id, 10) : null,
       jbsmmpanel_service_id: formData.jbsmmpanel_service_id ? parseInt(formData.jbsmmpanel_service_id, 10) : null,
@@ -178,13 +263,110 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
         </div>
       </div>
       <div>
-        <Label>Description</Label>
+        <div className="flex justify-between items-center mb-1">
+          <Label>Description</Label>
+          <span className="text-xs text-gray-500">Supports markdown **bold**, *italic*, and `[video]` tag</span>
+        </div>
         <Textarea
           value={formData.description}
           onChange={(e) => setFormData({ ...formData, description: e.target.value })}
           rows={4}
+          placeholder="Service instructions and details. You can insert [video] anywhere to position the video guide card."
           className="resize-y"
         />
+      </div>
+
+      {/* Video Guide Section */}
+      <div className="p-4 border-2 border-purple-200/80 rounded-xl bg-purple-50/40 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-purple-600 text-white rounded-lg">
+              <Video className="w-4 h-4" />
+            </div>
+            <div>
+              <Label className="text-sm font-semibold text-purple-950">Service Video Guide</Label>
+              <p className="text-xs text-purple-700">Attach a video tutorial to display the "Watch Video Guide" card in description</p>
+            </div>
+          </div>
+          {formData.video_url && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 border border-green-300">
+              <CheckCircle className="w-3.5 h-3.5" />
+              Video Active
+            </span>
+          )}
+        </div>
+
+        {/* Upload and URL input */}
+        <div className="grid md:grid-cols-2 gap-3 pt-1">
+          <div>
+            <Label className="text-xs font-medium text-gray-700 mb-1 block">Upload Video File</Label>
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="video/mp4,video/quicktime,video/webm,video/mkv"
+              onChange={handleVideoFileUpload}
+              className="hidden"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isUploading}
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full bg-white border-purple-200 hover:bg-purple-100/60 text-purple-900 flex items-center justify-center gap-2"
+            >
+              {isUploading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
+                  <span>Uploading video ({uploadProgress}%)...</span>
+                </>
+              ) : (
+                <>
+                  <UploadCloud className="w-4 h-4 text-purple-600" />
+                  <span>Choose Video File (.mp4, .mov)</span>
+                </>
+              )}
+            </Button>
+          </div>
+
+          <div>
+            <Label className="text-xs font-medium text-gray-700 mb-1 block">Or Paste Video URL</Label>
+            <div className="flex gap-2">
+              <Input
+                placeholder="https://.../video.mp4"
+                value={formData.video_url || ''}
+                onChange={(e) => setFormData({ ...formData, video_url: e.target.value })}
+                className="bg-white text-xs"
+              />
+              {formData.video_url && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setFormData({ ...formData, video_url: '' })}
+                  className="text-red-600 hover:bg-red-50 border-red-200 px-2.5 shrink-0"
+                  title="Remove video"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Live Preview if video is set */}
+        {formData.video_url && (
+          <div className="pt-2 border-t border-purple-200/60">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-purple-900 mb-1.5">
+              Live Customer Preview:
+            </p>
+            <div className="bg-white p-3 rounded-xl border border-purple-100 shadow-inner">
+              <ServiceVideoGuideCard
+                videoUrl={formData.video_url}
+                serviceName={formData.name || service.name}
+              />
+            </div>
+          </div>
+        )}
       </div>
       <div className="grid md:grid-cols-3 gap-4">
         <div>

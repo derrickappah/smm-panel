@@ -127,8 +127,8 @@ const ServicesPage = ({ user, onLogout }) => {
 
       // Fetch services from Supabase only
       // Only fetch enabled services for users
-      // Try with rate_unit first, fallback to without it if column doesn't exist
-      let query = supabase.from('services').select('id, name, description, rate, rate_unit, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only').eq('enabled', true);
+      // Try with rate_unit and video_url first, fallback to without if columns don't exist
+      let query = supabase.from('services').select('id, name, description, video_url, rate, rate_unit, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only').eq('enabled', true);
 
       // Filter services by role:
       // - seller: ONLY sees seller_only = true services
@@ -148,9 +148,9 @@ const ServicesPage = ({ user, onLogout }) => {
         .order('display_order', { ascending: true })
         .order('created_at', { ascending: false });
 
-      // If rate_unit column doesn't exist, try without it
-      if (error && (error.message?.includes('rate_unit') || error.code === '42703')) {
-        console.warn('rate_unit column not found, fetching without it:', error.message);
+      // If rate_unit or video_url column doesn't exist, try fallback
+      if (error && (error.message?.includes('rate_unit') || error.message?.includes('video_url') || error.code === '42703')) {
+        console.warn('Column not found, fetching without missing columns:', error.message);
         let fallbackQuery = supabase.from('services').select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only').eq('enabled', true);
 
         if (userRole === 'seller') {

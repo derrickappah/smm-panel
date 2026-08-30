@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, Layers } from 'lucide-react';
 import PlatformIcon from '@/components/PlatformIcon';
+import ServiceVideoGuideCard from '@/components/dashboard/ServiceVideoGuideCard';
 
 const normalizeComboServices = (comboServiceIds) => {
   if (!Array.isArray(comboServiceIds)) return [];
@@ -165,8 +166,8 @@ const DashboardOrderForm = React.memo(({
       selectedService.name?.toLowerCase().includes('custom comment');
   }, [selectedService]);
 
-  // Helper function to parse markdown-style formatting (bold and italic)
-  const formatDescription = useCallback((text) => {
+  // Helper function to parse markdown-style formatting (bold and italic) and inline video tags
+  const formatDescription = useCallback((text, videoUrl, serviceName) => {
     if (!text) return null;
 
     // Split by line breaks first to preserve them
@@ -174,6 +175,28 @@ const DashboardOrderForm = React.memo(({
     const result = [];
 
     lines.forEach((line, lineIndex) => {
+      const trimmedLine = line.trim();
+
+      // Check if line is an explicit video guide tag
+      // e.g. [video], [video_guide], [video: https://...], [video](https://...)
+      const videoTagMatch = trimmedLine.match(/^\[(?:video|video_guide)(?::\s*|\s+)?([^\]]*)\]$/i) || 
+                            trimmedLine.match(/^\[(?:video|video_guide)\]\(([^)]+)\)$/i);
+
+      if (videoTagMatch) {
+        const customUrl = videoTagMatch[1]?.trim();
+        const effectiveUrl = customUrl || videoUrl;
+        if (effectiveUrl) {
+          result.push(
+            <ServiceVideoGuideCard
+              key={`video-tag-${lineIndex}`}
+              videoUrl={effectiveUrl}
+              serviceName={serviceName}
+            />
+          );
+          return;
+        }
+      }
+
       // Process each line for formatting
       const parts = [];
       let currentIndex = 0;
@@ -484,14 +507,29 @@ const DashboardOrderForm = React.memo(({
         </Button>
       </form>
 
-      {(selectedService?.description || selectedPackage?.description) && (
-        <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-          <p className="text-sm font-medium text-gray-900 mb-2">Description</p>
-          <div className="text-sm text-gray-700 leading-relaxed">
-            {formatDescription(selectedService?.description || selectedPackage?.description)}
+      {(selectedService?.description || selectedPackage?.description || selectedService?.video_url || selectedPackage?.video_url) && (() => {
+        const descText = selectedService?.description || selectedPackage?.description || '';
+        const videoUrl = selectedService?.video_url || selectedPackage?.video_url || '';
+        const serviceName = selectedService?.name || selectedPackage?.name || '';
+        const hasExplicitVideoTag = /\[(?:video|video_guide)/i.test(descText);
+
+        return (
+          <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+            <p className="text-sm font-medium text-gray-900 mb-2">Description</p>
+            {videoUrl && !hasExplicitVideoTag && (
+              <ServiceVideoGuideCard
+                videoUrl={videoUrl}
+                serviceName={serviceName}
+              />
+            )}
+            {descText && (
+              <div className="text-sm text-gray-700 leading-relaxed">
+                {formatDescription(descText, videoUrl, serviceName)}
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 });
