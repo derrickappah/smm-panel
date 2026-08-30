@@ -59,6 +59,7 @@ const parseVideoUrl = (rawUrl) => {
 
 const VideoModal = ({ videoUrl, title = 'Video Guide', onClose }) => {
   const [videoError, setVideoError] = useState(false);
+  const videoRef = useRef(null);
 
   // Prevent background scrolling on body when modal is open
   useEffect(() => {
@@ -82,6 +83,27 @@ const VideoModal = ({ videoUrl, title = 'Video Guide', onClose }) => {
   }, [onClose]);
 
   const videoInfo = useMemo(() => parseVideoUrl(videoUrl), [videoUrl]);
+
+  // Attempt smooth play on mount without throwing fatal errors on autoplay blocks
+  useEffect(() => {
+    if (videoInfo?.type === 'html5' && videoRef.current) {
+      const playPromise = videoRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {
+          // Autoplay was blocked by browser policy (e.g. unmuted on mobile).
+          // Video controls remain available for user to tap and play.
+        });
+      }
+    }
+  }, [videoInfo]);
+
+  const handleVideoError = () => {
+    // Only treat as fatal error if the video element has a genuine fatal network/decode error
+    const err = videoRef.current?.error;
+    if (err && (err.code === 4 || err.code === 3)) {
+      setVideoError(true);
+    }
+  };
 
   return createPortal(
     <div 
@@ -139,18 +161,22 @@ const VideoModal = ({ videoUrl, title = 'Video Guide', onClose }) => {
               )}
             </div>
           ) : (
-            <div className="w-full max-w-xl mx-auto flex items-center justify-center max-h-[60dvh] sm:max-h-[70dvh]">
-              <div className="relative w-full max-h-[60dvh] sm:max-h-[70dvh] rounded-2xl sm:rounded-3xl overflow-hidden bg-black shadow-2xl ring-1 ring-white/20 flex items-center justify-center">
+            <div className="w-full max-w-xl mx-auto flex flex-col items-center justify-center max-h-[65dvh] sm:max-h-[75dvh]">
+              <div className="relative w-full max-h-[65dvh] sm:max-h-[75dvh] rounded-2xl sm:rounded-3xl overflow-hidden bg-black shadow-2xl ring-1 ring-white/20 flex items-center justify-center">
                 <video
-                  src={videoInfo.url}
+                  ref={videoRef}
                   controls
-                  autoPlay
                   playsInline
                   webkit-playsinline="true"
-                  preload="auto"
-                  onError={() => setVideoError(true)}
-                  className="w-full max-h-[60dvh] sm:max-h-[70dvh] object-contain rounded-2xl"
+                  preload="metadata"
+                  crossOrigin="anonymous"
+                  onError={handleVideoError}
+                  className="w-full max-h-[65dvh] sm:max-h-[75dvh] object-contain rounded-2xl bg-black"
                 >
+                  <source src={videoInfo.url} type="video/mp4" />
+                  <source src={videoInfo.url} type="video/quicktime" />
+                  <source src={videoInfo.url} type="video/webm" />
+                  <source src={videoInfo.url} />
                   Your browser does not support the video tag.
                 </video>
               </div>
