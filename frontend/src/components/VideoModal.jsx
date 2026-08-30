@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState, useRef } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { X, ExternalLink, Play } from 'lucide-react';
+import { X, ExternalLink } from 'lucide-react';
 
 const parseVideoUrl = (rawUrl) => {
   if (!rawUrl) return null;
@@ -50,17 +50,14 @@ const parseVideoUrl = (rawUrl) => {
     };
   }
 
-  // Direct video file (mp4, webm, mov, ogg, etc.)
+  // Direct video file (mp4, webm, mov, ogg, Supabase storage, etc.)
   return {
-    type: 'html5',
+    type: 'direct',
     url: url
   };
 };
 
 const VideoModal = ({ videoUrl, title = 'Video Guide', onClose }) => {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const videoRef = useRef(null);
-
   // Prevent background scrolling on body when modal is open
   useEffect(() => {
     const originalOverflow = document.body.style.overflow;
@@ -84,15 +81,51 @@ const VideoModal = ({ videoUrl, title = 'Video Guide', onClose }) => {
 
   const videoInfo = useMemo(() => parseVideoUrl(videoUrl), [videoUrl]);
 
-  const handlePlayToggle = () => {
-    if (!videoRef.current) return;
-    if (videoRef.current.paused) {
-      videoRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
-    } else {
-      videoRef.current.pause();
-      setIsPlaying(false);
+  // Generate self-contained HTML document for direct video files to guarantee native player execution
+  const directVideoDoc = useMemo(() => {
+    if (!videoUrl || videoInfo?.type !== 'direct') return null;
+    const cleanUrl = videoInfo?.url || videoUrl;
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      background-color: #000000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
     }
-  };
+    video {
+      width: 100%;
+      height: 100%;
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      background: #000000;
+    }
+  </style>
+</head>
+<body>
+  <video 
+    src="${cleanUrl}" 
+    controls 
+    autoplay 
+    playsinline 
+    webkit-playsinline="true"
+    preload="auto"
+  >
+    <source src="${cleanUrl}">
+    Your browser does not support playing this video.
+  </video>
+</body>
+</html>`;
+  }, [videoUrl, videoInfo]);
 
   return createPortal(
     <div 
@@ -121,65 +154,44 @@ const VideoModal = ({ videoUrl, title = 'Video Guide', onClose }) => {
         </button>
       </header>
 
-      {/* Video Player Center Area - Contained and isolated to prevent overlap */}
+      {/* Video Player Center Area - Isolated sandbox iframe container */}
       <main className="relative z-10 flex-1 flex flex-col items-center justify-center p-3 sm:p-6 min-h-0 w-full overflow-hidden my-auto">
-        {videoInfo?.type === 'youtube' || videoInfo?.type === 'vimeo' || videoInfo?.type === 'loom' ? (
-          <div className={`w-full ${videoInfo.isShort ? 'max-w-[320px] aspect-[9/16] max-h-[60dvh]' : 'max-w-3xl aspect-video max-h-[60dvh] sm:max-h-[70dvh]'} mx-auto flex flex-col items-center justify-center`}>
-            <div className="relative w-full h-full rounded-2xl sm:rounded-3xl overflow-hidden bg-black shadow-2xl ring-1 ring-white/20 animate-in zoom-in-95 duration-200">
+        <div className={`w-full ${videoInfo?.isShort ? 'max-w-[340px] aspect-[9/16] max-h-[65dvh]' : 'max-w-3xl aspect-video max-h-[65dvh] sm:max-h-[75dvh]'} mx-auto flex flex-col items-center justify-center`}>
+          <div className="relative w-full h-full rounded-2xl sm:rounded-3xl overflow-hidden bg-black shadow-2xl ring-1 ring-white/20 animate-in zoom-in-95 duration-200">
+            {videoInfo?.type === 'direct' ? (
               <iframe
-                src={videoInfo.embedUrl}
+                srcDoc={directVideoDoc}
                 title={title}
-                className="absolute inset-0 w-full h-full border-0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                className="absolute inset-0 w-full h-full border-0 bg-black"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+                allowFullScreen
+                loading="eager"
+              />
+            ) : (
+              <iframe
+                src={videoInfo?.embedUrl}
+                title={title}
+                className="absolute inset-0 w-full h-full border-0 bg-black"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen; web-share"
                 allowFullScreen
                 referrerPolicy="strict-origin-when-cross-origin"
                 loading="eager"
               />
-            </div>
-            {videoInfo.type === 'youtube' && (
-              <a
-                href={videoInfo.directUrl || videoUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-2.5 inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-white/10 hover:bg-white/20 active:bg-white/30 text-white/90 hover:text-white text-[11px] sm:text-xs font-medium rounded-full transition-all border border-white/15"
-              >
-                <ExternalLink size={12} />
-                <span>Tap here if video is blocked by YouTube</span>
-              </a>
             )}
           </div>
-        ) : (
-          <div className="w-full max-w-xl mx-auto flex flex-col items-center justify-center max-h-[65dvh] sm:max-h-[75dvh]">
-            <div className="relative w-full max-h-[65dvh] sm:max-h-[75dvh] rounded-2xl sm:rounded-3xl overflow-hidden bg-black shadow-2xl ring-1 ring-white/20 flex items-center justify-center group">
-              <video
-                ref={videoRef}
-                src={videoInfo?.url || videoUrl}
-                controls
-                playsInline
-                webkit-playsinline="true"
-                preload="auto"
-                onPlay={() => setIsPlaying(true)}
-                onPause={() => setIsPlaying(false)}
-                className="w-full max-h-[65dvh] sm:max-h-[75dvh] object-contain rounded-2xl bg-black cursor-pointer"
-                onClick={handlePlayToggle}
-              >
-                Your browser does not support the video tag.
-              </video>
 
-              {/* Big Tap to Play Button when paused */}
-              {!isPlaying && (
-                <button
-                  type="button"
-                  onClick={handlePlayToggle}
-                  className="absolute inset-0 m-auto w-16 h-16 sm:w-18 sm:h-18 rounded-full bg-indigo-600/90 hover:bg-indigo-600 active:bg-indigo-700 text-white flex items-center justify-center shadow-2xl shadow-indigo-500/50 hover:scale-110 active:scale-90 transition-all cursor-pointer z-20 pointer-events-auto"
-                  aria-label="Play video"
-                >
-                  <Play className="w-8 h-8 sm:w-9 sm:h-9 fill-current ml-1" />
-                </button>
-              )}
-            </div>
-          </div>
-        )}
+          {videoInfo?.type === 'youtube' && (
+            <a
+              href={videoInfo.directUrl || videoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2.5 inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-white/10 hover:bg-white/20 active:bg-white/30 text-white/90 hover:text-white text-[11px] sm:text-xs font-medium rounded-full transition-all border border-white/15"
+            >
+              <ExternalLink size={12} />
+              <span>Tap here if video is blocked by YouTube</span>
+            </a>
+          )}
+        </div>
       </main>
       
       {/* Bottom Actions - High z-index & iOS safe-area bottom padding */}
@@ -195,7 +207,7 @@ const VideoModal = ({ videoUrl, title = 'Video Guide', onClose }) => {
             className="px-4 py-2 bg-white/15 hover:bg-white/25 active:bg-white/30 text-white text-xs sm:text-sm font-medium rounded-full transition-colors flex items-center gap-1.5 shadow"
           >
             <ExternalLink className="w-3.5 h-3.5" />
-            <span>Open Link</span>
+            <span>Open in New Tab</span>
           </a>
         )}
         <button
