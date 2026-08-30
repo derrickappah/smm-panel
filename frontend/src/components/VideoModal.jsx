@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, ExternalLink } from 'lucide-react';
+import { X, ExternalLink, Loader2, Play } from 'lucide-react';
 
 const parseVideoUrl = (rawUrl) => {
   if (!rawUrl) return null;
@@ -58,6 +58,11 @@ const parseVideoUrl = (rawUrl) => {
 };
 
 const VideoModal = ({ videoUrl, title = 'Video Guide', onClose }) => {
+  const [blobUrl, setBlobUrl] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasError, setHasError] = useState(false);
+  const videoRef = useRef(null);
+
   // Prevent background scrolling on body when modal is open
   useEffect(() => {
     const originalOverflow = document.body.style.overflow;
@@ -81,7 +86,51 @@ const VideoModal = ({ videoUrl, title = 'Video Guide', onClose }) => {
 
   const videoInfo = useMemo(() => parseVideoUrl(videoUrl), [videoUrl]);
 
-  const playerSrc = videoInfo?.embedUrl || videoInfo?.url || videoUrl;
+  // Buffer video as local in-memory blob to completely bypass mobile cross-origin & range header restrictions
+  useEffect(() => {
+    if (!videoUrl || videoInfo?.type !== 'direct') return;
+
+    let isMounted = true;
+    let createdUrl = null;
+    setIsLoading(true);
+    setHasError(false);
+
+    const directSrc = videoInfo.url || videoUrl;
+
+    fetch(directSrc, { mode: 'cors' })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Fetch failed with status ' + response.status);
+        return response.blob();
+      })
+      .then((blob) => {
+        if (isMounted) {
+          createdUrl = URL.createObjectURL(blob);
+          setBlobUrl(createdUrl);
+          setIsLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.warn('Blob prefetch fell back to direct streaming:', err);
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+      if (createdUrl) {
+        URL.revokeObjectURL(createdUrl);
+      }
+    };
+  }, [videoUrl, videoInfo]);
+
+  const activeVideoSource = blobUrl || videoInfo?.url || videoUrl;
+
+  const handleManualPlay = () => {
+    if (videoRef.current) {
+      videoRef.current.play().catch((err) => console.log('Playback error:', err));
+    }
+  };
 
   return createPortal(
     <div 
@@ -115,19 +164,50 @@ const VideoModal = ({ videoUrl, title = 'Video Guide', onClose }) => {
         <div className={`w-full ${videoInfo?.isShort ? 'max-w-[340px] aspect-[9/16] max-h-[65dvh]' : 'max-w-3xl aspect-video max-h-[65dvh] sm:max-h-[75dvh]'} mx-auto flex flex-col items-center justify-center`}>
           <div className="relative w-full h-full rounded-2xl sm:rounded-3xl overflow-hidden bg-black shadow-2xl ring-1 ring-white/20 animate-in zoom-in-95 duration-200 flex items-center justify-center">
             {videoInfo?.type === 'direct' ? (
-              <video
-                key={videoUrl}
-                src={videoInfo.url || videoUrl}
-                controls
-                autoPlay
-                playsInline
-                webkit-playsinline="true"
-                controlsList="nodownload"
-                className="w-full h-full max-h-[65dvh] sm:max-h-[75dvh] object-contain bg-black"
-              >
-                <source src={videoInfo.url || videoUrl} type="video/mp4" />
-                Your browser does not support the video tag.
-              </video>
+              <>
+                {isLoading && !blobUrl && (
+                  <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/70 backdrop-blur-xs gap-2 text-white">
+                    <Loader2 className="w-8 h-8 animate-spin text-indigo-400" />
+                    <span className="text-xs text-white/80 font-medium">Loading video guide...</span>
+                  </div>
+                )}
+                
+                {hasError ? (
+                  <div className="flex flex-col items-center justify-center p-6 text-center text-white">
+                    <p className="text-sm font-semibold mb-2">Video player encountered an issue on this browser</p>
+                    <a
+                      href={videoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-full text-xs font-semibold flex items-center gap-1.5 shadow-lg mt-2"
+                    >
+                      <ExternalLink size={14} />
+                      <span>Play Video in Fullscreen Tab</span>
+                    </a>
+                  </div>
+                ) : (
+                  <video
+                    ref={videoRef}
+                    key={activeVideoSource}
+                    src={activeVideoSource}
+                    controls
+                    playsInline
+                    webkit-playsinline="true"
+                    preload="auto"
+                    controlsList="nodownload"
+                    className="w-full h-full max-h-[65dvh] sm:max-h-[75dvh] object-contain bg-black"
+                    onError={(e) => {
+                      console.warn('Video element error:', e);
+                      // If blob failed, try direct url before erroring
+                      if (blobUrl) {
+                        setBlobUrl(null);
+                      } else {
+                        setHasError(true);
+                      }
+                    }}
+                  />
+                )}
+              </>
             ) : (
               <iframe
                 src={videoInfo?.embedUrl}
