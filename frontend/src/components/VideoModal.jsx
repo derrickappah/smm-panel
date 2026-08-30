@@ -110,19 +110,35 @@ const VideoModal = ({ videoUrl, title = 'Video Guide', onClose }) => {
         </button>
       </header>
 
-      {/* Video Player Center Area - Direct iframe player container */}
+      {/* Video Player Center Area */}
       <main className="relative z-10 flex-1 flex flex-col items-center justify-center p-3 sm:p-6 min-h-0 w-full overflow-hidden my-auto">
         <div className={`w-full ${videoInfo?.isShort ? 'max-w-[340px] aspect-[9/16] max-h-[65dvh]' : 'max-w-3xl aspect-video max-h-[65dvh] sm:max-h-[75dvh]'} mx-auto flex flex-col items-center justify-center`}>
-          <div className="relative w-full h-full rounded-2xl sm:rounded-3xl overflow-hidden bg-black shadow-2xl ring-1 ring-white/20 animate-in zoom-in-95 duration-200">
-            <iframe
-              src={playerSrc}
-              title={title}
-              className="absolute inset-0 w-full h-full border-0 bg-black"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen; web-share"
-              allowFullScreen
-              referrerPolicy="strict-origin-when-cross-origin"
-              loading="eager"
-            />
+          <div className="relative w-full h-full rounded-2xl sm:rounded-3xl overflow-hidden bg-black shadow-2xl ring-1 ring-white/20 animate-in zoom-in-95 duration-200 flex items-center justify-center">
+            {videoInfo?.type === 'direct' ? (
+              <video
+                key={videoUrl}
+                src={videoInfo.url || videoUrl}
+                controls
+                autoPlay
+                playsInline
+                webkit-playsinline="true"
+                controlsList="nodownload"
+                className="w-full h-full max-h-[65dvh] sm:max-h-[75dvh] object-contain bg-black"
+              >
+                <source src={videoInfo.url || videoUrl} type="video/mp4" />
+                Your browser does not support the video tag.
+              </video>
+            ) : (
+              <iframe
+                src={videoInfo?.embedUrl}
+                title={title}
+                className="absolute inset-0 w-full h-full border-0 bg-black"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen; web-share"
+                allowFullScreen
+                referrerPolicy="strict-origin-when-cross-origin"
+                loading="eager"
+              />
+            )}
           </div>
 
           {videoInfo?.type === 'youtube' && (
