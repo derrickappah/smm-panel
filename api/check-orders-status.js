@@ -147,13 +147,23 @@ export default async function handler(req, res) {
         console.log(`[StatusCheck] Request by ${user.id} (isAdmin: ${isAdmin}) for ${orderIds.length} orders`);
 
         // 2. Fetch orders from database (restricted by client permissions)
-        const { data: orders, error: fetchError } = await dbClient
+        const { data: rawOrders, error: fetchError } = await dbClient
             .from('orders')
             .select('*')
             .in('id', orderIds.slice(0, 100)); // Increased limit to 100
 
         if (fetchError) throw fetchError;
-        if (!orders || orders.length === 0) {
+        let orders = rawOrders || [];
+        if (orders.length === 0) {
+            const { data: comboOrders } = await dbClient
+                .from('combo_parent_orders')
+                .select('id, user_id, status')
+                .in('id', orderIds.slice(0, 100));
+            if (comboOrders && comboOrders.length > 0) {
+                const comboCheckHandler = (await import('./order/check-combo-status.js')).default;
+                req.body = { parent_order_id: comboOrders[0].id };
+                return comboCheckHandler(req, res);
+            }
             return res.status(404).json({ error: 'No orders found or access denied' });
         }
 

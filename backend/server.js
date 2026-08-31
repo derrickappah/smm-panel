@@ -1274,6 +1274,29 @@ app.post('/api/admin/orders-list', async (req, res) => {
   }
 });
 
+// Check Combo Orders Status Endpoint
+app.post('/api/order/check-combo-status', async (req, res) => {
+  try {
+    const handler = (await import('../api/order/check-combo-status.js')).default;
+    await handler(req, res);
+  } catch (error) {
+    console.error('Error in /api/order/check-combo-status endpoint:', error);
+    res.status(500).json({ error: 'Server action failed', message: error.message });
+  }
+});
+
+// Place Combo Order Endpoint
+app.post('/api/order/place-combo-order', async (req, res) => {
+  try {
+    const handler = (await import('../api/order/place-combo-order.js')).default;
+    await handler(req, res);
+  } catch (error) {
+    console.error('Error in /api/order/place-combo-order endpoint:', error);
+    res.status(500).json({ error: 'Server action failed', message: error.message });
+  }
+});
+
+
 // Global Centralized Express Error Handler (OWASP A09 Information Leak Prevention)
 app.use((err, req, res, next) => {
   console.error('[UNHANDLED EXPRESS ERROR]', {

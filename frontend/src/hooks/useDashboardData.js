@@ -89,43 +89,61 @@ const fetchRecentOrders = async () => {
   const { data: { user: authUser } } = await supabase.auth.getUser();
   if (!authUser) return { orders: [], count: 0 };
 
-  const { data, error, count } = await supabase
-    .from('orders')
-    .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, created_at, completed_at, refund_status, total_cost, last_status_check, promotion_packages(name, platform, service_type)', { count: 'exact' })
-    .eq('user_id', authUser.id)
-    .order('created_at', { ascending: false })
-    .limit(1);
+  try {
+    const [ordersRes, comboRes] = await Promise.all([
+      supabase
+        .from('orders')
+        .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, component_provider_order_ids, created_at, completed_at, refund_status, total_cost, last_status_check, is_reward, promotion_packages(name, platform, service_type, is_combo), services(id, name, platform, is_combo)', { count: 'exact' })
+        .eq('user_id', authUser.id)
+        .order('created_at', { ascending: false })
+        .limit(5),
+      supabase
+        .from('combo_parent_orders')
+        .select('*, combo_child_orders(*), combo_services(name, category)')
+        .eq('user_id', authUser.id)
+        .order('created_at', { ascending: false })
+        .limit(5)
+    ]);
 
-  if (error) {
-    if (error.code === 'PGRST301' || error.message?.includes('500') || error.message?.includes('Internal Server Error')) {
-      console.warn('Orders table may not exist or RLS policy issue:', error.message);
-      return { orders: [], count: 0 };
-    }
-    throw error;
-  }
-
-  const orders = data || [];
-  const totalCount = count || 0;
-
-  // Check SMMGen status for orders using optimized batch utility
-  if (orders.length > 0) {
-    await checkOrdersStatusBatch(orders, {
-      concurrency: 3, // Lower concurrency for dashboard (only 5 orders)
-      minIntervalMinutes: 5
+    const regularOrders = (ordersRes.data || []).map(order => {
+      const hasComponents = Array.isArray(order.component_provider_order_ids) && order.component_provider_order_ids.length > 1;
+      return {
+        ...order,
+        is_combo: !!(order.services?.is_combo || order.promotion_packages?.is_combo || hasComponents),
+        child_orders: hasComponents ? order.component_provider_order_ids : []
+      };
     });
 
-    // Fetch updated orders to return latest status
-    const { data: updatedData } = await supabase
-      .from('orders')
-      .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, created_at, completed_at, refund_status, total_cost, last_status_check, promotion_packages(name, platform, service_type)')
-      .eq('user_id', authUser.id)
-      .in('id', orders.map(o => o.id))
-      .order('created_at', { ascending: false });
+    const comboOrders = (comboRes.data || []).map(cOrder => ({
+      id: cOrder.id,
+      user_id: cOrder.user_id,
+      order_number: cOrder.order_number,
+      link: cOrder.link,
+      quantity: cOrder.quantity || 1,
+      total_cost: parseFloat(cOrder.selling_price || 0),
+      status: cOrder.status || 'pending',
+      created_at: cOrder.created_at,
+      is_combo: true,
+      is_builder_combo: true,
+      child_orders: cOrder.combo_child_orders || [],
+      services: {
+        name: cOrder.combo_service_name,
+        platform: cOrder.combo_services?.category || 'Combo',
+        service_type: 'Combo Package'
+      }
+    }));
 
-    return { orders: updatedData || orders, count: totalCount };
+    const combined = [...regularOrders, ...comboOrders].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+
+    const totalCount = (ordersRes.count || 0) + (comboOrders.length || 0);
+
+    return { orders: combined.slice(0, 5), count: totalCount };
+  } catch (error) {
+    console.warn('Error fetching recent orders in dashboard:', error.message);
+    return { orders: [], count: 0 };
   }
-
-  return { orders, count: totalCount };
 };
 
 // Removed redundant fetchTotalOrderCount function
