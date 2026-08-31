@@ -5,11 +5,12 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Plus, Edit, Trash2, Bell, X, AlertCircle, CheckCircle, ExternalLink, Image as ImageIcon, Video, List, Info } from 'lucide-react';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Search, Plus, Edit, Trash2, Bell, X, CheckCircle, Image as ImageIcon, Video, List, Info, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAdminServiceNotifications } from '@/hooks/useAdminServiceNotifications';
 import { useAdminServices } from '@/hooks/useAdminServices';
+import { useAdminPromotionPackages } from '@/hooks/useAdminPromotionPackages';
 import { useDebounce } from '@/hooks/useDebounce';
 import { cn } from '@/lib/utils';
 
@@ -21,9 +22,12 @@ const AdminServiceNotifications = () => {
 
   const { notifications, isLoading, createNotification, updateNotification, deleteNotification } = useAdminServiceNotifications();
   const { data: services = [] } = useAdminServices();
+  const { data: promoPackages = [] } = useAdminPromotionPackages();
 
   const [formData, setFormData] = useState({
-    service_id: '',
+    target_value: '',
+    service_id: null,
+    promotion_package_id: null,
     message: '',
     title: 'Important Notification',
     subtitle: 'Just now',
@@ -39,16 +43,53 @@ const AdminServiceNotifications = () => {
 
   const filteredNotifications = notifications.filter(n => {
     const serviceName = n.service?.name?.toLowerCase() || '';
+    const promoName = n.promotion_package?.name?.toLowerCase() || '';
+    const platform = (n.promotion_package?.platform || n.service?.platform || '').toLowerCase();
     const message = n.message?.toLowerCase() || '';
     const title = n.title?.toLowerCase() || '';
     const search = debouncedSearch.toLowerCase();
-    return serviceName.includes(search) || message.includes(search) || title.includes(search);
+    return serviceName.includes(search) || promoName.includes(search) || platform.includes(search) || message.includes(search) || title.includes(search);
   });
+
+  const handleTargetChange = (value) => {
+    if (value.startsWith('promo:')) {
+      const packageId = value.replace('promo:', '');
+      setFormData(prev => ({
+        ...prev,
+        target_value: value,
+        promotion_package_id: packageId,
+        service_id: null
+      }));
+    } else if (value.startsWith('service:')) {
+      const serviceId = value.replace('service:', '');
+      setFormData(prev => ({
+        ...prev,
+        target_value: value,
+        service_id: serviceId,
+        promotion_package_id: null
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        target_value: '',
+        service_id: null,
+        promotion_package_id: null
+      }));
+    }
+  };
 
   const handleEdit = (notification) => {
     setEditingNotification(notification);
+    const targetValue = notification.promotion_package_id 
+      ? `promo:${notification.promotion_package_id}`
+      : notification.service_id 
+        ? `service:${notification.service_id}` 
+        : '';
+
     setFormData({
-      service_id: notification.service_id,
+      target_value: targetValue,
+      service_id: notification.service_id || null,
+      promotion_package_id: notification.promotion_package_id || null,
       message: notification.message,
       title: notification.title || 'Important Notification',
       subtitle: notification.subtitle || 'Just now',
@@ -93,14 +134,15 @@ const AdminServiceNotifications = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.service_id) {
-      toast.error('Please select a service');
+    if (!formData.service_id && !formData.promotion_package_id) {
+      toast.error('Please select a service or promo package');
       return;
     }
 
     // Clean up empty steps
     const cleanedSteps = formData.instructions_steps.filter(s => s.trim() !== '');
-    const dataToSubmit = { ...formData, instructions_steps: cleanedSteps };
+    const { target_value, ...payload } = formData;
+    const dataToSubmit = { ...payload, instructions_steps: cleanedSteps };
 
     try {
       if (editingNotification) {
@@ -118,7 +160,9 @@ const AdminServiceNotifications = () => {
 
   const resetForm = () => {
     setFormData({
-      service_id: '',
+      target_value: '',
+      service_id: null,
+      promotion_package_id: null,
       message: '',
       title: 'Important Notification',
       subtitle: 'Just now',
@@ -184,20 +228,43 @@ const AdminServiceNotifications = () => {
                   </div>
                   
                   <div>
-                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Target Service</Label>
+                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Target Service / Promo</Label>
                     <Select 
-                      value={formData.service_id} 
-                      onValueChange={(value) => setFormData({ ...formData, service_id: value })}
+                      value={formData.target_value} 
+                      onValueChange={handleTargetChange}
                     >
                       <SelectTrigger className="rounded-xl mt-1 h-12 border-gray-100">
-                        <SelectValue placeholder="Select a service to target" />
+                        <SelectValue placeholder="Select a service or promo package to target" />
                       </SelectTrigger>
-                      <SelectContent className="rounded-xl">
-                        {services.map((s) => (
-                          <SelectItem key={s.id} value={s.id}>
-                            [{s.platform.toUpperCase()}] {s.name}
-                          </SelectItem>
-                        ))}
+                      <SelectContent className="rounded-xl max-h-[300px]">
+                        {promoPackages.length > 0 && (
+                          <SelectGroup>
+                            <SelectLabel className="text-xs font-black text-amber-600 uppercase tracking-wider px-2 py-1.5 flex items-center gap-1.5">
+                              <Sparkles className="w-3.5 h-3.5" /> Promo Services (Packages)
+                            </SelectLabel>
+                            {promoPackages.map((pkg) => (
+                              <SelectItem key={`promo-${pkg.id}`} value={`promo:${pkg.id}`}>
+                                <span className="font-bold text-amber-700 mr-1.5">[PROMO]</span>
+                                <span className="text-gray-500 font-semibold mr-1">[{pkg.platform?.toUpperCase() || 'PROMO'}]</span>
+                                <span className="font-medium text-gray-900">{pkg.name}</span>
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        )}
+
+                        {promoPackages.length > 0 && services.length > 0 && <SelectSeparator />}
+
+                        <SelectGroup>
+                          <SelectLabel className="text-xs font-black text-indigo-600 uppercase tracking-wider px-2 py-1.5 flex items-center gap-1.5">
+                            <List className="w-3.5 h-3.5" /> Regular Services
+                          </SelectLabel>
+                          {services.map((s) => (
+                            <SelectItem key={`service-${s.id}`} value={`service:${s.id}`}>
+                              <span className="text-gray-500 font-semibold mr-1">[{s.platform?.toUpperCase()}]</span>
+                              <span className="font-medium text-gray-900">{s.name}</span>
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
                       </SelectContent>
                     </Select>
                   </div>
@@ -377,7 +444,7 @@ const AdminServiceNotifications = () => {
         <div className="relative">
           <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-300 w-5 h-5" />
           <Input
-            placeholder="Search by service or title..."
+            placeholder="Search by service, promo package, or title..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-12 rounded-2xl h-14 border-gray-100 focus:border-indigo-300 transition-all shadow-sm text-base"
@@ -408,92 +475,107 @@ const AdminServiceNotifications = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-5">
-          {filteredNotifications.map((n) => (
-            <div key={n.id} className={cn(
-              "group relative border rounded-[2rem] p-6 transition-all duration-500 hover:shadow-2xl hover:shadow-indigo-500/10",
-              n.is_active ? 'border-indigo-50 bg-white' : 'border-gray-200 bg-gray-50/30 grayscale'
-            )}>
-              <div className="flex flex-col md:flex-row items-start justify-between gap-6">
-                <div className="flex-1 space-y-5">
-                  <div className="flex items-center gap-4 flex-wrap">
-                    <div className={cn(
-                      "w-14 h-14 rounded-3xl flex items-center justify-center shadow-inner transition-all group-hover:scale-110",
-                      n.is_active ? "bg-indigo-50 text-indigo-600" : "bg-gray-100 text-gray-400"
-                    )}>
-                      <Bell className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className="text-sm font-black text-gray-900 uppercase tracking-tight">
-                          {n.service?.name}
-                        </span>
-                        <Badge variant="outline" className="text-[10px] font-black px-2 py-0 border-gray-100 text-gray-400 uppercase">
-                          {n.service?.platform}
-                        </Badge>
-                        {n.is_active ? (
-                          <div className="flex items-center gap-1.5 px-2 py-0.5 bg-green-50 text-green-600 rounded-full text-[10px] font-black border border-green-100">
-                            <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                            LIVE
-                          </div>
-                        ) : (
-                          <div className="px-2 py-0.5 bg-gray-100 text-gray-400 rounded-full text-[10px] font-black border border-gray-200">
-                            INACTIVE
-                          </div>
-                        )}
+          {filteredNotifications.map((n) => {
+            const isPromo = !!n.promotion_package_id;
+            const targetName = isPromo ? n.promotion_package?.name : n.service?.name;
+            const targetPlatform = isPromo ? n.promotion_package?.platform : n.service?.platform;
+
+            return (
+              <div key={n.id} className={cn(
+                "group relative border rounded-[2rem] p-6 transition-all duration-500 hover:shadow-2xl hover:shadow-indigo-500/10",
+                n.is_active ? 'border-indigo-50 bg-white' : 'border-gray-200 bg-gray-50/30 grayscale'
+              )}>
+                <div className="flex flex-col md:flex-row items-start justify-between gap-6">
+                  <div className="flex-1 space-y-5">
+                    <div className="flex items-center gap-4 flex-wrap">
+                      <div className={cn(
+                        "w-14 h-14 rounded-3xl flex items-center justify-center shadow-inner transition-all group-hover:scale-110",
+                        n.is_active 
+                          ? isPromo ? "bg-amber-50 text-amber-600" : "bg-indigo-50 text-indigo-600"
+                          : "bg-gray-100 text-gray-400"
+                      )}>
+                        {isPromo ? <Sparkles className="w-6 h-6" /> : <Bell className="w-6 h-6" />}
                       </div>
-                      <h4 className="text-lg font-black text-gray-900 tracking-tight leading-tight">{n.title}</h4>
-                      <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">{n.subtitle}</p>
+                      <div>
+                        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                          {isPromo && (
+                            <Badge className="bg-amber-100 hover:bg-amber-100 text-amber-800 border-amber-200 text-[10px] font-black px-2 py-0 uppercase">
+                              PROMO SERVICE
+                            </Badge>
+                          )}
+                          <span className="text-sm font-black text-gray-900 uppercase tracking-tight">
+                            {targetName || (isPromo ? 'Promo Package' : 'Service')}
+                          </span>
+                          {targetPlatform && (
+                            <Badge variant="outline" className="text-[10px] font-black px-2 py-0 border-gray-100 text-gray-400 uppercase">
+                              {targetPlatform}
+                            </Badge>
+                          )}
+                          {n.is_active ? (
+                            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-green-50 text-green-600 rounded-full text-[10px] font-black border border-green-100">
+                              <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                              LIVE
+                            </div>
+                          ) : (
+                            <div className="px-2 py-0.5 bg-gray-100 text-gray-400 rounded-full text-[10px] font-black border border-gray-200">
+                              INACTIVE
+                            </div>
+                          )}
+                        </div>
+                        <h4 className="text-lg font-black text-gray-900 tracking-tight leading-tight">{n.title}</h4>
+                        <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">{n.subtitle}</p>
+                      </div>
                     </div>
-                  </div>
-                  
-                  <div className="bg-gray-50/50 rounded-2xl p-5 border border-gray-100/50 relative overflow-hidden">
-                    <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500/20" />
-                    <p className="text-sm text-gray-700 leading-relaxed font-medium italic">
-                      "{n.message}"
-                    </p>
+                    
+                    <div className="bg-gray-50/50 rounded-2xl p-5 border border-gray-100/50 relative overflow-hidden">
+                      <div className={cn("absolute top-0 left-0 w-1 h-full", isPromo ? "bg-amber-500/30" : "bg-indigo-500/20")} />
+                      <p className="text-sm text-gray-700 leading-relaxed font-medium italic">
+                        "{n.message}"
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-6 text-[10px] font-black text-gray-400 uppercase tracking-widest flex-wrap">
+                      <div className="flex items-center gap-2 text-indigo-600">
+                        <CheckCircle className="w-3.5 h-3.5" />
+                        <span>{n.acknowledgment_count} ACKNOWLEDGMENTS</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <List className="w-3.5 h-3.5" />
+                        <span>{Array.isArray(n.instructions_steps) ? n.instructions_steps.length : 0} STEPS</span>
+                      </div>
+                      {n.show_video && n.video_url && (
+                        <div className="flex items-center gap-2 text-red-400">
+                          <Video className="w-3.5 h-3.5" />
+                          <span>VIDEO ATTACHED</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                    <div className="flex items-center gap-2 text-indigo-600">
-                      <CheckCircle className="w-3.5 h-3.5" />
-                      <span>{n.acknowledgment_count} ACKNOWLEDGMENTS</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <List className="w-3.5 h-3.5" />
-                      <span>{Array.isArray(n.instructions_steps) ? n.instructions_steps.length : 0} STEPS</span>
-                    </div>
-                    {n.show_video && n.video_url && (
-                      <div className="flex items-center gap-2 text-red-400">
-                        <Video className="w-3.5 h-3.5" />
-                        <span>VIDEO ATTACHED</span>
-                      </div>
-                    )}
+                  <div className="flex md:flex-col items-center gap-3 self-end md:self-start">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => handleEdit(n)}
+                      className="h-12 w-12 rounded-2xl border-gray-100 hover:border-indigo-200 hover:bg-indigo-50 text-indigo-600 transition-all shadow-sm group-hover:bg-indigo-600 group-hover:text-white group-hover:border-indigo-600"
+                      title="Edit"
+                    >
+                      <Edit className="w-5 h-5" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => handleDelete(n.id)}
+                      className="h-12 w-12 rounded-2xl text-red-400 hover:text-white hover:bg-red-500 border-gray-100 hover:border-red-500 transition-all shadow-sm"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </Button>
                   </div>
-                </div>
-
-                <div className="flex md:flex-col items-center gap-3 self-end md:self-start">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => handleEdit(n)}
-                    className="h-12 w-12 rounded-2xl border-gray-100 hover:border-indigo-200 hover:bg-indigo-50 text-indigo-600 transition-all shadow-sm group-hover:bg-indigo-600 group-hover:text-white group-hover:border-indigo-600"
-                    title="Edit"
-                  >
-                    <Edit className="w-5 h-5" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => handleDelete(n.id)}
-                    className="h-12 w-12 rounded-2xl text-red-400 hover:text-white hover:bg-red-500 border-gray-100 hover:border-red-500 transition-all shadow-sm"
-                    title="Delete"
-                  >
-                    <Trash2 className="w-5 h-5" />
-                  </Button>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

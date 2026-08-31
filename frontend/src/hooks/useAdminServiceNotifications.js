@@ -14,7 +14,8 @@ export const useAdminServiceNotifications = () => {
         .from('service_notifications')
         .select(`
           *,
-          service:services(id, name, platform)
+          service:services(id, name, platform),
+          promotion_package:promotion_packages(id, name, platform)
         `)
         .order('created_at', { ascending: false });
 
