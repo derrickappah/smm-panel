@@ -3312,9 +3312,9 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
         {/* Stats Cards */}
         <DashboardStats user={displayUser} orderCount={totalOrderCount} />
 
-        <div className="grid lg:grid-cols-2 gap-6 lg:gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 items-start w-full min-w-0">
           {/* Add Funds */}
-          <div id="deposit-section">
+          <div id="deposit-section" className="w-full min-w-0">
             <DashboardDeposit
               depositMethod={depositMethod}
               setDepositMethod={setDepositMethod}

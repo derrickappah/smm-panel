@@ -28,13 +28,13 @@ const ServiceVideoGuideCard = ({
             setIsOpen(true);
           }
         }}
-        className={`group my-3 p-3.5 sm:p-4 rounded-2xl bg-[#f5f0ff] hover:bg-[#ede4ff] border border-purple-200/90 hover:border-purple-300 transition-all duration-200 cursor-pointer shadow-sm active:scale-[0.99] text-left select-none ${className}`}
+        className={`group my-3 p-3.5 sm:p-4 rounded-2xl bg-[#f5f0ff] hover:bg-[#ede4ff] border border-purple-200/90 hover:border-purple-300 transition-all duration-200 cursor-pointer shadow-sm active:scale-[0.99] text-left select-none w-full min-w-0 max-w-full overflow-hidden ${className}`}
       >
-        <div className="flex items-center gap-3.5">
+        <div className="flex items-center gap-3 sm:gap-3.5 min-w-0 w-full">
           {/* Purple circular/rounded badge with clapperboard/film & play icon */}
-          <div className="relative shrink-0 w-13 h-13 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-600 flex items-center justify-center shadow-md shadow-indigo-300/40 group-hover:scale-105 transition-transform duration-200">
+          <div className="relative shrink-0 w-11 h-11 sm:w-13 sm:h-13 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-600 flex items-center justify-center shadow-md shadow-indigo-300/40 group-hover:scale-105 transition-transform duration-200">
             <svg
-              className="w-7 h-7 sm:w-8 sm:h-8 text-white"
+              className="w-6 h-6 sm:w-7 sm:h-7 text-white"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -52,11 +52,11 @@ const ServiceVideoGuideCard = ({
           </div>
 
           <div className="flex-1 min-w-0 pr-1">
-            <div className="flex items-center justify-between gap-1">
-              <h4 className="text-[15px] sm:text-base font-bold text-indigo-950 tracking-tight truncate group-hover:text-indigo-600 transition-colors">
+            <div className="flex items-center justify-between gap-1 min-w-0">
+              <h4 className="text-[14px] sm:text-[15px] font-bold text-indigo-950 tracking-tight truncate group-hover:text-indigo-600 transition-colors">
                 {title}
               </h4>
-              <ChevronRight className="w-5 h-5 text-indigo-400 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all shrink-0" />
+              <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-400 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all shrink-0" />
             </div>
             <p className="text-xs sm:text-[13px] text-gray-600 font-medium truncate mt-0.5">
               {subtitle}
@@ -66,9 +66,9 @@ const ServiceVideoGuideCard = ({
 
         {/* Footer recommendation note matching screenshot */}
         {badgeText && (
-          <div className="flex items-center gap-1.5 pt-2.5 mt-2.5 border-t border-purple-100/90 text-xs font-semibold text-indigo-600">
+          <div className="flex items-center gap-1.5 pt-2 mt-2.5 border-t border-purple-100/90 text-xs font-semibold text-indigo-600 min-w-0">
             <Video className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-            <span className="truncate">{badgeText}</span>
+            <span className="truncate min-w-0">{badgeText}</span>
           </div>
         )}
       </div>

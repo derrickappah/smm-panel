@@ -208,7 +208,7 @@ const DashboardOrderForm = React.memo(({
         const boldMatch = line.substring(currentIndex).match(/^\*\*([^*]+)\*\*/);
         if (boldMatch) {
           parts.push(
-            <strong key={`part-${lineIndex}-${keyCounter++}`} className="font-semibold">
+            <strong key={`part-${lineIndex}-${keyCounter++}`} className="font-semibold break-words">
               {boldMatch[1]}
             </strong>
           );
@@ -220,7 +220,7 @@ const DashboardOrderForm = React.memo(({
         const italicMatch = line.substring(currentIndex).match(/^\*([^*]+)\*/);
         if (italicMatch) {
           parts.push(
-            <em key={`part-${lineIndex}-${keyCounter++}`} className="italic">
+            <em key={`part-${lineIndex}-${keyCounter++}`} className="italic break-words">
               {italicMatch[1]}
             </em>
           );
@@ -244,7 +244,7 @@ const DashboardOrderForm = React.memo(({
         if (nextMarker !== -1) {
           if (nextMarker > currentIndex) {
             parts.push(
-              <span key={`part-${lineIndex}-${keyCounter++}`}>
+              <span key={`part-${lineIndex}-${keyCounter++}`} className="break-words">
                 {line.substring(currentIndex, nextMarker)}
               </span>
             );
@@ -254,7 +254,7 @@ const DashboardOrderForm = React.memo(({
             const isBoldMarker = line.substring(currentIndex, currentIndex + 2) === '**';
             const consumeLength = isBoldMarker ? 2 : 1;
             parts.push(
-              <span key={`part-${lineIndex}-${keyCounter++}`}>
+              <span key={`part-${lineIndex}-${keyCounter++}`} className="break-words">
                 {line.substring(currentIndex, currentIndex + consumeLength)}
               </span>
             );
@@ -263,7 +263,7 @@ const DashboardOrderForm = React.memo(({
         } else {
           // No more formatting, add the rest of the line
           parts.push(
-            <span key={`part-${lineIndex}-${keyCounter++}`}>
+            <span key={`part-${lineIndex}-${keyCounter++}`} className="break-words">
               {line.substring(currentIndex)}
             </span>
           );
@@ -274,7 +274,7 @@ const DashboardOrderForm = React.memo(({
       // Add the line content (even if empty, to preserve line breaks)
       if (parts.length > 0) {
         result.push(
-          <span key={`line-${lineIndex}`}>
+          <span key={`line-${lineIndex}`} className="break-words [overflow-wrap:anywhere]">
             {parts}
           </span>
         );
@@ -295,7 +295,7 @@ const DashboardOrderForm = React.memo(({
   }, []);
 
   return (
-    <div className="bg-white border-2 border-gray-300 rounded-lg p-6 sm:p-8 shadow-xl animate-slideUp" id="order-form-section">
+    <div className="bg-white border-2 border-gray-300 rounded-lg p-6 sm:p-8 shadow-xl animate-slideUp w-full min-w-0 max-w-full overflow-hidden" id="order-form-section">
       <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">Place New Order</h2>
       <form onSubmit={handleOrder} className="space-y-4">
         <div className="relative">
@@ -514,7 +514,7 @@ const DashboardOrderForm = React.memo(({
         const hasExplicitVideoTag = /\[(?:video|video_guide)/i.test(descText);
 
         return (
-          <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+          <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg w-full min-w-0 max-w-full overflow-hidden break-words">
             <p className="text-sm font-medium text-gray-900 mb-2">Description</p>
             {videoUrl && !hasExplicitVideoTag && (
               <ServiceVideoGuideCard
@@ -523,7 +523,7 @@ const DashboardOrderForm = React.memo(({
               />
             )}
             {descText && (
-              <div className="text-sm text-gray-700 leading-relaxed">
+              <div className="text-sm text-gray-700 leading-relaxed break-words overflow-hidden [overflow-wrap:anywhere]">
                 {formatDescription(descText, videoUrl, serviceName)}
               </div>
             )}
