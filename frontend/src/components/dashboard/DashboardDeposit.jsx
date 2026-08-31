@@ -338,6 +338,9 @@ const DashboardDeposit = React.memo(({
                   <div className="rounded-lg overflow-hidden bg-gray-100">
                     <video
                       controls
+                      playsInline
+                      webkit-playsinline="true"
+                      x5-playsinline="true"
                       className="w-full h-auto"
                       preload="metadata"
                       style={{ maxHeight: '500px' }}
@@ -345,6 +348,9 @@ const DashboardDeposit = React.memo(({
                       <source
                         src="https://spihsvdchouynfbsotwq.supabase.co/storage/v1/object/public/storage/tutorial.mp4"
                         type="video/mp4"
+                      />
+                      <source
+                        src="https://spihsvdchouynfbsotwq.supabase.co/storage/v1/object/public/storage/tutorial.mp4"
                       />
                       Your browser does not support the video tag.
                     </video>
@@ -760,6 +766,9 @@ const DashboardDeposit = React.memo(({
                   <div className="rounded-lg overflow-hidden bg-gray-100">
                     <video
                       controls
+                      playsInline
+                      webkit-playsinline="true"
+                      x5-playsinline="true"
                       className="w-full h-auto"
                       preload="metadata"
                       style={{ maxHeight: '500px' }}
@@ -767,6 +776,9 @@ const DashboardDeposit = React.memo(({
                       <source
                         src="https://spihsvdchouynfbsotwq.supabase.co/storage/v1/object/public/storage/tutorial.MOV"
                         type="video/quicktime"
+                      />
+                      <source
+                        src="https://spihsvdchouynfbsotwq.supabase.co/storage/v1/object/public/storage/tutorial.MOV"
                       />
                       Your browser does not support the video tag.
                     </video>
@@ -828,6 +840,9 @@ const DashboardDeposit = React.memo(({
                   <div className="rounded-lg overflow-hidden bg-gray-100">
                     <video
                       controls
+                      playsInline
+                      webkit-playsinline="true"
+                      x5-playsinline="true"
                       className="w-full h-auto"
                       preload="metadata"
                       style={{ maxHeight: '500px' }}
@@ -835,6 +850,9 @@ const DashboardDeposit = React.memo(({
                       <source
                         src="https://spihsvdchouynfbsotwq.supabase.co/storage/v1/object/public/storage/WhatsApp%20Video%202025-12-17%20at%207.29.00%20PM.mp4"
                         type="video/mp4"
+                      />
+                      <source
+                        src="https://spihsvdchouynfbsotwq.supabase.co/storage/v1/object/public/storage/WhatsApp%20Video%202025-12-17%20at%207.29.00%20PM.mp4"
                       />
                       Your browser does not support the video tag.
                     </video>

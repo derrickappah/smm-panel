@@ -10,12 +10,14 @@ import { supabase } from '@/lib/supabase';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useAllVideoTutorials, useCreateVideoTutorial, useUpdateVideoTutorial, useDeleteVideoTutorial } from '@/hooks/useVideoTutorials';
+import VideoModal from '@/components/VideoModal';
 
 const AdminVideoTutorials = () => {
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [editingTutorial, setEditingTutorial] = useState(null);
   const [showForm, setShowForm] = useState(false);
+  const [previewVideo, setPreviewVideo] = useState(null);
   const debouncedSearch = useDebounce(searchTerm, 300);
 
   const { data: tutorials = [], isLoading } = useAllVideoTutorials();
@@ -81,7 +83,8 @@ const AdminVideoTutorials = () => {
         .from('storage')
         .upload(fileName, file, {
           cacheControl: '3600',
-          upsert: false
+          upsert: false,
+          contentType: file.type || 'video/mp4'
         });
 
       if (uploadError) {
@@ -131,7 +134,8 @@ const AdminVideoTutorials = () => {
         .from('storage')
         .upload(fileName, file, {
           cacheControl: '3600',
-          upsert: false
+          upsert: false,
+          contentType: file.type || 'image/jpeg'
         });
 
       if (uploadError) {
@@ -544,15 +548,22 @@ const AdminVideoTutorials = () => {
                     </span>
                   </div>
                   {tutorial.video_url && (
-                    <div className="mt-2">
+                    <div className="mt-2 flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setPreviewVideo({ url: tutorial.video_url, title: tutorial.title })}
+                        className="text-sm text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1 cursor-pointer"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        Preview Video
+                      </button>
                       <a
                         href={tutorial.video_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-sm text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
+                        className="text-xs text-gray-500 hover:text-gray-700"
                       >
-                        <Play className="w-3 h-3" />
-                        View Video
+                        (Open Direct Link)
                       </a>
                     </div>
                   )}
@@ -578,6 +589,14 @@ const AdminVideoTutorials = () => {
             </div>
           ))}
         </div>
+      )}
+
+      {previewVideo && (
+        <VideoModal
+          videoUrl={previewVideo.url}
+          title={previewVideo.title}
+          onClose={() => setPreviewVideo(null)}
+        />
       )}
     </div>
   );

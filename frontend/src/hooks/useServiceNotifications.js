@@ -25,10 +25,12 @@ export const useServiceNotifications = (userId) => {
     mutationFn: async ({ notificationId, orderId }) => {
       const { data, error } = await supabase
         .from('service_notification_acknowledgments')
-        .insert({
+        .upsert({
           user_id: userId,
           notification_id: notificationId,
-          order_id: orderId
+          order_id: orderId || null
+        }, {
+          onConflict: 'user_id,notification_id'
         });
       if (error) throw error;
       return data;

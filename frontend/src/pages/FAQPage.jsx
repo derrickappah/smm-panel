@@ -9,6 +9,7 @@ import { Loader2, HelpCircle, Bell, Video, MessageCircleQuestion, Play } from 'l
 import { useFAQ } from '@/hooks/useFAQ';
 import { useUpdates } from '@/hooks/useUpdates';
 import { useVideoTutorials } from '@/hooks/useVideoTutorials';
+import { parseVideoUrl } from '@/lib/videoUtils';
 import {
   Accordion,
   AccordionContent,
@@ -205,40 +206,38 @@ const FAQPage = ({ user, onLogout }) => {
                       console.log('Tutorial thumbnail URL:', tutorial.id, tutorial.thumbnail_url);
                     }
                     
-                    // Check if it's a YouTube URL
-                    const isYouTube = tutorial.video_url?.includes('youtube.com') || tutorial.video_url?.includes('youtu.be');
-                    const getYouTubeEmbedUrl = (url) => {
-                      if (!url) return null;
-                      // Extract video ID from various YouTube URL formats
-                      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-                      const match = url.match(regExp);
-                      const videoId = match && match[2].length === 11 ? match[2] : null;
-                      return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1` : null;
-                    };
-                    
-                    const embedUrl = isYouTube ? getYouTubeEmbedUrl(tutorial.video_url) : null;
+                    const parsedInfo = parseVideoUrl(tutorial.video_url);
+                    const embedUrl = parsedInfo?.embedUrl || null;
+                    const isDirect = parsedInfo?.type === 'direct' || !embedUrl;
                     const isPlaying = playingVideoId === tutorial.id;
                     
                     return (
                       <div key={tutorial.id} className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
                         {isPlaying ? (
                           <div className="aspect-video bg-black">
-                            {embedUrl ? (
+                            {!isDirect && embedUrl ? (
                               <iframe
                                 src={embedUrl}
                                 title={tutorial.title}
-                                className="w-full h-full"
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                className="w-full h-full border-0"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
                                 allowFullScreen
+                                referrerPolicy="strict-origin-when-cross-origin"
                               />
                             ) : (
                               <video
                                 src={tutorial.video_url}
                                 controls
                                 autoPlay
-                                className="w-full h-full"
+                                playsInline
+                                webkit-playsinline="true"
+                                x5-playsinline="true"
+                                preload="metadata"
+                                className="w-full h-full object-contain bg-black"
                                 onEnded={() => setPlayingVideoId(null)}
                               >
+                                <source src={tutorial.video_url} type={parsedInfo?.mimeType || 'video/mp4'} />
+                                <source src={tutorial.video_url} />
                                 Your browser does not support the video tag.
                               </video>
                             )}
