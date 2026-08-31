@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { X, ExternalLink, Loader2, Play, RotateCcw, AlertTriangle, Copy, Check, Tv } from 'lucide-react';
+import { X, ExternalLink, Loader2, Play, RotateCcw, AlertTriangle, Tv } from 'lucide-react';
 import { parseVideoUrl } from '@/lib/videoUtils';
 
 const VideoModal = ({ videoUrl, title = 'Video Guide', onClose }) => {
@@ -9,7 +9,6 @@ const VideoModal = ({ videoUrl, title = 'Video Guide', onClose }) => {
   const [errorMessage, setErrorMessage] = useState('');
   const [isAutoplayBlocked, setIsAutoplayBlocked] = useState(false);
   const [isPortraitVideo, setIsPortraitVideo] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
 
   const videoRef = useRef(null);
@@ -48,7 +47,6 @@ const VideoModal = ({ videoUrl, title = 'Video Guide', onClose }) => {
     setErrorMessage('');
     setIsAutoplayBlocked(false);
     setIsPortraitVideo(false);
-    setCopied(false);
   }, [videoUrl, retryKey]);
 
   // Attempt safe play on direct video
@@ -66,7 +64,6 @@ const VideoModal = ({ videoUrl, title = 'Video Guide', onClose }) => {
     } catch (err) {
       if (!isMountedRef.current) return;
       if (err.name === 'NotAllowedError') {
-        // Autoplay with audio was prevented by browser policy
         setIsAutoplayBlocked(true);
         setIsLoading(false);
       } else if (err.name !== 'AbortError') {
@@ -117,37 +114,6 @@ const VideoModal = ({ videoUrl, title = 'Video Guide', onClose }) => {
       return `${window.location.origin}${url.startsWith('/') ? '' : '/'}${url}`;
     }
     return url;
-  };
-
-  const handleCopyLink = async () => {
-    const rawLink = videoInfo?.directUrl || videoUrl;
-    if (!rawLink) return;
-    const directUrl = getAbsoluteUrl(rawLink);
-    try {
-      await navigator.clipboard.writeText(directUrl);
-      setCopied(true);
-      setTimeout(() => {
-        if (isMountedRef.current) setCopied(false);
-      }, 2000);
-    } catch {
-      // Fallback if clipboard API unavailable
-      const textArea = document.createElement('textarea');
-      textArea.value = directUrl;
-      textArea.style.position = 'fixed';
-      textArea.style.opacity = '0';
-      document.body.appendChild(textArea);
-      textArea.select();
-      try {
-        document.execCommand('copy');
-        setCopied(true);
-        setTimeout(() => {
-          if (isMountedRef.current) setCopied(false);
-        }, 2000);
-      } catch {
-        // ignore
-      }
-      document.body.removeChild(textArea);
-    }
   };
 
   const fallbackLink = videoInfo?.directUrl || videoUrl;
@@ -389,44 +355,12 @@ const VideoModal = ({ videoUrl, title = 'Video Guide', onClose }) => {
           paddingLeft: 'max(env(safe-area-inset-left, 0px), 16px)',
           paddingRight: 'max(env(safe-area-inset-right, 0px), 16px)'
         }}
-        className="relative z-50 p-3 sm:p-4 bg-black/90 sm:bg-black/75 backdrop-blur-lg border-t border-white/10 flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 shrink-0 w-full"
+        className="relative z-50 p-3 sm:p-4 bg-black/90 sm:bg-black/75 backdrop-blur-lg border-t border-white/10 flex items-center justify-center shrink-0 w-full"
       >
-        {fallbackLink && (
-          <a
-            href={getAbsoluteUrl(fallbackLink)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="min-h-[44px] px-4 py-2 bg-white/15 hover:bg-white/25 active:bg-white/35 text-white text-xs sm:text-sm font-medium rounded-full transition-all flex items-center gap-1.5 shadow border border-white/10 active:scale-95 cursor-pointer"
-          >
-            <ExternalLink className="w-3.5 h-3.5" />
-            <span>Open in New Tab</span>
-          </a>
-        )}
-
-        {fallbackLink && (
-          <button
-            type="button"
-            onClick={handleCopyLink}
-            className="min-h-[44px] px-4 py-2 bg-white/15 hover:bg-white/25 active:bg-white/35 text-white text-xs sm:text-sm font-medium rounded-full transition-all flex items-center gap-1.5 shadow border border-white/10 active:scale-95 cursor-pointer"
-          >
-            {copied ? (
-              <>
-                <Check className="w-3.5 h-3.5 text-green-400" />
-                <span className="text-green-300 font-semibold">Link Copied!</span>
-              </>
-            ) : (
-              <>
-                <Copy className="w-3.5 h-3.5" />
-                <span>Copy Link</span>
-              </>
-            )}
-          </button>
-        )}
-
         <button
           type="button"
           onClick={onClose}
-          className="min-h-[44px] px-8 py-2 bg-white hover:bg-gray-100 active:bg-gray-200 text-black text-xs sm:text-sm font-bold rounded-full transition-all shadow-lg active:scale-95 cursor-pointer"
+          className="min-h-[44px] px-10 py-2.5 bg-white hover:bg-gray-100 active:bg-gray-200 text-black text-xs sm:text-sm font-bold rounded-full transition-all shadow-lg active:scale-95 cursor-pointer"
         >
           Done
         </button>
