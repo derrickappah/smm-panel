@@ -304,6 +304,7 @@ const VideoModal = ({ videoUrl, title = 'Video Guide', onClose }) => {
                   <video
                     key={`${videoUrl}-${retryKey}`}
                     ref={videoRef}
+                    src={videoInfo?.url || videoUrl}
                     playsInline
                     webkit-playsinline="true"
                     x5-playsinline="true"
@@ -342,9 +343,6 @@ const VideoModal = ({ videoUrl, title = 'Video Guide', onClose }) => {
                     <source 
                       src={videoInfo?.url || videoUrl} 
                       type={videoInfo?.mimeType || 'video/mp4'} 
-                    />
-                    <source 
-                      src={videoInfo?.url || videoUrl} 
                     />
                     Your browser does not support HTML5 video streaming.
                   </video>
