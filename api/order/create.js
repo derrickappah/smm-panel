@@ -272,7 +272,6 @@ export default async function handler(req, res) {
             if (provider && provider_service_id) {
                 combo_components = [{ provider, service_id: provider_service_id }];
             }
-        }
 
             console.log('[ORDER] Package provider detection:', {
                 package_id: pkg.id,
