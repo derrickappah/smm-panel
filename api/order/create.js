@@ -481,6 +481,15 @@ export default async function handler(req, res) {
 
             await supabase.from('orders').update(updateData).eq('id', order_id);
 
+            // Update transaction description with provider order ID
+            const primaryProviderOrderId = updateData.oldsmm_order_id || updateData.apiowner_order_id || updateData.smmgen_order_id || updateData.smmcost_order_id || updateData.jbsmmpanel_order_id || updateData.worldofsmm_order_id || updateData.g1618_order_id;
+            if (primaryProviderOrderId) {
+                const itemName = service?.name || pkg?.name || 'SMM Service';
+                await supabase.from('transactions').update({
+                    description: `Order #${primaryProviderOrderId} (${itemName})`
+                }).eq('order_id', order_id).eq('type', 'order');
+            }
+
             // ── Handle Success & Partial Failures ─────────────────────────────
             if (someSuccess) {
                 let currentBalance = rpcResult.new_balance;

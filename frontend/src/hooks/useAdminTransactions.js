@@ -11,7 +11,7 @@ const fetchTransactions = async ({ pageParam = 0 }) => {
 
   const { data, error, count } = await supabase
     .from('transactions')
-    .select('id, user_id, amount, type, status, created_at, paystack_status, paystack_reference, manual_reference, korapay_reference, moolre_reference, moolre_status, moolre_channel, order_id, profiles!transactions_user_id_fkey(email, name)', { count: 'exact' })
+    .select('id, user_id, amount, type, status, created_at, paystack_status, paystack_reference, manual_reference, korapay_reference, moolre_reference, moolre_status, moolre_channel, order_id, profiles!transactions_user_id_fkey(email, name), orders(id, oldsmm_order_id, apiowner_order_id, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, component_provider_order_ids)', { count: 'exact' })
     .order('created_at', { ascending: false })
     .range(from, to);
 
@@ -51,7 +51,7 @@ const fetchAllTransactions = async () => {
     
     const { data, error } = await supabase
       .from('transactions')
-      .select('id, user_id, amount, type, status, created_at, paystack_status, paystack_reference, manual_reference, korapay_reference, moolre_reference, moolre_status, moolre_channel, order_id, profiles!transactions_user_id_fkey(email, name)')
+      .select('id, user_id, amount, type, status, created_at, paystack_status, paystack_reference, manual_reference, korapay_reference, moolre_reference, moolre_status, moolre_channel, order_id, profiles!transactions_user_id_fkey(email, name), orders(id, oldsmm_order_id, apiowner_order_id, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, component_provider_order_ids)')
       .order('created_at', { ascending: false })
       .range(from, to);
 

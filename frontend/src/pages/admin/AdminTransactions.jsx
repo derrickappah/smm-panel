@@ -36,6 +36,28 @@ const AdminTransactions = memo(({ onRefresh, refreshing = false, getBalanceCheck
     useInfinite: true 
   });
 
+  const getProviderOrderId = (transaction) => {
+    const o = transaction.orders;
+    if (o) {
+      const isInternalUuid = o.smmgen_order_id === o.id;
+      if (o.apiowner_order_id && !String(o.apiowner_order_id).toLowerCase().includes('not placed')) return String(o.apiowner_order_id);
+      if (o.oldsmm_order_id && !String(o.oldsmm_order_id).toLowerCase().includes('not placed')) return String(o.oldsmm_order_id);
+      if (o.g1618_order_id && !String(o.g1618_order_id).toLowerCase().includes('not placed')) return String(o.g1618_order_id);
+      if (o.worldofsmm_order_id && !String(o.worldofsmm_order_id).toLowerCase().includes('not placed')) return String(o.worldofsmm_order_id);
+      if (o.smmcost_order_id && !String(o.smmcost_order_id).toLowerCase().includes('not placed')) return String(o.smmcost_order_id);
+      if (o.jbsmmpanel_order_id && o.jbsmmpanel_order_id > 0) return String(o.jbsmmpanel_order_id);
+      if (o.smmgen_order_id && !isInternalUuid && !String(o.smmgen_order_id).toLowerCase().includes('not placed')) return String(o.smmgen_order_id);
+      if (Array.isArray(o.component_provider_order_ids) && o.component_provider_order_ids.length > 0) {
+        const pids = o.component_provider_order_ids.map(c => c.provider_order_id).filter(Boolean);
+        if (pids.length > 0) return pids.join(', ');
+      }
+    }
+    if (transaction.order_id && transaction.order_id.length <= 15 && !transaction.order_id.includes('-')) {
+      return String(transaction.order_id);
+    }
+    return null;
+  };
+
   const allTransactions = useMemo(() => {
     if (!data?.pages) return [];
     return data.pages.flatMap(page => page.data || []);
@@ -227,7 +249,7 @@ const AdminTransactions = memo(({ onRefresh, refreshing = false, getBalanceCheck
                            (transaction.type === 'manual_adjustment' && transaction.description?.toLowerCase().includes('debit'));
             return (
               <p className={`font-semibold ${isCredit ? 'text-green-600' : isDebit ? 'text-red-600' : 'text-gray-600'}`}>
-                {isCredit ? '+' : isDebit ? '-' : ''}₵{transaction.amount?.toFixed(2) || '0.00'}
+                {isCredit ? '+' : isDebit ? '-' : ''}₵{Math.abs(parseFloat(transaction.amount || 0)).toFixed(2)}
               </p>
             );
           })()}
@@ -251,9 +273,16 @@ const AdminTransactions = memo(({ onRefresh, refreshing = false, getBalanceCheck
           {transaction.moolre_channel && (
             <p className="text-xs text-gray-500">Network: {transaction.moolre_channel}</p>
           )}
-          {transaction.order_id && (
-            <p className="text-xs text-gray-500">Order: {transaction.order_id.slice(0, 8)}...</p>
-          )}
+          {(() => {
+            const providerOrderId = getProviderOrderId(transaction);
+            if (providerOrderId) {
+              return <p className="text-xs text-indigo-600 font-medium">Order #{providerOrderId}</p>;
+            }
+            if (transaction.order_id) {
+              return <p className="text-xs text-gray-500">Order: {transaction.order_id.slice(0, 8)}...</p>;
+            }
+            return null;
+          })()}
         </div>
         <div className="flex justify-center">
           {balanceCheck === 'not_updated' ? (
@@ -384,7 +413,7 @@ const AdminTransactions = memo(({ onRefresh, refreshing = false, getBalanceCheck
                              (transaction.type === 'manual_adjustment' && transaction.description?.toLowerCase().includes('debit'));
               return (
                 <p className={`font-semibold text-lg ${isCredit ? 'text-green-600' : isDebit ? 'text-red-600' : 'text-gray-600'}`}>
-                  {isCredit ? '+' : isDebit ? '-' : ''}₵{transaction.amount?.toFixed(2) || '0.00'}
+                  {isCredit ? '+' : isDebit ? '-' : ''}₵{Math.abs(parseFloat(transaction.amount || 0)).toFixed(2)}
                 </p>
               );
             })()}
@@ -403,9 +432,16 @@ const AdminTransactions = memo(({ onRefresh, refreshing = false, getBalanceCheck
             {transaction.moolre_channel && (
               <p className="text-xs text-gray-500 mt-1">Network: {transaction.moolre_channel}</p>
             )}
-            {transaction.order_id && (
-              <p className="text-xs text-gray-500 mt-1">Order: {transaction.order_id.slice(0, 12)}...</p>
-            )}
+            {(() => {
+              const providerOrderId = getProviderOrderId(transaction);
+              if (providerOrderId) {
+                return <p className="text-xs text-indigo-600 font-medium mt-1">Order #{providerOrderId}</p>;
+              }
+              if (transaction.order_id) {
+                return <p className="text-xs text-gray-500 mt-1">Order: {transaction.order_id.slice(0, 12)}...</p>;
+              }
+              return null;
+            })()}
           </div>
           <div>
             <p className="text-xs text-gray-500">Date</p>

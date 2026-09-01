@@ -38,6 +38,28 @@ const TransactionsPage = ({ user, onLogout }) => {
   const transactionsPerPage = 20;
   const isAdmin = user?.role === 'admin';
 
+  const getProviderOrderId = (transaction) => {
+    const o = transaction.orders;
+    if (o) {
+      const isInternalUuid = o.smmgen_order_id === o.id;
+      if (o.apiowner_order_id && !String(o.apiowner_order_id).toLowerCase().includes('not placed')) return String(o.apiowner_order_id);
+      if (o.oldsmm_order_id && !String(o.oldsmm_order_id).toLowerCase().includes('not placed')) return String(o.oldsmm_order_id);
+      if (o.g1618_order_id && !String(o.g1618_order_id).toLowerCase().includes('not placed')) return String(o.g1618_order_id);
+      if (o.worldofsmm_order_id && !String(o.worldofsmm_order_id).toLowerCase().includes('not placed')) return String(o.worldofsmm_order_id);
+      if (o.smmcost_order_id && !String(o.smmcost_order_id).toLowerCase().includes('not placed')) return String(o.smmcost_order_id);
+      if (o.jbsmmpanel_order_id && o.jbsmmpanel_order_id > 0) return String(o.jbsmmpanel_order_id);
+      if (o.smmgen_order_id && !isInternalUuid && !String(o.smmgen_order_id).toLowerCase().includes('not placed')) return String(o.smmgen_order_id);
+      if (Array.isArray(o.component_provider_order_ids) && o.component_provider_order_ids.length > 0) {
+        const pids = o.component_provider_order_ids.map(c => c.provider_order_id).filter(Boolean);
+        if (pids.length > 0) return pids.join(', ');
+      }
+    }
+    if (transaction.order_id && transaction.order_id.length <= 15 && !transaction.order_id.includes('-')) {
+      return String(transaction.order_id);
+    }
+    return null;
+  };
+
   useEffect(() => {
     fetchTransactions();
   }, []);
@@ -52,7 +74,7 @@ const TransactionsPage = ({ user, onLogout }) => {
       if (!isAdmin) {
         const { data: transactionsData, error } = await supabase
           .from('transactions')
-          .select('id, user_id, type, amount, status, deposit_method, paystack_reference, korapay_reference, moolre_reference, manual_reference, client_reference, order_id, description, created_at, updated_at')
+          .select('id, user_id, type, amount, status, deposit_method, paystack_reference, korapay_reference, moolre_reference, manual_reference, client_reference, order_id, description, created_at, updated_at, orders(id, oldsmm_order_id, apiowner_order_id, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, component_provider_order_ids)')
           .eq('user_id', authUser.id)
           .order('created_at', { ascending: false });
 
@@ -64,11 +86,10 @@ const TransactionsPage = ({ user, onLogout }) => {
 
         setTransactions(transactionsData || []);
       } else {
-        // For admins: fetch all transactions with user profiles in one query (using join)
-        // Use explicit relationship name to avoid ambiguity with admin_id foreign key
+        // For admins: fetch all transactions with user profiles and orders in one query (using join)
         const { data: transactionsData, error: transactionsError } = await supabase
           .from('transactions')
-          .select('*, profiles!transactions_user_id_fkey(email, name, balance)')
+          .select('*, profiles!transactions_user_id_fkey(email, name, balance), orders(id, oldsmm_order_id, apiowner_order_id, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, component_provider_order_ids)')
           .order('created_at', { ascending: false });
 
         if (transactionsError) {
@@ -554,6 +575,7 @@ const TransactionsPage = ({ user, onLogout }) => {
     // Search filter (for admin: search by user email/name, for users: search by amount/date)
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
+      const providerOrderId = getProviderOrderId(transaction)?.toLowerCase() || '';
       if (isAdmin) {
         const userProfile = userProfiles[transaction.user_id];
         const userName = userProfile?.name?.toLowerCase() || '';
@@ -568,6 +590,7 @@ const TransactionsPage = ({ user, onLogout }) => {
           amount.includes(searchLower) ||
           id.includes(searchLower) ||
           orderId.includes(searchLower) ||
+          providerOrderId.includes(searchLower) ||
           description.includes(searchLower) ||
           ref.includes(searchLower);
       } else {
@@ -579,6 +602,7 @@ const TransactionsPage = ({ user, onLogout }) => {
         return amount.includes(searchLower) ||
           id.includes(searchLower) ||
           orderId.includes(searchLower) ||
+          providerOrderId.includes(searchLower) ||
           description.includes(searchLower) ||
           ref.includes(searchLower);
       }
@@ -837,7 +861,7 @@ const TransactionsPage = ({ user, onLogout }) => {
                                   (transaction.type === 'manual_adjustment' && transaction.description?.toLowerCase().includes('debit'));
                                 return (
                                   <p className={`font-semibold text-gray-900 ${isCredit ? 'text-green-600' : isDebit ? 'text-red-600' : 'text-gray-600'}`}>
-                                    {isCredit ? '+' : isDebit ? '-' : ''}₵{parseFloat(transaction.amount || 0).toFixed(2)}
+                                    {isCredit ? '+' : isDebit ? '-' : ''}₵{Math.abs(parseFloat(transaction.amount || 0)).toFixed(2)}
                                   </p>
                                 );
                               })()}
@@ -857,11 +881,24 @@ const TransactionsPage = ({ user, onLogout }) => {
                             {/* Transaction ID & References */}
                             <div className="text-center flex flex-col items-center gap-0.5">
                               <p className="text-xs text-gray-700 font-mono break-all">{transaction.id}</p>
-                              {transaction.order_id && (
-                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-200" title={`Order ID: ${transaction.order_id}`}>
-                                  Order: #{transaction.order_id.slice(0, 8)}...
-                                </span>
-                              )}
+                              {(() => {
+                                const providerOrderId = getProviderOrderId(transaction);
+                                if (providerOrderId) {
+                                  return (
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-200" title={`Provider Order ID: ${providerOrderId}`}>
+                                      Order #{providerOrderId}
+                                    </span>
+                                  );
+                                }
+                                if (transaction.order_id) {
+                                  return (
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-200" title={`Order ID: ${transaction.order_id}`}>
+                                      Order #{transaction.order_id.slice(0, 8)}...
+                                    </span>
+                                  );
+                                }
+                                return null;
+                              })()}
                               {transaction.paystack_reference && (
                                 <p className="text-xs text-gray-500">Ref: {transaction.paystack_reference.slice(0, 8)}...</p>
                               )}
@@ -942,13 +979,32 @@ const TransactionsPage = ({ user, onLogout }) => {
                                 <div className="flex items-center gap-2 flex-wrap text-xs">
                                   <p className="text-gray-600">
                                     <span className="font-semibold text-gray-700">Description:</span>{' '}
-                                    {transaction.description || (transaction.type === 'refund' && transaction.order_id ? `Refund for order #${transaction.order_id}` : transaction.type)}
+                                    {(() => {
+                                      const providerOrderId = getProviderOrderId(transaction);
+                                      if (transaction.description) return transaction.description;
+                                      if (transaction.type === 'refund') return `Refund for order #${providerOrderId || transaction.order_id}`;
+                                      if (transaction.type === 'order') return `Order #${providerOrderId || transaction.order_id}`;
+                                      return transaction.type;
+                                    })()}
                                   </p>
-                                  {transaction.order_id && (
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
-                                      Order ID: {transaction.order_id}
-                                    </span>
-                                  )}
+                                  {(() => {
+                                    const providerOrderId = getProviderOrderId(transaction);
+                                    if (providerOrderId) {
+                                      return (
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                          Provider Order ID: #{providerOrderId}
+                                        </span>
+                                      );
+                                    }
+                                    if (transaction.order_id) {
+                                      return (
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                          Order ID: {transaction.order_id}
+                                        </span>
+                                      );
+                                    }
+                                    return null;
+                                  })()}
                                 </div>
                                 {transaction.admin_id && isAdmin && (
                                   <p className="text-xs text-gray-500">
