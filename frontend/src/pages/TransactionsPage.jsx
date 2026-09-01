@@ -52,7 +52,7 @@ const TransactionsPage = ({ user, onLogout }) => {
       if (!isAdmin) {
         const { data: transactionsData, error } = await supabase
           .from('transactions')
-          .select('id, user_id, type, amount, status, deposit_method, paystack_reference, korapay_reference, created_at, updated_at')
+          .select('id, user_id, type, amount, status, deposit_method, paystack_reference, korapay_reference, moolre_reference, manual_reference, client_reference, order_id, description, created_at, updated_at')
           .eq('user_id', authUser.id)
           .order('created_at', { ascending: false });
 
@@ -560,14 +560,27 @@ const TransactionsPage = ({ user, onLogout }) => {
         const userEmail = userProfile?.email?.toLowerCase() || '';
         const amount = transaction.amount?.toString() || '';
         const id = transaction.id?.toLowerCase() || '';
+        const orderId = transaction.order_id?.toLowerCase() || '';
+        const description = transaction.description?.toLowerCase() || '';
+        const ref = (transaction.paystack_reference || transaction.korapay_reference || transaction.moolre_reference || '').toLowerCase();
         return userName.includes(searchLower) ||
           userEmail.includes(searchLower) ||
           amount.includes(searchLower) ||
-          id.includes(searchLower);
+          id.includes(searchLower) ||
+          orderId.includes(searchLower) ||
+          description.includes(searchLower) ||
+          ref.includes(searchLower);
       } else {
         const amount = transaction.amount?.toString() || '';
         const id = transaction.id?.toLowerCase() || '';
-        return amount.includes(searchLower) || id.includes(searchLower);
+        const orderId = transaction.order_id?.toLowerCase() || '';
+        const description = transaction.description?.toLowerCase() || '';
+        const ref = (transaction.paystack_reference || transaction.korapay_reference || transaction.moolre_reference || '').toLowerCase();
+        return amount.includes(searchLower) ||
+          id.includes(searchLower) ||
+          orderId.includes(searchLower) ||
+          description.includes(searchLower) ||
+          ref.includes(searchLower);
       }
     }
 
@@ -841,11 +854,22 @@ const TransactionsPage = ({ user, onLogout }) => {
                                 <p className="text-xs text-gray-600 break-all">{userProfile?.email || transaction.user_id.slice(0, 8)}</p>
                               </div>
                             )}
-                            {/* Transaction ID */}
-                            <div className="text-center">
-                              <p className="text-xs text-gray-700 break-all">{transaction.id}</p>
+                            {/* Transaction ID & References */}
+                            <div className="text-center flex flex-col items-center gap-0.5">
+                              <p className="text-xs text-gray-700 font-mono break-all">{transaction.id}</p>
+                              {transaction.order_id && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-200" title={`Order ID: ${transaction.order_id}`}>
+                                  Order: #{transaction.order_id.slice(0, 8)}...
+                                </span>
+                              )}
                               {transaction.paystack_reference && (
                                 <p className="text-xs text-gray-500">Ref: {transaction.paystack_reference.slice(0, 8)}...</p>
+                              )}
+                              {transaction.korapay_reference && (
+                                <p className="text-xs text-gray-500">Kora: {transaction.korapay_reference.slice(0, 8)}...</p>
+                              )}
+                              {transaction.moolre_reference && (
+                                <p className="text-xs text-gray-500">Moolre: {transaction.moolre_reference.slice(0, 8)}...</p>
                               )}
                             </div>
                             {/* Balance Status (Admin only) */}
@@ -898,22 +922,34 @@ const TransactionsPage = ({ user, onLogout }) => {
                                 </Button>
                               )}
                               {!isAdmin && transaction.type === 'deposit' && transaction.status === 'approved' && (
-                                <span className="text-xs text-green-600 flex items-center gap-1">
+                                <span className="text-xs text-green-600 flex items-center gap-1 font-medium">
                                   <CheckCircle className="w-3 h-3" />
                                   Credited
                                 </span>
                               )}
+                              {!isAdmin && transaction.type === 'refund' && transaction.status === 'approved' && (
+                                <span className="text-xs text-emerald-600 flex items-center gap-1 font-medium">
+                                  <RefreshCw className="w-3 h-3" />
+                                  Refunded
+                                </span>
+                              )}
                             </div>
                           </div>
-                          {/* Description and Admin Info Row */}
-                          {(transaction.description || transaction.admin_id) && (
-                            <div className="px-4 pb-2 border-t border-gray-100">
-                              <div className="flex flex-col gap-1 pt-2">
-                                {transaction.description && (
-                                  <p className="text-xs text-gray-600">
-                                    <span className="font-medium">Description:</span> {transaction.description}
+                          {/* Description and Reference Info Row */}
+                          {(transaction.description || transaction.order_id || (transaction.admin_id && isAdmin)) && (
+                            <div className="px-4 py-2 border-t border-gray-100 bg-gray-50/50">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 flex-wrap text-xs">
+                                  <p className="text-gray-600">
+                                    <span className="font-semibold text-gray-700">Description:</span>{' '}
+                                    {transaction.description || (transaction.type === 'refund' && transaction.order_id ? `Refund for order #${transaction.order_id}` : transaction.type)}
                                   </p>
-                                )}
+                                  {transaction.order_id && (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                      Order ID: {transaction.order_id}
+                                    </span>
+                                  )}
+                                </div>
                                 {transaction.admin_id && isAdmin && (
                                   <p className="text-xs text-gray-500">
                                     <span className="font-medium">Admin:</span> {transaction.admin_id.slice(0, 8)}...
