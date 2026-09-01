@@ -2,6 +2,7 @@ import { verifyAuth, getServiceRoleClient } from '../utils/auth.js';
 import { rateLimit } from '../middleware/rateLimit.js';
 import { redis } from '../utils/redisClient.js';
 import { dispatchProviderOrder } from '../utils/providerClient.js';
+import { processComboBuilderRefund } from '../utils/comboRefundHelper.js';
 
 export default async function handler(req, res) {
   // CORS Setup
@@ -167,6 +168,22 @@ export default async function handler(req, res) {
                 log_type: 'failure',
                 message: `Provider placement failed: ${providerResult.error}`,
                 details: { error: providerResult.error, raw: providerResult.raw_response }
+              });
+
+              // Calculate proportional refund for this failed child sub-order
+              const totalChildrenCost = child_orders.reduce((sum, c) => sum + parseFloat(c.cost || 0), 0);
+              const parentPrice = parseFloat(comboDef.selling_price || 0);
+              const childRefundShare = totalChildrenCost > 0
+                ? (parseFloat(child.cost || 0) / totalChildrenCost) * parentPrice
+                : parentPrice / child_orders.length;
+
+              await processComboBuilderRefund(supabase, {
+                parentOrderId: parent_order_id,
+                childOrderId: child.id,
+                userId: user.id,
+                amount: childRefundShare,
+                refundType: 'partial',
+                reason: `Refund for failed sub-order (${child.service_type}) in Combo #${parent_order_id.slice(0, 8)}: ${providerResult.error || 'Provider placement failed'}`
               });
             }
 

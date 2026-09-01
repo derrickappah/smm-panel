@@ -18,6 +18,7 @@ import {
     mapApiOwnerStatus
 } from './utils/statusMapping.js';
 import { setCorsHeaders } from './utils/corsHeaders.js';
+import { calculatePackageComboRefund } from './utils/comboRefundHelper.js';
 
 /**
  * Handle automatic refund for an order using atomic RPC
@@ -33,30 +34,42 @@ async function handleAutomaticRefund(supabase, order, statusInfo, mappedStatus) 
         let refundType = 'full';
         let remains = 0;
 
-        const isFullRefundStatus = ['canceled', 'cancelled', 'refunded', 'refunds'].includes(mappedStatus);
-        if (isFullRefundStatus) {
-            refundAmount = order.total_cost;
-            refundType = 'full';
-        } else if (mappedStatus === 'partial') {
-            // Calculate partial refund: (remains / quantity) * total_cost
-            remains = parseInt(statusInfo.remains || 0, 10);
-            const quantity = parseInt(order.quantity || 1, 10);
-            const totalCost = parseFloat(order.total_cost || 0);
-
-            if (remains > 0 && quantity > 0) {
-                // Precision: (Total Cost / Quantity) * Remains, rounded to 2 decimals
-                refundAmount = (totalCost / quantity) * remains;
-                refundAmount = Math.round((refundAmount + Number.EPSILON) * 100) / 100;
-                
-                // Safety: Refund cannot exceed total cost
-                if (refundAmount > totalCost) refundAmount = totalCost;
-                refundType = 'partial';
+        // Check if multi-component combo package
+        if (Array.isArray(order.component_provider_order_ids) && order.component_provider_order_ids.length > 1) {
+            const comboCalc = calculatePackageComboRefund(order, order.component_provider_order_ids);
+            if (comboCalc.refundAmount > 0) {
+                refundAmount = comboCalc.refundAmount;
+                refundType = comboCalc.refundType;
+                remains = comboCalc.totalRemains;
             } else {
-                console.warn(`[Refund] Partial status for order ${order.id} but remains (${remains}) or quantity (${quantity}) is 0. Skipping refund.`);
-                return { success: false, error: 'Invalid remains or quantity' };
+                return null;
             }
         } else {
-            return null; // No refund for other statuses
+            const isFullRefundStatus = ['canceled', 'cancelled', 'refunded', 'refunds'].includes(mappedStatus);
+            if (isFullRefundStatus) {
+                refundAmount = order.total_cost;
+                refundType = 'full';
+            } else if (mappedStatus === 'partial') {
+                // Calculate partial refund: (remains / quantity) * total_cost
+                remains = parseInt(statusInfo.remains || 0, 10);
+                const quantity = parseInt(order.quantity || 1, 10);
+                const totalCost = parseFloat(order.total_cost || 0);
+
+                if (remains > 0 && quantity > 0) {
+                    // Precision: (Total Cost / Quantity) * Remains, rounded to 2 decimals
+                    refundAmount = (totalCost / quantity) * remains;
+                    refundAmount = Math.round((refundAmount + Number.EPSILON) * 100) / 100;
+                    
+                    // Safety: Refund cannot exceed total cost
+                    if (refundAmount > totalCost) refundAmount = totalCost;
+                    refundType = 'partial';
+                } else {
+                    console.warn(`[Refund] Partial status for order ${order.id} but remains (${remains}) or quantity (${quantity}) is 0. Skipping refund.`);
+                    return { success: false, error: 'Invalid remains or quantity' };
+                }
+            } else {
+                return null; // No refund for other statuses
+            }
         }
 
         if (refundAmount <= 0) {
