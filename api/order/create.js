@@ -242,83 +242,37 @@ export default async function handler(req, res) {
             is_combo = pkg.is_combo || false;
 
             if (is_combo) {
-                if (pkg.combo_smmgen_service_ids && Array.isArray(pkg.combo_smmgen_service_ids) && pkg.combo_smmgen_service_ids.length > 0) {
-                    combo_components = pkg.combo_smmgen_service_ids.map(sid => ({
-                        provider: 'smmgen',
-                        service_id: sid,
-                    }));
-                } else if (pkg.combo_package_ids && Array.isArray(pkg.combo_package_ids)) {
-                    const componentIds = pkg.combo_package_ids.map(item => typeof item === 'object' && item !== null ? item.id : item);
-                    const { data: compPkgs, error: compErr } = await supabase
-                        .from('promotion_packages')
-                        .select('id, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id')
-                        .in('id', componentIds);
-
-                    if (!compErr && compPkgs) {
-                        const orderedPkgs = componentIds.map(id => compPkgs.find(p => p.id === id)).filter(Boolean);
-                        for (const p of orderedPkgs) {
-                            let compProvider = null;
-                            let compProviderId = null;
-                            if (p.smmgen_service_id) {
-                                compProvider = 'smmgen';
-                                compProviderId = p.smmgen_service_id;
-                            } else if (p.smmcost_service_id) {
-                                compProvider = 'smmcost';
-                                compProviderId = p.smmcost_service_id;
-                            } else if (p.jbsmmpanel_service_id) {
-                                compProvider = 'jbsmmpanel';
-                                compProviderId = p.jbsmmpanel_service_id;
-                            } else if (p.worldofsmm_service_id) {
-                                compProvider = 'worldofsmm';
-                                compProviderId = p.worldofsmm_service_id;
-                            } else if (p.g1618_service_id) {
-                                compProvider = 'g1618';
-                                compProviderId = p.g1618_service_id;
-                            } else if (p.oldsmm_service_id) {
-                                compProvider = 'oldsmm';
-                                compProviderId = p.oldsmm_service_id;
-                            } else if (p.apiowner_service_id) {
-                                compProvider = 'apiowner';
-                                compProviderId = p.apiowner_service_id;
-                            }
-
-                            if (compProvider && compProviderId) {
-                                combo_components.push({
-                                    provider: compProvider,
-                                    service_id: String(compProviderId)
-                                });
-                            }
-                        }
-                    }
-                }
-            } else {
-                if (pkg.smmcost_service_id) {
-                    provider = 'smmcost';
-                    provider_service_id = pkg.smmcost_service_id;
-                } else if (pkg.jbsmmpanel_service_id) {
-                    provider = 'jbsmmpanel';
-                    provider_service_id = pkg.jbsmmpanel_service_id;
-                } else if (pkg.smmgen_service_id) {
-                    provider = 'smmgen';
-                    provider_service_id = pkg.smmgen_service_id;
-                } else if (pkg.worldofsmm_service_id) {
-                    provider = 'worldofsmm';
-                    provider_service_id = pkg.worldofsmm_service_id;
-                } else if (pkg.g1618_service_id) {
-                    provider = 'g1618';
-                    provider_service_id = pkg.g1618_service_id;
-                } else if (pkg.oldsmm_service_id) {
-                    provider = 'oldsmm';
-                    provider_service_id = pkg.oldsmm_service_id;
-                } else if (pkg.apiowner_service_id) {
-                    provider = 'apiowner';
-                    provider_service_id = pkg.apiowner_service_id;
-                }
-
-                if (provider && provider_service_id) {
-                    combo_components = [{ provider, service_id: provider_service_id }];
-                }
+                req.body.package_id = pkg.id;
+                return comboHandler(req, res);
             }
+
+            if (pkg.smmcost_service_id) {
+                provider = 'smmcost';
+                provider_service_id = pkg.smmcost_service_id;
+            } else if (pkg.jbsmmpanel_service_id) {
+                provider = 'jbsmmpanel';
+                provider_service_id = pkg.jbsmmpanel_service_id;
+            } else if (pkg.smmgen_service_id) {
+                provider = 'smmgen';
+                provider_service_id = pkg.smmgen_service_id;
+            } else if (pkg.worldofsmm_service_id) {
+                provider = 'worldofsmm';
+                provider_service_id = pkg.worldofsmm_service_id;
+            } else if (pkg.g1618_service_id) {
+                provider = 'g1618';
+                provider_service_id = pkg.g1618_service_id;
+            } else if (pkg.oldsmm_service_id) {
+                provider = 'oldsmm';
+                provider_service_id = pkg.oldsmm_service_id;
+            } else if (pkg.apiowner_service_id) {
+                provider = 'apiowner';
+                provider_service_id = pkg.apiowner_service_id;
+            }
+
+            if (provider && provider_service_id) {
+                combo_components = [{ provider, service_id: provider_service_id }];
+            }
+        }
 
             console.log('[ORDER] Package provider detection:', {
                 package_id: pkg.id,
