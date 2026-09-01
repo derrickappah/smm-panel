@@ -127,12 +127,13 @@ export default async function handler(req, res) {
       parentServiceId = svc.id;
       
       // Calculate selling price
-      const ratePerThousand = Number(svc.rate || 0);
-      const isPerThousand = !svc.is_fixed_price && svc.service_type !== 'Package';
-      if (isPerThousand && qtyNum > 1) {
-        totalSellingPrice = Math.round(((ratePerThousand * qtyNum) / 1000) * 100) / 100;
+      const rateUnit = Number(svc.rate_unit || 1000);
+      const serviceRate = Number(svc.rate || 0);
+      const isFixed = Boolean(svc.is_fixed_price || svc.service_type === 'Package');
+      if (isFixed) {
+        totalSellingPrice = Math.round(serviceRate * 100) / 100;
       } else {
-        totalSellingPrice = Math.round(ratePerThousand * 100) / 100;
+        totalSellingPrice = Math.round(((serviceRate * qtyNum) / rateUnit) * 100) / 100;
       }
 
       if (svc.combo_service_ids && Array.isArray(svc.combo_service_ids) && svc.combo_service_ids.length > 0) {

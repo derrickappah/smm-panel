@@ -77,32 +77,10 @@ const DashboardOrderForm = React.memo(({
     const quantity = parseInt(orderForm.quantity);
     if (isNaN(quantity) || quantity <= 0) return '0.00';
 
-    if (selectedService.is_combo && selectedService.combo_service_ids?.length > 0) {
-      const normalizedCombo = normalizeComboServices(selectedService.combo_service_ids);
-      const componentServices = normalizedCombo
-        .map(item => sortedServices.find(s => s.id === item.id))
-        .filter(s => s !== undefined);
-
-      if (componentServices.length === 0) {
-        const rateUnit = selectedService.rate_unit || 1000;
-        return ((quantity / rateUnit) * selectedService.rate).toFixed(2);
-      }
-
-      const totalCost = componentServices.reduce((sum, componentService) => {
-        const rateUnit = componentService.rate_unit || 1000;
-        const customItem = normalizedCombo.find(x => x.id === componentService.id);
-        const rateToUse = (customItem && customItem.combo_rate !== null && customItem.combo_rate !== undefined)
-          ? parseFloat(customItem.combo_rate)
-          : parseFloat(componentService.rate);
-        return sum + ((quantity / rateUnit) * rateToUse);
-      }, 0);
-
-      return totalCost.toFixed(2);
-    }
-
     const rateUnit = selectedService.rate_unit || 1000;
-    return ((quantity / rateUnit) * selectedService.rate).toFixed(2);
-  }, [selectedService, selectedPackage, orderForm.quantity, sortedServices]);
+    const rate = parseFloat(selectedService.rate) || 0;
+    return ((quantity / rateUnit) * rate).toFixed(2);
+  }, [selectedService, selectedPackage, orderForm.quantity]);
 
   const handleServiceSearchChange = useCallback((e) => {
     const value = e.target.value;
