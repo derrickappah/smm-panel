@@ -105,91 +105,105 @@ const fetchRecentOrders = async () => {
         .limit(5)
     ]);
 
-    const flattened = [];
+    const combined = [];
 
-    // Flatten regular orders
+    // Process regular orders
     (ordersRes.data || []).forEach(order => {
       const components = order.component_provider_order_ids;
       const serviceName = order.promotion_packages?.name || order.services?.name || 'Service';
       const platform = order.promotion_packages?.platform || order.services?.platform || '';
+      const isCombo = Array.isArray(components) && components.length > 1;
 
-      if (Array.isArray(components) && components.length > 1) {
-        components.forEach((comp, idx) => {
-          flattened.push({
-            id: `${order.id}-comp-${idx}`,
-            service_name: comp.service_name ? `${serviceName} • ${comp.service_name}` : `${serviceName} • ${comp.provider || `Item #${idx+1}`}`,
-            platform,
-            order_number: comp.provider_order_id || 'N/A',
-            display_order_id: comp.provider_order_id || 'N/A',
-            link: order.link,
-            quantity: comp.quantity || Math.round(order.quantity / components.length),
-            total_cost: parseFloat(comp.cost || (order.total_cost / components.length || 0)),
-            status: comp.status || order.status,
-            created_at: order.created_at,
-            is_combo_item: true,
-            is_reward: order.is_reward
-          });
-        });
-      } else {
-        flattened.push({
+      if (isCombo) {
+        const subOrders = components.map((comp, idx) => ({
+          id: `${order.id}-${idx}`,
+          name: comp.service_name || comp.service_type || comp.provider || `Item #${idx+1}`,
+          order_id: comp.provider_order_id || 'Not placed',
+          quantity: comp.quantity || Math.round(order.quantity / components.length),
+          status: comp.status || order.status
+        }));
+
+        combined.push({
           id: order.id,
           service_name: serviceName,
           platform,
-          order_number: order.apiowner_order_id || order.oldsmm_order_id || order.g1618_order_id || order.worldofsmm_order_id || order.smmcost_order_id || order.jbsmmpanel_order_id || order.smmgen_order_id || order.id.slice(0, 8),
-          display_order_id: order.apiowner_order_id || order.oldsmm_order_id || order.g1618_order_id || order.worldofsmm_order_id || order.smmcost_order_id || order.jbsmmpanel_order_id || order.smmgen_order_id || order.id.slice(0, 8),
           link: order.link,
           quantity: order.quantity,
           total_cost: parseFloat(order.total_cost || 0),
           status: order.status,
           created_at: order.created_at,
-          is_combo_item: false,
+          is_combo: true,
+          sub_orders: subOrders,
+          is_reward: order.is_reward
+        });
+      } else {
+        const displayId = order.apiowner_order_id && !String(order.apiowner_order_id).toLowerCase().includes('not placed')
+          ? order.apiowner_order_id
+          : order.oldsmm_order_id && !String(order.oldsmm_order_id).toLowerCase().includes('not placed')
+            ? order.oldsmm_order_id
+            : order.g1618_order_id && !String(order.g1618_order_id).toLowerCase().includes('not placed')
+              ? order.g1618_order_id
+              : order.worldofsmm_order_id && !String(order.worldofsmm_order_id).toLowerCase().includes('not placed')
+                ? order.worldofsmm_order_id
+                : order.smmcost_order_id && !String(order.smmcost_order_id).toLowerCase().includes('not placed')
+                  ? order.smmcost_order_id
+                  : order.jbsmmpanel_order_id && order.jbsmmpanel_order_id > 0
+                    ? order.jbsmmpanel_order_id
+                    : order.smmgen_order_id && order.smmgen_order_id !== order.id && !String(order.smmgen_order_id).toLowerCase().includes('not placed')
+                      ? order.smmgen_order_id
+                      : order.id.slice(0, 8);
+
+        combined.push({
+          id: order.id,
+          service_name: serviceName,
+          platform,
+          order_number: displayId,
+          display_order_id: displayId,
+          link: order.link,
+          quantity: order.quantity,
+          total_cost: parseFloat(order.total_cost || 0),
+          status: order.status,
+          created_at: order.created_at,
+          is_combo: false,
+          sub_orders: null,
           is_reward: order.is_reward
         });
       }
     });
 
-    // Flatten combo builder orders
+    // Process combo builder orders
     (comboRes.data || []).forEach(cOrder => {
       const childs = cOrder.combo_child_orders || [];
       const baseName = cOrder.combo_service_name || 'Combo Package';
       const platform = cOrder.combo_services?.category || 'Combo';
 
-      if (Array.isArray(childs) && childs.length > 0) {
-        childs.forEach((child, idx) => {
-          flattened.push({
-            id: child.id,
-            service_name: `${baseName} • ${child.service_type || `Item #${idx+1}`}`,
-            platform,
-            order_number: child.provider_order_id || `#${cOrder.order_number || ''}`,
-            display_order_id: child.provider_order_id || `#${cOrder.order_number || ''}`,
-            link: cOrder.link,
-            quantity: child.fixed_quantity || cOrder.quantity,
-            total_cost: parseFloat(child.cost || (cOrder.selling_price / childs.length || 0)),
-            status: child.status || 'pending',
-            created_at: child.created_at || cOrder.created_at,
-            is_combo_item: true
-          });
-        });
-      } else {
-        flattened.push({
-          id: cOrder.id,
-          service_name: baseName,
-          platform,
-          order_number: `#${cOrder.order_number || cOrder.id.slice(0, 8)}`,
-          display_order_id: `#${cOrder.order_number || cOrder.id.slice(0, 8)}`,
-          link: cOrder.link,
-          quantity: cOrder.quantity || 1,
-          total_cost: parseFloat(cOrder.selling_price || 0),
-          status: cOrder.status || 'pending',
-          created_at: cOrder.created_at,
-          is_combo_item: true
-        });
-      }
+      const subOrders = childs.map((child, idx) => ({
+        id: child.id,
+        name: child.service_type || `Item #${idx+1}`,
+        order_id: child.provider_order_id || `#${cOrder.order_number || ''}` || child.id.slice(0, 8),
+        quantity: child.fixed_quantity || cOrder.quantity,
+        status: child.status || 'pending'
+      }));
+
+      combined.push({
+        id: cOrder.id,
+        service_name: baseName,
+        platform,
+        order_number: `#${cOrder.order_number || ''}`,
+        display_order_id: `#${cOrder.order_number || cOrder.id.slice(0, 8)}`,
+        link: cOrder.link,
+        quantity: cOrder.quantity || 1,
+        total_cost: parseFloat(cOrder.selling_price || 0),
+        status: cOrder.status || 'pending',
+        created_at: cOrder.created_at,
+        is_combo: true,
+        sub_orders: subOrders
+      });
     });
 
-    flattened.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-    return { orders: flattened.slice(0, 5), count: flattened.length };
+    return { orders: combined.slice(0, 5), count: combined.length };
   } catch (error) {
     console.warn('Error fetching recent orders in dashboard:', error.message);
     return { orders: [], count: 0 };

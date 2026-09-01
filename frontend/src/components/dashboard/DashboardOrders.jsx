@@ -32,24 +32,24 @@ const DashboardOrders = React.memo(({ orders, services }) => {
     const statusLower = String(status || '').toLowerCase();
     switch (statusLower) {
       case 'completed':
-        return <CheckCircle className="w-3 h-3 text-green-600" />;
+        return <CheckCircle className="w-3 h-3 text-green-600 shrink-0" />;
       case 'canceled':
       case 'cancelled':
       case 'failed':
-        return <XCircle className="w-3 h-3 text-red-600" />;
+        return <XCircle className="w-3 h-3 text-red-600 shrink-0" />;
       case 'processing':
       case 'in progress':
-        return <Loader className="w-3 h-3 text-blue-600 animate-spin" />;
+        return <Loader className="w-3 h-3 text-blue-600 animate-spin shrink-0" />;
       case 'partial':
-        return <Loader className="w-3 h-3 text-orange-600 animate-spin" />;
+        return <Loader className="w-3 h-3 text-orange-600 animate-spin shrink-0" />;
       case 'refunded':
       case 'refunds':
-        return <XCircle className="w-3 h-3 text-purple-600" />;
+        return <XCircle className="w-3 h-3 text-purple-600 shrink-0" />;
       case 'submission_failed':
-        return <XCircle className="w-3 h-3 text-red-500" />;
+        return <XCircle className="w-3 h-3 text-red-500 shrink-0" />;
       case 'pending':
       default:
-        return <Clock className="w-3 h-3 text-yellow-600" />;
+        return <Clock className="w-3 h-3 text-yellow-600 shrink-0" />;
     }
   };
 
@@ -74,30 +74,41 @@ const DashboardOrders = React.memo(({ orders, services }) => {
         {orders.map((order) => {
           const service = services?.find(s => s.id === order.service_id) || order.services;
           const isPackageOrder = !!order.promotion_package_id;
+          const isCombo = order.is_combo && Array.isArray(order.sub_orders) && order.sub_orders.length > 0;
           const platformName = order.platform || order.services?.platform || service?.platform || '';
           const serviceName = order.service_name || service?.name || 'Service';
 
           return (
             <div 
               key={order.id} 
-              className={`bg-gray-50 border ${order.is_combo_item ? 'border-indigo-200' : isPackageOrder ? 'border-purple-200' : 'border-gray-200'} px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg hover:border-gray-300 transition-colors flex items-center justify-between gap-3`}
+              className={`bg-gray-50 border ${isCombo ? 'border-indigo-200 bg-indigo-50/10' : isPackageOrder ? 'border-purple-200' : 'border-gray-200'} px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg hover:border-gray-300 transition-colors flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap`}
             >
               <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
                 <PlatformIcon platform={platformName} serviceName={serviceName} className="w-4 h-4 object-contain shrink-0" />
-                <p className="text-sm font-medium text-gray-900 truncate max-w-[200px] sm:max-w-none">{serviceName}</p>
+                <p className="text-sm font-medium text-gray-900 truncate max-w-[180px] sm:max-w-none">{serviceName}</p>
                 <span className="text-[10px] sm:text-xs text-gray-500 whitespace-nowrap shrink-0">(+{Number(order.quantity || 0).toLocaleString()})</span>
                 
-                {order.display_order_id && order.display_order_id !== 'N/A' && (
-                  <span className="font-mono text-[10px] bg-white border border-gray-200 px-1.5 py-0.5 rounded text-gray-700">
-                    ID: {order.display_order_id}
+                {isCombo && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-100 text-indigo-700 text-[10px] font-semibold rounded border border-indigo-200">
+                    <Layers className="w-2.5 h-2.5" />
+                    Combo ({order.sub_orders.length})
                   </span>
                 )}
 
-                {order.is_combo_item && (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-100 text-indigo-700 text-[10px] font-semibold rounded border border-indigo-200">
-                    <Layers className="w-2.5 h-2.5" />
-                    Bundle
-                  </span>
+                {isCombo ? (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {order.sub_orders.map((sub, sIdx) => (
+                      <span key={sIdx} className="font-mono text-[10px] bg-white border border-gray-200 px-1.5 py-0.5 rounded text-gray-700">
+                        {sub.name}: {sub.order_id}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  order.display_order_id && order.display_order_id !== 'N/A' && (
+                    <span className="font-mono text-[10px] bg-white border border-gray-200 px-1.5 py-0.5 rounded text-gray-700">
+                      ID: {order.display_order_id}
+                    </span>
+                  )
                 )}
 
                 {order.is_reward && (
@@ -108,12 +119,24 @@ const DashboardOrders = React.memo(({ orders, services }) => {
                 )}
               </div>
 
-              <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+              <div className="flex items-center gap-2 sm:gap-4 shrink-0 flex-wrap">
                 <p className="text-sm font-semibold text-gray-900 whitespace-nowrap">₵{order.total_cost?.toFixed(2) || '0.00'}</p>
-                <span className={`text-[10px] font-medium px-2 py-0.5 rounded border whitespace-nowrap capitalize flex items-center gap-1 ${getStatusStyles(order.status)}`}>
-                  {getStatusIcon(order.status)}
-                  {order.status === 'submission_failed' ? 'Failed' : order.status}
-                </span>
+                
+                {isCombo ? (
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {order.sub_orders.map((sub, sIdx) => (
+                      <span key={sIdx} className={`text-[10px] px-1.5 py-0.5 rounded border font-medium capitalize flex items-center gap-1 ${getStatusStyles(sub.status)}`}>
+                        {getStatusIcon(sub.status)}
+                        <span className="font-normal text-[9px]">{sub.name}:</span> {sub.status}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded border whitespace-nowrap capitalize flex items-center gap-1 ${getStatusStyles(order.status)}`}>
+                    {getStatusIcon(order.status)}
+                    {order.status === 'submission_failed' ? 'Failed' : order.status}
+                  </span>
+                )}
               </div>
             </div>
           );

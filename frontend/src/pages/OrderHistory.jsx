@@ -40,7 +40,7 @@ const OrderHistory = ({ user, onLogout }) => {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) return;
 
-      // Query regular orders and combo builder orders
+      // Query regular orders and combo builder parent orders
       const [ordersRes, comboOrdersRes, servicesRes] = await Promise.all([
         supabase
           .from('orders')
@@ -61,46 +61,44 @@ const OrderHistory = ({ user, onLogout }) => {
 
       const rawComboOrders = comboOrdersRes?.data || [];
       const rawRegularOrders = ordersRes.data || [];
-      const flattenedOrders = [];
+      const normalizedOrders = [];
 
       // 1. Process regular orders from public.orders
       rawRegularOrders.forEach(order => {
         const components = order.component_provider_order_ids;
         const serviceName = order.promotion_packages?.name || order.services?.name || 'Service';
         const platform = order.promotion_packages?.platform || order.services?.platform || '';
+        const isCombo = Array.isArray(components) && components.length > 1;
 
-        if (Array.isArray(components) && components.length > 1) {
-          // Flatten combo/package into individual order rows
-          components.forEach((comp, idx) => {
-            flattenedOrders.push({
-              id: `${order.id}-comp-${idx}`,
-              parent_order_id: order.id,
-              raw_order_id: order.id,
-              service_id: order.service_id,
-              promotion_package_id: order.promotion_package_id,
-              service_name: comp.service_name 
-                ? `${serviceName} • ${comp.service_name}` 
-                : comp.service_type 
-                  ? `${serviceName} • ${comp.service_type}` 
-                  : `${serviceName} • ${comp.provider || `Item #${idx+1}`}`,
-              platform: platform,
-              order_number: comp.provider_order_id || 'Not placed',
-              display_order_id: comp.provider_order_id || 'Not placed',
-              link: order.link,
-              quantity: comp.quantity || comp.fixed_quantity || Math.round(order.quantity / components.length),
-              total_cost: parseFloat(comp.cost || (order.total_cost / components.length || 0)),
-              status: comp.status || order.status,
-              created_at: order.created_at,
-              provider: comp.provider,
-              provider_order_id: comp.provider_order_id,
-              is_combo_item: true,
-              is_builder_combo: false,
-              is_reward: order.is_reward,
-              services: {
-                name: comp.service_name ? `${serviceName} • ${comp.service_name}` : `${serviceName} • ${comp.provider || `Item #${idx+1}`}`,
-                platform: platform
-              }
-            });
+        if (isCombo) {
+          // Keep as 1 row with sub-orders embedded
+          const subOrders = components.map((comp, idx) => ({
+            id: `${order.id}-${idx}`,
+            name: comp.service_name || comp.service_type || comp.provider || `Item #${idx + 1}`,
+            order_id: comp.provider_order_id || 'Not placed',
+            quantity: comp.quantity || comp.fixed_quantity || Math.round(order.quantity / components.length),
+            status: comp.status || order.status,
+            provider: comp.provider
+          }));
+
+          normalizedOrders.push({
+            id: order.id,
+            raw_order_id: order.id,
+            service_id: order.service_id,
+            promotion_package_id: order.promotion_package_id,
+            service_name: serviceName,
+            platform: platform,
+            link: order.link,
+            quantity: order.quantity,
+            total_cost: parseFloat(order.total_cost || 0),
+            status: order.status,
+            created_at: order.created_at,
+            is_combo: true,
+            is_builder_combo: false,
+            sub_orders: subOrders,
+            is_reward: order.is_reward,
+            services: order.services,
+            promotion_packages: order.promotion_packages
           });
         } else {
           // Regular single order
@@ -121,9 +119,8 @@ const OrderHistory = ({ user, onLogout }) => {
                         ? order.smmgen_order_id
                         : order.id.slice(0, 8);
 
-          flattenedOrders.push({
+          normalizedOrders.push({
             id: order.id,
-            parent_order_id: null,
             raw_order_id: order.id,
             service_id: order.service_id,
             promotion_package_id: order.promotion_package_id,
@@ -144,76 +141,56 @@ const OrderHistory = ({ user, onLogout }) => {
             oldsmm_order_id: order.oldsmm_order_id,
             apiowner_order_id: order.apiowner_order_id,
             is_reward: order.is_reward,
-            is_combo_item: false,
+            is_combo: false,
             is_builder_combo: false,
+            sub_orders: null,
             services: order.services,
             promotion_packages: order.promotion_packages
           });
         }
       });
 
-      // 2. Process combo builder orders from combo_parent_orders (flatten each sub-order)
+      // 2. Process combo builder orders from combo_parent_orders (as 1 row with sub-orders embedded)
       rawComboOrders.forEach(cOrder => {
         const childs = cOrder.combo_child_orders || [];
         const baseComboName = cOrder.combo_service_name || 'Combo Package';
         const platform = cOrder.combo_services?.category || 'Combo';
 
-        if (Array.isArray(childs) && childs.length > 0) {
-          childs.forEach((child, idx) => {
-            const childDisplayId = child.provider_order_id || `#${cOrder.order_number || ''}` || child.id.slice(0, 8);
+        const subOrders = childs.map((child, idx) => ({
+          id: child.id,
+          name: child.service_type || `Item #${idx + 1}`,
+          order_id: child.provider_order_id || `#${cOrder.order_number || ''}` || child.id.slice(0, 8),
+          quantity: child.fixed_quantity || cOrder.quantity,
+          status: child.status || 'pending',
+          provider: child.provider
+        }));
 
-            flattenedOrders.push({
-              id: child.id,
-              parent_order_id: cOrder.id,
-              raw_order_id: cOrder.id,
-              service_name: `${baseComboName} • ${child.service_type || `Item #${idx+1}`}`,
-              platform: platform,
-              order_number: childDisplayId,
-              display_order_id: childDisplayId,
-              link: cOrder.link,
-              quantity: child.fixed_quantity || cOrder.quantity,
-              total_cost: parseFloat(child.cost || (cOrder.selling_price / childs.length || 0)),
-              status: child.status || 'pending',
-              created_at: child.created_at || cOrder.created_at,
-              provider: child.provider,
-              provider_order_id: child.provider_order_id,
-              is_combo_item: true,
-              is_builder_combo: true,
-              services: {
-                name: `${baseComboName} • ${child.service_type || `Item #${idx+1}`}`,
-                platform: platform
-              }
-            });
-          });
-        } else {
-          // Fallback if no child orders exist yet
-          flattenedOrders.push({
-            id: cOrder.id,
-            parent_order_id: cOrder.id,
-            raw_order_id: cOrder.id,
-            service_name: baseComboName,
-            platform: platform,
-            order_number: `#${cOrder.order_number || cOrder.id.slice(0, 8)}`,
-            display_order_id: `#${cOrder.order_number || cOrder.id.slice(0, 8)}`,
-            link: cOrder.link,
-            quantity: cOrder.quantity || 1,
-            total_cost: parseFloat(cOrder.selling_price || 0),
-            status: cOrder.status || 'pending',
-            created_at: cOrder.created_at,
-            is_combo_item: true,
-            is_builder_combo: true,
-            services: {
-              name: baseComboName,
-              platform: platform
-            }
-          });
-        }
+        normalizedOrders.push({
+          id: cOrder.id,
+          raw_order_id: cOrder.id,
+          service_name: baseComboName,
+          platform: platform,
+          order_number: `#${cOrder.order_number || ''}`,
+          display_order_id: `#${cOrder.order_number || cOrder.id.slice(0, 8)}`,
+          link: cOrder.link,
+          quantity: cOrder.quantity || 1,
+          total_cost: parseFloat(cOrder.selling_price || 0),
+          status: cOrder.status || 'pending',
+          created_at: cOrder.created_at,
+          is_combo: true,
+          is_builder_combo: true,
+          sub_orders: subOrders,
+          services: {
+            name: baseComboName,
+            platform: platform
+          }
+        });
       });
 
-      // Sort all individual orders chronologically descending
-      flattenedOrders.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      // Sort all orders chronologically descending
+      normalizedOrders.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-      setOrders(flattenedOrders);
+      setOrders(normalizedOrders);
       setServices(servicesRes.data || []);
     } catch (error) {
       console.error('Error fetching orders data:', error);
@@ -230,24 +207,24 @@ const OrderHistory = ({ user, onLogout }) => {
     const statusLower = String(status || '').toLowerCase();
     switch (statusLower) {
       case 'completed':
-        return <CheckCircle className="w-4 h-4 text-green-600" />;
+        return <CheckCircle className="w-3.5 h-3.5 text-green-600 shrink-0" />;
       case 'canceled':
       case 'cancelled':
       case 'failed':
-        return <XCircle className="w-4 h-4 text-red-600" />;
+        return <XCircle className="w-3.5 h-3.5 text-red-600 shrink-0" />;
       case 'processing':
       case 'in progress':
-        return <Loader className="w-4 h-4 text-blue-600 animate-spin" />;
+        return <Loader className="w-3.5 h-3.5 text-blue-600 animate-spin shrink-0" />;
       case 'partial':
-        return <Loader className="w-4 h-4 text-orange-600 animate-spin" />;
+        return <Loader className="w-3.5 h-3.5 text-orange-600 animate-spin shrink-0" />;
       case 'refunded':
       case 'refunds':
-        return <XCircle className="w-4 h-4 text-purple-600" />;
+        return <XCircle className="w-3.5 h-3.5 text-purple-600 shrink-0" />;
       case 'submission_failed':
-        return <XCircle className="w-4 h-4 text-red-500" />;
+        return <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />;
       case 'pending':
       default:
-        return <Clock className="w-4 h-4 text-yellow-600" />;
+        return <Clock className="w-3.5 h-3.5 text-yellow-600 shrink-0" />;
     }
   };
 
@@ -276,7 +253,7 @@ const OrderHistory = ({ user, onLogout }) => {
     }
   };
 
-  // Check and update order status for any order item
+  // Check and update order status (supports single & combo orders)
   const checkOrderStatus = useCallback(async (order) => {
     if (checkingStatus[order.id]) return;
 
@@ -286,9 +263,9 @@ const OrderHistory = ({ user, onLogout }) => {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
 
-      if (order.parent_order_id || order.is_combo_item) {
+      if (order.is_combo) {
         // Combo order status check
-        const targetId = order.parent_order_id || order.raw_order_id || order.id;
+        const targetId = order.raw_order_id || order.id;
         const res = await fetch('/api/order/check-combo-status', {
           method: 'POST',
           headers: {
@@ -300,7 +277,7 @@ const OrderHistory = ({ user, onLogout }) => {
 
         const resData = await res.json();
         if (resData.success) {
-          toast.success('Order status refreshed!');
+          toast.success('Combo order statuses refreshed!');
           fetchData();
         } else {
           toast.error(resData.error || 'Failed to check order status');
@@ -343,15 +320,22 @@ const OrderHistory = ({ user, onLogout }) => {
     return orders.filter(o => {
       const searchLower = orderSearch.toLowerCase();
       const serviceName = o.service_name || o.services?.name || '';
-      const orderIdStr = String(o.display_order_id || o.order_number || o.id);
+      
+      const subOrdersMatch = o.sub_orders && o.sub_orders.some(s => 
+        String(s.name || '').toLowerCase().includes(searchLower) ||
+        String(s.order_id || '').toLowerCase().includes(searchLower)
+      );
 
       const matchesSearch =
         !orderSearch ||
         serviceName.toLowerCase().includes(searchLower) ||
         (o.link && o.link.toLowerCase().includes(searchLower)) ||
-        orderIdStr.toLowerCase().includes(searchLower);
+        String(o.display_order_id || '').toLowerCase().includes(searchLower) ||
+        subOrdersMatch;
 
-      const matchesStatus = orderStatusFilter === 'all' || o.status === orderStatusFilter;
+      const matchesStatus = orderStatusFilter === 'all' || 
+        (o.is_combo && o.sub_orders?.some(s => s.status === orderStatusFilter)) ||
+        o.status === orderStatusFilter;
 
       return matchesSearch && matchesStatus;
     });
@@ -380,7 +364,7 @@ const OrderHistory = ({ user, onLogout }) => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 md:pt-6 pb-6 sm:pb-8">
         <div className="mb-6 sm:mb-8 animate-fadeIn">
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">Order History</h1>
-          <p className="text-sm sm:text-base text-gray-600">Track all your orders and live delivery statuses</p>
+          <p className="text-sm sm:text-base text-gray-600">Track all your single and combo orders with complete sub-order statuses</p>
         </div>
 
         {loading ? (
@@ -436,9 +420,9 @@ const OrderHistory = ({ user, onLogout }) => {
                   <div className="min-w-[1100px]">
                     {/* Header */}
                     <div className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
-                      <div className="grid grid-cols-[2fr_1.2fr_1.5fr_1fr_1fr_1.2fr_1.2fr_1fr] gap-4 p-4 font-semibold text-xs sm:text-sm text-gray-700">
+                      <div className="grid grid-cols-[2fr_1.3fr_1.4fr_1fr_1fr_1.5fr_1.2fr_1fr] gap-4 p-4 font-semibold text-xs sm:text-sm text-gray-700">
                         <div className="text-center">Service</div>
-                        <div className="text-center">Order ID</div>
+                        <div className="text-center">Order ID(s)</div>
                         <div className="text-center">Link</div>
                         <div className="text-center">Quantity</div>
                         <div className="text-center">Cost</div>
@@ -452,15 +436,16 @@ const OrderHistory = ({ user, onLogout }) => {
                     <div className="divide-y divide-gray-200">
                       {paginatedOrders.map((order) => {
                         const serviceName = order.service_name || order.services?.name || 'Service';
+                        const isCombo = order.is_combo && Array.isArray(order.sub_orders) && order.sub_orders.length > 0;
 
                         return (
                           <div
                             key={order.id}
                             data-testid={`order-item-${order.id}`}
-                            className="bg-white hover:bg-gray-50 transition-colors"
+                            className={`bg-white hover:bg-gray-50/80 transition-colors ${isCombo ? 'bg-indigo-50/10' : ''}`}
                           >
-                            <div className="grid grid-cols-[2fr_1.2fr_1.5fr_1fr_1fr_1.2fr_1.2fr_1fr] gap-4 p-4 items-center">
-                              {/* Service Name & Badges */}
+                            <div className="grid grid-cols-[2fr_1.3fr_1.4fr_1fr_1fr_1.5fr_1.2fr_1fr] gap-4 p-4 items-center">
+                              {/* Service Name & Combo Badge */}
                               <div className="text-center flex flex-col items-center">
                                 <div className="flex items-center justify-center gap-1.5 flex-wrap">
                                   <PlatformIcon 
@@ -470,10 +455,10 @@ const OrderHistory = ({ user, onLogout }) => {
                                   />
                                   <p className="font-medium text-gray-900 text-sm">{serviceName}</p>
                                   
-                                  {order.is_combo_item && (
+                                  {isCombo && (
                                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-100 text-indigo-700 text-[10px] font-semibold rounded border border-indigo-200">
                                       <Layers className="w-2.5 h-2.5" />
-                                      Bundle Item
+                                      Combo ({order.sub_orders.length})
                                     </span>
                                   )}
 
@@ -485,11 +470,22 @@ const OrderHistory = ({ user, onLogout }) => {
                                 </div>
                               </div>
 
-                              {/* Order ID */}
-                              <div className="text-center">
-                                <span className="font-mono font-semibold text-gray-900 text-xs sm:text-sm bg-gray-50 border border-gray-200 px-2 py-1 rounded">
-                                  {order.display_order_id || order.order_number || 'N/A'}
-                                </span>
+                              {/* Order ID(s) */}
+                              <div className="text-center flex flex-col items-center gap-1.5">
+                                {isCombo ? (
+                                  order.sub_orders.map((sub, sIdx) => (
+                                    <div key={sIdx} className="flex items-center gap-1 text-[11px]">
+                                      <span className="text-gray-500 font-medium text-[10px]">{sub.name}:</span>
+                                      <span className="font-mono font-semibold text-gray-800 bg-gray-50 border border-gray-200 px-1.5 py-0.5 rounded text-[11px]">
+                                        {sub.order_id}
+                                      </span>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <span className="font-mono font-semibold text-gray-900 text-xs sm:text-sm bg-gray-50 border border-gray-200 px-2 py-1 rounded">
+                                    {order.display_order_id || order.order_number || 'N/A'}
+                                  </span>
+                                )}
                               </div>
 
                               {/* Link */}
@@ -500,8 +496,17 @@ const OrderHistory = ({ user, onLogout }) => {
                               </div>
 
                               {/* Quantity */}
-                              <div className="text-center">
-                                <p className="font-semibold text-gray-900 text-sm">+{Number(order.quantity || 0).toLocaleString()}</p>
+                              <div className="text-center flex flex-col items-center gap-1">
+                                {isCombo ? (
+                                  order.sub_orders.map((sub, sIdx) => (
+                                    <div key={sIdx} className="text-xs font-semibold text-gray-900 flex items-center gap-1">
+                                      <span>+{Number(sub.quantity || 0).toLocaleString()}</span>
+                                      <span className="text-[10px] text-gray-500 font-normal">({sub.name})</span>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <p className="font-semibold text-gray-900 text-sm">+{Number(order.quantity || 0).toLocaleString()}</p>
+                                )}
                               </div>
 
                               {/* Cost */}
@@ -509,14 +514,28 @@ const OrderHistory = ({ user, onLogout }) => {
                                 <p className="font-semibold text-gray-900 text-sm">₵{(order.total_cost || 0).toFixed(2)}</p>
                               </div>
 
-                              {/* Status */}
-                              <div className="flex justify-center">
-                                <div className="flex items-center gap-1.5">
-                                  {getStatusIcon(order.status)}
-                                  <span className={`text-xs px-2.5 py-1 rounded border font-medium capitalize whitespace-nowrap ${getStatusColor(order.status)}`}>
-                                    {order.status}
-                                  </span>
-                                </div>
+                              {/* Status (Shows all sub-order statuses directly in 1 field) */}
+                              <div className="flex flex-col items-center justify-center gap-1.5">
+                                {isCombo ? (
+                                  order.sub_orders.map((sub, sIdx) => (
+                                    <div key={sIdx} className="flex items-center gap-1.5 w-full justify-center">
+                                      <span className="text-[10px] text-gray-600 font-medium truncate max-w-[70px] text-right" title={sub.name}>
+                                        {sub.name}:
+                                      </span>
+                                      <span className={`text-[11px] px-2 py-0.5 rounded border font-medium capitalize whitespace-nowrap flex items-center gap-1 ${getStatusColor(sub.status)}`}>
+                                        {getStatusIcon(sub.status)}
+                                        {sub.status}
+                                      </span>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <div className="flex items-center gap-1.5">
+                                    {getStatusIcon(order.status)}
+                                    <span className={`text-xs px-2.5 py-1 rounded border font-medium capitalize whitespace-nowrap ${getStatusColor(order.status)}`}>
+                                      {order.status}
+                                    </span>
+                                  </div>
+                                )}
                               </div>
 
                               {/* Date */}
