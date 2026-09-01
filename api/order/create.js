@@ -79,6 +79,7 @@ export default async function handler(req, res) {
         let is_combo = false;
         let combo_components = [];
         let serviceUrlType = null;
+        let serviceItemName = 'SMM Service';
 
         if (service_id) {
             const { data: service, error: sErr } = await supabase
@@ -90,6 +91,8 @@ export default async function handler(req, res) {
             if (sErr || !service || !service.enabled) {
                 return res.status(400).json({ error: 'Service not found or disabled' });
             }
+
+            serviceItemName = service.name || 'SMM Service';
 
             // Calculate authoritative cost server-side
             const ratePerUnit = Number(service.rate);
@@ -225,6 +228,8 @@ export default async function handler(req, res) {
                 .single();
 
             if (pErr || !pkg) return res.status(400).json({ error: 'Package not found' });
+
+            serviceItemName = pkg.name || 'SMM Package';
 
             // Calculate authoritative cost for packages server-side
             calculatedTotalCost = Math.round(Number(pkg.price) * 100) / 100;
@@ -482,12 +487,15 @@ export default async function handler(req, res) {
             await supabase.from('orders').update(updateData).eq('id', order_id);
 
             // Update transaction description with provider order ID
-            const primaryProviderOrderId = updateData.oldsmm_order_id || updateData.apiowner_order_id || updateData.smmgen_order_id || updateData.smmcost_order_id || updateData.jbsmmpanel_order_id || updateData.worldofsmm_order_id || updateData.g1618_order_id;
-            if (primaryProviderOrderId) {
-                const itemName = service?.name || pkg?.name || 'SMM Service';
-                await supabase.from('transactions').update({
-                    description: `Order #${primaryProviderOrderId} (${itemName})`
-                }).eq('order_id', order_id).eq('type', 'order');
+            try {
+                const primaryProviderOrderId = updateData.oldsmm_order_id || updateData.apiowner_order_id || updateData.smmgen_order_id || updateData.smmcost_order_id || updateData.jbsmmpanel_order_id || updateData.worldofsmm_order_id || updateData.g1618_order_id;
+                if (primaryProviderOrderId) {
+                    await supabase.from('transactions').update({
+                        description: `Order #${primaryProviderOrderId} (${serviceItemName})`
+                    }).eq('order_id', order_id).eq('type', 'order');
+                }
+            } catch (txDescErr) {
+                console.warn('[ORDER] Non-critical: Failed to update transaction description with provider ID:', txDescErr.message);
             }
 
             // ── Handle Success & Partial Failures ─────────────────────────────
