@@ -73,7 +73,8 @@ export default async function handler(req, res) {
         .select(`
           id, user_id, service_id, promotion_package_id, link, quantity, total_cost, status, 
           smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, 
-          component_provider_order_ids, created_at, completed_at, refund_status, last_status_check,
+          component_provider_order_ids, combo_id, combo_name, combo_item_name, service_name, is_combo,
+          created_at, completed_at, refund_status, last_status_check,
           services (
             name, platform, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, 
             worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id, is_combo

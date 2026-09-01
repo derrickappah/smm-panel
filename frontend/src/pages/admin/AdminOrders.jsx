@@ -451,7 +451,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
   ), []);
 
   const renderTableRow = useCallback((order, index) => {
-    const isComboOrder = !!(order.services?.is_combo || order.promotion_packages?.is_combo || (order.component_provider_order_ids && order.component_provider_order_ids.length > 1));
+    const isComboOrder = !!(order.is_combo || order.combo_id || order.combo_name || order.services?.is_combo || order.promotion_packages?.is_combo || (order.component_provider_order_ids && order.component_provider_order_ids.length > 1));
     return (
       <div className="grid grid-cols-12 gap-4 p-4 items-start bg-white hover:bg-gray-50 transition-colors min-h-[100px]">
         <div className="col-span-1.5 flex flex-col gap-1">
@@ -712,9 +712,9 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
               <p className="text-sm font-medium text-gray-900">
-                {order.promotion_package_id
+                {order.service_name || (order.combo_name && order.combo_item_name ? `${order.combo_name} (${order.combo_item_name})` : (order.promotion_package_id
                   ? order.promotion_packages?.name || 'Package'
-                  : order.services?.name || 'N/A'}
+                  : order.services?.name || order.combo_name || 'N/A'))}
               </p>
               {order.promotion_package_id && (
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded">
@@ -829,7 +829,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
   }, [handleOrderStatusUpdate, handleRefundOrder, handleReorderToSMMGen, reorderMutation.isPending]);
 
   const renderMobileCard = useCallback((order, index) => {
-    const isComboOrder = !!(order.services?.is_combo || order.promotion_packages?.is_combo || (order.component_provider_order_ids && order.component_provider_order_ids.length > 1));
+    const isComboOrder = !!(order.is_combo || order.combo_id || order.combo_name || order.services?.is_combo || order.promotion_packages?.is_combo || (order.component_provider_order_ids && order.component_provider_order_ids.length > 1));
     return (
       <div className="bg-white p-4 space-y-3">
         <div className="flex items-start justify-between">
@@ -1151,9 +1151,9 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2">
                 <p className="text-sm font-medium text-gray-900">
-                  {order.promotion_package_id
+                  {order.service_name || (order.combo_name && order.combo_item_name ? `${order.combo_name} (${order.combo_item_name})` : (order.promotion_package_id
                     ? order.promotion_packages?.name || 'Package'
-                    : order.services?.name || 'N/A'}
+                    : order.services?.name || order.combo_name || 'N/A'))}
                 </p>
                 {order.promotion_package_id && (
                   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded">

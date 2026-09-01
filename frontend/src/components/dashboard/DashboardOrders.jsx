@@ -76,9 +76,29 @@ const DashboardOrders = React.memo(({ orders, services }) => {
         {displayOrders.map((order) => {
           const service = services?.find(s => s.id === order.service_id) || order.services;
           const isPackageOrder = !!order.promotion_package_id;
-          const isCombo = order.is_combo && Array.isArray(order.sub_orders) && order.sub_orders.length > 0;
+          const isCombo = !!(order.is_combo || order.combo_id || order.combo_name);
           const platformName = order.platform || order.services?.platform || service?.platform || '';
-          const serviceName = order.service_name || service?.name || 'Service';
+          
+          let serviceName = order.service_name;
+          if (!serviceName) {
+            if (order.combo_name && order.combo_item_name) {
+              serviceName = `${order.combo_name} (${order.combo_item_name})`;
+            } else if (order.combo_name) {
+              serviceName = order.combo_name;
+            } else {
+              serviceName = service?.name || 'SMM Service';
+            }
+          }
+
+          const displayId = order.display_order_id || 
+            (order.apiowner_order_id && !String(order.apiowner_order_id).toLowerCase().includes('not placed') ? order.apiowner_order_id :
+             order.oldsmm_order_id && !String(order.oldsmm_order_id).toLowerCase().includes('not placed') ? order.oldsmm_order_id :
+             order.g1618_order_id && !String(order.g1618_order_id).toLowerCase().includes('not placed') ? order.g1618_order_id :
+             order.worldofsmm_order_id && !String(order.worldofsmm_order_id).toLowerCase().includes('not placed') ? order.worldofsmm_order_id :
+             order.smmcost_order_id && !String(order.smmcost_order_id).toLowerCase().includes('not placed') ? order.smmcost_order_id :
+             order.jbsmmpanel_order_id && order.jbsmmpanel_order_id > 0 ? order.jbsmmpanel_order_id :
+             order.smmgen_order_id && !String(order.smmgen_order_id).toLowerCase().includes('not placed') ? order.smmgen_order_id :
+             (order.id ? order.id.slice(0, 8) : ''));
 
           return (
             <div 
@@ -93,24 +113,14 @@ const DashboardOrders = React.memo(({ orders, services }) => {
                 {isCombo && (
                   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-100 text-indigo-700 text-[10px] font-semibold rounded border border-indigo-200">
                     <Layers className="w-2.5 h-2.5" />
-                    Combo ({order.sub_orders.length})
+                    Combo
                   </span>
                 )}
 
-                {isCombo ? (
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {order.sub_orders.map((sub, sIdx) => (
-                      <span key={sIdx} className="font-mono text-[10px] bg-white border border-gray-200 px-1.5 py-0.5 rounded text-gray-700">
-                        {sub.name}: {sub.order_id}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  order.display_order_id && order.display_order_id !== 'N/A' && (
-                    <span className="font-mono text-[10px] bg-white border border-gray-200 px-1.5 py-0.5 rounded text-gray-700">
-                      ID: {order.display_order_id}
-                    </span>
-                  )
+                {displayId && displayId !== 'N/A' && (
+                  <span className="font-mono text-[10px] bg-white border border-gray-200 px-1.5 py-0.5 rounded text-gray-700">
+                    ID: {displayId}
+                  </span>
                 )}
 
                 {order.is_reward && (
@@ -122,23 +132,12 @@ const DashboardOrders = React.memo(({ orders, services }) => {
               </div>
 
               <div className="flex items-center gap-2 sm:gap-4 shrink-0 flex-wrap">
-                <p className="text-sm font-semibold text-gray-900 whitespace-nowrap">₵{order.total_cost?.toFixed(2) || '0.00'}</p>
+                <p className="text-sm font-semibold text-gray-900 whitespace-nowrap">₵{Number(order.total_cost || 0).toFixed(2)}</p>
                 
-                {isCombo ? (
-                  <div className="flex items-center gap-1 flex-wrap">
-                    {order.sub_orders.map((sub, sIdx) => (
-                      <span key={sIdx} className={`text-[10px] px-1.5 py-0.5 rounded border font-medium capitalize flex items-center gap-1 ${getStatusStyles(sub.status)}`}>
-                        {getStatusIcon(sub.status)}
-                        <span className="font-normal text-[9px]">{sub.name}:</span> {sub.status}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded border whitespace-nowrap capitalize flex items-center gap-1 ${getStatusStyles(order.status)}`}>
-                    {getStatusIcon(order.status)}
-                    {order.status === 'submission_failed' ? 'Failed' : order.status}
-                  </span>
-                )}
+                <span className={`text-[10px] font-medium px-2 py-0.5 rounded border whitespace-nowrap capitalize flex items-center gap-1 ${getStatusStyles(order.status)}`}>
+                  {getStatusIcon(order.status)}
+                  {order.status === 'submission_failed' ? 'Failed' : order.status}
+                </span>
               </div>
             </div>
           );

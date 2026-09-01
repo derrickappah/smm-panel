@@ -117,8 +117,8 @@ export default async function handler(req, res) {
                 return res.status(403).json({ error: 'This service is only available to sellers' });
             }
 
-            // If this is a new Combo Service Builder combo service, delegate directly to place-combo-order engine
-            if (service.combo_service_id || (service.is_combo && !service.combo_service_ids && !service.combo_smmgen_service_ids)) {
+            // If this is a combo service, delegate directly to place-combo-order engine for independent order splitting
+            if (service.is_combo || service.combo_service_id) {
                 req.body.combo_service_id = service.combo_service_id || service.id;
                 return comboHandler(req, res);
             }

@@ -1,8 +1,9 @@
 import { verifyAuth, getServiceRoleClient } from '../utils/auth.js';
 import { rateLimit } from '../middleware/rateLimit.js';
 import { redis } from '../utils/redisClient.js';
-import { dispatchProviderOrder } from '../utils/providerClient.js';
-import { processComboBuilderRefund } from '../utils/comboRefundHelper.js';
+import { placeProviderOrder, extractOrderId } from '../utils/providers.js';
+import { cleanUrl } from '../utils/orderValidation.js';
+import crypto from 'crypto';
 
 export default async function handler(req, res) {
   // CORS Setup
@@ -43,11 +44,17 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Authentication required', message: authError.message });
   }
 
-  const { combo_service_id, service_id, link, quantity } = req.body;
+  const { combo_service_id, service_id, link: rawLink, quantity, comments } = req.body;
 
-  if (!link || typeof link !== 'string' || link.trim() === '') {
+  if (!rawLink || typeof rawLink !== 'string' || rawLink.trim() === '') {
     return res.status(400).json({ error: 'Valid URL/link is required' });
   }
+
+  const cleanedLink = cleanUrl(rawLink.trim());
+  if (!cleanedLink) {
+    return res.status(400).json({ error: 'Enter a valid URL.' });
+  }
+
   const qtyNum = Number(quantity || 1);
   if (isNaN(qtyNum) || qtyNum <= 0) {
     return res.status(400).json({ error: 'Quantity must be a positive integer' });
@@ -60,13 +67,13 @@ export default async function handler(req, res) {
 
   const supabase = getServiceRoleClient();
 
-  // Resolve target combo service definition
+  // Resolve target combo service definition and child items
   let comboDef = null;
   const { data: comboByDirectId } = await supabase
     .from('combo_services')
     .select('*')
     .eq('id', targetComboId)
-    .single();
+    .maybeSingle();
 
   if (comboByDirectId) {
     comboDef = comboByDirectId;
@@ -75,17 +82,86 @@ export default async function handler(req, res) {
       .from('combo_services')
       .select('*')
       .eq('service_id', targetComboId)
-      .single();
+      .maybeSingle();
     comboDef = comboByServiceId;
+  }
+
+  // If not found in combo_services table, check if service in public.services with combo_service_id
+  if (!comboDef) {
+    const { data: svc } = await supabase
+      .from('services')
+      .select('*')
+      .eq('id', targetComboId)
+      .maybeSingle();
+
+    if (svc && svc.combo_service_id) {
+      const { data: comboLinked } = await supabase
+        .from('combo_services')
+        .select('*')
+        .eq('id', svc.combo_service_id)
+        .maybeSingle();
+      comboDef = comboLinked;
+    }
   }
 
   if (!comboDef || comboDef.status !== 'active') {
     return res.status(404).json({ error: 'Combo Service not found or inactive' });
   }
 
+  // Fetch enabled child service items for this combo
+  const { data: childItems, error: itemsErr } = await supabase
+    .from('combo_service_items')
+    .select('*')
+    .eq('combo_service_id', comboDef.id)
+    .eq('enabled', true)
+    .order('display_order', { ascending: true });
+
+  if (itemsErr || !childItems || childItems.length === 0) {
+    return res.status(400).json({ error: 'No active child services configured for this combo' });
+  }
+
+  // Calculate authoritative selling price for this combo purchase
+  const totalSellingPrice = Math.round(Number(comboDef.selling_price || 0) * 100) / 100;
+  if (isNaN(totalSellingPrice) || totalSellingPrice <= 0) {
+    return res.status(400).json({ error: 'Invalid selling price for combo service' });
+  }
+
+  // Calculate proportional allocated selling price for each child item
+  // Ensures the exact sum of child allocated selling prices equals totalSellingPrice
+  const totalEstimatedCost = childItems.reduce((sum, item) => sum + (Number(item.estimated_cost) || 0), 0);
+  let allocatedSum = 0;
+  const allocatedCosts = [];
+
+  for (let i = 0; i < childItems.length; i++) {
+    const item = childItems[i];
+    if (i === childItems.length - 1) {
+      // Last item gets the exact remaining amount to guarantee zero penny rounding discrepancy
+      const lastCost = Math.round((totalSellingPrice - allocatedSum + Number.EPSILON) * 100) / 100;
+      allocatedCosts.push(Math.max(0, lastCost));
+    } else {
+      let costShare = 0;
+      if (totalEstimatedCost > 0) {
+        costShare = ((Number(item.estimated_cost) || 0) / totalEstimatedCost) * totalSellingPrice;
+      } else {
+        costShare = totalSellingPrice / childItems.length;
+      }
+      const roundedShare = Math.round((costShare + Number.EPSILON) * 100) / 100;
+      allocatedCosts.push(roundedShare);
+      allocatedSum += roundedShare;
+    }
+  }
+
+  const itemsPayload = childItems.map((item, idx) => ({
+    provider: item.provider,
+    provider_service_id: String(item.provider_service_id),
+    service_type: item.service_type || `Item #${idx + 1}`,
+    quantity: Number(item.fixed_quantity || 1000),
+    allocated_cost: allocatedCosts[idx]
+  }));
+
   // Idempotency check with Redis (10 second lock)
   if (redis) {
-    const orderLockKey = `smm:lock:combo:${user.id}:${comboDef.id}:${encodeURIComponent(link.trim())}`;
+    const orderLockKey = `smm:lock:combo:${user.id}:${comboDef.id}:${encodeURIComponent(cleanedLink)}`;
     const acquired = await redis.set(orderLockKey, 'locked', { nx: true, ex: 10 });
     if (!acquired) {
       return res.status(409).json({
@@ -94,132 +170,149 @@ export default async function handler(req, res) {
     }
   }
 
+  const hashData = `${user.id}-${comboDef.id}-${cleanedLink}-${Math.floor(Date.now() / 60000)}`;
+  const idempotencyHash = crypto.createHash('md5').update(hashData).digest('hex');
+
   try {
-    // 1. Execute Atomic RPC to deduct balance & create Parent/Child DB records
-    const { data: rpcRes, error: rpcErr } = await supabase.rpc('place_combo_order_atomic', {
+    // 1. Execute Atomic RPC to deduct balance & create separate independent order records in public.orders
+    const { data: rpcRes, error: rpcErr } = await supabase.rpc('create_secure_combo_orders', {
       p_user_id: user.id,
-      p_combo_service_id: comboDef.id,
-      p_link: link.trim(),
-      p_quantity: qtyNum
+      p_service_id: comboDef.service_id || null,
+      p_combo_name: comboDef.name,
+      p_link: cleanedLink,
+      p_total_cost: totalSellingPrice,
+      p_items: itemsPayload,
+      p_idempotency_key: idempotencyHash
     });
 
     if (rpcErr || !rpcRes || !rpcRes.success) {
-      const errMsg = rpcErr?.message || rpcRes?.error || 'Failed to place combo order';
+      const errMsg = rpcErr?.message || rpcRes?.message || 'Failed to process combo order';
       return res.status(400).json({ error: errMsg });
     }
 
-    const { parent_order_id, child_orders } = rpcRes;
+    const { combo_id, created_orders, new_balance } = rpcRes;
+    const splitOrderResults = [];
 
-    // 2. Dispatch child orders asynchronously
-    // Immediate child orders (delay === 0) dispatch right away
-    if (Array.isArray(child_orders)) {
-      for (const child of child_orders) {
-        const delaySec = child.delay_seconds || 0;
+    // 2. Dispatch each split order independently to its provider API
+    for (const splitOrder of (created_orders || [])) {
+      try {
+        console.log(`[ComboSplit] Dispatching split order ${splitOrder.id} (${splitOrder.service_type}) to ${splitOrder.provider} (Service ID: ${splitOrder.provider_service_id})...`);
 
-        const processChild = async () => {
-          try {
-            // Log Provider Request Attempt
-            await supabase.from('combo_logs').insert({
-              parent_order_id,
-              child_order_id: child.id,
-              log_type: 'provider_request',
-              message: `Sending order to ${child.provider} (Service ID ${child.provider_service_id})`,
-              details: { provider: child.provider, service_id: child.provider_service_id, quantity: child.fixed_quantity, link: link.trim() }
-            });
+        const providerResponse = await placeProviderOrder(splitOrder.provider, {
+          service: splitOrder.provider_service_id,
+          link: cleanedLink,
+          quantity: splitOrder.quantity,
+          comments: comments || undefined
+        });
 
-            const providerResult = await dispatchProviderOrder({
-              provider: child.provider,
-              service_id: child.provider_service_id,
-              link: link.trim(),
-              quantity: child.fixed_quantity
-            });
+        console.log(`[ComboSplit] Provider response for ${splitOrder.id}:`, providerResponse);
+        const extId = extractOrderId(providerResponse);
 
-            if (providerResult.success) {
-              await supabase
-                .from('combo_child_orders')
-                .update({
-                  provider_order_id: providerResult.provider_order_id,
-                  status: 'processing',
-                  dispatched_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString()
-                })
-                .eq('id', child.id);
+        if (extId) {
+          // Success: Update this specific order with provider order ID and status='processing'
+          const updateData = {
+            status: 'processing',
+            submitted_at: new Date().toISOString(),
+            last_status_check: new Date().toISOString()
+          };
 
-              await supabase.from('combo_logs').insert({
-                parent_order_id,
-                child_order_id: child.id,
-                log_type: 'provider_response',
-                message: `Provider order placed successfully with Order ID ${providerResult.provider_order_id}`,
-                details: providerResult.raw_response
-              });
-            } else {
-              await supabase
-                .from('combo_child_orders')
-                .update({
-                  status: 'failed',
-                  error_message: providerResult.error || 'Provider API error',
-                  updated_at: new Date().toISOString()
-                })
-                .eq('id', child.id);
+          const p = splitOrder.provider.toLowerCase();
+          const pid = String(extId);
+          if (p === 'smmgen')     updateData.smmgen_order_id     = pid;
+          if (p === 'smmcost')    updateData.smmcost_order_id   = pid;
+          if (p === 'jbsmmpanel') updateData.jbsmmpanel_order_id = parseInt(pid, 10) || 0;
+          if (p === 'worldofsmm') updateData.worldofsmm_order_id = pid;
+          if (p === 'g1618')      updateData.g1618_order_id      = pid;
+          if (p === 'oldsmm')     updateData.oldsmm_order_id     = pid;
+          if (p === 'apiowner')   updateData.apiowner_order_id   = pid;
 
-              await supabase.from('combo_logs').insert({
-                parent_order_id,
-                child_order_id: child.id,
-                log_type: 'failure',
-                message: `Provider placement failed: ${providerResult.error}`,
-                details: { error: providerResult.error, raw: providerResult.raw_response }
-              });
+          await supabase.from('orders').update(updateData).eq('id', splitOrder.id);
 
-              // Calculate proportional refund for this failed child sub-order
-              const totalChildrenCost = child_orders.reduce((sum, c) => sum + parseFloat(c.cost || 0), 0);
-              const parentPrice = parseFloat(comboDef.selling_price || 0);
-              const childRefundShare = totalChildrenCost > 0
-                ? (parseFloat(child.cost || 0) / totalChildrenCost) * parentPrice
-                : parentPrice / child_orders.length;
-
-              await processComboBuilderRefund(supabase, {
-                parentOrderId: parent_order_id,
-                childOrderId: child.id,
-                userId: user.id,
-                amount: childRefundShare,
-                refundType: 'partial',
-                reason: `Refund for failed sub-order (${child.service_type}) in Combo #${parent_order_id.slice(0, 8)}: ${providerResult.error || 'Provider placement failed'}`
-              });
-            }
-
-            // Recalculate Parent Order Status
-            await supabase.rpc('update_combo_parent_order_status', {
-              p_parent_order_id: parent_order_id
-            });
-          } catch (childErr) {
-            console.error(`[ComboChildDispatch] Exception for child ${child.id}:`, childErr);
-          }
-        };
-
-        if (delaySec === 0) {
-          // Immediate dispatch
-          processChild();
+          splitOrderResults.push({
+            order_id: splitOrder.id,
+            service: splitOrder.service_name,
+            provider: splitOrder.provider,
+            provider_order_id: pid,
+            quantity: splitOrder.quantity,
+            allocated_cost: splitOrder.allocated_cost,
+            status: 'processing'
+          });
         } else {
-          // Scheduled timeout dispatch in Node.js
-          setTimeout(processChild, delaySec * 1000);
+          // Placement failed for this specific split order: auto-refund its allocated amount ONLY
+          const errMsg = providerResponse?.error || providerResponse?.message || 'Provider order placement failed';
+          console.warn(`[ComboSplit] Split order ${splitOrder.id} failed:`, errMsg);
+
+          await supabase.from('orders').update({
+            status: 'failed',
+            last_provider_error: errMsg,
+            provider_error_details: providerResponse || {}
+          }).eq('id', splitOrder.id);
+
+          // Auto-refund ONLY the allocated selling price for this specific child order
+          const refundRes = await supabase.rpc('process_automatic_refund', {
+            p_order_id: String(splitOrder.id),
+            p_refund_amount: parseFloat(splitOrder.allocated_cost || 0),
+            p_refund_type: 'full',
+            p_remains: 0
+          });
+
+          console.log(`[ComboSplit] Auto-refund for split order ${splitOrder.id} (${splitOrder.allocated_cost} GHS):`, refundRes.data || refundRes.error);
+
+          splitOrderResults.push({
+            order_id: splitOrder.id,
+            service: splitOrder.service_name,
+            provider: splitOrder.provider,
+            provider_order_id: null,
+            quantity: splitOrder.quantity,
+            allocated_cost: splitOrder.allocated_cost,
+            status: 'refunded',
+            refunded: true,
+            error: errMsg
+          });
         }
+      } catch (childErr) {
+        console.error(`[ComboSplit] Exception placing order ${splitOrder.id}:`, childErr.message);
+
+        await supabase.from('orders').update({
+          status: 'failed',
+          last_provider_error: childErr.message
+        }).eq('id', splitOrder.id);
+
+        // Auto-refund for this child order
+        await supabase.rpc('process_automatic_refund', {
+          p_order_id: String(splitOrder.id),
+          p_refund_amount: parseFloat(splitOrder.allocated_cost || 0),
+          p_refund_type: 'full',
+          p_remains: 0
+        });
+
+        splitOrderResults.push({
+          order_id: splitOrder.id,
+          service: splitOrder.service_name,
+          provider: splitOrder.provider,
+          provider_order_id: null,
+          quantity: splitOrder.quantity,
+          allocated_cost: splitOrder.allocated_cost,
+          status: 'refunded',
+          refunded: true,
+          error: childErr.message
+        });
       }
     }
 
-    // 3. Return clean Parent Order response to customer
+    // 3. Return clean response with split order details
     return res.status(200).json({
       success: true,
-      message: 'Combo order placed successfully',
-      order: {
-        id: parent_order_id,
-        service_name: comboDef.name,
-        selling_price: comboDef.selling_price,
-        quantity: qtyNum,
-        status: 'pending'
-      }
+      message: 'Combo order placed and split successfully',
+      combo_id,
+      combo_name: comboDef.name,
+      total_cost: totalSellingPrice,
+      orders: splitOrderResults,
+      new_balance
     });
+
   } catch (err) {
-    console.error('[place-combo-order] Exception:', err);
+    console.error('[place-combo-order] Fatal exception:', err);
     return res.status(500).json({ error: err.message });
   }
 }

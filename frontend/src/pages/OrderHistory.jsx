@@ -40,11 +40,11 @@ const OrderHistory = ({ user, onLogout }) => {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) return;
 
-      // Query regular orders and combo builder parent orders
+      // Query regular orders and legacy combo builder parent orders
       const [ordersRes, comboOrdersRes, servicesRes] = await Promise.all([
         supabase
           .from('orders')
-          .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, component_provider_order_ids, created_at, completed_at, refund_status, total_cost, last_status_check, is_reward, promotion_packages(name, platform, service_type, is_combo), services(id, name, platform, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id, is_combo)')
+          .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, component_provider_order_ids, combo_id, combo_name, combo_item_name, service_name, is_combo, created_at, completed_at, refund_status, total_cost, last_status_check, is_reward, promotion_packages(name, platform, service_type, is_combo), services(id, name, platform, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id, is_combo)')
           .eq('user_id', authUser.id)
           .order('created_at', { ascending: false }),
         supabase
@@ -63,128 +63,121 @@ const OrderHistory = ({ user, onLogout }) => {
       const rawRegularOrders = ordersRes.data || [];
       const normalizedOrders = [];
 
-      // 1. Process regular orders from public.orders
+      // 1. Process orders from public.orders (each split order is its own independent row)
       rawRegularOrders.forEach(order => {
-        const components = order.component_provider_order_ids;
-        const serviceName = order.promotion_packages?.name || order.services?.name || 'Service';
-        const platform = order.promotion_packages?.platform || order.services?.platform || '';
-        const isCombo = Array.isArray(components) && components.length > 1;
+        const isInternalUuid = order.smmgen_order_id === order.id;
+        const displayId = order.apiowner_order_id && !String(order.apiowner_order_id).toLowerCase().includes('not placed')
+          ? order.apiowner_order_id
+          : order.oldsmm_order_id && !String(order.oldsmm_order_id).toLowerCase().includes('not placed')
+            ? order.oldsmm_order_id
+            : order.g1618_order_id && !String(order.g1618_order_id).toLowerCase().includes('not placed')
+              ? order.g1618_order_id
+              : order.worldofsmm_order_id && !String(order.worldofsmm_order_id).toLowerCase().includes('not placed')
+                ? order.worldofsmm_order_id
+                : order.smmcost_order_id && !String(order.smmcost_order_id).toLowerCase().includes('not placed')
+                  ? order.smmcost_order_id
+                  : order.jbsmmpanel_order_id && order.jbsmmpanel_order_id > 0
+                    ? order.jbsmmpanel_order_id
+                    : order.smmgen_order_id && !isInternalUuid && !String(order.smmgen_order_id).toLowerCase().includes('not placed')
+                      ? order.smmgen_order_id
+                      : (order.id ? order.id.slice(0, 8) : 'N/A');
 
-        if (isCombo) {
-          // Keep as 1 row with sub-orders embedded
-          const subOrders = components.map((comp, idx) => ({
-            id: `${order.id}-${idx}`,
-            name: comp.service_name || comp.service_type || comp.provider || `Item #${idx + 1}`,
-            order_id: comp.provider_order_id || 'Not placed',
-            quantity: comp.quantity || comp.fixed_quantity || Math.round(order.quantity / components.length),
-            status: comp.status || order.status,
-            provider: comp.provider
-          }));
-
-          normalizedOrders.push({
-            id: order.id,
-            raw_order_id: order.id,
-            service_id: order.service_id,
-            promotion_package_id: order.promotion_package_id,
-            service_name: serviceName,
-            platform: platform,
-            link: order.link,
-            quantity: order.quantity,
-            total_cost: parseFloat(order.total_cost || 0),
-            status: order.status,
-            created_at: order.created_at,
-            is_combo: true,
-            is_builder_combo: false,
-            sub_orders: subOrders,
-            is_reward: order.is_reward,
-            services: order.services,
-            promotion_packages: order.promotion_packages
-          });
-        } else {
-          // Regular single order
-          const isInternalUuid = order.smmgen_order_id === order.id;
-          const displayId = order.apiowner_order_id && !String(order.apiowner_order_id).toLowerCase().includes('not placed')
-            ? order.apiowner_order_id
-            : order.oldsmm_order_id && !String(order.oldsmm_order_id).toLowerCase().includes('not placed')
-              ? order.oldsmm_order_id
-              : order.g1618_order_id && !String(order.g1618_order_id).toLowerCase().includes('not placed')
-                ? order.g1618_order_id
-                : order.worldofsmm_order_id && !String(order.worldofsmm_order_id).toLowerCase().includes('not placed')
-                  ? order.worldofsmm_order_id
-                  : order.smmcost_order_id && !String(order.smmcost_order_id).toLowerCase().includes('not placed')
-                    ? order.smmcost_order_id
-                    : order.jbsmmpanel_order_id && order.jbsmmpanel_order_id > 0
-                      ? order.jbsmmpanel_order_id
-                      : order.smmgen_order_id && !isInternalUuid && !String(order.smmgen_order_id).toLowerCase().includes('not placed')
-                        ? order.smmgen_order_id
-                        : order.id.slice(0, 8);
-
-          normalizedOrders.push({
-            id: order.id,
-            raw_order_id: order.id,
-            service_id: order.service_id,
-            promotion_package_id: order.promotion_package_id,
-            service_name: serviceName,
-            platform: platform,
-            order_number: displayId,
-            display_order_id: displayId,
-            link: order.link,
-            quantity: order.quantity,
-            total_cost: parseFloat(order.total_cost || 0),
-            status: order.status,
-            created_at: order.created_at,
-            smmgen_order_id: order.smmgen_order_id,
-            smmcost_order_id: order.smmcost_order_id,
-            jbsmmpanel_order_id: order.jbsmmpanel_order_id,
-            worldofsmm_order_id: order.worldofsmm_order_id,
-            g1618_order_id: order.g1618_order_id,
-            oldsmm_order_id: order.oldsmm_order_id,
-            apiowner_order_id: order.apiowner_order_id,
-            is_reward: order.is_reward,
-            is_combo: false,
-            is_builder_combo: false,
-            sub_orders: null,
-            services: order.services,
-            promotion_packages: order.promotion_packages
-          });
+        const isComboOrder = !!(order.is_combo || order.combo_id || order.combo_name);
+        let serviceDisplayName = order.service_name;
+        if (!serviceDisplayName) {
+          if (order.combo_name && order.combo_item_name) {
+            serviceDisplayName = `${order.combo_name} (${order.combo_item_name})`;
+          } else if (order.combo_name) {
+            serviceDisplayName = order.combo_name;
+          } else {
+            serviceDisplayName = order.promotion_packages?.name || order.services?.name || 'SMM Service';
+          }
         }
+
+        const platform = order.promotion_packages?.platform || order.services?.platform || 'General';
+
+        normalizedOrders.push({
+          id: order.id,
+          raw_order_id: order.id,
+          service_id: order.service_id,
+          promotion_package_id: order.promotion_package_id,
+          service_name: serviceDisplayName,
+          platform: platform,
+          order_number: displayId,
+          display_order_id: displayId,
+          link: order.link,
+          quantity: order.quantity,
+          total_cost: parseFloat(order.total_cost || 0),
+          status: order.status,
+          created_at: order.created_at,
+          smmgen_order_id: order.smmgen_order_id,
+          smmcost_order_id: order.smmcost_order_id,
+          jbsmmpanel_order_id: order.jbsmmpanel_order_id,
+          worldofsmm_order_id: order.worldofsmm_order_id,
+          g1618_order_id: order.g1618_order_id,
+          oldsmm_order_id: order.oldsmm_order_id,
+          apiowner_order_id: order.apiowner_order_id,
+          is_reward: order.is_reward,
+          is_combo: isComboOrder,
+          combo_id: order.combo_id,
+          combo_name: order.combo_name,
+          combo_item_name: order.combo_item_name,
+          services: order.services,
+          promotion_packages: order.promotion_packages
+        });
       });
 
-      // 2. Process combo builder orders from combo_parent_orders (as 1 row with sub-orders embedded)
+      // 2. Handle legacy combo builder parent orders if existing in historical database
       rawComboOrders.forEach(cOrder => {
         const childs = cOrder.combo_child_orders || [];
         const baseComboName = cOrder.combo_service_name || 'Combo Package';
         const platform = cOrder.combo_services?.category || 'Combo';
 
-        const subOrders = childs.map((child, idx) => ({
-          id: child.id,
-          name: child.service_type || `Item #${idx + 1}`,
-          order_id: child.provider_order_id || `#${cOrder.order_number || ''}` || child.id.slice(0, 8),
-          quantity: child.fixed_quantity || cOrder.quantity,
-          status: child.status || 'pending',
-          provider: child.provider
-        }));
-
-        normalizedOrders.push({
-          id: cOrder.id,
-          raw_order_id: cOrder.id,
-          service_name: baseComboName,
-          platform: platform,
-          order_number: `#${cOrder.order_number || ''}`,
-          display_order_id: `#${cOrder.order_number || cOrder.id.slice(0, 8)}`,
-          link: cOrder.link,
-          quantity: cOrder.quantity || 1,
-          total_cost: parseFloat(cOrder.selling_price || 0),
-          status: cOrder.status || 'pending',
-          created_at: cOrder.created_at,
-          is_combo: true,
-          is_builder_combo: true,
-          sub_orders: subOrders,
-          services: {
-            name: baseComboName,
-            platform: platform
-          }
-        });
+        if (childs.length > 0) {
+          childs.forEach((child, idx) => {
+            const childCost = parseFloat(child.cost || 0);
+            normalizedOrders.push({
+              id: child.id,
+              raw_order_id: cOrder.id,
+              service_name: `${baseComboName} (${child.service_type || `Item #${idx + 1}`})`,
+              platform: platform,
+              order_number: child.provider_order_id || `#${cOrder.order_number || ''}` || child.id.slice(0, 8),
+              display_order_id: child.provider_order_id || `#${cOrder.order_number || child.id.slice(0, 8)}`,
+              link: cOrder.link,
+              quantity: child.fixed_quantity || cOrder.quantity,
+              total_cost: childCost > 0 ? childCost : parseFloat(cOrder.selling_price || 0) / childs.length,
+              status: child.status || 'pending',
+              created_at: child.created_at || cOrder.created_at,
+              is_combo: true,
+              is_legacy_combo: true,
+              combo_name: baseComboName,
+              services: {
+                name: baseComboName,
+                platform: platform
+              }
+            });
+          });
+        } else {
+          normalizedOrders.push({
+            id: cOrder.id,
+            raw_order_id: cOrder.id,
+            service_name: baseComboName,
+            platform: platform,
+            order_number: `#${cOrder.order_number || ''}`,
+            display_order_id: `#${cOrder.order_number || cOrder.id.slice(0, 8)}`,
+            link: cOrder.link,
+            quantity: cOrder.quantity || 1,
+            total_cost: parseFloat(cOrder.selling_price || 0),
+            status: cOrder.status || 'pending',
+            created_at: cOrder.created_at,
+            is_combo: true,
+            combo_name: baseComboName,
+            services: {
+              name: baseComboName,
+              platform: platform
+            }
+          });
+        }
       });
 
       // Sort all orders chronologically descending
@@ -253,18 +246,16 @@ const OrderHistory = ({ user, onLogout }) => {
     }
   };
 
-  // Check and update order status (supports single & combo orders)
+  // Check and update order status (supports single & split combo orders)
   const checkOrderStatus = useCallback(async (order) => {
     if (checkingStatus[order.id]) return;
 
     setCheckingStatus(prev => ({ ...prev, [order.id]: true }));
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-
-      if (order.is_combo) {
-        // Combo order status check
+      if (order.is_legacy_combo) {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
         const targetId = order.raw_order_id || order.id;
         const res = await fetch('/api/order/check-combo-status', {
           method: 'POST',
@@ -277,7 +268,7 @@ const OrderHistory = ({ user, onLogout }) => {
 
         const resData = await res.json();
         if (resData.success) {
-          toast.success('Combo order statuses refreshed!');
+          toast.success('Order status refreshed!');
           fetchData();
         } else {
           toast.error(resData.error || 'Failed to check order status');
@@ -285,13 +276,13 @@ const OrderHistory = ({ user, onLogout }) => {
         return;
       }
 
-      // Single regular order
+      // Standard order / split combo order from public.orders
       const result = await checkOrdersStatusBatch([order], {
         concurrency: 1,
         minIntervalMinutes: 0
       });
 
-      if (result.errors.length > 0) {
+      if (result.errors && result.errors.length > 0) {
         toast.error(`Error checking order: ${result.errors[0].error}`);
       } else {
         toast.success(`Order status checked: ${result.newStatus || order.status}`);
@@ -436,7 +427,7 @@ const OrderHistory = ({ user, onLogout }) => {
                     <div className="divide-y divide-gray-200">
                       {paginatedOrders.map((order) => {
                         const serviceName = order.service_name || order.services?.name || 'Service';
-                        const isCombo = order.is_combo && Array.isArray(order.sub_orders) && order.sub_orders.length > 0;
+                        const isCombo = !!order.is_combo;
 
                         return (
                           <div
@@ -458,7 +449,7 @@ const OrderHistory = ({ user, onLogout }) => {
                                   {isCombo && (
                                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-100 text-indigo-700 text-[10px] font-semibold rounded border border-indigo-200">
                                       <Layers className="w-2.5 h-2.5" />
-                                      Combo ({order.sub_orders.length})
+                                      Combo
                                     </span>
                                   )}
 
@@ -472,20 +463,9 @@ const OrderHistory = ({ user, onLogout }) => {
 
                               {/* Order ID(s) */}
                               <div className="text-center flex flex-col items-center gap-1.5">
-                                {isCombo ? (
-                                  order.sub_orders.map((sub, sIdx) => (
-                                    <div key={sIdx} className="flex items-center gap-1 text-[11px]">
-                                      <span className="text-gray-500 font-medium text-[10px]">{sub.name}:</span>
-                                      <span className="font-mono font-semibold text-gray-800 bg-gray-50 border border-gray-200 px-1.5 py-0.5 rounded text-[11px]">
-                                        {sub.order_id}
-                                      </span>
-                                    </div>
-                                  ))
-                                ) : (
-                                  <span className="font-mono font-semibold text-gray-900 text-xs sm:text-sm bg-gray-50 border border-gray-200 px-2 py-1 rounded">
-                                    {order.display_order_id || order.order_number || 'N/A'}
-                                  </span>
-                                )}
+                                <span className="font-mono font-semibold text-gray-900 text-xs sm:text-sm bg-gray-50 border border-gray-200 px-2 py-1 rounded">
+                                  {order.display_order_id || order.order_number || 'N/A'}
+                                </span>
                               </div>
 
                               {/* Link */}
@@ -497,16 +477,7 @@ const OrderHistory = ({ user, onLogout }) => {
 
                               {/* Quantity */}
                               <div className="text-center flex flex-col items-center gap-1">
-                                {isCombo ? (
-                                  order.sub_orders.map((sub, sIdx) => (
-                                    <div key={sIdx} className="text-xs font-semibold text-gray-900 flex items-center gap-1">
-                                      <span>+{Number(sub.quantity || 0).toLocaleString()}</span>
-                                      <span className="text-[10px] text-gray-500 font-normal">({sub.name})</span>
-                                    </div>
-                                  ))
-                                ) : (
-                                  <p className="font-semibold text-gray-900 text-sm">+{Number(order.quantity || 0).toLocaleString()}</p>
-                                )}
+                                <p className="font-semibold text-gray-900 text-sm">+{Number(order.quantity || 0).toLocaleString()}</p>
                               </div>
 
                               {/* Cost */}
@@ -514,28 +485,12 @@ const OrderHistory = ({ user, onLogout }) => {
                                 <p className="font-semibold text-gray-900 text-sm">₵{(order.total_cost || 0).toFixed(2)}</p>
                               </div>
 
-                              {/* Status (Shows all sub-order statuses directly in 1 field) */}
-                              <div className="flex flex-col items-center justify-center gap-1.5">
-                                {isCombo ? (
-                                  order.sub_orders.map((sub, sIdx) => (
-                                    <div key={sIdx} className="flex items-center gap-1.5 w-full justify-center">
-                                      <span className="text-[10px] text-gray-600 font-medium truncate max-w-[70px] text-right" title={sub.name}>
-                                        {sub.name}:
-                                      </span>
-                                      <span className={`text-[11px] px-2 py-0.5 rounded border font-medium capitalize whitespace-nowrap flex items-center gap-1 ${getStatusColor(sub.status)}`}>
-                                        {getStatusIcon(sub.status)}
-                                        {sub.status}
-                                      </span>
-                                    </div>
-                                  ))
-                                ) : (
-                                  <div className="flex items-center gap-1.5">
-                                    {getStatusIcon(order.status)}
-                                    <span className={`text-xs px-2.5 py-1 rounded border font-medium capitalize whitespace-nowrap ${getStatusColor(order.status)}`}>
-                                      {order.status}
-                                    </span>
-                                  </div>
-                                )}
+                              {/* Status */}
+                              <div className="flex items-center justify-center gap-1.5">
+                                {getStatusIcon(order.status)}
+                                <span className={`text-xs px-2.5 py-1 rounded border font-medium capitalize whitespace-nowrap ${getStatusColor(order.status)}`}>
+                                  {order.status}
+                                </span>
                               </div>
 
                               {/* Date */}
