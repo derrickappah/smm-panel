@@ -53,25 +53,27 @@ const DashboardOrders = React.memo(({ orders, services }) => {
     }
   };
 
-  if (!orders || orders.length === 0) {
+  const displayOrders = (orders || []).slice(0, 1);
+
+  if (!displayOrders || displayOrders.length === 0) {
     return null;
   }
 
   return (
     <div className="mt-6 sm:mt-8 bg-white border-2 border-gray-300 rounded-lg p-4 sm:p-6 shadow-xl animate-slideUp">
       <div className="flex items-center justify-between mb-4 gap-4">
-        <h2 className="text-lg sm:text-xl font-bold text-gray-900">Recent Orders</h2>
+        <h2 className="text-lg sm:text-xl font-bold text-gray-900">Recent Order</h2>
         <Button
           data-testid="view-all-orders-btn"
           variant="ghost"
           onClick={() => navigate('/orders')}
-          className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-lg whitespace-nowrap h-8 px-3 text-sm"
+          className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-lg whitespace-nowrap h-8 px-3 text-sm font-medium"
         >
-          View All
+          See More
         </Button>
       </div>
       <div className="space-y-2">
-        {orders.map((order) => {
+        {displayOrders.map((order) => {
           const service = services?.find(s => s.id === order.service_id) || order.services;
           const isPackageOrder = !!order.promotion_package_id;
           const isCombo = order.is_combo && Array.isArray(order.sub_orders) && order.sub_orders.length > 0;

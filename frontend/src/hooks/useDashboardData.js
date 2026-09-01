@@ -203,7 +203,7 @@ const fetchRecentOrders = async () => {
 
     combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-    return { orders: combined.slice(0, 5), count: combined.length };
+    return { orders: combined.slice(0, 1), count: combined.length };
   } catch (error) {
     console.warn('Error fetching recent orders in dashboard:', error.message);
     return { orders: [], count: 0 };
