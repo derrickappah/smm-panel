@@ -709,9 +709,21 @@ app.post('/api/check-orders-status', async (req, res) => {
 
           if (someChanged) {
             // Aggregated status logic
-            if (allCompleted) finalStatus = 'completed';
-            else if (anyCanceled && !anyInProgress) finalStatus = 'partial'; // Or canceled if all canceled
-            else if (anyInProgress || someChanged) finalStatus = 'processing';
+            const compCompleted = updatedComponents.filter(c => c.status === 'completed').length;
+            const compCanceled = updatedComponents.filter(c => ['canceled', 'cancelled', 'refunded', 'failed'].includes(c.status)).length;
+            const compInProgress = updatedComponents.filter(c => ['in progress', 'processing'].includes(c.status)).length;
+
+            if (compCompleted === updatedComponents.length) {
+              finalStatus = 'completed';
+            } else if (compCanceled === updatedComponents.length) {
+              finalStatus = 'canceled';
+            } else if (compCompleted > 0 && compCanceled > 0) {
+              finalStatus = 'partial';
+            } else if (compInProgress > 0 || compCompleted > 0) {
+              finalStatus = 'processing';
+            } else if (compCanceled > 0) {
+              finalStatus = 'canceled';
+            }
 
             updates.push({ id: order.id, status: finalStatus, component_provider_order_ids: updatedComponents });
             results.push({ id: order.id, old: order.status, new: finalStatus, provider: 'combo' });

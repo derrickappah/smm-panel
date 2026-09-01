@@ -196,19 +196,29 @@ export default async function handler(req, res) {
         });
 
         if (compStatus !== 'completed') allCompleted = false;
-        if (['in progress', 'processing', 'pending'].includes(compStatus)) anyInProgress = true;
+        if (['in progress', 'processing'].includes(compStatus)) anyInProgress = true;
         if (['canceled', 'cancelled', 'refunded'].includes(compStatus)) anyCanceled = true;
         if (compStatus === 'failed') anyFailed = true;
       }
 
+      const completedCount = updatedComponents.filter(c => c.status === 'completed').length;
+      const inactiveFailedCount = updatedComponents.filter(c => ['canceled', 'cancelled', 'refunded', 'failed'].includes(c.status)).length;
+      const inProgressCount = updatedComponents.filter(c => ['in progress', 'processing'].includes(c.status)).length;
+      const totalCount = updatedComponents.length;
+
       let newParentStatus = regularOrder.status;
-      if (allCompleted) {
+      if (completedCount === totalCount) {
         newParentStatus = 'completed';
-      } else if ((anyCanceled || anyFailed) && !anyInProgress) {
+      } else if (inactiveFailedCount === totalCount) {
+        newParentStatus = 'canceled';
+      } else if (completedCount > 0 && inactiveFailedCount > 0) {
         newParentStatus = 'partial';
-      } else if (anyInProgress || componentsChanged) {
+      } else if (inProgressCount > 0 || completedCount > 0) {
         newParentStatus = 'processing';
+      } else if (inactiveFailedCount > 0) {
+        newParentStatus = 'canceled';
       }
+
 
       const updatePayload = {
         component_provider_order_ids: updatedComponents,

@@ -167,10 +167,16 @@ BEGIN
         v_new_status := 'pending';
     ELSIF v_completed_children = v_total_children THEN
         v_new_status := 'completed';
-    ELSIF v_failed_children > 0 OR v_canceled_children > 0 THEN
+    ELSIF v_canceled_children = v_total_children THEN
+        v_new_status := 'canceled';
+    ELSIF (v_failed_children + v_canceled_children) = v_total_children THEN
+        v_new_status := 'canceled';
+    ELSIF (v_completed_children > 0 AND (v_failed_children > 0 OR v_canceled_children > 0)) THEN
         v_new_status := 'partial';
-    ELSIF v_processing_children > 0 OR v_completed_children > 0 THEN
+    ELSIF (v_processing_children > 0 OR v_completed_children > 0) THEN
         v_new_status := 'processing';
+    ELSIF (v_failed_children > 0 OR v_canceled_children > 0) THEN
+        v_new_status := 'canceled';
     ELSE
         v_new_status := 'pending';
     END IF;
