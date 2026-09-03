@@ -1286,6 +1286,17 @@ app.post('/api/admin/orders-list', async (req, res) => {
   }
 });
 
+// Admin User Transactions Search Server Action
+app.post('/api/admin/user-transactions-search', async (req, res) => {
+  try {
+    const handler = (await import('../api/admin/user-transactions-search.js')).default;
+    await handler(req, res);
+  } catch (error) {
+    console.error('Error in /api/admin/user-transactions-search endpoint:', error);
+    res.status(500).json({ error: 'Server action failed', message: error.message });
+  }
+});
+
 // Check Combo Orders Status Endpoint
 app.post('/api/order/check-combo-status', async (req, res) => {
   try {

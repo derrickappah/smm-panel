@@ -22,6 +22,7 @@ const AdminUsers = lazy(() => import('@/pages/admin/AdminUsers'));
 const AdminUserSearch = lazy(() => import('@/pages/admin/AdminUserSearch'));
 const AdminBannedUsers = lazy(() => import('@/pages/admin/AdminBannedUsers'));
 const AdminUserExport = lazy(() => import('@/pages/admin/AdminUserExport'));
+const AdminUserTransactionsSearch = lazy(() => import('@/pages/admin/AdminUserTransactionsSearch'));
 const AdminOrders = lazy(() => import('@/pages/admin/AdminOrders'));
 const AdminOrderSearch = lazy(() => import('@/pages/admin/AdminOrderSearch'));
 const AdminDeposits = lazy(() => import('@/pages/admin/AdminDeposits'));
@@ -96,6 +97,9 @@ const AdminDashboard = memo(({ user, onLogout }) => {
         'users/banned': 'banned-users',
         'export-users': 'export-users',
         'users/export': 'export-users',
+        'user-transactions-search': 'user-transactions-search',
+        'transactions/search': 'user-transactions-search',
+        'user-transactions': 'user-transactions-search',
         'transactions': 'transactions',
         'support': 'support',
         'balance': 'balance',
@@ -345,6 +349,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     'user-search': 'User Search',
     'banned-users': 'Banned Users',
     'export-users': 'Export Users',
+    'user-transactions-search': 'User Transactions & Timeline',
     transactions: 'Transactions',
     support: 'Support',
     balance: 'Balance Check',
@@ -383,6 +388,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     { id: 'user-search', label: 'User Search', icon: Search },
     { id: 'banned-users', label: 'Banned Users', icon: ShieldAlert },
     { id: 'export-users', label: 'Export Users', icon: Download },
+    { id: 'user-transactions-search', label: 'User Transactions', icon: Receipt },
     { id: 'transactions', label: 'Transactions', icon: Receipt },
     { id: 'support', label: 'Support', icon: MessageSquare, badge: stats.open_tickets },
     { id: 'balance', label: 'Balance', icon: Wallet },
@@ -804,6 +810,13 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                 <TabsContent value="export-users" className="lg:mt-0 w-full max-w-full">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminUserExport />
+                  </Suspense>
+                </TabsContent>
+
+                {/* User Transactions & Timeline Search Section */}
+                <TabsContent value="user-transactions-search" className="lg:mt-0 w-full max-w-full">
+                  <Suspense fallback={<ComponentLoader />}>
+                    <AdminUserTransactionsSearch />
                   </Suspense>
                 </TabsContent>
 
