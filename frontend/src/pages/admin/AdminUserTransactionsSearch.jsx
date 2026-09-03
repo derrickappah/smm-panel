@@ -459,16 +459,33 @@ const AdminUserTransactionsSearch = memo(() => {
 
                       {/* Event Box */}
                       <div className="bg-gray-50 hover:bg-white border border-gray-200 hover:border-indigo-300 rounded-2xl p-4 shadow-2xs hover:shadow-sm transition-all space-y-2">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 border-b border-gray-200/60 pb-2">
-                          <div className="flex items-center gap-2">
-                            <h5 className="font-bold text-gray-900 text-sm">{ev.title}</h5>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-200/60 pb-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h5 className="font-bold text-gray-900 text-sm sm:text-base">{ev.title}</h5>
                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase ${ev.badgeColor}`}>
                               {ev.badge}
                             </span>
                           </div>
-                          <span className="text-xs font-mono text-gray-500">
-                            {new Date(ev.timestamp).toLocaleString()}
-                          </span>
+
+                          <div className="flex items-center gap-2 self-start sm:self-auto">
+                            {/* Prominent Price / Amount Badge */}
+                            {(ev.priceDisplay || (ev.amount !== undefined && ev.amount !== null && ev.amount > 0)) && (
+                              <span className={`text-xs font-extrabold px-3 py-1 rounded-xl border shadow-2xs font-mono ${
+                                ev.eventType === 'REFUND' || ev.eventType === 'REFUNDED_ORDER'
+                                  ? 'bg-purple-100 text-purple-900 border-purple-300'
+                                  : ev.eventType === 'DEPOSIT'
+                                  ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                                  : ev.eventType === 'ORDER'
+                                  ? 'bg-indigo-100 text-indigo-900 border-indigo-300'
+                                  : 'bg-gray-100 text-gray-900 border-gray-300'
+                              }`}>
+                                {ev.priceDisplay || `₵${Number(ev.amount).toFixed(2)}`}
+                              </span>
+                            )}
+                            <span className="text-xs font-mono text-gray-500">
+                              {new Date(ev.timestamp).toLocaleString()}
+                            </span>
+                          </div>
                         </div>
 
                         <p className="text-xs text-gray-700 font-medium">{ev.description}</p>

@@ -3,6 +3,7 @@
  * 
  * Path: /api/admin/user-transactions-search
  * Description: High-speed server action to search users and retrieve 100% of all user transactions, orders, tickets, and activity logs from account creation.
+ * Guarantees exact price & amount tagging (in ₵) on every transaction, order, and refund.
  */
 
 import { verifyAdmin, getServiceRoleClient } from '../utils/auth.js';
@@ -194,6 +195,7 @@ export default async function handler(req, res) {
         timestamp: userProfile.created_at,
         title: 'Account Created',
         description: `Registered account with email ${userProfile.email}`,
+        priceDisplay: null,
         badge: 'REGISTERED',
         badgeColor: 'bg-blue-100 text-blue-800 border-blue-200',
         metadata: {
@@ -204,25 +206,38 @@ export default async function handler(req, res) {
       });
     }
 
-    // Events: Transactions
+    // Events: Transactions (Deposits, Refunds, Admin Adjustments, Withdrawals)
     transactions.forEach(t => {
       const isDeposit = t.type === 'deposit';
+      const isRefund = t.type === 'refund' || (t.description && t.description.toLowerCase().includes('refund'));
+      const amt = Number(t.amount || 0);
+
+      let priceTag = isDeposit ? `+₵${amt.toFixed(2)}` : isRefund ? `+₵${amt.toFixed(2)} Refund` : `₵${amt.toFixed(2)}`;
+
       timelineEvents.push({
         id: `tx-${t.id}`,
-        eventType: isDeposit ? 'DEPOSIT' : 'TRANSACTION',
+        eventType: isRefund ? 'REFUND' : isDeposit ? 'DEPOSIT' : 'TRANSACTION',
         category: 'financial',
         timestamp: t.created_at,
-        title: isDeposit ? `Deposit (₵${Number(t.amount || 0).toFixed(2)})` : `Transaction: ${t.type || 'wallet'}`,
+        title: isDeposit 
+          ? `Deposit (₵${amt.toFixed(2)})` 
+          : isRefund 
+          ? `Refund Received (₵${amt.toFixed(2)})` 
+          : `Transaction: ${t.type || 'wallet'} (₵${amt.toFixed(2)})`,
         description: t.description || (isDeposit ? `Deposit via ${t.payment_method || 'gateway'}` : 'Wallet activity'),
-        amount: Number(t.amount || 0),
+        priceDisplay: priceTag,
+        amount: amt,
         status: t.status,
         badge: (t.status || 'completed').toUpperCase(),
-        badgeColor: t.status === 'approved' || t.status === 'completed' 
+        badgeColor: isRefund
+          ? 'bg-purple-100 text-purple-800 border-purple-200'
+          : t.status === 'approved' || t.status === 'completed' 
           ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
           : t.status === 'pending'
           ? 'bg-amber-100 text-amber-800 border-amber-200'
           : 'bg-rose-100 text-rose-800 border-rose-200',
         metadata: {
+          price: `₵${amt.toFixed(2)}`,
           txId: t.id,
           gateway: t.payment_method || t.gateway || 'System',
           reference: t.reference || t.id
@@ -233,27 +248,35 @@ export default async function handler(req, res) {
     // Events: Orders
     orders.forEach(o => {
       const serviceName = o.services?.name || o.promotion_packages?.name || 'SMM Service';
+      const cost = Number(o.total_cost || 0);
+      const isRefunded = o.status === 'refunded' || o.refund_status === 'succeeded';
+
       timelineEvents.push({
         id: `order-${o.id}`,
-        eventType: 'ORDER',
+        eventType: isRefunded ? 'REFUNDED_ORDER' : 'ORDER',
         category: 'order',
         timestamp: o.created_at,
-        title: `Order Placed: ${serviceName}`,
-        description: `Quantity: ${o.quantity?.toLocaleString() || 1} • Cost: ₵${Number(o.total_cost || 0).toFixed(2)} • Link: ${o.link || 'N/A'}`,
-        amount: Number(o.total_cost || 0),
+        title: isRefunded 
+          ? `Order Refunded: ${serviceName} (₵${cost.toFixed(2)})`
+          : `Order Placed: ${serviceName} (₵${cost.toFixed(2)})`,
+        description: `Quantity: ${o.quantity?.toLocaleString() || 1} • Price: ₵${cost.toFixed(2)} • Link: ${o.link || 'N/A'}`,
+        priceDisplay: isRefunded ? `+₵${cost.toFixed(2)} Refund` : `₵${cost.toFixed(2)}`,
+        amount: cost,
         status: o.status,
         badge: (o.status || 'pending').toUpperCase(),
         badgeColor: o.status === 'completed'
           ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
           : o.status === 'processing' || o.status === 'in progress'
           ? 'bg-blue-100 text-blue-800 border-blue-200'
-          : o.status === 'refunded'
+          : isRefunded
           ? 'bg-purple-100 text-purple-800 border-purple-200'
           : o.status === 'canceled'
           ? 'bg-rose-100 text-rose-800 border-rose-200'
           : 'bg-amber-100 text-amber-800 border-amber-200',
         metadata: {
+          orderPrice: `₵${cost.toFixed(2)}`,
           orderId: o.id,
+          quantity: o.quantity,
           smmgenOrderId: o.smmgen_order_id,
           smmcostOrderId: o.smmcost_order_id,
           jbsmmpanelOrderId: o.jbsmmpanel_order_id,
@@ -272,6 +295,7 @@ export default async function handler(req, res) {
         timestamp: tk.created_at,
         title: `Support Ticket: ${tk.subject || 'Support Inquiry'}`,
         description: `Priority: ${tk.priority || 'normal'} • Status: ${tk.status || 'open'}`,
+        priceDisplay: null,
         status: tk.status,
         badge: (tk.status || 'OPEN').toUpperCase(),
         badgeColor: tk.status === 'closed' || tk.status === 'resolved'
@@ -292,6 +316,7 @@ export default async function handler(req, res) {
         timestamp: banInfo.banned_at || userProfile.created_at,
         title: 'Account Banned',
         description: `Ban Reason: ${banInfo.reason || 'No reason provided'}`,
+        priceDisplay: null,
         badge: 'BANNED',
         badgeColor: 'bg-rose-600 text-white border-rose-700',
         metadata: {
