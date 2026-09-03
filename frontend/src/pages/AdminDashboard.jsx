@@ -9,7 +9,7 @@ import {
   Users, ShoppingCart, DollarSign, Package, Wallet, Receipt,
   MessageSquare, UserPlus, RefreshCw, BarChart3, Menu, X, LayoutDashboard, Tag,
   ChevronLeft, ChevronRight, FileText, Server, HelpCircle, CreditCard, Scale, Bell, Video,
-  Gift, Settings, Layers, Search, Download, ShieldAlert, ShieldCheck, Sliders
+  Gift, Settings, Layers, Search, Download, ShieldAlert, ShieldCheck, Sliders, Clock
 } from 'lucide-react';
 import { useReferralStats } from '@/hooks/useAdminReferrals';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -349,7 +349,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     'user-search': 'User Search',
     'banned-users': 'Banned Users',
     'export-users': 'Export Users',
-    'user-transactions-search': 'User Transactions & Timeline',
+    'user-transactions-search': 'Timeline',
     transactions: 'Transactions',
     support: 'Support',
     balance: 'Balance Check',
@@ -388,7 +388,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     { id: 'user-search', label: 'User Search', icon: Search },
     { id: 'banned-users', label: 'Banned Users', icon: ShieldAlert },
     { id: 'export-users', label: 'Export Users', icon: Download },
-    { id: 'user-transactions-search', label: 'User Transactions', icon: Receipt },
+    { id: 'user-transactions-search', label: 'Timeline', icon: Clock },
     { id: 'transactions', label: 'Transactions', icon: Receipt },
     { id: 'support', label: 'Support', icon: MessageSquare, badge: stats.open_tickets },
     { id: 'balance', label: 'Balance', icon: Wallet },

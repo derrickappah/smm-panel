@@ -178,8 +178,8 @@ const AdminUserTransactionsSearch = memo(() => {
       <div className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-6 shadow-md space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
           <div className="flex items-center gap-2 text-gray-900 font-bold text-base sm:text-lg">
-            <Receipt className="w-5 h-5 text-indigo-600 shrink-0" />
-            <span>User Transactions & Action History</span>
+            <Clock className="w-5 h-5 text-indigo-600 shrink-0" />
+            <span>Timeline</span>
           </div>
 
           {user && (
