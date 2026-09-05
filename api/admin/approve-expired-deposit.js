@@ -95,12 +95,30 @@ export default async function handler(req, res) {
       })
     });
 
-    const moolreData = await moolreResponse.json();
+    const moolreText = await moolreResponse.text();
+    let moolreData;
+    try {
+      moolreData = JSON.parse(moolreText);
+    } catch (parseErr) {
+      const jsonMatch = moolreText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          moolreData = JSON.parse(jsonMatch[0]);
+        } catch (e) {}
+      }
+      if (!moolreData) {
+        console.error('[APPROVE-EXPIRED-DEPOSIT] Non-JSON response from Moolre:', moolreText);
+        return res.status(502).json({
+          error: 'Moolre payment gateway returned an invalid non-JSON response. If you have verified the payment in your wallet, you can approve manually.',
+          details: moolreText.slice(0, 300)
+        });
+      }
+    }
 
     if (!moolreResponse.ok || moolreData.status === 0) {
       console.error('[APPROVE-EXPIRED-DEPOSIT] Moolre verification failed:', moolreData);
       return res.status(400).json({
-        error: `Moolre verification failed: ${moolreData.message || 'Transaction not found in Moolre statement'}`
+        error: `Moolre verification failed: ${moolreData.message || 'Transaction not found in Moolre statement'}. If you confirmed payment in your account, use 'Approve Manually'.`
       });
     }
 

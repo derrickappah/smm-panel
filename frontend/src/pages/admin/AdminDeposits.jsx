@@ -787,22 +787,37 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
             </div>
           ) : deposit.status === 'expired' ? (
             <div className="flex flex-col gap-2">
-              {(isMoolre || isMoolreWeb) ? (
+              {(isMoolre || isMoolreWeb) && (
                 <Button
                   onClick={() => handleVerifyExpiredMoolreDeposit(deposit)}
-                  disabled={verifyingDeposit === deposit.id}
+                  disabled={verifyingDeposit === deposit.id || approvingDeposit === deposit.id}
                   variant="outline"
                   size="sm"
                   className="text-xs min-h-[36px] border-orange-500 text-orange-600 hover:bg-orange-50"
                 >
-                  {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify & Approve'}
+                  {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with Moolre'}
                 </Button>
-              ) : (
-                <span className="text-xs text-orange-600 flex items-center gap-1">
-                  <XCircle className="w-4 h-4" />
-                  Expired
-                </span>
               )}
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => handleApproveDeposit(deposit)}
+                  disabled={approvingDeposit === deposit.id || verifyingDeposit === deposit.id}
+                  variant="default"
+                  size="sm"
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs min-h-[36px]"
+                >
+                  {approvingDeposit === deposit.id ? 'Approving...' : 'Approve'}
+                </Button>
+                <Button
+                  onClick={() => handleRejectDeposit(deposit.id)}
+                  disabled={approvingDeposit === deposit.id || verifyingDeposit === deposit.id}
+                  variant="destructive"
+                  size="sm"
+                  className="flex-1 text-xs min-h-[36px]"
+                >
+                  Reject
+                </Button>
+              </div>
             </div>
           ) : isManual && deposit.payment_proof_url ? (
             <Button
@@ -965,22 +980,37 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
         )}
         {deposit.status === 'expired' && (
           <div className="pt-3 border-t border-gray-200 space-y-2">
-            {(isMoolre || isMoolreWeb) ? (
+            {(isMoolre || isMoolreWeb) && (
               <Button
                 onClick={() => handleVerifyExpiredMoolreDeposit(deposit)}
-                disabled={verifyingDeposit === deposit.id}
+                disabled={verifyingDeposit === deposit.id || approvingDeposit === deposit.id}
                 variant="outline"
                 size="sm"
                 className="w-full border-orange-500 text-orange-600 hover:bg-orange-50 min-h-[44px]"
               >
-                {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify & Approve'}
+                {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with Moolre'}
               </Button>
-            ) : (
-              <span className="text-xs text-orange-600 flex items-center gap-1">
-                <XCircle className="w-4 h-4" />
-                Expired
-              </span>
             )}
+            <div className="flex gap-2">
+              <Button
+                onClick={() => handleApproveDeposit(deposit)}
+                disabled={approvingDeposit === deposit.id || verifyingDeposit === deposit.id}
+                variant="default"
+                size="sm"
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white min-h-[44px]"
+              >
+                {approvingDeposit === deposit.id ? 'Approving...' : 'Approve'}
+              </Button>
+              <Button
+                onClick={() => handleRejectDeposit(deposit.id)}
+                disabled={approvingDeposit === deposit.id || verifyingDeposit === deposit.id}
+                variant="destructive"
+                size="sm"
+                className="flex-1 min-h-[44px]"
+              >
+                Reject
+              </Button>
+            </div>
           </div>
         )}
         {isManual && deposit.payment_proof_url && deposit.status !== 'pending' && deposit.status !== 'expired' && (

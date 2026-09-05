@@ -347,8 +347,12 @@ function App() {
               <Toaster position="top-right" closeButton richColors />
               <ConditionalWhatsAppButton />
             </div>
-            <SpeedInsights scriptSrc="https://va.vercel-scripts.com/v1/speed-insights/script.js" />
-            <Analytics scriptSrc="https://va.vercel-scripts.com/v1/script.js" />
+            {process.env.REACT_APP_VERCEL_ANALYTICS_ENABLED === 'true' && (
+              <>
+                <SpeedInsights scriptSrc="https://va.vercel-scripts.com/v1/speed-insights/script.js" />
+                <Analytics scriptSrc="https://va.vercel-scripts.com/v1/script.js" />
+              </>
+            )}
           </BrowserRouter>
         </TooltipProvider>
       </QueryClientProvider>

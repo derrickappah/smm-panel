@@ -136,10 +136,10 @@ export default async function handler(req, res) {
       });
     }
 
-    // Additional check: Only allow approval of pending deposits
-    if (transaction.status !== 'pending') {
+    // Additional check: Allow approval of pending or expired deposits
+    if (transaction.status !== 'pending' && transaction.status !== 'expired') {
       return res.status(400).json({
-        error: 'Can only approve pending deposits',
+        error: 'Can only approve pending or expired deposits',
         current_status: transaction.status,
         transaction_id: transaction_id,
         payment_method: payment_method || null,
