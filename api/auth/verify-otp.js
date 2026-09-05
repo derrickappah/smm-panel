@@ -131,13 +131,15 @@ export default async function handler(req, res) {
       const isNowInvalidated = newAttempts >= 5;
       
       // Update DB record with incremented attempt count
-      await supabase.from('system_events').update({
-        metadata: {
-          ...meta,
-          attempts: newAttempts,
-          invalidated: isNowInvalidated
-        }
-      }).eq('id', matchingEvent.id).catch(() => {});
+      try {
+        await supabase.from('system_events').update({
+          metadata: {
+            ...meta,
+            attempts: newAttempts,
+            invalidated: isNowInvalidated
+          }
+        }).eq('id', matchingEvent.id);
+      } catch (e) {}
 
       if (isNowInvalidated) {
         logSecurityEvent({

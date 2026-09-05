@@ -264,15 +264,16 @@ export async function resolveDevice(req, res = null, options = {}) {
 
       if (targetUserIsBanned && !existingDevice.is_banned) {
         // Enforce ban on device record immediately
-        await supabase
-          .from('user_devices')
-          .update({
-            is_banned: true,
-            banned_at: new Date().toISOString(),
-            ban_reason: 'Associated account suspended'
-          })
-          .eq('id', existingDevice.id)
-          .catch(() => {});
+        try {
+          await supabase
+            .from('user_devices')
+            .update({
+              is_banned: true,
+              banned_at: new Date().toISOString(),
+              ban_reason: 'Associated account suspended'
+            })
+            .eq('id', existingDevice.id);
+        } catch (e) {}
       }
 
       // Update Redis cache
@@ -292,11 +293,12 @@ export async function resolveDevice(req, res = null, options = {}) {
         if (ipAddress) updatePayload.ip_address = ipAddress;
         if (userAgent) updatePayload.user_agent = userAgent;
 
-        await supabase
-          .from('user_devices')
-          .update(updatePayload)
-          .eq('id', existingDevice.id)
-          .catch(() => {});
+        try {
+          await supabase
+            .from('user_devices')
+            .update(updatePayload)
+            .eq('id', existingDevice.id);
+        } catch (e) {}
       }
     } else {
       // Create new device record (atomic upsert on device_id_hash)
