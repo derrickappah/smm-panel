@@ -225,7 +225,26 @@ export default async function handler(req, res) {
       })
     });
 
-    const moolreData = await moolreResponse.json();
+    const moolreText = await moolreResponse.text();
+    let moolreData;
+    try {
+      moolreData = JSON.parse(moolreText);
+    } catch (parseErr) {
+      const jsonMatch = moolreText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          moolreData = JSON.parse(jsonMatch[0]);
+        } catch (e) {}
+      }
+      if (!moolreData) {
+        console.error('[MANUAL-VERIFY-MOOLRE-WEB] Non-JSON response from Moolre:', moolreText);
+        return res.status(502).json({
+          success: false,
+          error: 'Moolre payment gateway returned an invalid non-JSON response. Please try again or verify with manual reference.',
+          details: moolreText.slice(0, 300)
+        });
+      }
+    }
 
     if (!moolreResponse.ok || moolreData.status === 0) {
       console.error('[MANUAL-VERIFY-MOOLRE-WEB] Moolre verification error:', moolreData);
@@ -240,12 +259,22 @@ export default async function handler(req, res) {
     // Define moolreId for compatibility with the rest of the script
     const moolreId = idType === 2 ? moolreIdValue : String(moolreData.data?.id || moolreIdValue);
 
+    // Parse transaction status
+    // txstatus: 1=Success, 0=Pending, 2=Failed
+    const txstatus = moolreData.data?.txstatus;
+    let paymentStatus = 'pending';
+    if (txstatus === 1) {
+      paymentStatus = 'success';
+    } else if (txstatus === 2) {
+      paymentStatus = 'failed';
+    }
+
     // Validate that the Moolre transaction matches this deposit
     const moolreAmount = parseFloat(moolreData.data?.amount || 0);
     const transactionAmount = parseFloat(transaction.amount || 0);
     
-    // Check amount match (allow small floating point differences)
-    if (Math.abs(moolreAmount - transactionAmount) > 0.01) {
+    // Check amount match if payment is marked successful or has a recorded amount
+    if ((paymentStatus === 'success' || moolreAmount > 0) && Math.abs(moolreAmount - transactionAmount) > 0.01) {
       console.error('[MANUAL-VERIFY-MOOLRE-WEB] Amount mismatch:', {
         transactionId: transaction.id,
         expectedAmount: transactionAmount,
@@ -336,16 +365,6 @@ export default async function handler(req, res) {
     } else if (transaction.moolre_reference && !moolreData.data?.externalref) {
       // Transaction has reference but Moolre doesn't - this is unusual but acceptable if amount/time match
       console.warn('[MANUAL-VERIFY-MOOLRE-WEB] Transaction has reference but Moolre response missing externalref - relying on amount and time validation');
-    }
-
-    // Parse transaction status
-    // txstatus: 1=Success, 0=Pending, 2=Failed
-    const txstatus = moolreData.data?.txstatus;
-    let paymentStatus = 'pending';
-    if (txstatus === 1) {
-      paymentStatus = 'success';
-    } else if (txstatus === 2) {
-      paymentStatus = 'failed';
     }
 
     console.log(`[MANUAL-VERIFY-MOOLRE-WEB] Moolre verification result:`, {

@@ -347,8 +347,8 @@ function App() {
               <Toaster position="top-right" closeButton richColors />
               <ConditionalWhatsAppButton />
             </div>
-            <SpeedInsights />
-            <Analytics />
+            <SpeedInsights scriptSrc="https://va.vercel-scripts.com/v1/speed-insights/script.js" />
+            <Analytics scriptSrc="https://va.vercel-scripts.com/v1/script.js" />
           </BrowserRouter>
         </TooltipProvider>
       </QueryClientProvider>
