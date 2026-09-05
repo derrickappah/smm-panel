@@ -79,7 +79,11 @@ export default async function handler(req, res) {
       // Handle authentication errors
       if (authError.message === 'Missing or invalid authorization header' ||
         authError.message === 'Missing authentication token' ||
-        authError.message === 'Invalid or expired token') {
+        authError.message === 'Invalid or expired token' ||
+        authError.message === 'Invalid or expired authentication token' ||
+        authError.message?.toLowerCase().includes('token') ||
+        authError.message?.toLowerCase().includes('authentication') ||
+        authError.message?.toLowerCase().includes('session')) {
         return res.status(401).json({
           error: 'Authentication required',
           message: authError.message
@@ -88,6 +92,7 @@ export default async function handler(req, res) {
       
       // Handle authorization errors
       if (authError.message.includes('Access denied') || 
+          authError.message === 'Admin access required' ||
           authError.message === 'Transaction not found') {
         return res.status(403).json({
           error: authError.message,

@@ -299,8 +299,15 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
   const handleVerifyMoolreDeposit = useCallback(async (deposit, manualRef = null) => {
     setVerifyingDeposit(deposit.id);
     try {
-      // Get JWT token for API authentication
-      const { data: { session } } = await supabase.auth.getSession();
+      // Get fresh JWT token for API authentication
+      let { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token || (session.expires_at && Date.now() / 1000 >= session.expires_at - 60)) {
+        const { data: refreshData, error: refreshErr } = await supabase.auth.refreshSession();
+        if (!refreshErr && refreshData?.session) {
+          session = refreshData.session;
+        }
+      }
+
       if (!session?.access_token) {
         throw new Error('No session token available. Please log in again.');
       }
@@ -320,6 +327,11 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
       const data = await response.json();
 
       if (!response.ok) {
+        if (response.status === 401) {
+          toast.error('Your admin session has expired. Please log in again.');
+          return;
+        }
+
         // If error suggests manual Moolre ID and we don't have one, show dialog
         if (data.error && data.error.includes('No Moolre ID') && !manualRef) {
           setManualRefDialog({
@@ -383,8 +395,15 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
   const handleVerifyMoolreWebDeposit = useCallback(async (deposit, manualRef = null) => {
     setVerifyingDeposit(deposit.id);
     try {
-      // Get JWT token for API authentication
-      const { data: { session } } = await supabase.auth.getSession();
+      // Get fresh JWT token for API authentication
+      let { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token || (session.expires_at && Date.now() / 1000 >= session.expires_at - 60)) {
+        const { data: refreshData, error: refreshErr } = await supabase.auth.refreshSession();
+        if (!refreshErr && refreshData?.session) {
+          session = refreshData.session;
+        }
+      }
+
       if (!session?.access_token) {
         throw new Error('No session token available. Please log in again.');
       }
@@ -404,6 +423,11 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
       const data = await response.json();
 
       if (!response.ok) {
+        if (response.status === 401) {
+          toast.error('Your admin session has expired. Please log in again.');
+          return;
+        }
+
         // If error suggests manual Moolre ID and we don't have one, show dialog
         if (data.error && data.error.includes('No Moolre ID') && !manualRef) {
           setManualRefDialog({
@@ -473,7 +497,13 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
   const handleVerifyExpiredMoolreDeposit = useCallback(async (deposit, manualRef = null) => {
     setVerifyingDeposit(deposit.id);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      let { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token || (session.expires_at && Date.now() / 1000 >= session.expires_at - 60)) {
+        const { data: refreshData, error: refreshErr } = await supabase.auth.refreshSession();
+        if (!refreshErr && refreshData?.session) {
+          session = refreshData.session;
+        }
+      }
       if (!session?.access_token) {
         throw new Error('No session token available. Please log in again.');
       }

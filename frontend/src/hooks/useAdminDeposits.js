@@ -126,6 +126,8 @@ export const useAdminDeposits = (options = {}) => {
       if (error) {
         if (error.code === '42501' || error.message?.includes('permission') || error.message?.includes('policy')) {
           toast.error('RLS Policy Error: Cannot view all transactions. Please run database/fixes/FIX_ADMIN_RLS.sql in Supabase SQL Editor.');
+        } else if (error.code === '57014' || error.message?.includes('timeout')) {
+          toast.error('Query timed out. Your admin session may have expired. Please refresh the page or log in again.');
         }
         throw error;
       }

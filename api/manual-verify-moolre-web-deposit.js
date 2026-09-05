@@ -58,16 +58,20 @@ export default async function handler(req, res) {
       
       if (authError.message === 'Missing or invalid authorization header' ||
           authError.message === 'Missing authentication token' ||
-          authError.message === 'Invalid or expired token') {
+          authError.message === 'Invalid or expired token' ||
+          authError.message === 'Invalid or expired authentication token' ||
+          authError.message?.toLowerCase().includes('token') ||
+          authError.message?.toLowerCase().includes('authentication') ||
+          authError.message?.toLowerCase().includes('session')) {
         return res.status(401).json({
           error: 'Authentication required',
           message: authError.message
         });
       }
       
-      if (authError.message === 'Admin access required') {
+      if (authError.message === 'Admin access required' || authError.message?.includes('Access denied')) {
         return res.status(403).json({
-          error: 'Admin access required for manual verification'
+          error: authError.message || 'Admin access required for manual verification'
         });
       }
       
