@@ -128,12 +128,8 @@ export default async function handler(req, res) {
     }
 
     // 5. Verify the Tx ID matches
-    const moolreTxId = String(verifiedTx.id || verifiedTx.transactionid || verifiedTx.transaction_id || '');
-    const finalMoolreId = idType === 2 ? moolreIdValue : moolreTxId;
-
-    if (!finalMoolreId) {
-      return res.status(400).json({ error: 'Could not resolve Moolre ID from response' });
-    }
+    const moolreTxId = String(verifiedTx.id || verifiedTx.transactionid || verifiedTx.transaction_id || verifiedTx.txid || '');
+    const finalMoolreId = (idType === 2 ? moolreIdValue : moolreTxId) || moolreIdValue;
 
     if (idType === 2 && moolreTxId && moolreTxId !== String(moolreIdValue)) {
       return res.status(400).json({
