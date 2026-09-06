@@ -4,6 +4,7 @@ import { usePaymentMethods } from '@/hooks/usePaymentMethods';
 import { X, MessageCircle, Phone } from 'lucide-react';
 import { trackMetaEvent } from '@/lib/metaPixel';
 import HelpMenuOverlay from './HelpMenuOverlay';
+import PhoneTutorialBottomSheet from './PhoneTutorialBottomSheet';
 
 const WhatsAppButton = ({ message, className = "" }) => {
   const { whatsappNumber, supportPhoneNumber } = usePaymentMethods();
@@ -18,6 +19,7 @@ const WhatsAppButton = ({ message, className = "" }) => {
   const [hasDragged, setHasDragged] = useState(false);
   const navigate = useNavigate();
   const [showPopup, setShowPopup] = useState(false);
+  const [showPhoneBottomSheet, setShowPhoneBottomSheet] = useState(false);
   const [hasBeenTapped, setHasBeenTapped] = useState(() => {
     // Check localStorage to see if user has already tapped the button
     return localStorage.getItem('whatsapp-button-tapped') === 'true';
@@ -228,6 +230,13 @@ const WhatsAppButton = ({ message, className = "" }) => {
           />
         )}
 
+        {/* Floating Phone Tutorial Bottom Sheet */}
+        {showPhoneBottomSheet && (
+          <PhoneTutorialBottomSheet 
+            onClose={() => setShowPhoneBottomSheet(false)} 
+          />
+        )}
+
         {/* Fallback Message for TikTok WebView */}
         {isTikTok && (
           <div
@@ -277,13 +286,12 @@ const WhatsAppButton = ({ message, className = "" }) => {
             onClick={(e) => {
               if (!hasDragged) {
                 setHasBeenTapped(true);
-                trackMetaEvent('Contact', { method: 'Phone Call' });
-                window.open(getCallUrl(), '_self');
+                setShowPhoneBottomSheet(true);
               }
             }}
             className="bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 relative flex items-center justify-center"
-            aria-label="Call Support"
-            title="Call Support"
+            aria-label="Help and Tutorials"
+            title="Help and Tutorials"
             style={{
               cursor: isDragging ? 'grabbing' : 'pointer',
               width: '56px',
