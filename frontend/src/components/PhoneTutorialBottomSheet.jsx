@@ -61,7 +61,7 @@ const PhoneTutorialBottomSheet = ({ onClose }) => {
       subtitle: 'Add balance to your account easily.',
       chevronColor: 'text-[#16a34a]',
       borderColor: 'border-emerald-100 hover:border-emerald-300',
-      videoUrl: '/howtodeposit.mp4',
+      videoUrl: '/deposit.mp4',
       modalTitle: 'How to Add Money (Deposit)'
     }
   ];
