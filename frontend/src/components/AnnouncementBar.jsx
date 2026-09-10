@@ -1,110 +1,107 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { supabase } from '@/lib/supabase';
+import React, { useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
+import { useAnnouncement, DEFAULT_ANNOUNCEMENT } from '@/hooks/useAnnouncement';
 
-const FILLER_MESSAGES = [
-  '🚀 Deposit today and unlock free TikTok likes!',
-  '⭐ Get free views just by depositing daily!',
-  '🎯 Grow your TikTok with BoostUp GH rewards!',
-  '💥 Claim your daily bonus — it\'s completely free!',
-  '🌟 New users: deposit once and start earning rewards!',
-  '🎁 Hundreds of users claim daily bonuses every day!',
-  '🔥 Top up your balance and claim free engagement!',
-  '✅ Safe, fast and real — BoostUp GH delivers!',
-];
+const THEME_STYLES = {
+  navy: 'bg-[#061727] text-white border-y border-[#0d2a45]',
+  emerald: 'bg-[#062c1e] text-emerald-100 border-y border-[#0a4630]',
+  amber: 'bg-[#2a1705] text-amber-200 border-y border-[#48280a]',
+  crimson: 'bg-[#2a0808] text-rose-100 border-y border-[#481212]',
+};
+
+const SPEED_SETTINGS = {
+  slow: 35,   // seconds for full track
+  normal: 22,
+  fast: 14,
+};
 
 const AnnouncementBar = () => {
-  const [messages, setMessages] = useState(FILLER_MESSAGES);
-  const trackRef = useRef(null);
+  const location = useLocation();
+  const { data: announcement = DEFAULT_ANNOUNCEMENT } = useAnnouncement();
 
-  useEffect(() => {
-    const fetchRecentClaims = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('daily_reward_claims')
-          .select(`id, reward_type, reward_amount, created_at, profiles!inner(name)`)
-          .order('created_at', { ascending: false })
-          .limit(20);
+  const isVisible = useMemo(() => {
+    if (!announcement || announcement.enabled === false) return false;
+    
+    // Support page should be clean without announcement distractions if needed, or follow display_scope
+    if (location.pathname === '/support') return false;
 
-        if (!error && data && data.length > 0) {
-          const claimMessages = data.map((claim) => {
-            const name = claim.profiles?.name || 'Someone';
-            const amount = claim.reward_amount
-              ? parseInt(claim.reward_amount).toLocaleString()
-              : null;
-            const type = claim.reward_type === 'views' ? 'TikTok views' : 'TikTok likes';
-            return amount
-              ? `🎉 ${name} just claimed free ${amount} ${type}!`
-              : `🎁 ${name} just claimed their daily bonus!`;
-          });
+    if (announcement.display_scope === 'dashboard') {
+      return location.pathname === '/dashboard';
+    }
 
-          // Always pad with fillers so we have at least 12 unique items
-          const combined = [...claimMessages];
-          let i = 0;
-          while (combined.length < 12) {
-            combined.push(FILLER_MESSAGES[i % FILLER_MESSAGES.length]);
-            i++;
-          }
-          setMessages(combined);
-        }
-      } catch (_) {
-        // Keep filler messages on error
-      }
-    };
+    // 'all' scope: show on all authenticated and main app pages
+    return true;
+  }, [announcement, location.pathname]);
 
-    fetchRecentClaims();
-    const interval = setInterval(fetchRecentClaims, 2 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, []);
+  if (!isVisible) {
+    return null;
+  }
 
-  // The key to a seamless loop:
-  // Render messages TWICE side-by-side, then animate by exactly HALF the total width.
-  // When the first copy scrolls fully off screen, the animation resets to 0 — which
-  // looks identical because the second copy has now taken the first copy's position.
-  const doubled = [...messages, ...messages];
+  const messageText = (announcement.message || DEFAULT_ANNOUNCEMENT.message).trim();
+  const themeClass = THEME_STYLES[announcement.theme] || THEME_STYLES.navy;
+  const animDuration = SPEED_SETTINGS[announcement.speed] || SPEED_SETTINGS.normal;
 
-  // Speed: pixels per second. Higher = faster.
-  const PX_PER_SECOND = 80;
-
-  useEffect(() => {
-    const track = trackRef.current;
-    if (!track) return;
-
-    // Wait for the DOM to paint so we can measure actual pixel widths
-    const raf = requestAnimationFrame(() => {
-      const halfWidth = track.scrollWidth / 2;
-      const duration = halfWidth / PX_PER_SECOND;
-
-      track.style.setProperty('--marquee-half', `-${halfWidth}px`);
-      track.style.setProperty('--marquee-duration', `${duration}s`);
-    });
-
-    return () => cancelAnimationFrame(raf);
-  }, [messages]);
+  // We repeat the message multiple times to ensure continuous fill on wide monitors
+  const items = [messageText, messageText, messageText, messageText];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-2">
-      <div className="w-full bg-indigo-600 text-white overflow-hidden py-1.5 md:py-2 rounded-lg shadow-md border border-indigo-500">
-        <div
-          ref={trackRef}
-          className="marquee-ticker flex whitespace-nowrap"
+    <div
+      className={`w-full overflow-hidden shadow-sm relative z-40 select-none pointer-events-auto ${themeClass}`}
+      role="region"
+      aria-label="Announcement banner"
+    >
+      <div className="relative flex items-center h-8 sm:h-9 overflow-hidden">
+        {/* Continuous ticker track */}
+        <div 
+          className="announcement-marquee flex items-center whitespace-nowrap will-change-transform"
+          style={{
+            animationDuration: `${animDuration}s`,
+          }}
         >
-          {doubled.map((message, index) => (
-            <span key={index} className="mx-10 text-xs sm:text-sm font-medium flex-shrink-0">
-              {message}
-            </span>
-          ))}
+          {/* First set of items */}
+          <div className="flex items-center flex-shrink-0">
+            {items.map((item, idx) => (
+              <div key={`track-a-${idx}`} className="flex items-center">
+                <span className="mx-6 sm:mx-10 text-xs sm:text-sm font-bold uppercase tracking-wider">
+                  {item}
+                </span>
+                <span className="opacity-40 text-xs font-bold select-none">•</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Second duplicate set for seamless infinite loop */}
+          <div className="flex items-center flex-shrink-0" aria-hidden="true">
+            {items.map((item, idx) => (
+              <div key={`track-b-${idx}`} className="flex items-center">
+                <span className="mx-6 sm:mx-10 text-xs sm:text-sm font-bold uppercase tracking-wider">
+                  {item}
+                </span>
+                <span className="opacity-40 text-xs font-bold select-none">•</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
+
       <style>{`
-        @keyframes ticker {
-          0%   { transform: translateX(0); }
-          100% { transform: translateX(var(--marquee-half, -50%)); }
+        @keyframes announcement-scroll {
+          0% {
+            transform: translate3d(0, 0, 0);
+          }
+          100% {
+            transform: translate3d(-50%, 0, 0);
+          }
         }
-        .marquee-ticker {
-          will-change: transform;
-          animation: ticker var(--marquee-duration, 12s) linear infinite;
+        .announcement-marquee {
+          display: flex;
+          width: max-content;
+          animation-name: announcement-scroll;
+          animation-timing-function: linear;
+          animation-iteration-count: infinite;
         }
-        .marquee-ticker:hover {
+        .announcement-marquee:hover,
+        .announcement-marquee:active {
           animation-play-state: paused;
         }
       `}</style>

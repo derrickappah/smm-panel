@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useAllUpdates, useCreateUpdate, useUpdateUpdate, useDeleteUpdate } from '@/hooks/useUpdates';
+import AdminAnnouncementBarSettings from '@/components/admin/AdminAnnouncementBarSettings';
 
 const AdminUpdates = () => {
   const queryClient = useQueryClient();
@@ -89,7 +90,12 @@ const AdminUpdates = () => {
   };
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
+    <div className="space-y-6">
+      {/* Top Status & Announcement Bar Settings */}
+      <AdminAnnouncementBarSettings />
+
+      {/* General Updates and News List */}
+      <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <Bell className="w-6 h-6 text-indigo-600" />
@@ -266,6 +272,7 @@ const AdminUpdates = () => {
           ))}
         </div>
       )}
+      </div>
     </div>
   );
 };
