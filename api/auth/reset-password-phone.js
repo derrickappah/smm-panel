@@ -1,4 +1,4 @@
-﻿import { getServiceRoleClient } from '../utils/auth.js';
+import { getServiceRoleClient } from '../utils/auth.js';
 import { setCorsHeaders } from '../utils/corsHeaders.js';
 import { redis } from '../utils/redisClient.js';
 import { logSecurityEvent } from '../utils/activityLogger.js';
@@ -8,7 +8,7 @@ import crypto from 'crypto';
 const memoryResetCounts = new Map();
 
 if (typeof setInterval !== 'undefined') {
-  setInterval(() => {
+  const cleanupTimer = setInterval(() => {
     const now = Date.now();
     for (const [key, record] of memoryResetCounts.entries()) {
       if (now - record.firstAttempt > 600000) {
@@ -16,6 +16,9 @@ if (typeof setInterval !== 'undefined') {
       }
     }
   }, 60000);
+  if (cleanupTimer && typeof cleanupTimer.unref === 'function') {
+    cleanupTimer.unref();
+  }
 }
 
 function normalizePhone(phone) {
@@ -147,21 +150,27 @@ export default async function handler(req, res) {
       const newAttempts = dbAttempts + 1;
       const isNowInvalidated = newAttempts >= 5;
 
-      await supabase.from('system_events').update({
-        metadata: {
-          ...meta,
-          attempts: newAttempts,
-          invalidated: isNowInvalidated
-        }
-      }).eq('id', matchingEvent.id).catch(() => {});
+      try {
+        await supabase.from('system_events').update({
+          metadata: {
+            ...meta,
+            attempts: newAttempts,
+            invalidated: isNowInvalidated
+          }
+        }).eq('id', matchingEvent.id);
+      } catch (dbErr) {
+        console.error('[RESET PASSWORD] Failed to update event attempts:', dbErr);
+      }
 
       if (isNowInvalidated) {
-        logSecurityEvent({
-          action_type: 'password_reset_brute_force_detected',
-          description: 'Password reset brute force threshold exceeded for ' + normPhone,
-          metadata: { phone: normPhone, attempts: newAttempts },
-          req
-        }).catch(() => {});
+        try {
+          await logSecurityEvent({
+            action_type: 'password_reset_brute_force_detected',
+            description: 'Password reset brute force threshold exceeded for ' + normPhone,
+            metadata: { phone: normPhone, attempts: newAttempts },
+            req
+          });
+        } catch (e) {}
 
         return res.status(429).json({
           error: 'Too many failed verification attempts. Your reset code has been invalidated. Please request a new code.'
@@ -171,11 +180,12 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Invalid or expired OTP code. Please check and try again.' });
     }
 
-    // OTP is valid! Find user account by phone number in public.profiles
+    // OTP is valid! Find user account by phone number in public.profiles (order by newest account in case of legacy duplicates)
     const { data: profiles, error: profileErr } = await supabase
       .from('profiles')
-      .select('id, email, name')
+      .select('id, email, name, created_at')
       .or('phone_number.eq.' + normPhone + ',phone_number.eq.+233' + normPhone.substring(1) + ',phone_number.eq.233' + normPhone.substring(1))
+      .order('created_at', { ascending: false })
       .limit(1);
 
     if (profileErr || !profiles || profiles.length === 0) {
@@ -198,23 +208,31 @@ export default async function handler(req, res) {
     }
 
     // Invalidate the OTP so it cannot be used again
-    await supabase.from('system_events').update({
-      metadata: { ...meta, verified: true, used_at: new Date().toISOString() }
-    }).eq('id', matchingEvent.id).catch(() => {});
+    try {
+      await supabase.from('system_events').update({
+        metadata: { ...meta, verified: true, used_at: new Date().toISOString() }
+      }).eq('id', matchingEvent.id);
+    } catch (dbErr) {
+      console.error('[RESET PASSWORD] Failed to mark OTP as verified:', dbErr);
+    }
 
     // Clear rate limit counters
     if (redis) {
-      await redis.del(bruteForceKey).catch(() => {});
+      try {
+        await redis.del(bruteForceKey);
+      } catch (redisErr) {}
     }
 
     // Log security event
-    logSecurityEvent({
-      action_type: 'password_reset_success',
-      description: 'Password reset successfully via phone OTP for user ' + userProfile.email,
-      user_id: userId,
-      metadata: { phone: normPhone, email: userProfile.email },
-      req
-    }).catch(() => {});
+    try {
+      await logSecurityEvent({
+        action_type: 'password_reset_success',
+        description: 'Password reset successfully via phone OTP for user ' + userProfile.email,
+        user_id: userId,
+        metadata: { phone: normPhone, email: userProfile.email },
+        req
+      });
+    } catch (e) {}
 
     return res.status(200).json({
       success: true,
