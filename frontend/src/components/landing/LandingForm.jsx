@@ -96,7 +96,7 @@ export const LandingForm = () => {
                         p_phone: formData.phone_number.trim()
                     });
                     if (isRegistered) {
-                        toast.error('This WhatsApp number is already registered. Please sign in instead.');
+                        toast.error('Failed to send OTP verification code, number already registered');
                         return;
                     }
                 } catch (phoneErr) {

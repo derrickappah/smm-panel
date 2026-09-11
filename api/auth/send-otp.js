@@ -63,7 +63,7 @@ export default async function handler(req, res) {
 
         if (!rpcError && isRegistered) {
           return res.status(409).json({
-            error: 'This phone number is already registered to another account. Please log in instead.'
+            error: 'Failed to send OTP verification code, number already registered'
           });
         }
       }

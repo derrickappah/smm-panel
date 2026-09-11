@@ -321,8 +321,8 @@ const AuthPage = () => {
             p_phone: formData.phone_number.trim()
           });
           if (!phoneRpcErr && isRegistered) {
-            toast.error('This WhatsApp number is already registered to an account. Please log in instead.');
-            setPhoneError('This WhatsApp number is already registered');
+            toast.error('Failed to send OTP verification code, number already registered');
+            setPhoneError('Number already registered');
             setLoading(false);
             return;
           }
