@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { supabase, isConfigured } from '@/lib/supabase';
 import SEO from '@/components/SEO';
-import { Phone, Mail, KeyRound, CheckCircle2, RefreshCw, Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { Phone, Mail, CheckCircle2, RefreshCw, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 
 // Email validation function (same as AuthPage)
 const isValidEmail = (email) => {
@@ -184,7 +184,6 @@ const ResetPasswordPage = () => {
         setPhoneStep('success');
         toast.success('Password reset successfully!');
 
-        // Redirect to login after 3 seconds
         setTimeout(() => {
           navigate('/auth');
         }, 3000);
@@ -256,7 +255,7 @@ const ResetPasswordPage = () => {
     setLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
-        redirectTo: ${window.location.origin}/reset-password,
+        redirectTo: `${window.location.origin}/reset-password`,
       });
 
       if (error) {
@@ -374,7 +373,9 @@ const ResetPasswordPage = () => {
                       if (recoveryPasswordError) setRecoveryPasswordError('');
                     }}
                     required
-                    className={w-full h-11 pr-10 rounded-xl }
+                    className={`w-full h-11 pr-10 rounded-xl ${
+                      recoveryPasswordError ? 'border-red-500' : 'border-gray-300'
+                    }`}
                   />
                   <button
                     type="button"
@@ -405,7 +406,9 @@ const ResetPasswordPage = () => {
                       if (recoveryConfirmPasswordError) setRecoveryConfirmPasswordError('');
                     }}
                     required
-                    className={w-full h-11 pr-10 rounded-xl }
+                    className={`w-full h-11 pr-10 rounded-xl ${
+                      recoveryConfirmPasswordError ? 'border-red-500' : 'border-gray-300'
+                    }`}
                   />
                   <button
                     type="button"
@@ -441,7 +444,11 @@ const ResetPasswordPage = () => {
                       setPhoneStep('input');
                       setPhoneError('');
                     }}
-                    className={lex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-lg transition-all }
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-lg transition-all ${
+                      resetMethod === 'phone'
+                        ? 'bg-white text-indigo-600 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
                   >
                     <Phone className="w-4 h-4" />
                     Phone / SMS
@@ -452,7 +459,11 @@ const ResetPasswordPage = () => {
                       setResetMethod('email');
                       setEmailError('');
                     }}
-                    className={lex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-lg transition-all }
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-lg transition-all ${
+                      resetMethod === 'email'
+                        ? 'bg-white text-indigo-600 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
                   >
                     <Mail className="w-4 h-4" />
                     Email
@@ -469,22 +480,22 @@ const ResetPasswordPage = () => {
                         <Label htmlFor="reset-phone" className="text-sm font-medium text-gray-700 mb-1.5 block">
                           WhatsApp / Phone Number
                         </Label>
-                        <div className="relative">
-                          <Input
-                            id="reset-phone"
-                            type="tel"
-                            placeholder="024XXXXXXX"
-                            value={phoneNumber}
-                            maxLength={10}
-                            onChange={(e) => {
-                              const cleaned = e.target.value.replace(/\D/g, '').slice(0, 10);
-                              setPhoneNumber(cleaned);
-                              if (phoneError) setPhoneError('');
-                            }}
-                            required
-                            className={w-full h-11 rounded-xl }
-                          />
-                        </div>
+                        <Input
+                          id="reset-phone"
+                          type="tel"
+                          placeholder="024XXXXXXX"
+                          value={phoneNumber}
+                          maxLength={10}
+                          onChange={(e) => {
+                            const cleaned = e.target.value.replace(/\D/g, '').slice(0, 10);
+                            setPhoneNumber(cleaned);
+                            if (phoneError) setPhoneError('');
+                          }}
+                          required
+                          className={`w-full h-11 rounded-xl ${
+                            phoneError ? 'border-red-500 focus:ring-red-500' : 'border-gray-300'
+                          }`}
+                        />
                         {phoneError && (
                           <p className="mt-1.5 text-xs text-red-600">{phoneError}</p>
                         )}
@@ -540,7 +551,9 @@ const ResetPasswordPage = () => {
                             if (phoneOtpError) setPhoneOtpError('');
                           }}
                           required
-                          className={w-full h-11 rounded-xl text-center tracking-widest font-mono text-lg }
+                          className={`w-full h-11 rounded-xl text-center tracking-widest font-mono text-lg ${
+                            phoneOtpError ? 'border-red-500' : 'border-gray-300'
+                          }`}
                         />
                         {phoneOtpError && (
                           <p className="mt-1 text-xs text-red-600">{phoneOtpError}</p>
@@ -562,7 +575,9 @@ const ResetPasswordPage = () => {
                               if (phonePasswordError) setPhonePasswordError('');
                             }}
                             required
-                            className={w-full h-11 pr-10 rounded-xl }
+                            className={`w-full h-11 pr-10 rounded-xl ${
+                              phonePasswordError ? 'border-red-500' : 'border-gray-300'
+                            }`}
                           />
                           <button
                             type="button"
@@ -593,7 +608,9 @@ const ResetPasswordPage = () => {
                               if (phoneConfirmPasswordError) setPhoneConfirmPasswordError('');
                             }}
                             required
-                            className={w-full h-11 pr-10 rounded-xl }
+                            className={`w-full h-11 pr-10 rounded-xl ${
+                              phoneConfirmPasswordError ? 'border-red-500' : 'border-gray-300'
+                            }`}
                           />
                           <button
                             type="button"
@@ -706,7 +723,9 @@ const ResetPasswordPage = () => {
                             if (emailError) setEmailError('');
                           }}
                           required
-                          className={w-full h-11 rounded-xl }
+                          className={`w-full h-11 rounded-xl ${
+                            emailError ? 'border-red-500' : 'border-gray-300'
+                          }`}
                         />
                         {emailError && (
                           <p className="mt-1.5 text-xs text-red-600">{emailError}</p>
