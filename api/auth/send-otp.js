@@ -46,7 +46,8 @@ export default async function handler(req, res) {
 
   try {
     const { email, phone_number, purpose = 'signup' } = req.body;
-    const identifier = (phone_number || email || '').trim().toLowerCase();
+    const normPhone = phone_number ? normalizePhone(phone_number) : null;
+    const identifier = (normPhone || phone_number || email || '').trim().toLowerCase();
 
     if (!identifier) {
       return res.status(400).json({ error: 'Email or phone number is required to send OTP' });
@@ -64,6 +65,23 @@ export default async function handler(req, res) {
         if (!rpcError && isRegistered) {
           return res.status(409).json({
             error: 'Failed to send OTP verification code, number already registered'
+          });
+        }
+      }
+    }
+
+    // Check if phone number exists for password reset
+    if (phone_number && purpose === 'reset_password') {
+      const normPhone = normalizePhone(phone_number);
+      if (normPhone && normPhone.length >= 10) {
+        const supabaseCheck = getServiceRoleClient();
+        const { data: isRegistered, error: rpcError } = await supabaseCheck.rpc('check_phone_registered', {
+          p_phone: normPhone
+        });
+
+        if (!rpcError && !isRegistered) {
+          return res.status(404).json({
+            error: 'No account found with this phone number. Please check and try again.'
           });
         }
       }
@@ -178,7 +196,9 @@ export default async function handler(req, res) {
             messages: [
               {
                 recipient: recipientPhone,
-                message: `Your BoostUp GH verification code is: ${otpCode}. Valid for 10 minutes.`,
+                message: purpose === 'reset_password'
+                  ? `Your BoostUp GH password reset code is: ${otpCode}. Valid for 10 minutes. Do not share this code.`
+                  : `Your BoostUp GH verification code is: ${otpCode}. Valid for 10 minutes.`,
                 ref: smsRef
               }
             ]
