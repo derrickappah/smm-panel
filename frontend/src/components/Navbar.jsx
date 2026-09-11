@@ -8,7 +8,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Home, Package, History, Shield, LogOut, Menu, X, User, HelpCircle, Receipt, FileText, MessageCircleQuestion, Gift, MoreHorizontal } from 'lucide-react';
-import AnnouncementBar from './AnnouncementBar';
+// import AnnouncementBar from './AnnouncementBar';
 
 const Navbar = ({ user, onLogout }) => {
   const navigate = useNavigate();
@@ -208,10 +208,12 @@ const Navbar = ({ user, onLogout }) => {
         </div>
       </div>
 
-      {/* Announcement / Status Bar */}
-      <div className="pointer-events-auto">
-        <AnnouncementBar />
-      </div>
+      {/* Announcement Bar */}
+      {/* {location.pathname !== '/support' && (
+        <div className="pointer-events-auto">
+          <AnnouncementBar />
+        </div>
+      )} */}
     </nav>
   );
 };
