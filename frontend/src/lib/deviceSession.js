@@ -88,7 +88,7 @@ export async function checkDeviceAllowed() {
  * @param {string} email - Email being logged into
  * @returns {Promise<boolean>} true if allowed, false if restricted
  */
-export async function checkLoginAllowed(email) {
+export async function checkLoginAllowed(identifier) {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 3500);
@@ -97,7 +97,7 @@ export async function checkLoginAllowed(email) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ identifier, email: identifier }),
       signal: controller.signal
     });
     clearTimeout(timeoutId);

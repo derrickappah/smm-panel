@@ -232,9 +232,24 @@ const AuthPage = () => {
         return;
       }
 
+      const loginIdentifier = formData.email.trim();
+      const isEmail = loginIdentifier.includes('@');
+      let cleanPhone = '';
+      let isPhone = false;
+
+      if (!isEmail) {
+        cleanPhone = loginIdentifier.replace(/\D/g, '');
+        if (cleanPhone.length === 12 && cleanPhone.startsWith('233')) {
+          cleanPhone = '0' + cleanPhone.substring(3);
+        } else if (cleanPhone.length === 9) {
+          cleanPhone = '0' + cleanPhone;
+        }
+        isPhone = cleanPhone.length === 10;
+      }
+
       // Pre-check device & account restriction
       if (isLogin) {
-        const isAllowed = await checkLoginAllowed(formData.email.trim());
+        const isAllowed = await checkLoginAllowed(isPhone ? cleanPhone : loginIdentifier);
         if (!isAllowed) {
           toast.error('Access to this service is currently unavailable.');
           setLoading(false);
@@ -250,16 +265,29 @@ const AuthPage = () => {
       }
 
       // Validate inputs
-      if (!formData.email.trim()) {
-        toast.error('Please enter your email');
+      if (!loginIdentifier) {
+        toast.error(isLogin ? 'Please enter your email or WhatsApp number' : 'Please enter your email');
         setLoading(false);
         return;
       }
 
-      if (!isValidEmail(formData.email.trim())) {
-        toast.error('Please enter a valid email address');
-        setLoading(false);
-        return;
+      if (isLogin) {
+        if (!isEmail && !isPhone) {
+          toast.error('Please enter a valid email address or 10-digit WhatsApp number');
+          setLoading(false);
+          return;
+        }
+        if (isEmail && !isValidEmail(loginIdentifier)) {
+          toast.error('Please enter a valid email address');
+          setLoading(false);
+          return;
+        }
+      } else {
+        if (!isValidEmail(loginIdentifier)) {
+          toast.error('Please enter a valid email address');
+          setLoading(false);
+          return;
+        }
       }
 
       if (!formData.password || formData.password.length < 6) {
@@ -345,58 +373,117 @@ const AuthPage = () => {
 
       if (isLogin) {
         // LOGIN
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: formData.email.trim(),
-          password: formData.password,
-          options: {
-            captchaToken: requireCaptcha ? (captchaToken || undefined) : undefined,
-            captcha_token: requireCaptcha ? (captchaToken || undefined) : undefined,
-          }
-        });
+        let authUser = null;
+        let authSession = null;
 
-        if (error) {
-          if (window.turnstile) {
-            try {
-              window.turnstile.reset();
-            } catch (e) {}
-          }
-          setCaptchaToken('');
-          let errorMsg = 'Login failed';
-
-          if (error.message?.includes('Invalid login credentials') || error.message?.includes('invalid_credentials')) {
-            errorMsg = 'Invalid email or password';
-          } else if (error.message?.includes('Email not confirmed')) {
-            errorMsg = 'Please check your email and confirm your account';
-          } else {
-            errorMsg = error.message || 'Login failed. Please try again.';
-          }
-
-          // Log failed login attempt
-          await logLoginAttempt({
-            success: false,
-            email: formData.email.trim(),
-            error: errorMsg
+        if (isPhone) {
+          // PHONE NUMBER LOGIN
+          const res = await fetch('/api/auth/login-phone', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              phone_number: cleanPhone,
+              password: formData.password,
+              captchaToken: requireCaptcha ? (captchaToken || undefined) : undefined,
+              captcha_token: requireCaptcha ? (captchaToken || undefined) : undefined,
+            })
           });
 
-          toast.error(errorMsg);
-          setLoading(false);
-          return;
+          const data = await res.json();
+
+          if (!res.ok) {
+            if (window.turnstile) {
+              try {
+                window.turnstile.reset();
+              } catch (e) {}
+            }
+            setCaptchaToken('');
+            const errorMsg = data.error || 'Login failed. Please check your credentials.';
+
+            await logLoginAttempt({
+              success: false,
+              email: cleanPhone,
+              error: errorMsg
+            });
+
+            toast.error(errorMsg);
+            setLoading(false);
+            return;
+          }
+
+          // Set Supabase session in browser client
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token: data.session.access_token,
+            refresh_token: data.session.refresh_token
+          });
+
+          if (sessionError) {
+            console.error('Failed to set session:', sessionError);
+            toast.error('Failed to initialize session. Please try logging in again.');
+            setLoading(false);
+            return;
+          }
+
+          authUser = data.user;
+          authSession = data.session;
+        } else {
+          // EMAIL LOGIN
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email: loginIdentifier,
+            password: formData.password,
+            options: {
+              captchaToken: requireCaptcha ? (captchaToken || undefined) : undefined,
+              captcha_token: requireCaptcha ? (captchaToken || undefined) : undefined,
+            }
+          });
+
+          if (error) {
+            if (window.turnstile) {
+              try {
+                window.turnstile.reset();
+              } catch (e) {}
+            }
+            setCaptchaToken('');
+            let errorMsg = 'Login failed';
+
+            if (error.message?.includes('Invalid login credentials') || error.message?.includes('invalid_credentials')) {
+              errorMsg = 'Invalid email or password';
+            } else if (error.message?.includes('Email not confirmed')) {
+              errorMsg = 'Please check your email and confirm your account';
+            } else {
+              errorMsg = error.message || 'Login failed. Please try again.';
+            }
+
+            // Log failed login attempt
+            await logLoginAttempt({
+              success: false,
+              email: loginIdentifier,
+              error: errorMsg
+            });
+
+            toast.error(errorMsg);
+            setLoading(false);
+            return;
+          }
+
+          authUser = data.user;
+          authSession = data.session;
         }
 
-        if (data.user) {
+        if (authUser) {
           // Log successful login (non-blocking)
           logLoginAttempt({
             success: true,
-            email: formData.email.trim()
+            email: authUser.email || loginIdentifier
           }).catch(() => {});
 
           toast.success('Welcome back!');
 
           // Create profile if it doesn't exist (non-blocking)
           supabase.from('profiles').insert({
-            id: data.user.id,
-            email: data.user.email,
-            name: data.user.email.split('@')[0],
+            id: authUser.id,
+            email: authUser.email,
+            name: (authUser.email || 'user').split('@')[0],
             balance: 0.0,
             role: 'user',
           }).then(({ error: profileError }) => {
@@ -406,7 +493,7 @@ const AuthPage = () => {
           }).catch(() => {});
 
           // Synchronize device session with authenticated user
-          const accessToken = data.session?.access_token;
+          const accessToken = authSession?.access_token;
           initDeviceSession(accessToken).then(async (syncResult) => {
             if (syncResult?.isBanned) {
               await supabase.auth.signOut();
@@ -747,12 +834,12 @@ const AuthPage = () => {
 
             <div>
               <Label htmlFor="email" className="text-sm font-medium text-gray-700 mb-2 block">
-                Email
+                {isLogin ? 'Email or WhatsApp Number' : 'Email'}
               </Label>
               <Input
                 id="email"
-                type="email"
-                placeholder="you@example.com"
+                type={isLogin ? 'text' : 'email'}
+                placeholder={isLogin ? 'e.g. 0559272762 or you@example.com' : 'you@example.com'}
                 value={formData.email}
                 onChange={(e) => {
                   setFormData({ ...formData, email: e.target.value });
@@ -762,12 +849,29 @@ const AuthPage = () => {
                   }
                 }}
                 onBlur={(e) => {
-                  // Validate email when user leaves the field
-                  const emailValue = e.target.value.trim();
-                  if (emailValue && !isValidEmail(emailValue)) {
-                    setEmailError('Please enter a valid email address');
+                  // Validate identifier when user leaves the field
+                  const val = e.target.value.trim();
+                  if (!val) {
+                    setEmailError(isLogin ? 'Email or WhatsApp number is required' : 'Email is required');
+                  } else if (isLogin) {
+                    const isEmail = val.includes('@');
+                    let cleanPhone = val.replace(/\D/g, '');
+                    if (cleanPhone.length === 12 && cleanPhone.startsWith('233')) cleanPhone = '0' + cleanPhone.substring(3);
+                    else if (cleanPhone.length === 9) cleanPhone = '0' + cleanPhone;
+                    const isPhone = cleanPhone.length === 10;
+                    if (!isEmail && !isPhone) {
+                      setEmailError('Please enter a valid email or 10-digit WhatsApp number');
+                    } else if (isEmail && !isValidEmail(val)) {
+                      setEmailError('Please enter a valid email address');
+                    } else {
+                      setEmailError('');
+                    }
                   } else {
-                    setEmailError('');
+                    if (!isValidEmail(val)) {
+                      setEmailError('Please enter a valid email address');
+                    } else {
+                      setEmailError('');
+                    }
                   }
                 }}
                 required
@@ -778,6 +882,9 @@ const AuthPage = () => {
               />
               {emailError && (
                 <p className="mt-1 text-sm text-red-600">{emailError}</p>
+              )}
+              {isLogin && !emailError && (
+                <p className="mt-1 text-xs text-gray-500">Log in with your email or 10-digit WhatsApp number.</p>
               )}
             </div>
 

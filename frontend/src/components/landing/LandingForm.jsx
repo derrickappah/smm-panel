@@ -56,12 +56,36 @@ export const LandingForm = () => {
                 return;
             }
 
-            const email = formData.email.trim();
+            const loginIdentifier = formData.email.trim();
             const password = formData.password;
+            const isEmail = loginIdentifier.includes('@');
+            let cleanPhone = '';
+            let isPhone = false;
 
-            if (!isValidEmail(email)) {
-                toast.error('Please enter a valid email address');
-                return;
+            if (!isEmail) {
+                cleanPhone = loginIdentifier.replace(/\D/g, '');
+                if (cleanPhone.length === 12 && cleanPhone.startsWith('233')) {
+                    cleanPhone = '0' + cleanPhone.substring(3);
+                } else if (cleanPhone.length === 9) {
+                    cleanPhone = '0' + cleanPhone;
+                }
+                isPhone = cleanPhone.length === 10;
+            }
+
+            if (isLogin) {
+                if (!isEmail && !isPhone) {
+                    toast.error('Please enter a valid email address or 10-digit WhatsApp number');
+                    return;
+                }
+                if (isEmail && !isValidEmail(loginIdentifier)) {
+                    toast.error('Please enter a valid email address');
+                    return;
+                }
+            } else {
+                if (!isValidEmail(loginIdentifier)) {
+                    toast.error('Please enter a valid email address');
+                    return;
+                }
             }
 
             if (password.length < 6) {
@@ -109,29 +133,74 @@ export const LandingForm = () => {
             }
 
             if (isLogin) {
-                const { data, error } = await supabase.auth.signInWithPassword({
-                    email,
-                    password,
-                    options: {
-                        captchaToken: requireCaptcha ? (captchaToken || undefined) : undefined,
-                        captcha_token: requireCaptcha ? (captchaToken || undefined) : undefined,
-                    }
-                });
+                let authUser = null;
 
-                if (error) {
-                    if (window.turnstile) {
-                        try {
-                            window.turnstile.reset();
-                        } catch (e) {}
+                if (isPhone) {
+                    const res = await fetch('/api/auth/login-phone', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            phone_number: cleanPhone,
+                            password,
+                            captchaToken: requireCaptcha ? (captchaToken || undefined) : undefined,
+                            captcha_token: requireCaptcha ? (captchaToken || undefined) : undefined,
+                        })
+                    });
+
+                    const data = await res.json();
+
+                    if (!res.ok) {
+                        if (window.turnstile) {
+                            try {
+                                window.turnstile.reset();
+                            } catch (e) {}
+                        }
+                        setCaptchaToken('');
+                        const errorMsg = data.error || 'Login failed. Please check your credentials.';
+                        await logLoginAttempt({ success: false, email: cleanPhone, error: errorMsg });
+                        toast.error(errorMsg);
+                        return;
                     }
-                    setCaptchaToken('');
-                    await logLoginAttempt({ success: false, email, error: error.message });
-                    toast.error(error.message || 'Login failed');
-                    return;
+
+                    const { error: sessionError } = await supabase.auth.setSession({
+                        access_token: data.session.access_token,
+                        refresh_token: data.session.refresh_token
+                    });
+
+                    if (sessionError) {
+                        console.error('Failed to set session:', sessionError);
+                        toast.error('Failed to initialize session. Please try logging in again.');
+                        return;
+                    }
+
+                    authUser = data.user;
+                } else {
+                    const { data, error } = await supabase.auth.signInWithPassword({
+                        email: loginIdentifier,
+                        password,
+                        options: {
+                            captchaToken: requireCaptcha ? (captchaToken || undefined) : undefined,
+                            captcha_token: requireCaptcha ? (captchaToken || undefined) : undefined,
+                        }
+                    });
+
+                    if (error) {
+                        if (window.turnstile) {
+                            try {
+                                window.turnstile.reset();
+                            } catch (e) {}
+                        }
+                        setCaptchaToken('');
+                        await logLoginAttempt({ success: false, email: loginIdentifier, error: error.message });
+                        toast.error(error.message || 'Login failed');
+                        return;
+                    }
+
+                    authUser = data.user;
                 }
 
-                if (data.user) {
-                    await logLoginAttempt({ success: true, email });
+                if (authUser) {
+                    await logLoginAttempt({ success: true, email: authUser.email || loginIdentifier });
                     toast.success('Welcome back!');
                     navigate('/dashboard');
                 }
@@ -261,10 +330,12 @@ export const LandingForm = () => {
                     )}
 
                     <div className="space-y-1.5">
-                        <Label className="text-white/70 text-xs font-bold uppercase tracking-widest ml-1">Email Address</Label>
+                        <Label className="text-white/70 text-xs font-bold uppercase tracking-widest ml-1">
+                            {isLogin ? 'Email or WhatsApp Number' : 'Email Address'}
+                        </Label>
                         <Input
-                            type="email"
-                            placeholder="name@example.com"
+                            type={isLogin ? 'text' : 'email'}
+                            placeholder={isLogin ? 'e.g. 0559272762 or name@example.com' : 'name@example.com'}
                             className="bg-white/5 border-white/10 text-white placeholder:text-white/20 h-12 rounded-xl focus:ring-indigo-500/50"
                             value={formData.email}
                             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
