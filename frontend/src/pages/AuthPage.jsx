@@ -314,6 +314,23 @@ const AuthPage = () => {
         return;
       }
 
+      // Check if WhatsApp number is already registered to another account
+      if (!isLogin) {
+        try {
+          const { data: isRegistered, error: phoneRpcErr } = await supabase.rpc('check_phone_registered', {
+            p_phone: formData.phone_number.trim()
+          });
+          if (!phoneRpcErr && isRegistered) {
+            toast.error('This WhatsApp number is already registered to an account. Please log in instead.');
+            setPhoneError('This WhatsApp number is already registered');
+            setLoading(false);
+            return;
+          }
+        } catch (phoneCheckErr) {
+          console.warn('Phone check warning:', phoneCheckErr);
+        }
+      }
+
       if (!isLogin && !termsAccepted) {
         toast.error('Please accept the Terms and Conditions to continue');
         setLoading(false);
@@ -459,7 +476,9 @@ const AuthPage = () => {
             let errorMsg = 'Signup failed';
 
             // Handle specific error cases
-            if (error.status === 422) {
+            if (error.message?.includes('phone') || error.message?.includes('registered to another account')) {
+              errorMsg = 'This WhatsApp number is already registered to another account. Please log in instead.';
+            } else if (error.status === 422) {
               // 422 Unprocessable Content - usually means validation failed
               if (error.message?.includes('already registered') || error.message?.includes('User already registered') || error.message?.includes('already exists')) {
                 errorMsg = 'Email already registered. Please try logging in instead.';

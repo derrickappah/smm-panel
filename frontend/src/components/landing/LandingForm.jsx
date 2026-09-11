@@ -91,6 +91,17 @@ export const LandingForm = () => {
                     toast.error('WhatsApp number must be exactly 10 digits');
                     return;
                 }
+                try {
+                    const { data: isRegistered } = await supabase.rpc('check_phone_registered', {
+                        p_phone: formData.phone_number.trim()
+                    });
+                    if (isRegistered) {
+                        toast.error('This WhatsApp number is already registered. Please sign in instead.');
+                        return;
+                    }
+                } catch (phoneErr) {
+                    console.warn('Phone check error:', phoneErr);
+                }
                 if (!termsAccepted) {
                     toast.error('Please accept the Terms and Conditions');
                     return;
@@ -164,7 +175,11 @@ export const LandingForm = () => {
                         } catch (e) {}
                     }
                     setCaptchaToken('');
-                    toast.error(error.message || 'Registration failed');
+                    let errorMsg = error.message || 'Registration failed';
+                    if (error.message?.includes('phone') || error.message?.includes('registered to another account')) {
+                        errorMsg = 'This WhatsApp number is already registered. Please sign in instead.';
+                    }
+                    toast.error(errorMsg);
                     return;
                 }
 

@@ -26,6 +26,18 @@ function formatPhoneForMoolre(phone) {
   return cleaned;
 }
 
+// Normalize Ghanaian phone number to 0XXXXXXXXX
+function normalizePhone(phone) {
+  let cleaned = (phone || '').replace(/\D/g, '');
+  if (!cleaned) return '';
+  if (cleaned.length === 12 && cleaned.startsWith('233')) {
+    cleaned = '0' + cleaned.substring(3);
+  } else if (cleaned.length === 9) {
+    cleaned = '0' + cleaned;
+  }
+  return cleaned;
+}
+
 export default async function handler(req, res) {
   setCorsHeaders(req, res);
 
@@ -33,11 +45,28 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { email, phone_number } = req.body;
+    const { email, phone_number, purpose = 'signup' } = req.body;
     const identifier = (phone_number || email || '').trim().toLowerCase();
 
     if (!identifier) {
       return res.status(400).json({ error: 'Email or phone number is required to send OTP' });
+    }
+
+    // Check if phone number is already registered for signup
+    if (phone_number && purpose === 'signup') {
+      const normPhone = normalizePhone(phone_number);
+      if (normPhone && normPhone.length >= 10) {
+        const supabaseCheck = getServiceRoleClient();
+        const { data: isRegistered, error: rpcError } = await supabaseCheck.rpc('check_phone_registered', {
+          p_phone: normPhone
+        });
+
+        if (!rpcError && isRegistered) {
+          return res.status(409).json({
+            error: 'This phone number is already registered to another account. Please log in instead.'
+          });
+        }
+      }
     }
 
     // SECURITY: Rate limit OTP sends — max 3 per identifier per 10 minutes
