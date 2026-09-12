@@ -124,8 +124,11 @@ function App() {
       // Handle password recovery event
       if (event === 'PASSWORD_RECOVERY') {
         console.log('Password recovery event detected, redirecting...');
+        try {
+          sessionStorage.setItem('supabase_recovery_mode', 'true');
+        } catch (e) {}
         if (window.location.pathname !== '/reset-password') {
-          window.location.href = '/reset-password';
+          window.location.href = '/reset-password?type=recovery';
         }
         clearTimeout(fallbackTimeout);
         setLoading(false);

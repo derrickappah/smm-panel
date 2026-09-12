@@ -58,8 +58,23 @@ const ResetPasswordPage = () => {
   const [emailError, setEmailError] = useState('');
   const [emailValue, setEmailValue] = useState('');
 
-  // Email link recovery mode (hash fragments: #access_token=...&type=recovery)
-  const [isRecoveryMode, setIsRecoveryMode] = useState(false);
+  // Email link recovery mode (handles PKCE ?code=..., hash #access_token=..., ?type=recovery, or auth event)
+  const [isRecoveryMode, setIsRecoveryMode] = useState(() => {
+    try {
+      const hash = window.location.hash || '';
+      const params = new URLSearchParams(window.location.search);
+      return (
+        params.get('type') === 'recovery' ||
+        params.has('code') ||
+        params.has('token_hash') ||
+        (hash.includes('access_token') && hash.includes('type=recovery')) ||
+        hash.includes('type=recovery') ||
+        sessionStorage.getItem('supabase_recovery_mode') === 'true'
+      );
+    } catch {
+      return false;
+    }
+  });
   const [recoveryPassword, setRecoveryPassword] = useState('');
   const [recoveryConfirmPassword, setRecoveryConfirmPassword] = useState('');
   const [recoveryPasswordError, setRecoveryPasswordError] = useState('');
@@ -73,23 +88,83 @@ const ResetPasswordPage = () => {
     }
   }, [resendCooldown]);
 
-  // Check URL hash for recovery tokens (email link format)
+  // Listen for Supabase PASSWORD_RECOVERY auth event & handle PKCE/token parameters
   useEffect(() => {
-    const hash = window.location.hash;
-    const hasRecoveryToken = hash.includes('access_token') && hash.includes('type=recovery');
-    const typeParam = searchParams.get('type');
-    
-    if (hasRecoveryToken || typeParam === 'recovery') {
-      setIsRecoveryMode(true);
-      setTimeout(async () => {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error || !session) {
-          toast.error('Invalid or expired reset link. Please request a new password reset.');
-          window.history.replaceState(null, '', '/reset-password');
-          setIsRecoveryMode(false);
+    let isMounted = true;
+
+    // 1. Direct listener for Supabase auth recovery event
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('[ResetPasswordPage] Auth event:', event);
+      if (event === 'PASSWORD_RECOVERY') {
+        try {
+          sessionStorage.setItem('supabase_recovery_mode', 'true');
+        } catch (e) {}
+        if (isMounted) setIsRecoveryMode(true);
+      }
+    });
+
+    const initRecovery = async () => {
+      try {
+        const hash = window.location.hash || '';
+        const typeParam = searchParams.get('type');
+        const codeParam = searchParams.get('code');
+        const tokenHashParam = searchParams.get('token_hash');
+        const hasRecoveryHash =
+          hash.includes('type=recovery') ||
+          (hash.includes('access_token') && hash.includes('recovery'));
+        const storedRecovery = sessionStorage.getItem('supabase_recovery_mode') === 'true';
+
+        const hasRecoveryIntent =
+          typeParam === 'recovery' ||
+          Boolean(codeParam) ||
+          Boolean(tokenHashParam) ||
+          hasRecoveryHash ||
+          storedRecovery;
+
+        if (!hasRecoveryIntent) {
+          return;
         }
-      }, 500);
-    }
+
+        if (isMounted) setIsRecoveryMode(true);
+
+        // If modern Supabase PKCE authorization code is present, exchange it for session
+        if (codeParam) {
+          console.log('[ResetPasswordPage] Exchanging auth code for session...');
+          const { error: exchangeErr } = await supabase.auth.exchangeCodeForSession(codeParam);
+          if (exchangeErr) {
+            console.error('[ResetPasswordPage] Code exchange error:', exchangeErr);
+          } else {
+            try {
+              sessionStorage.setItem('supabase_recovery_mode', 'true');
+            } catch (e) {}
+            if (isMounted) setIsRecoveryMode(true);
+          }
+        } else if (tokenHashParam && typeParam === 'recovery') {
+          console.log('[ResetPasswordPage] Verifying token hash...');
+          const { error: verifyErr } = await supabase.auth.verifyOtp({
+            token_hash: tokenHashParam,
+            type: 'recovery',
+          });
+          if (verifyErr) {
+            console.error('[ResetPasswordPage] Token hash verify error:', verifyErr);
+          } else {
+            try {
+              sessionStorage.setItem('supabase_recovery_mode', 'true');
+            } catch (e) {}
+            if (isMounted) setIsRecoveryMode(true);
+          }
+        }
+      } catch (err) {
+        console.error('[ResetPasswordPage] Error initializing recovery mode:', err);
+      }
+    };
+
+    initRecovery();
+
+    return () => {
+      isMounted = false;
+      subscription?.unsubscribe();
+    };
   }, [searchParams]);
 
   // 1. Phone Reset: Send OTP
@@ -255,7 +330,7 @@ const ResetPasswordPage = () => {
     setLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: `${window.location.origin}/reset-password?type=recovery`,
       });
 
       if (error) {
@@ -315,6 +390,9 @@ const ResetPasswordPage = () => {
       }
 
       toast.success('Password updated successfully! Redirecting to login...');
+      try {
+        sessionStorage.removeItem('supabase_recovery_mode');
+      } catch (e) {}
       await supabase.auth.signOut();
       window.history.replaceState(null, '', '/reset-password');
       setTimeout(() => navigate('/auth'), 2000);
@@ -753,7 +831,13 @@ const ResetPasswordPage = () => {
         {/* Back to Login */}
         <p className="text-center text-sm text-gray-600 mt-6">
           <button
-            onClick={() => navigate('/auth')}
+            onClick={() => {
+              try {
+                sessionStorage.removeItem('supabase_recovery_mode');
+              } catch (e) {}
+              setIsRecoveryMode(false);
+              navigate('/auth');
+            }}
             className="inline-flex items-center gap-1.5 text-indigo-600 hover:text-indigo-700 font-medium px-2 py-1 rounded-lg transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
