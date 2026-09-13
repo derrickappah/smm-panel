@@ -155,20 +155,24 @@ const AuthPage = () => {
     return manualReferralCode.trim() || referralCode.trim();
   };
 
-  const sendOtpCode = async (email, phone) => {
+  const sendOtpCode = async (email, phone, requestedProvider = null) => {
     setSendingOtp(true);
     try {
       const response = await fetch('/api/auth/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, phone_number: phone })
+        body: JSON.stringify({
+          email,
+          phone_number: phone,
+          requested_provider: requestedProvider || undefined
+        })
       });
       const data = await response.json();
       if (response.ok && data.success) {
         if (data.demo_otp) {
           toast.success(`OTP verification code sent! (Demo Code: ${data.demo_otp})`);
         } else {
-          toast.success('OTP verification code sent to your phone number.');
+          toast.success(`OTP verification code sent to your phone number${data.provider_used ? ` via ${data.provider_used.toUpperCase()}` : ''}.`);
         }
         setShowOtpModal(true);
         return true;
@@ -1043,17 +1047,28 @@ const AuthPage = () => {
               </InputOTPGroup>
             </InputOTP>
 
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="flex flex-col items-center gap-2 text-xs text-muted-foreground">
               <span>Didn't receive the code?</span>
-              <button
-                type="button"
-                onClick={() => sendOtpCode(formData.email.trim(), formData.phone_number.trim())}
-                disabled={sendingOtp}
-                className="text-indigo-600 hover:underline font-medium inline-flex items-center gap-1"
-              >
-                <RefreshCw className={`w-3 h-3 ${sendingOtp ? 'animate-spin' : ''}`} />
-                Resend Code
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => sendOtpCode(formData.email.trim(), formData.phone_number.trim())}
+                  disabled={sendingOtp}
+                  className="text-indigo-600 hover:underline font-medium inline-flex items-center gap-1"
+                >
+                  <RefreshCw className={`w-3 h-3 ${sendingOtp ? 'animate-spin' : ''}`} />
+                  Resend Code
+                </button>
+                <span>•</span>
+                <button
+                  type="button"
+                  onClick={() => sendOtpCode(formData.email.trim(), formData.phone_number.trim(), 'hubtel')}
+                  disabled={sendingOtp}
+                  className="text-emerald-600 hover:underline font-medium inline-flex items-center gap-1"
+                >
+                  Resend via Hubtel (Backup)
+                </button>
+              </div>
             </div>
 
             <Button

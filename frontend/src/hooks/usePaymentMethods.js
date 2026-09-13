@@ -85,6 +85,9 @@ export const fetchPaymentSettingsFn = async () => {
       'require_otp',
       'require_phone_verification',
       'moolre_sender_id',
+      'hubtel_sender_id',
+      'primary_sms_provider',
+      'fallback_sms_provider',
       'support_phone_number'
     ]);
 
@@ -158,9 +161,12 @@ export const fetchPaymentSettingsFn = async () => {
   // Parse OTP Verification
   settings.requireOtp = getEnabled('require_otp', DEFAULT_PAYMENT_SETTINGS.requireOtp);
 
-  // Parse Phone Verification (Moolre SMS)
+  // Parse Phone & SMS Verification Settings
   settings.requirePhoneVerification = getEnabled('require_phone_verification', DEFAULT_PAYMENT_SETTINGS.requirePhoneVerification);
   settings.moolreSenderId = getString('moolre_sender_id', DEFAULT_PAYMENT_SETTINGS.moolreSenderId);
+  settings.hubtelSenderId = getString('hubtel_sender_id', 'Boostupgh');
+  settings.primarySmsProvider = getString('primary_sms_provider', 'moolre');
+  settings.fallbackSmsProvider = getString('fallback_sms_provider', 'hubtel');
 
   // Determine Deposit Method
   settings.depositMethod = getFirstEnabledPaymentMethod(settings.paymentMethodSettings);

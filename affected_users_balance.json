@@ -1,0 +1,809 @@
+[
+  {
+    "user_id": "e955701a-50e3-49a6-858a-55cd02687b5c",
+    "email": "ericatuahene876@gmail.com",
+    "name": "Eric Atuahene",
+    "phone": "0241183066",
+    "orders_count": 3,
+    "orders": [
+      {
+        "order_id": "95bcd44e-a854-446c-8edd-79f5379adf79",
+        "amount": 25,
+        "type": "full"
+      },
+      {
+        "order_id": "ab1b6a0e-78c6-4d2d-ad51-1798d4dd9fdd",
+        "amount": 25,
+        "type": "full"
+      },
+      {
+        "order_id": "7700f8e7-929d-4a61-9783-1c1e054f2107",
+        "amount": 25,
+        "type": "full"
+      }
+    ],
+    "total_refunded": 75,
+    "before_balance": 0.74,
+    "after_balance": 75.74
+  },
+  {
+    "user_id": "9bca562a-4cae-4340-852f-aba85f2aa7cd",
+    "email": "yawg6969@gmail.com",
+    "name": "Gyasi Yaw",
+    "phone": "0267926174",
+    "orders_count": 2,
+    "orders": [
+      {
+        "order_id": "704e03d8-2af1-4835-9991-93185e7fe923",
+        "amount": 21.35,
+        "type": "partial"
+      },
+      {
+        "order_id": "9f92f430-4a37-4368-8fba-a2b622f0b10f",
+        "amount": 21.38,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 42.73,
+    "before_balance": 0,
+    "after_balance": 42.73
+  },
+  {
+    "user_id": "af72b47d-d688-402f-a9f1-44325c0cf624",
+    "email": "cogfamouz@gmail.com",
+    "name": "Famouz cog",
+    "phone": "0532884474",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "5dfc5a39-dc55-4ba0-9068-615dd9873842",
+        "amount": 25.4,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 25.4,
+    "before_balance": 3,
+    "after_balance": 28.4
+  },
+  {
+    "user_id": "9170f24a-dd36-446f-a240-3e1a86b7bd5c",
+    "email": "ephraimappiah17@gmail.com",
+    "name": "ye",
+    "phone": "0538227619",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "f62474c3-75f5-42ae-9005-cdfc3834ad5f",
+        "amount": 25,
+        "type": "full"
+      }
+    ],
+    "total_refunded": 25,
+    "before_balance": 334.61,
+    "after_balance": 359.61
+  },
+  {
+    "user_id": "54352e84-cc1c-4f43-b7c3-8abbf89112db",
+    "email": "markanthonyokoyeckcc@gmail.com",
+    "name": "Mark anthony",
+    "phone": "0813207150",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "df36223f-ff5b-4e35-89f7-9fd917df8859",
+        "amount": 25,
+        "type": "full"
+      }
+    ],
+    "total_refunded": 25,
+    "before_balance": 1.3,
+    "after_balance": 26.3
+  },
+  {
+    "user_id": "cec734b0-5aa3-46b8-b151-a7f661a28f52",
+    "email": "alliwasila1364@icloud.com",
+    "name": "Wassila Ali",
+    "phone": "0257090502",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "dd1abc03-e763-493e-9714-0dacb2b26052",
+        "amount": 25,
+        "type": "full"
+      }
+    ],
+    "total_refunded": 25,
+    "before_balance": 31.26,
+    "after_balance": 56.26
+  },
+  {
+    "user_id": "26445ba2-fbdd-4533-89f0-dda3554dd725",
+    "email": "o18504603@gmail.com",
+    "name": "Oti martin",
+    "phone": "0247787107",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "cdb94d16-8468-48c0-b603-2454f50ef3a4",
+        "amount": 24.78,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 24.78,
+    "before_balance": 5.06,
+    "after_balance": 29.84
+  },
+  {
+    "user_id": "883a8299-2e29-49fd-b1db-8d8b29996e8e",
+    "email": "annabea@gmail.com",
+    "name": "Anna bae",
+    "phone": "0553614272",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "c3f200ca-9c72-4f7c-8b45-6b4b3855bbeb",
+        "amount": 24.28,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 24.28,
+    "before_balance": 5.72,
+    "after_balance": 30
+  },
+  {
+    "user_id": "6bbef35a-abd4-447e-bb26-3da3d81f937b",
+    "email": "atobrakelvin@gmail.com",
+    "name": "Atobrahkelvin",
+    "phone": "0557315805",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "0b750237-c0b4-445b-b17f-3323be80413a",
+        "amount": 24.2,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 24.2,
+    "before_balance": 0.3,
+    "after_balance": 24.5
+  },
+  {
+    "user_id": "db4f7af7-263c-4c0f-9cc1-080af5450ed0",
+    "email": "darkwaafausty@gmail.com",
+    "name": "Faustina Darkwah",
+    "phone": "0540341148",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "a6d5120f-d0a1-421a-ae13-6dd4756a0330",
+        "amount": 24.13,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 24.13,
+    "before_balance": 9.1,
+    "after_balance": 33.23
+  },
+  {
+    "user_id": "54b4eeac-a9c9-4234-ae17-3da17eb8cd40",
+    "email": "spartagh059@gmail.com",
+    "name": "Spartan",
+    "phone": "0591982646",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "bb691b75-3f9e-4767-b623-ce4c65bdd7c3",
+        "amount": 23.4,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 23.4,
+    "before_balance": 6.34,
+    "after_balance": 29.74
+  },
+  {
+    "user_id": "7ede6ab2-eb51-46f1-aa3a-41adcf2a1b9b",
+    "email": "cafful405@gmail.com",
+    "name": "Afful collins",
+    "phone": "0249304709",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "0d3aca93-03e5-43e4-b9ae-e7b4fa9bd447",
+        "amount": 23,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 23,
+    "before_balance": 0,
+    "after_balance": 23
+  },
+  {
+    "user_id": "4553c33c-8efc-45b6-983b-dc43972ab2d1",
+    "email": "jemimahmens@icloud.com",
+    "name": "Jacklyn Mali-Dembele",
+    "phone": "0551216296",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "64ddeb3c-d601-4190-ba6d-2abb23915c56",
+        "amount": 22.9,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 22.9,
+    "before_balance": 12.89,
+    "after_balance": 35.79
+  },
+  {
+    "user_id": "2f9577ae-43bc-4884-add5-78416550d504",
+    "email": "raphaelowusu228@gmail.com",
+    "name": "Owusu",
+    "phone": "0552686290",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "3e04f9e2-8114-4a1d-8209-f742c65e0317",
+        "amount": 22.7,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 22.7,
+    "before_balance": 0.11,
+    "after_balance": 22.81
+  },
+  {
+    "user_id": "b57da208-ff7f-4d38-b491-ef3b46a099bb",
+    "email": "gyamfiaugustina25@gmail.com",
+    "name": "Gyamfi Augustina",
+    "phone": "0550692417",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "795f77c8-0477-46c6-9d13-1f40a406d05c",
+        "amount": 22.1,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 22.1,
+    "before_balance": 2.65,
+    "after_balance": 24.75
+  },
+  {
+    "user_id": "1b504bb2-ad75-4816-8ae8-0326e23bc97e",
+    "email": "naniwilvic111@icloud.com",
+    "name": "Nana",
+    "phone": "0598370675",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "aed799c0-cdb3-430f-8121-ad7994d6eb6e",
+        "amount": 21.43,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 21.43,
+    "before_balance": 2.5,
+    "after_balance": 23.93
+  },
+  {
+    "user_id": "9528395c-eba8-4ee6-9a76-1a2474c8f6b4",
+    "email": "calebowusu1511@icloud.com",
+    "name": "Refusedtobroke",
+    "phone": "0592091894",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "7c738eb8-d836-4ea9-a3ae-4dbff6b977c0",
+        "amount": 18.8,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 18.8,
+    "before_balance": 13.23,
+    "after_balance": 32.03
+  },
+  {
+    "user_id": "24f9a778-9707-458e-b8ae-0732498bddc3",
+    "email": "wasilat43030@gmail.com",
+    "name": "Tajudeen Omolara",
+    "phone": "8103563042",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "4ecf7d6d-daff-4349-90b1-b7a5f0235748",
+        "amount": 18.63,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 18.63,
+    "before_balance": 15.22,
+    "after_balance": 33.85
+  },
+  {
+    "user_id": "93406bda-80fd-4e03-9ee1-1f5cbea3a613",
+    "email": "ababiooscar83@gmail.com",
+    "name": "Oscar Ababio",
+    "phone": "0595400143",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "849aec8c-8541-4728-9030-466618d2b914",
+        "amount": 16.88,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 16.88,
+    "before_balance": 0,
+    "after_balance": 16.88
+  },
+  {
+    "user_id": "3ab11f05-e2b5-4a2c-a1cb-aa749e24f3e7",
+    "email": "mawunyodotse86@gmail.com",
+    "name": "Dotse Mawunyo",
+    "phone": "0530701281",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "4b4c4f37-e71b-45f8-b574-8f3b11e5844f",
+        "amount": 16.82,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 16.82,
+    "before_balance": 37.97,
+    "after_balance": 54.79
+  },
+  {
+    "user_id": "825a05e7-edc6-48d7-8314-633019ad29de",
+    "email": "pretty.maud@icloud.com",
+    "name": "Pretty Maud",
+    "phone": "0207346105",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "3492bcd5-36bc-4f69-8369-74b3e909bd0e",
+        "amount": 16.78,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 16.78,
+    "before_balance": 5,
+    "after_balance": 21.78
+  },
+  {
+    "user_id": "0c2b0d13-5489-4b31-8afe-488cb3d5919e",
+    "email": "abigailhoduamelah@gmail.com",
+    "name": "Abigail Tawiah",
+    "phone": "0241523726",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "9a841a95-2fa5-4085-82c1-8d3fb6fb6777",
+        "amount": 16.43,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 16.43,
+    "before_balance": 0,
+    "after_balance": 16.43
+  },
+  {
+    "user_id": "e956646f-89ca-410a-a446-d5576c51d990",
+    "email": "richsamzick@gmail.com",
+    "name": "Rick Samzick",
+    "phone": "0553886543",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "94b70eb6-ac79-44ff-9c71-e7793eefa07a",
+        "amount": 14.93,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 14.93,
+    "before_balance": 21.96,
+    "after_balance": 36.89
+  },
+  {
+    "user_id": "ffb64b11-592c-4b71-b513-15680927a55c",
+    "email": "abenagloria@icloud.com",
+    "name": "Abena",
+    "phone": "0537085622",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "4536c2ee-fca5-44ff-a2c3-f53067c01ffc",
+        "amount": 13.98,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 13.98,
+    "before_balance": 8,
+    "after_balance": 21.98
+  },
+  {
+    "user_id": "a1271962-2e4d-409b-8dbf-2434c39e5c29",
+    "email": "elizabetharthur@email.com",
+    "name": "Elizabeth Arthur",
+    "phone": "0538084369",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "b2a4cbc5-c126-460c-a04a-e2f8a151e2f3",
+        "amount": 12.62,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 12.62,
+    "before_balance": 0.16,
+    "after_balance": 12.78
+  },
+  {
+    "user_id": "cf1e4b4d-b9fb-4415-9af0-83f22ae11297",
+    "email": "yaw0541260837@gmail.com",
+    "name": "Gh Franky",
+    "phone": "0557751211",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "6cfa343f-85c7-4bdc-9197-fb158c9185d9",
+        "amount": 11.78,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 11.78,
+    "before_balance": 0.02,
+    "after_balance": 11.8
+  },
+  {
+    "user_id": "c344399c-eadf-4b86-bf20-e322dc65f1f1",
+    "email": "mrsackey21@gmail.com",
+    "name": "Ara nhaa",
+    "phone": "0596288630",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "e52e6906-d41b-4748-a215-ecd2fabea83a",
+        "amount": 11.62,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 11.62,
+    "before_balance": 17.5,
+    "after_balance": 29.12
+  },
+  {
+    "user_id": "d9471344-68b7-45a5-9e98-b672265a5c8c",
+    "email": "michaelboafo549@gmail.com",
+    "name": "Mr. Michael",
+    "phone": "0549040254",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "902890ab-a73a-4c7c-99ce-ead0eeb994d2",
+        "amount": 10.95,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 10.95,
+    "before_balance": 1.81,
+    "after_balance": 12.76
+  },
+  {
+    "user_id": "0fcb0f92-5684-4c69-b064-63aa41d00b1f",
+    "email": "asiedudaniel609@gmail.com",
+    "name": "Daniel Asiedu",
+    "phone": "0505265184",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "518a331c-3fd2-453e-bfd2-4d850533783a",
+        "amount": 8.94,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 8.94,
+    "before_balance": 1.17,
+    "after_balance": 10.11
+  },
+  {
+    "user_id": "9ccbf413-e2d4-4bce-a0e3-47991b12596e",
+    "email": "frimpongjanet123@email.com",
+    "name": "Janet Frimpong",
+    "phone": "0591532219",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "1b687315-0a0a-4f3d-8d4d-3eec108454b6",
+        "amount": 8.57,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 8.57,
+    "before_balance": 17.83,
+    "after_balance": 26.4
+  },
+  {
+    "user_id": "bb9441f8-a521-4884-b03a-58d95a5a4c2e",
+    "email": "bowykelvin14@email.com",
+    "name": "Kelvin Bowy",
+    "phone": "0530995177",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "be98c068-d690-46f4-bfee-1efafa477fb4",
+        "amount": 5.62,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 5.62,
+    "before_balance": 0.46,
+    "after_balance": 6.08
+  },
+  {
+    "user_id": "8a6706a5-8eba-46ad-9f24-df785ca724a1",
+    "email": "melomeyfrederick487@gmail.com",
+    "name": "Melomey",
+    "phone": "0503429676",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "234b0936-01b7-41b6-b398-6255ebdee721",
+        "amount": 5.2,
+        "type": "full"
+      }
+    ],
+    "total_refunded": 5.2,
+    "before_balance": 11.98,
+    "after_balance": 17.18
+  },
+  {
+    "user_id": "415a6442-5317-433f-9fae-77ac893d1fd7",
+    "email": "desmondkortsi5@gmail.com",
+    "name": "ETM SKELLY",
+    "phone": "0208434637",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "5910b492-e2e4-4931-b55e-9a2e76dae6d6",
+        "amount": 5.04,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 5.04,
+    "before_balance": 5.8,
+    "after_balance": 10.84
+  },
+  {
+    "user_id": "a4740ec5-fc6a-4b15-8d6e-fb81e26d8016",
+    "email": "kaygee7445@gmail.com",
+    "name": "Owura",
+    "phone": "0243070630",
+    "orders_count": 2,
+    "orders": [
+      {
+        "order_id": "3a470382-e034-43bd-af1d-2d89370c7e00",
+        "amount": 2.6,
+        "type": "full"
+      },
+      {
+        "order_id": "90812171-cca6-4d5d-88bf-4e1d53f4808c",
+        "amount": 1.85,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 4.45,
+    "before_balance": 3.32,
+    "after_balance": 7.77
+  },
+  {
+    "user_id": "b0e7fb5b-1280-492e-ae06-6f49c87c0e31",
+    "email": "josieannmiller41@gmail.com",
+    "name": "Ankomah",
+    "phone": "0598578405",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "1cb9dc36-5b6e-4317-bcda-8ea07236e3c0",
+        "amount": 4.16,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 4.16,
+    "before_balance": 12.55,
+    "after_balance": 16.71
+  },
+  {
+    "user_id": "f34418b4-bc29-43af-864d-c48ae560afb3",
+    "email": "smithmira58@gmail.com",
+    "name": "Mira",
+    "phone": "0205916807",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "bac637dd-5725-4c3d-9a43-b297e197c619",
+        "amount": 3.65,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 3.65,
+    "before_balance": 0.6,
+    "after_balance": 4.25
+  },
+  {
+    "user_id": "6b489b90-58df-4415-9282-aacc8f62e675",
+    "email": "sokuruth81@gmail.com",
+    "name": "Soku Ruth",
+    "phone": "0531435349",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "88597b31-8d88-4c2c-af36-3ecb281c0d00",
+        "amount": 3.43,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 3.43,
+    "before_balance": 5.28,
+    "after_balance": 8.71
+  },
+  {
+    "user_id": "a1abe89e-a412-44ec-835b-e9650b276cf6",
+    "email": "bdabillz2@gmail.com",
+    "name": "KING LEBRON",
+    "phone": "0599852603",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "a45215be-d8e7-4808-b91c-02c205be49c5",
+        "amount": 3.26,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 3.26,
+    "before_balance": 0.45,
+    "after_balance": 3.71
+  },
+  {
+    "user_id": "8c8ef104-b0f0-415a-a692-0860daac0f47",
+    "email": "patrickmensah2371@icloud.com",
+    "name": "Patrick Mensah",
+    "phone": "0530028963",
+    "orders_count": 2,
+    "orders": [
+      {
+        "order_id": "84b5a05a-a10b-4108-ad2b-2b6a28cff329",
+        "amount": 1.51,
+        "type": "partial"
+      },
+      {
+        "order_id": "d37c3975-c39a-4c02-91b2-7be95cbe24b5",
+        "amount": 1.61,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 3.12,
+    "before_balance": 1.59,
+    "after_balance": 4.71
+  },
+  {
+    "user_id": "3ecb759d-b3e4-4dde-9329-a536533747d1",
+    "email": "adelaideappiahnkrumah@gmail.com",
+    "name": "Nkrumah Adelaide Appiah",
+    "phone": "0549268735",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "accc10b7-8f56-4cb9-96bf-39e4fea86432",
+        "amount": 2.44,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 2.44,
+    "before_balance": 0.3,
+    "after_balance": 2.74
+  },
+  {
+    "user_id": "307ee6f7-0234-4608-a860-2d562b1c25dc",
+    "email": "stephanieohenewaa1@gmail.com",
+    "name": "Stephanie ohenewaa",
+    "phone": "0507715875",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "c88119f4-2a2d-4d6f-a04a-7a7ef8d642a2",
+        "amount": 2.44,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 2.44,
+    "before_balance": 3.32,
+    "after_balance": 5.76
+  },
+  {
+    "user_id": "a044c3d5-ec2c-412e-a764-614ada6a0d33",
+    "email": "fa3408683@gmail.com",
+    "name": "Francis Agyei",
+    "phone": "0542406459",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "365711fb-3234-42f6-8ea8-04ed7c4c1719",
+        "amount": 2.05,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 2.05,
+    "before_balance": 15.3,
+    "after_balance": 17.35
+  },
+  {
+    "user_id": "455af45c-6132-4de4-883a-8bd2cc4a68c4",
+    "email": "kingbrymo97@gmail.com",
+    "name": "King brymo",
+    "phone": "0550759677",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "42752561-dff8-4f2c-9e54-667a59b6cf3e",
+        "amount": 1.72,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 1.72,
+    "before_balance": 0.32,
+    "after_balance": 2.04
+  },
+  {
+    "user_id": "08c17a2e-4d5a-479f-a9e3-04720729f700",
+    "email": "aishabashiru112@gmail.com",
+    "name": "Aisha Bashiru",
+    "phone": "0539778548",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "98e9f46d-a6ae-44f6-8e35-24cf3f9eca9c",
+        "amount": 1.33,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 1.33,
+    "before_balance": 1.3,
+    "after_balance": 2.63
+  },
+  {
+    "user_id": "37d50a29-7242-44c7-89d1-81249f2bd710",
+    "email": "favourasafo33@gmail.com",
+    "name": "Favour",
+    "phone": "0593511004",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "ae3af656-d8fc-476b-b63e-c481d11b1b9c",
+        "amount": 1.04,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 1.04,
+    "before_balance": 2.8,
+    "after_balance": 3.84
+  },
+  {
+    "user_id": "1440892c-6de2-431d-8b08-6e515c2e8b25",
+    "email": "nyameb2007@gmail.com",
+    "name": "Nyame Benjamin",
+    "phone": "0553774293",
+    "orders_count": 1,
+    "orders": [
+      {
+        "order_id": "f11043ba-be28-4972-b239-0fbe585bf295",
+        "amount": 0.86,
+        "type": "partial"
+      }
+    ],
+    "total_refunded": 0.86,
+    "before_balance": 0.02,
+    "after_balance": 0.88
+  }
+]

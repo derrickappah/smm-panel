@@ -41,6 +41,16 @@ const AdminSettings = memo(() => {
   const [requirePhoneVerification, setRequirePhoneVerification] = useState(remoteRequirePhoneVerification);
   const [moolreVasKey, setMoolreVasKey] = useState('');
   const [moolreSenderId, setMoolreSenderId] = useState(remoteMoolreSenderId || 'Boostupgh');
+
+  // Hubtel & Provider Routing State
+  const [hubtelClientId, setHubtelClientId] = useState('');
+  const [hubtelClientSecret, setHubtelClientSecret] = useState('');
+  const [hubtelSenderId, setHubtelSenderId] = useState('Boostupgh');
+  const [primarySmsProvider, setPrimarySmsProvider] = useState('moolre');
+  const [fallbackSmsProvider, setFallbackSmsProvider] = useState('hubtel');
+  const [testingHubtelSms, setTestingHubtelSms] = useState(false);
+  const [testPhoneRecipient, setTestPhoneRecipient] = useState('');
+
   const [smsBalance, setSmsBalance] = useState(null);
   const [loadingSmsBalance, setLoadingSmsBalance] = useState(false);
   const [senderIdsList, setSenderIdsList] = useState([]);
@@ -61,11 +71,24 @@ const AdminSettings = memo(() => {
       const data = await res.json();
       if (data.success && data.settings) {
         setRequirePhoneVerification(data.settings.require_phone_verification);
-        setMoolreSenderId(data.settings.moolre_sender_id || 'BoostUpGH');
+        setMoolreSenderId(data.settings.moolre_sender_id || 'Boostupgh');
         setMoolreVasKey(data.settings.moolre_vaskey || '');
       }
+
+      // Fetch Hubtel settings
+      const hubtelRes = await fetch('/api/admin/hubtel-sms?action=get_settings', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const hubtelData = await hubtelRes.json();
+      if (hubtelData.success && hubtelData.settings) {
+        setHubtelClientId(hubtelData.settings.hubtel_client_id || '');
+        setHubtelClientSecret(hubtelData.settings.hubtel_client_secret || '');
+        setHubtelSenderId(hubtelData.settings.hubtel_sender_id || 'Boostupgh');
+        setPrimarySmsProvider(hubtelData.settings.primary_sms_provider || 'moolre');
+        setFallbackSmsProvider(hubtelData.settings.fallback_sms_provider || 'hubtel');
+      }
     } catch (err) {
-      console.warn('Failed to load Moolre settings:', err);
+      console.warn('Failed to load SMS settings:', err);
     }
   }, []);
 
@@ -79,7 +102,7 @@ const AdminSettings = memo(() => {
       setRequireCaptcha(remoteRequireCaptcha);
       setRequireOtp(remoteRequireOtp);
       setRequirePhoneVerification(remoteRequirePhoneVerification);
-      setMoolreSenderId(remoteMoolreSenderId || 'BoostUpGH');
+      setMoolreSenderId(remoteMoolreSenderId || 'Boostupgh');
     }
     fetchMoolreSettingsAndData();
   }, [remotePaymentSettings, remoteMinDepositSettings, remoteManualDepositDetails, remoteWhatsappNumber, remoteSupportPhoneNumber, remoteRequireCaptcha, remoteRequireOtp, remoteRequirePhoneVerification, remoteMoolreSenderId, isLoading, fetchMoolreSettingsAndData]);
@@ -89,12 +112,13 @@ const AdminSettings = memo(() => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error('Not authenticated');
+      const token = session.access_token;
 
-      const res = await fetch('/api/admin/moolre-sms', {
+      const moolreRes = await fetch('/api/admin/moolre-sms', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           action: 'save_settings',
@@ -104,17 +128,71 @@ const AdminSettings = memo(() => {
         })
       });
 
-      const data = await res.json();
-      if (res.ok && data.success) {
-        toast.success('Moolre SMS configuration saved successfully!');
+      const hubtelRes = await fetch('/api/admin/hubtel-sms', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: 'save_settings',
+          hubtel_client_id: hubtelClientId,
+          hubtel_client_secret: hubtelClientSecret,
+          hubtel_sender_id: hubtelSenderId,
+          primary_sms_provider: primarySmsProvider,
+          fallback_sms_provider: fallbackSmsProvider,
+          require_phone_verification: requirePhoneVerification
+        })
+      });
+
+      const mData = await moolreRes.json();
+      const hData = await hubtelRes.json();
+
+      if (mData.success && hData.success) {
+        toast.success('SMS Gateways & Failover Routing settings saved successfully!');
         queryClient.invalidateQueries({ queryKey: ['payment-settings'] });
       } else {
-        toast.error(data.error || 'Failed to save Moolre SMS configuration.');
+        toast.error('Failed to save some SMS settings.');
       }
     } catch (err) {
-      toast.error(err.message || 'Error saving Moolre configuration');
+      toast.error(err.message || 'Error saving SMS configuration');
     } finally {
       setSavingMoolreConfig(false);
+    }
+  };
+
+  const handleSendTestSmsHubtel = async () => {
+    if (!testPhoneRecipient.trim()) {
+      toast.error('Please enter a test recipient phone number');
+      return;
+    }
+    setTestingHubtelSms(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Not authenticated');
+
+      const res = await fetch('/api/admin/hubtel-sms', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          action: 'send_test_sms',
+          recipient: testPhoneRecipient,
+          message: 'BoostUp GH Hubtel Test SMS Verification Code: 123456'
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast.success(`Hubtel Test SMS sent to ${testPhoneRecipient}!`);
+      } else {
+        toast.error(data.error || 'Hubtel Test SMS failed.');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Error sending Hubtel test SMS');
+    } finally {
+      setTestingHubtelSms(false);
     }
   };
 
@@ -1005,17 +1083,17 @@ const AdminSettings = memo(() => {
 
       <Separator className="my-8" />
 
-      {/* Moolre SMS Gateway & Management Panel */}
+      {/* Unified SMS Gateway & Failover Control Center */}
       <Card className="border-2 border-purple-100 shadow-md">
-        <CardHeader className="bg-gradient-to-r from-purple-50/50 to-indigo-50/50">
+        <CardHeader className="bg-gradient-to-r from-purple-50/50 via-indigo-50/50 to-blue-50/50">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-purple-600 text-white rounded-xl shadow-sm">
+              <div className="p-2.5 bg-gradient-to-tr from-purple-600 to-indigo-600 text-white rounded-xl shadow-sm">
                 <Send className="w-5 h-5" />
               </div>
               <div>
-                <CardTitle className="text-lg font-bold">Moolre SMS Gateway & Management</CardTitle>
-                <CardDescription>Configure credentials, toggle phone verification, check SMS balance, and manage Sender IDs.</CardDescription>
+                <CardTitle className="text-lg font-bold">Unified SMS Gateway & Failover Control Center</CardTitle>
+                <CardDescription>Manage Moolre & Hubtel credentials, set Primary & Secondary SMS providers, and test live SMS delivery.</CardDescription>
               </div>
             </div>
             <Button
@@ -1024,150 +1102,197 @@ const AdminSettings = memo(() => {
               className="bg-purple-600 hover:bg-purple-700 text-white shadow-sm"
             >
               <Save className="w-4 h-4 mr-2" />
-              {savingMoolreConfig ? 'Saving...' : 'Save SMS Config'}
+              {savingMoolreConfig ? 'Saving...' : 'Save All SMS Settings'}
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="space-y-6 pt-6">
-          {/* Credentials Section */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <Label htmlFor="moolre-vaskey" className="flex items-center gap-1.5 font-semibold">
-                <Key className="w-4 h-4 text-purple-600" />
-                Moolre API VAS Key (X-API-VASKEY)
-              </Label>
-              <Input
-                id="moolre-vaskey"
-                type="password"
-                value={moolreVasKey}
-                onChange={(e) => setMoolreVasKey(e.target.value)}
-                placeholder="Enter your X-API-VASKEY..."
-              />
-              <p className="text-xs text-muted-foreground">
-                Required for sending SMS via api.moolre.com. Kept secure and private.
-              </p>
+        <CardContent className="space-y-8 pt-6">
+          {/* Provider Failover Routing Section */}
+          <div className="p-4 bg-gradient-to-r from-indigo-50/70 to-purple-50/70 rounded-2xl border border-indigo-100 space-y-4">
+            <div className="flex items-center gap-2">
+              <RefreshCw className="w-4 h-4 text-indigo-600" />
+              <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">SMS Provider Failover Routing</h4>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="moolre-senderid" className="flex items-center gap-1.5 font-semibold">
-                <Send className="w-4 h-4 text-purple-600" />
-                Approved Sender ID (Max 11 chars)
-              </Label>
-              <Input
-                id="moolre-senderid"
-                maxLength={11}
-                value={moolreSenderId}
-                onChange={(e) => setMoolreSenderId(e.target.value)}
-                placeholder="e.g. BoostUpGH"
-              />
-              <p className="text-xs text-muted-foreground">
-                Your registered and approved Sender ID with Moolre.
-              </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label htmlFor="primary-provider" className="font-semibold text-xs text-gray-700">
+                  Primary SMS Provider
+                </Label>
+                <select
+                  id="primary-provider"
+                  value={primarySmsProvider}
+                  onChange={(e) => setPrimarySmsProvider(e.target.value)}
+                  className="w-full h-10 px-3 text-sm bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                >
+                  <option value="moolre">Moolre SMS Gateway (Primary)</option>
+                  <option value="hubtel">Hubtel SMS Gateway (Primary)</option>
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  The initial provider used for all OTP verification codes and SMS dispatches.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="fallback-provider" className="font-semibold text-xs text-gray-700">
+                  Secondary (Fallback) SMS Provider
+                </Label>
+                <select
+                  id="fallback-provider"
+                  value={fallbackSmsProvider}
+                  onChange={(e) => setFallbackSmsProvider(e.target.value)}
+                  className="w-full h-10 px-3 text-sm bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                >
+                  <option value="hubtel">Hubtel SMS Gateway (Fallback)</option>
+                  <option value="moolre">Moolre SMS Gateway (Fallback)</option>
+                  <option value="none">None (No automatic failover)</option>
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  If the primary provider fails or times out (or if user requests resend), SMS routes automatically via fallback.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Moolre & Hubtel Configuration Cards */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Moolre SMS Gateway Card */}
+            <div className="p-5 bg-purple-50/30 rounded-2xl border border-purple-100 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Badge className="bg-purple-600 text-white">Moolre API</Badge>
+                  <h4 className="text-sm font-bold text-gray-900">Moolre SMS Gateway</h4>
+                </div>
+                {primarySmsProvider === 'moolre' && (
+                  <Badge variant="outline" className="border-purple-600 text-purple-700 text-[10px]">ACTIVE PRIMARY</Badge>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label htmlFor="moolre-vaskey" className="text-xs font-semibold">Moolre API VAS Key</Label>
+                  <Input
+                    id="moolre-vaskey"
+                    type="password"
+                    value={moolreVasKey}
+                    onChange={(e) => setMoolreVasKey(e.target.value)}
+                    placeholder="X-API-VASKEY"
+                    className="h-9 text-xs bg-white"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="moolre-senderid" className="text-xs font-semibold">Approved Moolre Sender ID</Label>
+                  <Input
+                    id="moolre-senderid"
+                    maxLength={11}
+                    value={moolreSenderId}
+                    onChange={(e) => setMoolreSenderId(e.target.value)}
+                    placeholder="e.g. Boostupgh"
+                    className="h-9 text-xs bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-between gap-3 border-t">
+                <div className="text-xs font-semibold text-gray-700">
+                  Balance: <span className="font-bold text-purple-700">{smsBalance !== null ? `${smsBalance} Credits` : '---'}</span>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleFetchSmsBalance}
+                  disabled={loadingSmsBalance}
+                  className="h-8 text-xs border-purple-200 text-purple-700 hover:bg-purple-100"
+                >
+                  <RefreshCw className={`w-3 h-3 mr-1 ${loadingSmsBalance ? 'animate-spin' : ''}`} />
+                  Check Balance
+                </Button>
+              </div>
+            </div>
+
+            {/* Hubtel SMS Gateway Card */}
+            <div className="p-5 bg-blue-50/30 rounded-2xl border border-blue-100 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Badge className="bg-blue-600 text-white">Hubtel API</Badge>
+                  <h4 className="text-sm font-bold text-gray-900">Hubtel SMS Gateway</h4>
+                </div>
+                {primarySmsProvider === 'hubtel' && (
+                  <Badge variant="outline" className="border-blue-600 text-blue-700 text-[10px]">ACTIVE PRIMARY</Badge>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label htmlFor="hubtel-clientid" className="text-xs font-semibold">Hubtel Client ID</Label>
+                  <Input
+                    id="hubtel-clientid"
+                    value={hubtelClientId}
+                    onChange={(e) => setHubtelClientId(e.target.value)}
+                    placeholder="e.g. xtyygvzc"
+                    className="h-9 text-xs bg-white font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="hubtel-secret" className="text-xs font-semibold">Hubtel Client Secret</Label>
+                  <Input
+                    id="hubtel-secret"
+                    type="password"
+                    value={hubtelClientSecret}
+                    onChange={(e) => setHubtelClientSecret(e.target.value)}
+                    placeholder="e.g. hujrpzzs"
+                    className="h-9 text-xs bg-white font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="hubtel-senderid" className="text-xs font-semibold">Approved Hubtel Sender ID</Label>
+                  <Input
+                    id="hubtel-senderid"
+                    maxLength={11}
+                    value={hubtelSenderId}
+                    onChange={(e) => setHubtelSenderId(e.target.value)}
+                    placeholder="e.g. Boostupgh"
+                    className="h-9 text-xs bg-white"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
           <Separator />
 
-          {/* Balance & Sender ID Management Actions */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Balance Card */}
-            <div className="p-4 bg-purple-50/50 rounded-xl border border-purple-100 space-y-3 flex flex-col justify-between">
-              <div>
-                <div className="text-xs font-semibold text-purple-700 uppercase tracking-wider mb-1">
-                  SMS Credit Balance
-                </div>
-                <div className="text-2xl font-black text-gray-900">
-                  {smsBalance !== null ? `${smsBalance} Credits` : '---'}
-                </div>
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={handleFetchSmsBalance}
-                disabled={loadingSmsBalance}
-                className="w-full border-purple-200 text-purple-700 hover:bg-purple-100"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${loadingSmsBalance ? 'animate-spin' : ''}`} />
-                Check SMS Balance
-              </Button>
+          {/* Test SMS Dispatcher Section */}
+          <div className="p-4 bg-gray-50 rounded-2xl border space-y-3">
+            <div className="flex items-center gap-2">
+              <Send className="w-4 h-4 text-blue-600" />
+              <h4 className="text-sm font-bold text-gray-900">Live SMS Dispatch Tester</h4>
             </div>
 
-            {/* List Sender IDs Card */}
-            <div className="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100 space-y-3 flex flex-col justify-between">
-              <div>
-                <div className="text-xs font-semibold text-indigo-700 uppercase tracking-wider mb-1">
-                  Registered Sender IDs
-                </div>
-                <div className="text-sm text-gray-600">
-                  {senderIdsList.length > 0 ? `${senderIdsList.length} registered ID(s)` : 'Click to fetch list'}
-                </div>
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={handleFetchSenderIds}
-                disabled={loadingSenderIds}
-                className="w-full border-indigo-200 text-indigo-700 hover:bg-indigo-100"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${loadingSenderIds ? 'animate-spin' : ''}`} />
-                Fetch Sender IDs List
-              </Button>
-            </div>
-
-            {/* Request New Sender ID */}
-            <div className="p-4 bg-blue-50/50 rounded-xl border border-blue-100 space-y-3">
-              <div className="text-xs font-semibold text-blue-700 uppercase tracking-wider">
-                Request New Sender ID
-              </div>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="New Sender ID"
-                  maxLength={11}
-                  value={newSenderIdInput}
-                  onChange={(e) => setNewSenderIdInput(e.target.value)}
-                  className="h-8 text-xs"
-                />
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <Input
+                placeholder="Recipient Phone Number (e.g. 0599342940)"
+                value={testPhoneRecipient}
+                onChange={(e) => setTestPhoneRecipient(e.target.value)}
+                className="h-9 text-xs bg-white sm:max-w-xs"
+              />
+              <div className="flex items-center gap-2 w-full sm:w-auto">
                 <Button
                   type="button"
                   size="sm"
-                  onClick={handleCreateSenderId}
-                  disabled={creatingSenderId || !newSenderIdInput.trim()}
-                  className="h-8 bg-blue-600 hover:bg-blue-700 text-white"
+                  onClick={handleSendTestSmsHubtel}
+                  disabled={testingHubtelSms || !testPhoneRecipient.trim()}
+                  className="h-9 text-xs bg-blue-600 hover:bg-blue-700 text-white flex-1 sm:flex-none"
                 >
-                  <Plus className="w-3.5 h-3.5 mr-1" />
-                  Submit
+                  <Send className="w-3.5 h-3.5 mr-1" />
+                  {testingHubtelSms ? 'Testing...' : 'Test Hubtel SMS'}
                 </Button>
               </div>
             </div>
           </div>
-
-          {/* Sender ID List Table */}
-          {senderIdsList.length > 0 && (
-            <div className="mt-4 border rounded-xl overflow-hidden bg-white shadow-sm">
-              <div className="px-4 py-2.5 bg-gray-50 border-b font-semibold text-xs text-gray-700 flex justify-between">
-                <span>Sender ID</span>
-                <span>Status</span>
-              </div>
-              <div className="divide-y max-h-40 overflow-y-auto">
-                {senderIdsList.map((item, idx) => (
-                  <div key={idx} className="px-4 py-2 flex items-center justify-between text-xs">
-                    <span className="font-medium text-gray-900">{item.senderid}</span>
-                    <Badge
-                      variant={
-                        item.approval === 'Approved' ? 'success' :
-                        item.approval === 'Pending' ? 'outline' : 'destructive'
-                      }
-                      className="capitalize"
-                    >
-                      {item.approval}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </CardContent>
       </Card>
     </div>

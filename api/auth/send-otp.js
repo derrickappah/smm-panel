@@ -2,6 +2,7 @@ import { getServiceRoleClient } from '../utils/auth.js';
 import { setCorsHeaders } from '../utils/corsHeaders.js';
 import { redis } from '../utils/redisClient.js';
 import crypto from 'crypto';
+
 // In-memory fallback tracking for when Redis is unavailable
 const memoryOtpCounts = new Map();
 
@@ -17,8 +18,8 @@ if (typeof setInterval !== 'undefined') {
   }, 60000);
 }
 
-// Format phone number for Moolre SMS Gateway (e.g., converts 024XXXXXXX to 23324XXXXXXX)
-function formatPhoneForMoolre(phone) {
+// Format phone number for SMS Gateways (e.g., converts 024XXXXXXX to 23324XXXXXXX)
+function formatPhoneForGateway(phone) {
   let cleaned = (phone || '').replace(/\D/g, '');
   if (cleaned.startsWith('0') && cleaned.length === 10) {
     cleaned = '233' + cleaned.substring(1);
@@ -38,6 +39,100 @@ function normalizePhone(phone) {
   return cleaned;
 }
 
+// Send SMS via Moolre Gateway
+async function sendViaMoolre(phone, otpCode, purpose, vasKey, senderId) {
+  if (!vasKey) return { success: false, provider: 'moolre', error: 'Moolre VAS Key not configured' };
+  const recipientPhone = formatPhoneForGateway(phone);
+  const smsRef = `ref_otp_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+
+  const smsPayload = {
+    type: 1,
+    senderid: senderId || 'Boostupgh',
+    messages: [
+      {
+        recipient: recipientPhone,
+        message: purpose === 'reset_password'
+          ? `Your BoostUp GH password reset code is: ${otpCode}. Valid for 10 minutes. Do not share this code.`
+          : `Your BoostUp GH verification code is: ${otpCode}. Valid for 10 minutes.`,
+        ref: smsRef
+      }
+    ]
+  };
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+    const res = await fetch('https://api.moolre.com/open/sms/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-VASKEY': vasKey
+      },
+      body: JSON.stringify(smsPayload),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+
+    const data = await res.json();
+    console.log('[MOOLRE SMS DISPATCH RESPONSE]', data);
+
+    if (res.ok && data.status === 1) {
+      return { success: true, provider: 'moolre', ref: smsRef, data };
+    } else {
+      return { success: false, provider: 'moolre', error: data.message || 'Moolre SMS delivery failed', data };
+    }
+  } catch (err) {
+    const errMsg = err.name === 'AbortError' ? 'Moolre SMS request timed out (6s)' : (err.message || 'Error connecting to Moolre SMS gateway');
+    console.error('[MOOLRE SMS ERROR]', errMsg);
+    return { success: false, provider: 'moolre', error: errMsg };
+  }
+}
+
+// Send SMS via Hubtel Gateway
+async function sendViaHubtel(phone, otpCode, purpose, clientId, clientSecret, senderId) {
+  if (!clientId || !clientSecret) return { success: false, provider: 'hubtel', error: 'Hubtel credentials not configured' };
+  const recipientPhone = formatPhoneForGateway(phone);
+  const authHeaderValue = 'Basic ' + Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+
+  const payload = {
+    From: senderId || 'Boostupgh',
+    To: recipientPhone,
+    Content: purpose === 'reset_password'
+      ? `Your BoostUp GH password reset code is: ${otpCode}. Valid for 10 minutes. Do not share this code.`
+      : `Your BoostUp GH verification code is: ${otpCode}. Valid for 10 minutes.`
+  };
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+    const res = await fetch('https://sms.hubtel.com/v1/messages/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': authHeaderValue
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+
+    const data = await res.json();
+    console.log('[HUBTEL SMS DISPATCH RESPONSE]', data);
+
+    if (res.ok && (data.status === 0 || data.messageId)) {
+      return { success: true, provider: 'hubtel', messageId: data.messageId, data };
+    } else {
+      return { success: false, provider: 'hubtel', error: data.statusDescription || data.message || 'Hubtel SMS delivery failed', data };
+    }
+  } catch (err) {
+    const errMsg = err.name === 'AbortError' ? 'Hubtel SMS request timed out (6s)' : (err.message || 'Error connecting to Hubtel SMS gateway');
+    console.error('[HUBTEL SMS ERROR]', errMsg);
+    return { success: false, provider: 'hubtel', error: errMsg };
+  }
+}
+
 export default async function handler(req, res) {
   setCorsHeaders(req, res);
 
@@ -45,7 +140,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { email, phone_number, purpose = 'signup' } = req.body;
+    const { email, phone_number, purpose = 'signup', requested_provider } = req.body;
     const normPhone = phone_number ? normalizePhone(phone_number) : null;
     const identifier = (normPhone || phone_number || email || '').trim().toLowerCase();
 
@@ -106,7 +201,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // In-memory rate limiting fallback if Redis was unavailable or not configured
+    // In-memory rate limiting fallback if Redis was unavailable
     if (!redis || !rateLimitExceeded) {
       const now = Date.now();
       const memRecord = memoryOtpCounts.get(identifier);
@@ -139,7 +234,6 @@ export default async function handler(req, res) {
     const supabase = getServiceRoleClient();
 
     // Store in system_events for serverless verification
-    // Generate salt and hash for OTP
     const salt = crypto.randomBytes(16).toString('hex');
     const otpHash = crypto.createHash('sha256').update(salt + otpCode).digest('hex');
 
@@ -161,101 +255,107 @@ export default async function handler(req, res) {
       console.error('Error logging OTP event:', insertError);
     }
 
-    // Log OTP generation event without sensitive code
     const maskedIdentifier = typeof identifier === 'string' && identifier.length > 4 
       ? identifier.slice(0, 2) + '****' + identifier.slice(-2) 
       : '***';
     console.log(`[OTP ONBOARDING] OTP generated for identifier ${maskedIdentifier}, expires at: ${expiresAt}`);
 
-    // If phone number is provided, send SMS via Moolre Gateway
+    // If phone number is provided, send SMS via Dual-Gateway System (Moolre & Hubtel)
     let smsSent = false;
     let smsMessage = '';
+    let usedProvider = '';
+    let dispatchRef = '';
 
     if (phone_number) {
-      const recipientPhone = formatPhoneForMoolre(phone_number);
-
-      // Fetch Moolre SMS configuration from app_settings
+      // Fetch SMS configurations from app_settings
       const { data: settings } = await supabase
         .from('app_settings')
         .select('key, value')
-        .in('key', ['moolre_vaskey', 'moolre_sender_id', 'require_phone_verification']);
+        .in('key', [
+          'moolre_vaskey',
+          'moolre_sender_id',
+          'hubtel_client_id',
+          'hubtel_client_secret',
+          'hubtel_sender_id',
+          'primary_sms_provider',
+          'fallback_sms_provider'
+        ]);
 
       const settingsMap = {};
       settings?.forEach(item => { settingsMap[item.key] = item.value; });
 
       const vasKey = settingsMap.moolre_vaskey || process.env.MOOLRE_VAS_KEY || process.env.MOOLRE_API_PUBKEY;
-      const senderId = settingsMap.moolre_sender_id || process.env.MOOLRE_SENDER_ID || 'Boostupgh';
+      const moolreSender = settingsMap.moolre_sender_id || process.env.MOOLRE_SENDER_ID || 'Boostupgh';
 
-      if (vasKey) {
-        try {
-          const smsRef = `ref_otp_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+      const hubtelClientId = settingsMap.hubtel_client_id || process.env.HUBTEL_CLIENT_ID || '';
+      const hubtelClientSecret = settingsMap.hubtel_client_secret || process.env.HUBTEL_CLIENT_SECRET || '';
+      const hubtelSender = settingsMap.hubtel_sender_id || process.env.HUBTEL_SENDER_ID || 'Boostupgh';
 
-          const smsPayload = {
-            type: 1,
-            senderid: senderId,
-            messages: [
-              {
-                recipient: recipientPhone,
-                message: purpose === 'reset_password'
-                  ? `Your BoostUp GH password reset code is: ${otpCode}. Valid for 10 minutes. Do not share this code.`
-                  : `Your BoostUp GH verification code is: ${otpCode}. Valid for 10 minutes.`,
-                ref: smsRef
-              }
-            ]
-          };
+      const primaryProvider = requested_provider || settingsMap.primary_sms_provider || 'moolre';
+      const fallbackProvider = settingsMap.fallback_sms_provider || 'hubtel';
 
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 6000); // 6s timeout
-
-          const moolreRes = await fetch('https://api.moolre.com/open/sms/send', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-API-VASKEY': vasKey
-            },
-            body: JSON.stringify(smsPayload),
-            signal: controller.signal
-          });
-          clearTimeout(timeoutId);
-
-          const moolreData = await moolreRes.json();
-          console.log('[MOOLRE SMS RESPONSE]', moolreData);
-
-          if (moolreRes.ok && moolreData.status === 1) {
-            smsSent = true;
-            smsMessage = `Verification SMS sent to ${recipientPhone}`;
-
-            // Update event metadata with sms_ref while preserving cryptographic hash & salt
-            await supabase.from('system_events').update({
-              metadata: {
-                identifier,
-                otp_hash: otpHash,
-                salt,
-                expires_at: expiresAt,
-                verified: false,
-                sms_ref: smsRef,
-                sms_sent: true
-              }
-            }).eq('description', `OTP generated for ${identifier}`).order('created_at', { ascending: false }).limit(1);
-          } else {
-            console.warn('[MOOLRE SMS WARNING]', moolreData.message || 'Failed to send SMS');
-            smsMessage = moolreData.message || 'SMS delivery pending/failed';
-          }
-        } catch (smsErr) {
-          console.error('[MOOLRE SMS ERROR]', smsErr.name === 'AbortError' ? 'Moolre SMS API request timed out (6s)' : smsErr);
-          smsMessage = smsErr.name === 'AbortError' ? 'SMS gateway request timed out' : 'Error connecting to SMS gateway';
+      // Function runner based on provider name
+      const dispatchToProvider = async (providerName) => {
+        if (providerName === 'hubtel') {
+          return await sendViaHubtel(phone_number, otpCode, purpose, hubtelClientId, hubtelClientSecret, hubtelSender);
+        } else {
+          return await sendViaMoolre(phone_number, otpCode, purpose, vasKey, moolreSender);
         }
+      };
+
+      // 1. Attempt Primary Provider
+      console.log(`[SMS DISPATCH] Attempting primary provider: "${primaryProvider}"...`);
+      let result = await dispatchToProvider(primaryProvider);
+
+      if (result.success) {
+        smsSent = true;
+        usedProvider = result.provider;
+        dispatchRef = result.ref || result.messageId || '';
+        smsMessage = `Verification SMS sent via ${usedProvider.toUpperCase()}`;
       } else {
-        console.warn('[MOOLRE SMS] No X-API-VASKEY configured in app_settings or environment variables.');
-        smsMessage = 'SMS gateway credentials not configured';
+        console.warn(`[SMS FAILOVER] Primary provider "${primaryProvider}" failed: ${result.error}. Checking fallback...`);
+
+        // 2. Attempt Fallback Provider if configured & different
+        if (fallbackProvider && fallbackProvider !== 'none' && fallbackProvider !== primaryProvider) {
+          console.log(`[SMS DISPATCH] Triggering automatic failover to provider: "${fallbackProvider}"...`);
+          const fallbackResult = await dispatchToProvider(fallbackProvider);
+
+          if (fallbackResult.success) {
+            smsSent = true;
+            usedProvider = fallbackResult.provider;
+            dispatchRef = fallbackResult.ref || fallbackResult.messageId || '';
+            smsMessage = `Verification SMS sent via fallback ${usedProvider.toUpperCase()}`;
+          } else {
+            console.error(`[SMS FAILOVER] Fallback provider "${fallbackProvider}" also failed: ${fallbackResult.error}`);
+            smsMessage = `Failed to send SMS via ${primaryProvider} & ${fallbackProvider}`;
+          }
+        } else {
+          smsMessage = result.error || `SMS delivery failed via ${primaryProvider}`;
+        }
+      }
+
+      // If SMS sent successfully, update system_events record
+      if (smsSent) {
+        await supabase.from('system_events').update({
+          metadata: {
+            identifier,
+            otp_hash: otpHash,
+            salt,
+            expires_at: expiresAt,
+            verified: false,
+            sms_provider: usedProvider,
+            sms_ref: dispatchRef,
+            sms_sent: true
+          }
+        }).eq('description', `OTP generated for ${identifier}`).order('created_at', { ascending: false }).limit(1);
       }
     }
 
-    // SECURITY: Never return OTP code in the response — use server logs for debugging
     return res.status(200).json({
       success: true,
       message: smsSent ? smsMessage : `OTP sent to ${identifier}. Check your SMS.`,
-      sms_sent: smsSent
+      sms_sent: smsSent,
+      provider_used: usedProvider || undefined
     });
   } catch (error) {
     console.error('Error sending OTP:', error);

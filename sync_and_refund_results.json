@@ -1,0 +1,516 @@
+{
+  "refunded_full": [
+    {
+      "order_id": "f62474c3-75f5-42ae-9005-cdfc3834ad5f",
+      "provider_order_id": "9325518",
+      "user_id": "9170f24a-dd36-446f-a240-3e1a86b7bd5c",
+      "amount_refunded": 25,
+      "new_balance": 359.61,
+      "created_at": "2026-09-01T12:50:31.495765+00:00"
+    },
+    {
+      "order_id": "234b0936-01b7-41b6-b398-6255ebdee721",
+      "provider_order_id": "9315990",
+      "user_id": "8a6706a5-8eba-46ad-9f24-df785ca724a1",
+      "amount_refunded": 5.2,
+      "new_balance": 17.18,
+      "created_at": "2026-09-01T07:26:44.596573+00:00"
+    },
+    {
+      "order_id": "3a470382-e034-43bd-af1d-2d89370c7e00",
+      "provider_order_id": "9300539",
+      "user_id": "a4740ec5-fc6a-4b15-8d6e-fb81e26d8016",
+      "amount_refunded": 2.6,
+      "new_balance": 5.92,
+      "created_at": "2026-08-31T22:17:29.084674+00:00"
+    },
+    {
+      "order_id": "df36223f-ff5b-4e35-89f7-9fd917df8859",
+      "provider_order_id": "9300266",
+      "user_id": "54352e84-cc1c-4f43-b7c3-8abbf89112db",
+      "amount_refunded": 25,
+      "new_balance": 26.3,
+      "created_at": "2026-08-31T22:10:01.991102+00:00"
+    },
+    {
+      "order_id": "95bcd44e-a854-446c-8edd-79f5379adf79",
+      "provider_order_id": "9266673",
+      "user_id": "e955701a-50e3-49a6-858a-55cd02687b5c",
+      "amount_refunded": 25,
+      "new_balance": 25.74,
+      "created_at": "2026-08-31T07:38:08.485139+00:00"
+    },
+    {
+      "order_id": "ab1b6a0e-78c6-4d2d-ad51-1798d4dd9fdd",
+      "provider_order_id": "9266658",
+      "user_id": "e955701a-50e3-49a6-858a-55cd02687b5c",
+      "amount_refunded": 25,
+      "new_balance": 50.74,
+      "created_at": "2026-08-31T07:37:42.643047+00:00"
+    },
+    {
+      "order_id": "7700f8e7-929d-4a61-9783-1c1e054f2107",
+      "provider_order_id": "9266648",
+      "user_id": "e955701a-50e3-49a6-858a-55cd02687b5c",
+      "amount_refunded": 25,
+      "new_balance": 75.74,
+      "created_at": "2026-08-31T07:37:07.75126+00:00"
+    },
+    {
+      "order_id": "dd1abc03-e763-493e-9714-0dacb2b26052",
+      "provider_order_id": "9240213",
+      "user_id": "cec734b0-5aa3-46b8-b151-a7f661a28f52",
+      "amount_refunded": 25,
+      "new_balance": 56.26,
+      "created_at": "2026-08-30T18:28:14.935645+00:00"
+    }
+  ],
+  "refunded_partial": [
+    {
+      "order_id": "accc10b7-8f56-4cb9-96bf-39e4fea86432",
+      "provider_order_id": "9315998",
+      "user_id": "3ecb759d-b3e4-4dde-9329-a536533747d1",
+      "quantity": 100,
+      "remains": 94,
+      "amount_refunded": 2.44,
+      "new_balance": 2.74,
+      "created_at": "2026-09-01T07:27:05.081638+00:00"
+    },
+    {
+      "order_id": "cdb94d16-8468-48c0-b603-2454f50ef3a4",
+      "provider_order_id": "9314570",
+      "user_id": "26445ba2-fbdd-4533-89f0-dda3554dd725",
+      "quantity": 1000,
+      "remains": 991,
+      "amount_refunded": 24.78,
+      "new_balance": 29.84,
+      "created_at": "2026-09-01T06:23:08.089909+00:00"
+    },
+    {
+      "order_id": "5dfc5a39-dc55-4ba0-9068-615dd9873842",
+      "provider_order_id": "9310873",
+      "user_id": "af72b47d-d688-402f-a9f1-44325c0cf624",
+      "quantity": 1000,
+      "remains": 977,
+      "amount_refunded": 25.4,
+      "new_balance": 28.4,
+      "created_at": "2026-09-01T03:32:09.574396+00:00"
+    },
+    {
+      "order_id": "a6d5120f-d0a1-421a-ae13-6dd4756a0330",
+      "provider_order_id": "9304646",
+      "user_id": "db4f7af7-263c-4c0f-9cc1-080af5450ed0",
+      "quantity": 1000,
+      "remains": 965,
+      "amount_refunded": 24.13,
+      "new_balance": 33.23,
+      "created_at": "2026-09-01T00:17:52.560539+00:00"
+    },
+    {
+      "order_id": "be98c068-d690-46f4-bfee-1efafa477fb4",
+      "provider_order_id": "9303891",
+      "user_id": "bb9441f8-a521-4884-b03a-58d95a5a4c2e",
+      "quantity": 250,
+      "remains": 216,
+      "amount_refunded": 5.62,
+      "new_balance": 6.08,
+      "created_at": "2026-08-31T23:52:46.003422+00:00"
+    },
+    {
+      "order_id": "902890ab-a73a-4c7c-99ce-ead0eeb994d2",
+      "provider_order_id": "9303348",
+      "user_id": "d9471344-68b7-45a5-9e98-b672265a5c8c",
+      "quantity": 500,
+      "remains": 421,
+      "amount_refunded": 10.95,
+      "new_balance": 12.76,
+      "created_at": "2026-08-31T23:35:21.905863+00:00"
+    },
+    {
+      "order_id": "42752561-dff8-4f2c-9e54-667a59b6cf3e",
+      "provider_order_id": "9303073",
+      "user_id": "455af45c-6132-4de4-883a-8bd2cc4a68c4",
+      "quantity": 100,
+      "remains": 66,
+      "amount_refunded": 1.72,
+      "new_balance": 2.04,
+      "created_at": "2026-08-31T23:26:47.196988+00:00"
+    },
+    {
+      "order_id": "365711fb-3234-42f6-8ea8-04ed7c4c1719",
+      "provider_order_id": "9301986",
+      "user_id": "a044c3d5-ec2c-412e-a764-614ada6a0d33",
+      "quantity": 100,
+      "remains": 79,
+      "amount_refunded": 2.05,
+      "new_balance": 17.35,
+      "created_at": "2026-08-31T22:56:44.302374+00:00"
+    },
+    {
+      "order_id": "0b750237-c0b4-445b-b17f-3323be80413a",
+      "provider_order_id": "9301977",
+      "user_id": "6bbef35a-abd4-447e-bb26-3da3d81f937b",
+      "quantity": 1000,
+      "remains": 968,
+      "amount_refunded": 24.2,
+      "new_balance": 24.5,
+      "created_at": "2026-08-31T22:56:17.172042+00:00"
+    },
+    {
+      "order_id": "c3f200ca-9c72-4f7c-8b45-6b4b3855bbeb",
+      "provider_order_id": "9301960",
+      "user_id": "883a8299-2e29-49fd-b1db-8d8b29996e8e",
+      "quantity": 1000,
+      "remains": 971,
+      "amount_refunded": 24.28,
+      "new_balance": 30,
+      "created_at": "2026-08-31T22:56:03.599319+00:00"
+    },
+    {
+      "order_id": "90812171-cca6-4d5d-88bf-4e1d53f4808c",
+      "provider_order_id": "9299938",
+      "user_id": "a4740ec5-fc6a-4b15-8d6e-fb81e26d8016",
+      "quantity": 100,
+      "remains": 71,
+      "amount_refunded": 1.85,
+      "new_balance": 7.77,
+      "created_at": "2026-08-31T22:02:20.939543+00:00"
+    },
+    {
+      "order_id": "84b5a05a-a10b-4108-ad2b-2b6a28cff329",
+      "provider_order_id": "9299752",
+      "user_id": "8c8ef104-b0f0-415a-a692-0860daac0f47",
+      "quantity": 100,
+      "remains": 58,
+      "amount_refunded": 1.51,
+      "new_balance": 3.1,
+      "created_at": "2026-08-31T21:57:10.985179+00:00"
+    },
+    {
+      "order_id": "518a331c-3fd2-453e-bfd2-4d850533783a",
+      "provider_order_id": "9299681",
+      "user_id": "0fcb0f92-5684-4c69-b064-63aa41d00b1f",
+      "quantity": 400,
+      "remains": 344,
+      "amount_refunded": 8.94,
+      "new_balance": 10.11,
+      "created_at": "2026-08-31T21:55:43.167642+00:00"
+    },
+    {
+      "order_id": "d37c3975-c39a-4c02-91b2-7be95cbe24b5",
+      "provider_order_id": "9299544",
+      "user_id": "8c8ef104-b0f0-415a-a692-0860daac0f47",
+      "quantity": 100,
+      "remains": 62,
+      "amount_refunded": 1.61,
+      "new_balance": 4.71,
+      "created_at": "2026-08-31T21:51:56.131686+00:00"
+    },
+    {
+      "order_id": "ae3af656-d8fc-476b-b63e-c481d11b1b9c",
+      "provider_order_id": "9297053",
+      "user_id": "37d50a29-7242-44c7-89d1-81249f2bd710",
+      "quantity": 100,
+      "remains": 40,
+      "amount_refunded": 1.04,
+      "new_balance": 3.84,
+      "created_at": "2026-08-31T20:45:49.771959+00:00"
+    },
+    {
+      "order_id": "1cb9dc36-5b6e-4317-bcda-8ea07236e3c0",
+      "provider_order_id": "9296231",
+      "user_id": "b0e7fb5b-1280-492e-ae06-6f49c87c0e31",
+      "quantity": 200,
+      "remains": 160,
+      "amount_refunded": 4.16,
+      "new_balance": 16.71,
+      "created_at": "2026-08-31T20:25:35.651992+00:00"
+    },
+    {
+      "order_id": "c88119f4-2a2d-4d6f-a04a-7a7ef8d642a2",
+      "provider_order_id": "9295457",
+      "user_id": "307ee6f7-0234-4608-a860-2d562b1c25dc",
+      "quantity": 100,
+      "remains": 94,
+      "amount_refunded": 2.44,
+      "new_balance": 5.76,
+      "created_at": "2026-08-31T20:06:12.356838+00:00"
+    },
+    {
+      "order_id": "e52e6906-d41b-4748-a215-ecd2fabea83a",
+      "provider_order_id": "9295070",
+      "user_id": "c344399c-eadf-4b86-bf20-e322dc65f1f1",
+      "quantity": 450,
+      "remains": 447,
+      "amount_refunded": 11.62,
+      "new_balance": 29.12,
+      "created_at": "2026-08-31T19:59:41.400993+00:00"
+    },
+    {
+      "order_id": "5910b492-e2e4-4931-b55e-9a2e76dae6d6",
+      "provider_order_id": "9292832",
+      "user_id": "415a6442-5317-433f-9fae-77ac893d1fd7",
+      "quantity": 200,
+      "remains": 194,
+      "amount_refunded": 5.04,
+      "new_balance": 10.84,
+      "created_at": "2026-08-31T19:04:00.319154+00:00"
+    },
+    {
+      "order_id": "6cfa343f-85c7-4bdc-9197-fb158c9185d9",
+      "provider_order_id": "9292794",
+      "user_id": "cf1e4b4d-b9fb-4415-9af0-83f22ae11297",
+      "quantity": 500,
+      "remains": 453,
+      "amount_refunded": 11.78,
+      "new_balance": 11.8,
+      "created_at": "2026-08-31T19:03:12.596665+00:00"
+    },
+    {
+      "order_id": "bb691b75-3f9e-4767-b623-ce4c65bdd7c3",
+      "provider_order_id": "9292534",
+      "user_id": "54b4eeac-a9c9-4234-ae17-3da17eb8cd40",
+      "quantity": 1000,
+      "remains": 936,
+      "amount_refunded": 23.4,
+      "new_balance": 29.74,
+      "created_at": "2026-08-31T18:56:09.497173+00:00"
+    },
+    {
+      "order_id": "64ddeb3c-d601-4190-ba6d-2abb23915c56",
+      "provider_order_id": "9292509",
+      "user_id": "4553c33c-8efc-45b6-983b-dc43972ab2d1",
+      "quantity": 1000,
+      "remains": 916,
+      "amount_refunded": 22.9,
+      "new_balance": 35.79,
+      "created_at": "2026-08-31T18:55:28.426293+00:00"
+    },
+    {
+      "order_id": "98e9f46d-a6ae-44f6-8e35-24cf3f9eca9c",
+      "provider_order_id": "9290759",
+      "user_id": "08c17a2e-4d5a-479f-a9e3-04720729f700",
+      "quantity": 100,
+      "remains": 51,
+      "amount_refunded": 1.33,
+      "new_balance": 2.63,
+      "created_at": "2026-08-31T18:07:34.293991+00:00"
+    },
+    {
+      "order_id": "3e04f9e2-8114-4a1d-8209-f742c65e0317",
+      "provider_order_id": "9289103",
+      "user_id": "2f9577ae-43bc-4884-add5-78416550d504",
+      "quantity": 1000,
+      "remains": 908,
+      "amount_refunded": 22.7,
+      "new_balance": 22.81,
+      "created_at": "2026-08-31T17:23:54.959869+00:00"
+    },
+    {
+      "order_id": "a45215be-d8e7-4808-b91c-02c205be49c5",
+      "provider_order_id": "9283319",
+      "user_id": "a1abe89e-a412-44ec-835b-e9650b276cf6",
+      "quantity": 200,
+      "remains": 136,
+      "amount_refunded": 3.26,
+      "new_balance": 3.71,
+      "created_at": "2026-08-31T15:05:35.999816+00:00"
+    },
+    {
+      "order_id": "88597b31-8d88-4c2c-af36-3ecb281c0d00",
+      "provider_order_id": "9282834",
+      "user_id": "6b489b90-58df-4415-9282-aacc8f62e675",
+      "quantity": 200,
+      "remains": 143,
+      "amount_refunded": 3.43,
+      "new_balance": 8.71,
+      "created_at": "2026-08-31T14:53:54.734153+00:00"
+    },
+    {
+      "order_id": "795f77c8-0477-46c6-9d13-1f40a406d05c",
+      "provider_order_id": "9279205",
+      "user_id": "b57da208-ff7f-4d38-b491-ef3b46a099bb",
+      "quantity": 1000,
+      "remains": 921,
+      "amount_refunded": 22.1,
+      "new_balance": 24.75,
+      "created_at": "2026-08-31T13:22:50.12682+00:00"
+    },
+    {
+      "order_id": "0d3aca93-03e5-43e4-b9ae-e7b4fa9bd447",
+      "provider_order_id": "9278001",
+      "user_id": "7ede6ab2-eb51-46f1-aa3a-41adcf2a1b9b",
+      "quantity": 1000,
+      "remains": 920,
+      "amount_refunded": 23,
+      "new_balance": 23,
+      "created_at": "2026-08-31T12:51:39.269501+00:00"
+    },
+    {
+      "order_id": "aed799c0-cdb3-430f-8121-ad7994d6eb6e",
+      "provider_order_id": "9269373",
+      "user_id": "1b504bb2-ad75-4816-8ae8-0326e23bc97e",
+      "quantity": 1000,
+      "remains": 857,
+      "amount_refunded": 21.43,
+      "new_balance": 23.93,
+      "created_at": "2026-08-31T09:05:08.635376+00:00"
+    },
+    {
+      "order_id": "704e03d8-2af1-4835-9991-93185e7fe923",
+      "provider_order_id": "9268646",
+      "user_id": "9bca562a-4cae-4340-852f-aba85f2aa7cd",
+      "quantity": 1000,
+      "remains": 854,
+      "amount_refunded": 21.35,
+      "new_balance": 21.35,
+      "created_at": "2026-08-31T08:39:39.529663+00:00"
+    },
+    {
+      "order_id": "9f92f430-4a37-4368-8fba-a2b622f0b10f",
+      "provider_order_id": "9268575",
+      "user_id": "9bca562a-4cae-4340-852f-aba85f2aa7cd",
+      "quantity": 1000,
+      "remains": 855,
+      "amount_refunded": 21.38,
+      "new_balance": 42.73,
+      "created_at": "2026-08-31T08:37:32.463076+00:00"
+    },
+    {
+      "order_id": "7c738eb8-d836-4ea9-a3ae-4dbff6b977c0",
+      "provider_order_id": "9263266",
+      "user_id": "9528395c-eba8-4ee6-9a76-1a2474c8f6b4",
+      "quantity": 1000,
+      "remains": 752,
+      "amount_refunded": 18.8,
+      "new_balance": 32.03,
+      "created_at": "2026-08-31T05:54:22.241171+00:00"
+    },
+    {
+      "order_id": "f11043ba-be28-4972-b239-0fbe585bf295",
+      "provider_order_id": "9258126",
+      "user_id": "1440892c-6de2-431d-8b08-6e515c2e8b25",
+      "quantity": 300,
+      "remains": 36,
+      "amount_refunded": 0.86,
+      "new_balance": 0.88,
+      "created_at": "2026-08-31T02:15:47.393424+00:00"
+    },
+    {
+      "order_id": "bac637dd-5725-4c3d-9a43-b297e197c619",
+      "provider_order_id": "9251502",
+      "user_id": "f34418b4-bc29-43af-864d-c48ae560afb3",
+      "quantity": 450,
+      "remains": 152,
+      "amount_refunded": 3.65,
+      "new_balance": 4.25,
+      "created_at": "2026-08-30T22:57:32.715004+00:00"
+    },
+    {
+      "order_id": "4ecf7d6d-daff-4349-90b1-b7a5f0235748",
+      "provider_order_id": "9251129",
+      "user_id": "24f9a778-9707-458e-b8ae-0732498bddc3",
+      "quantity": 1000,
+      "remains": 745,
+      "amount_refunded": 18.63,
+      "new_balance": 33.85,
+      "created_at": "2026-08-30T22:46:30.389983+00:00"
+    },
+    {
+      "order_id": "4b4c4f37-e71b-45f8-b574-8f3b11e5844f",
+      "provider_order_id": "9250560",
+      "user_id": "3ab11f05-e2b5-4a2c-a1cb-aa749e24f3e7",
+      "quantity": 1000,
+      "remains": 701,
+      "amount_refunded": 16.82,
+      "new_balance": 54.79,
+      "created_at": "2026-08-30T22:32:12.697579+00:00"
+    },
+    {
+      "order_id": "3492bcd5-36bc-4f69-8369-74b3e909bd0e",
+      "provider_order_id": "9249206",
+      "user_id": "825a05e7-edc6-48d7-8314-633019ad29de",
+      "quantity": 1000,
+      "remains": 671,
+      "amount_refunded": 16.78,
+      "new_balance": 21.78,
+      "created_at": "2026-08-30T21:58:01.298937+00:00"
+    },
+    {
+      "order_id": "849aec8c-8541-4728-9030-466618d2b914",
+      "provider_order_id": "9247310",
+      "user_id": "93406bda-80fd-4e03-9ee1-1f5cbea3a613",
+      "quantity": 1000,
+      "remains": 675,
+      "amount_refunded": 16.88,
+      "new_balance": 16.88,
+      "created_at": "2026-08-30T21:11:25.694806+00:00"
+    },
+    {
+      "order_id": "9a841a95-2fa5-4085-82c1-8d3fb6fb6777",
+      "provider_order_id": "9244393",
+      "user_id": "0c2b0d13-5489-4b31-8afe-488cb3d5919e",
+      "quantity": 1000,
+      "remains": 657,
+      "amount_refunded": 16.43,
+      "new_balance": 16.43,
+      "created_at": "2026-08-30T20:00:51.293225+00:00"
+    },
+    {
+      "order_id": "1b687315-0a0a-4f3d-8d4d-3eec108454b6",
+      "provider_order_id": "9244109",
+      "user_id": "9ccbf413-e2d4-4bce-a0e3-47991b12596e",
+      "quantity": 700,
+      "remains": 357,
+      "amount_refunded": 8.57,
+      "new_balance": 26.4,
+      "created_at": "2026-08-30T19:54:12.670234+00:00"
+    },
+    {
+      "order_id": "94b70eb6-ac79-44ff-9c71-e7793eefa07a",
+      "provider_order_id": "9242678",
+      "user_id": "e956646f-89ca-410a-a446-d5576c51d990",
+      "quantity": 1000,
+      "remains": 622,
+      "amount_refunded": 14.93,
+      "new_balance": 36.89,
+      "created_at": "2026-08-30T19:24:40.825152+00:00"
+    },
+    {
+      "order_id": "4536c2ee-fca5-44ff-a2c3-f53067c01ffc",
+      "provider_order_id": "9231460",
+      "user_id": "ffb64b11-592c-4b71-b513-15680927a55c",
+      "quantity": 1000,
+      "remains": 559,
+      "amount_refunded": 13.98,
+      "new_balance": 21.98,
+      "created_at": "2026-08-30T15:04:31.681065+00:00"
+    },
+    {
+      "order_id": "b2a4cbc5-c126-460c-a04a-e2f8a151e2f3",
+      "provider_order_id": "9229578",
+      "user_id": "a1271962-2e4d-409b-8dbf-2434c39e5c29",
+      "quantity": 1000,
+      "remains": 526,
+      "amount_refunded": 12.62,
+      "new_balance": 12.78,
+      "created_at": "2026-08-30T14:20:40.603134+00:00"
+    }
+  ],
+  "refund_skipped_already_done": 1162,
+  "refund_errors": [],
+  "status_updated": [
+    {
+      "order_id": "dcc4a9e1-bfe5-414e-80ef-9addd25a8ec5",
+      "provider_order_id": "9429357",
+      "from": "in progress",
+      "to": "completed"
+    },
+    {
+      "order_id": "98848a9c-87ba-41c3-9e79-b2a9f7130bca",
+      "provider_order_id": "9326110",
+      "from": "completed",
+      "to": "in progress"
+    }
+  ]
+}
