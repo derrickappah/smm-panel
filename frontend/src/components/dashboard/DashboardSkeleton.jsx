@@ -1,4 +1,9 @@
 import React from 'react';
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem
+} from "@/components/ui/carousel";
 
 const DashboardSkeleton = () => {
   return (
@@ -40,59 +45,46 @@ const DashboardSkeleton = () => {
         </div>
 
         {/* Promotion Packages Skeleton */}
-        <div className="w-full mb-6 sm:mb-8">
-          <div className="flex gap-2 md:gap-4 overflow-hidden -ml-2 md:-ml-4 pl-2 md:pl-4">
-            {/* Card 1 */}
-            <div className="basis-[85%] sm:basis-[70%] md:basis-1/2 lg:basis-1/3 shrink-0">
-              <div className="bg-white border-2 border-purple-200 rounded-2xl p-4 sm:p-5 shadow-xl min-h-[190px] flex flex-col justify-between animate-pulse">
-                <div className="flex items-start justify-between mb-2">
-                  <div className="h-6 w-20 bg-purple-50 border border-purple-100 rounded-lg" />
-                  <div className="h-6 w-16 bg-purple-100 rounded" />
-                </div>
-                <div className="space-y-2 mb-3">
-                  <div className="h-4 w-3/4 bg-gray-200 rounded" />
-                  <div className="h-3 w-1/2 bg-gray-200 rounded" />
-                </div>
-                <div className="h-9 sm:h-10 w-full bg-purple-200/80 rounded-xl" />
-              </div>
-            </div>
+        <div className="w-full mb-8">
+          <Carousel
+            opts={{
+              align: "center",
+              loop: true,
+            }}
+            className="w-full"
+          >
+            <CarouselContent className="-ml-2 md:-ml-4">
+              {[1, 2, 3, 4].map((i) => (
+                <CarouselItem key={i} className="pl-2 md:pl-4 basis-[85%] sm:basis-[70%] md:basis-1/2 lg:basis-1/3">
+                  <div className="relative bg-white border-2 border-purple-200 rounded-2xl p-4 sm:p-5 shadow-xl min-h-[190px] flex flex-col justify-between animate-pulse">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="h-6 w-20 bg-purple-50 border border-purple-100 rounded-lg" />
+                      <div className="h-6 w-16 bg-purple-100 rounded" />
+                    </div>
+                    <div className="space-y-2 mb-3">
+                      <div className="h-4 w-3/4 bg-gray-200 rounded" />
+                      <div className="h-3 w-1/2 bg-gray-200 rounded" />
+                    </div>
+                    <div className="h-9 sm:h-10 w-full bg-purple-200/80 rounded-xl" />
+                  </div>
+                </CarouselItem>
+              ))}
+            </CarouselContent>
+          </Carousel>
 
-            {/* Card 2 */}
-            <div className="hidden sm:block sm:basis-[70%] md:basis-1/2 lg:basis-1/3 shrink-0">
-              <div className="bg-white border-2 border-purple-200 rounded-2xl p-4 sm:p-5 shadow-xl min-h-[190px] flex flex-col justify-between animate-pulse">
-                <div className="flex items-start justify-between mb-2">
-                  <div className="h-6 w-20 bg-purple-50 border border-purple-100 rounded-lg" />
-                  <div className="h-6 w-16 bg-purple-100 rounded" />
-                </div>
-                <div className="space-y-2 mb-3">
-                  <div className="h-4 w-3/4 bg-gray-200 rounded" />
-                  <div className="h-3 w-1/2 bg-gray-200 rounded" />
-                </div>
-                <div className="h-9 sm:h-10 w-full bg-purple-200/80 rounded-xl" />
-              </div>
+          {/* Carousel Dots and Swipe Hint */}
+          <div className="flex flex-col items-center gap-3 mt-4">
+            <div className="flex justify-center gap-1.5">
+              <div className="w-6 h-1.5 bg-purple-600/70 rounded-full animate-pulse shadow-sm" />
+              <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse" />
+              <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse" />
+              <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse" />
             </div>
-
-            {/* Card 3 */}
-            <div className="hidden lg:block lg:basis-1/3 shrink-0">
-              <div className="bg-white border-2 border-purple-200 rounded-2xl p-4 sm:p-5 shadow-xl min-h-[190px] flex flex-col justify-between animate-pulse">
-                <div className="flex items-start justify-between mb-2">
-                  <div className="h-6 w-20 bg-purple-50 border border-purple-100 rounded-lg" />
-                  <div className="h-6 w-16 bg-purple-100 rounded" />
-                </div>
-                <div className="space-y-2 mb-3">
-                  <div className="h-4 w-3/4 bg-gray-200 rounded" />
-                  <div className="h-3 w-1/2 bg-gray-200 rounded" />
-                </div>
-                <div className="h-9 sm:h-10 w-full bg-purple-200/80 rounded-xl" />
-              </div>
+            <div className="flex items-center gap-2 text-purple-600/40 animate-pulse">
+              <span className="text-[10px] sm:text-xs font-bold tracking-widest uppercase">
+                &lt; swipe for more &gt;
+              </span>
             </div>
-          </div>
-
-          {/* Carousel Dots */}
-          <div className="flex justify-center gap-1.5 mt-4">
-            <div className="w-6 h-1.5 bg-purple-400 rounded-full animate-pulse" />
-            <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse" />
-            <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse" />
           </div>
         </div>
 
