@@ -18,6 +18,7 @@ import DashboardOrders from '@/components/dashboard/DashboardOrders';
 import PromotionBanner from '@/components/dashboard/PromotionBanner';
 import ClaimRewardModal from '@/components/dashboard/ClaimRewardModal';
 import PremiumNotificationPopup from '@/components/notifications/PremiumNotificationPopup';
+import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton';
 
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { usePaymentMethods } from '@/hooks/usePaymentMethods';
@@ -3249,6 +3250,10 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     }
   }, [orderForm, isSubmitting, onUpdateUser, fetchRecentOrders]);
 
+  if (!displayUser) {
+    return <DashboardSkeleton />;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <SEO
@@ -3265,8 +3270,10 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 md:pt-6 pb-6 sm:pb-8">
         {/* Welcome Section */}
-        <div className="mb-6 sm:mb-8 animate-fadeIn">
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">Welcome back, {displayUser.name}!</h1>
+        <div className="mb-3 sm:mb-4 animate-fadeIn">
+          <h1 className="text-sm sm:text-base font-medium text-gray-600">
+            Welcome back, <span className="font-semibold text-gray-900">{displayUser.name}</span>!
+          </h1>
         </div>
 
 
