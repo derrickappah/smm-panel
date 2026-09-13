@@ -305,8 +305,8 @@ export default async function handler(req, res) {
       const hubtelClientSecret = settingsMap.hubtel_client_secret || process.env.HUBTEL_CLIENT_SECRET || '';
       const hubtelSender = settingsMap.hubtel_sender_id || process.env.HUBTEL_SENDER_ID || 'Boostupgh';
 
-      const primaryProvider = requested_provider || settingsMap.primary_sms_provider || 'moolre';
-      const fallbackProvider = settingsMap.fallback_sms_provider || 'hubtel';
+      const primaryProvider = requested_provider || settingsMap.primary_sms_provider || 'hubtel';
+      const fallbackProvider = settingsMap.fallback_sms_provider || 'moolre';
 
       // Function runner based on provider name
       const dispatchToProvider = async (providerName) => {

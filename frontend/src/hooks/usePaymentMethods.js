@@ -165,8 +165,8 @@ export const fetchPaymentSettingsFn = async () => {
   settings.requirePhoneVerification = getEnabled('require_phone_verification', DEFAULT_PAYMENT_SETTINGS.requirePhoneVerification);
   settings.moolreSenderId = getString('moolre_sender_id', DEFAULT_PAYMENT_SETTINGS.moolreSenderId);
   settings.hubtelSenderId = getString('hubtel_sender_id', 'Boostupgh');
-  settings.primarySmsProvider = getString('primary_sms_provider', 'moolre');
-  settings.fallbackSmsProvider = getString('fallback_sms_provider', 'hubtel');
+  settings.primarySmsProvider = getString('primary_sms_provider', 'hubtel');
+  settings.fallbackSmsProvider = getString('fallback_sms_provider', 'moolre');
 
   // Determine Deposit Method
   settings.depositMethod = getFirstEnabledPaymentMethod(settings.paymentMethodSettings);

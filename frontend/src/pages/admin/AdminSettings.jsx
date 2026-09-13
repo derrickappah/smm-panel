@@ -46,8 +46,8 @@ const AdminSettings = memo(() => {
   const [hubtelClientId, setHubtelClientId] = useState('');
   const [hubtelClientSecret, setHubtelClientSecret] = useState('');
   const [hubtelSenderId, setHubtelSenderId] = useState('Boostupgh');
-  const [primarySmsProvider, setPrimarySmsProvider] = useState('moolre');
-  const [fallbackSmsProvider, setFallbackSmsProvider] = useState('hubtel');
+  const [primarySmsProvider, setPrimarySmsProvider] = useState('hubtel');
+  const [fallbackSmsProvider, setFallbackSmsProvider] = useState('moolre');
   const [testingHubtelSms, setTestingHubtelSms] = useState(false);
   const [testPhoneRecipient, setTestPhoneRecipient] = useState('');
 
