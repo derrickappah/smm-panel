@@ -56,7 +56,7 @@ const DashboardSkeleton = () => {
             <CarouselContent className="-ml-2 md:-ml-4">
               {[1, 2, 3, 4].map((i) => (
                 <CarouselItem key={i} className="pl-2 md:pl-4 basis-[85%] sm:basis-[70%] md:basis-1/2 lg:basis-1/3">
-                  <div className="relative bg-white border-2 border-purple-200 rounded-2xl p-4 sm:p-5 shadow-xl min-h-[190px] flex flex-col justify-between animate-pulse">
+                  <div className="relative bg-white border-2 border-purple-200 rounded-2xl p-4 sm:p-5 min-h-[190px] flex flex-col justify-between animate-pulse">
                     <div className="flex items-start justify-between mb-2">
                       <div className="h-6 w-20 bg-purple-50 border border-purple-100 rounded-lg" />
                       <div className="h-6 w-16 bg-purple-100 rounded" />
