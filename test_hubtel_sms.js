@@ -1,26 +1,63 @@
-const key1 = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ2YXNpZCI6MzIyNiwiZXhwIjoxOTU2NTI3OTk5fQ.KToP7MpSQnfpnw5NsJXNWFYmP7KjzpacxOarpnVoOM4';
+const clientId = 'jgunjnfo';
+const clientSecret = 'nmmixfrh';
+const senderId = 'Boostupgh';
 const recipientPhone = '233599342940';
+const testOtp = Math.floor(100000 + Math.random() * 900000).toString();
 
-async function testKey1WithShmTech() {
-  console.log("=== Testing Key 1 with Sender ID SHM TECH ===");
+async function testNewHubtelCredentials() {
+  console.log("=== Testing New Hubtel Credentials & Endpoint ===");
+  console.log("Client ID:", clientId);
+  console.log("Sender ID:", senderId);
+  console.log("Recipient:", recipientPhone);
+
+  // 1. JSON POST with Basic Auth to smsc.hubtel.com
+  console.log("\n[1] Testing JSON POST to https://smsc.hubtel.com/v1/messages/send...");
   try {
-    const res = await fetch('https://api.moolre.com/open/sms/send', {
+    const authHeaderValue = 'Basic ' + Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    const postPayload = {
+      From: senderId,
+      To: recipientPhone,
+      Content: `Your BoostUp GH verification code via Hubtel is: ${testOtp}.`
+    };
+
+    const postRes = await fetch('https://smsc.hubtel.com/v1/messages/send', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-API-VASKEY': key1
+        'Authorization': authHeaderValue
       },
-      body: JSON.stringify({
-        type: 1,
-        senderid: 'SHM TECH',
-        messages: [{ recipient: recipientPhone, message: `Your BoostUp GH verification code is: ${Math.floor(100000 + Math.random() * 900000)}.` }]
-      })
+      body: JSON.stringify(postPayload)
     });
-    const data = await res.json();
-    console.log("Key 1 (SHM TECH) Response:", JSON.stringify(data, null, 2));
-  } catch (e) {
-    console.error("Error:", e);
+
+    const postData = await postRes.json();
+    console.log("POST Response:", JSON.stringify(postData, null, 2));
+
+    if (postRes.ok && (postData.status === 0 || postData.messageId)) {
+      console.log("✅ Hubtel JSON POST SMS Dispatch Successful!");
+    } else {
+      console.warn("⚠️ Hubtel JSON POST response:", postData);
+    }
+  } catch (err) {
+    console.error("POST Error:", err);
+  }
+
+  // 2. HTTP GET to smsc.hubtel.com
+  console.log("\n[2] Testing HTTP GET to https://smsc.hubtel.com/v1/messages/send...");
+  try {
+    const getUrl = `https://smsc.hubtel.com/v1/messages/send?clientid=${encodeURIComponent(clientId)}&clientsecret=${encodeURIComponent(clientSecret)}&from=${encodeURIComponent(senderId)}&to=${encodeURIComponent(recipientPhone)}&content=${encodeURIComponent(`Test SMS via Hubtel GET: ${testOtp}`)}`;
+
+    const getRes = await fetch(getUrl, { method: 'GET' });
+    const getData = await getRes.json();
+    console.log("GET Response:", JSON.stringify(getData, null, 2));
+
+    if (getRes.ok && (getData.status === 0 || getData.messageId)) {
+      console.log("✅ Hubtel GET SMS Dispatch Successful!");
+    } else {
+      console.warn("⚠️ Hubtel GET response:", getData);
+    }
+  } catch (err) {
+    console.error("GET Error:", err);
   }
 }
 
-testKey1WithShmTech();
+testNewHubtelCredentials();

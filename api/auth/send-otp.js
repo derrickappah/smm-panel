@@ -107,15 +107,29 @@ async function sendViaHubtel(phone, otpCode, purpose, clientId, clientSecret, se
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 6000);
 
-    const res = await fetch('https://sms.hubtel.com/v1/messages/send', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': authHeaderValue
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal
-    });
+    let res;
+    try {
+      res = await fetch('https://smsc.hubtel.com/v1/messages/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': authHeaderValue
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+    } catch (e) {
+      // Fallback endpoint if smsc subdomain is unreachable
+      res = await fetch('https://sms.hubtel.com/v1/messages/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': authHeaderValue
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+    }
     clearTimeout(timeoutId);
 
     const data = await res.json();
