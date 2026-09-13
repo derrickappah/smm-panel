@@ -72,19 +72,12 @@ const DashboardSkeleton = () => {
             </CarouselContent>
           </Carousel>
 
-          {/* Carousel Dots and Swipe Hint */}
-          <div className="flex flex-col items-center gap-3 mt-4">
-            <div className="flex justify-center gap-1.5">
-              <div className="w-6 h-1.5 bg-purple-600/70 rounded-full animate-pulse shadow-sm" />
-              <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse" />
-              <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse" />
-              <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse" />
-            </div>
-            <div className="flex items-center gap-2 text-purple-600/40 animate-pulse">
-              <span className="text-[10px] sm:text-xs font-bold tracking-widest uppercase">
-                &lt; swipe for more &gt;
-              </span>
-            </div>
+          {/* Carousel Dots */}
+          <div className="flex justify-center gap-1.5 mt-4">
+            <div className="w-6 h-1.5 bg-purple-600/70 rounded-full animate-pulse shadow-sm" />
+            <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse" />
+            <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse" />
+            <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse" />
           </div>
         </div>
 
