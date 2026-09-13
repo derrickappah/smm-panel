@@ -119,7 +119,7 @@ const DashboardPromotionPackages = ({ packages, onPackageSelect, user }) => {
   }, [displayPackages.length]);
 
   return (
-    <div className="bg-white border-2 border-white rounded-lg p-3 shadow-sm animate-slideUp">
+    <div className="bg-white border-2 border-white rounded-lg p-3 shadow-sm">
       <div className="text-center mb-4">
         <div className="flex items-center justify-center gap-2 mb-1">
           <Sparkles className="w-4 h-4 text-purple-600" />

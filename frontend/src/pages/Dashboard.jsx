@@ -3270,7 +3270,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 md:pt-6 pb-6 sm:pb-8">
         {/* Welcome Section */}
-        <div className="mb-3 sm:mb-4 animate-fadeIn">
+        <div className="mb-3 sm:mb-4">
           <h1 className="text-sm sm:text-base font-medium text-gray-600">
             Welcome back, <span className="font-semibold text-gray-900">{displayUser.name}</span>!
           </h1>
