@@ -11,9 +11,11 @@ const WhatsAppButton = ({ message, className = "" }) => {
   const buttonRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   const [position, setPosition] = useState(() => {
-    // Always start in bottom-left corner (ignore saved position for now)
+    // Always start in bottom-right corner (ignore saved position for now)
     // Shifted higher up to avoid phone button being off-screen initially
-    return { x: 20, y: window.innerHeight - 160 };
+    const initialX = typeof window !== 'undefined' ? window.innerWidth - 80 : 320;
+    const initialY = typeof window !== 'undefined' ? window.innerHeight - 160 : 640;
+    return { x: initialX, y: initialY };
   });
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [hasDragged, setHasDragged] = useState(false);
@@ -40,15 +42,23 @@ const WhatsAppButton = ({ message, className = "" }) => {
   useEffect(() => {
     const handleResize = () => {
       const maxY = window.innerHeight - (supportPhoneNumber ? 150 : 80);
-      setPosition(prev => ({
-        x: Math.min(prev.x, window.innerWidth - 80),
-        y: Math.min(prev.y, maxY)
-      }));
+      setPosition(prev => {
+        if (!hasDragged) {
+          return {
+            x: window.innerWidth - 80,
+            y: window.innerHeight - 160
+          };
+        }
+        return {
+          x: Math.min(prev.x, window.innerWidth - 80),
+          y: Math.min(prev.y, maxY)
+        };
+      });
     };
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [supportPhoneNumber]);
+  }, [supportPhoneNumber, hasDragged]);
 
   const handleMouseDown = (e) => {
     // Start dragging when clicking anywhere on the container (but not on the image or svg)
@@ -240,7 +250,11 @@ const WhatsAppButton = ({ message, className = "" }) => {
         {/* Fallback Message for TikTok WebView */}
         {isTikTok && (
           <div
-            className="bg-black/80 text-white text-[10px] py-1 px-2 rounded-md whitespace-nowrap pointer-events-none select-none"
+            className={`bg-black/80 text-white text-[10px] py-1 px-2 rounded-md pointer-events-none select-none ${
+              position.x > (typeof window !== 'undefined' ? window.innerWidth / 2 : 200)
+                ? 'absolute right-0 bottom-full mb-2 text-right whitespace-nowrap'
+                : 'whitespace-nowrap'
+            }`}
             style={{
               transform: 'translateY(-4px)',
               boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
