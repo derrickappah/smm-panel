@@ -120,12 +120,8 @@ const Navbar = ({ user, onLogout }) => {
               </DropdownMenu>
             </div>
 
-            {/* Desktop User Info & Actions */}
+            {/* Desktop Actions */}
             <div className="hidden md:flex items-center space-x-3 sm:space-x-4">
-              <div className="text-right">
-                <p className="text-xs sm:text-sm font-medium text-gray-900">{user?.name}</p>
-                <p className="text-xs text-gray-600">₵{user?.balance?.toFixed(2) || '0.00'}</p>
-              </div>
               <Button
                 data-testid="logout-btn"
                 onClick={onLogout}
@@ -137,15 +133,8 @@ const Navbar = ({ user, onLogout }) => {
               </Button>
             </div>
 
-            {/* Mobile: User Balance & Menu Button */}
-            <div className="flex md:hidden items-center space-x-2 sm:space-x-3">
-              {/* User Balance - Mobile */}
-              <div className="flex items-center space-x-2 bg-gray-50 border border-gray-200 rounded-lg px-2 sm:px-3 py-1.5">
-                <div className="w-5 h-5 sm:w-6 sm:h-6 bg-indigo-600 rounded-full flex items-center justify-center">
-                  <User className="w-3 h-3 text-white" />
-                </div>
-                <span className="text-xs sm:text-sm font-semibold text-gray-900">₵{user?.balance?.toFixed(2) || '0.00'}</span>
-              </div>
+            {/* Mobile: Menu Button */}
+            <div className="flex md:hidden items-center">
 
               {/* Hamburger Menu Button */}
               <Button

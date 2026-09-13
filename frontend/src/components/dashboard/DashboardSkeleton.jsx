@@ -26,11 +26,10 @@ const DashboardSkeleton = () => {
                 <div className="h-9 w-16 bg-gray-100 rounded-lg animate-pulse" />
               </div>
 
-              {/* Mobile / user menu placeholder */}
+              {/* Action / menu placeholder */}
               <div className="flex items-center gap-2 sm:gap-3">
-                <div className="hidden sm:flex h-9 w-24 bg-green-50 border border-green-200 rounded-lg animate-pulse" />
-                <div className="h-9 w-20 sm:w-24 bg-gray-200 rounded-lg animate-pulse" />
-                <div className="h-9 w-9 bg-gray-200 rounded-lg md:hidden animate-pulse" />
+                <div className="hidden md:block h-9 w-9 bg-gray-100 rounded-lg animate-pulse" />
+                <div className="h-9 w-9 bg-gray-100 rounded-lg md:hidden animate-pulse" />
               </div>
             </div>
           </div>
