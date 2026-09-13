@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 
 const DashboardSkeleton = () => {
   return (
@@ -37,6 +37,63 @@ const DashboardSkeleton = () => {
         {/* Welcome Section Skeleton */}
         <div className="mb-3 sm:mb-4">
           <div className="h-5 sm:h-6 w-44 sm:w-56 bg-gray-200 rounded animate-pulse" />
+        </div>
+
+        {/* Promotion Packages Skeleton */}
+        <div className="w-full mb-6 sm:mb-8">
+          <div className="flex gap-2 md:gap-4 overflow-hidden -ml-2 md:-ml-4 pl-2 md:pl-4">
+            {/* Card 1 */}
+            <div className="basis-[85%] sm:basis-[70%] md:basis-1/2 lg:basis-1/3 shrink-0">
+              <div className="bg-white border-2 border-purple-200 rounded-2xl p-4 sm:p-5 shadow-xl min-h-[190px] flex flex-col justify-between animate-pulse">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="h-6 w-20 bg-purple-50 border border-purple-100 rounded-lg" />
+                  <div className="h-6 w-16 bg-purple-100 rounded" />
+                </div>
+                <div className="space-y-2 mb-3">
+                  <div className="h-4 w-3/4 bg-gray-200 rounded" />
+                  <div className="h-3 w-1/2 bg-gray-200 rounded" />
+                </div>
+                <div className="h-9 sm:h-10 w-full bg-purple-200/80 rounded-xl" />
+              </div>
+            </div>
+
+            {/* Card 2 */}
+            <div className="hidden sm:block sm:basis-[70%] md:basis-1/2 lg:basis-1/3 shrink-0">
+              <div className="bg-white border-2 border-purple-200 rounded-2xl p-4 sm:p-5 shadow-xl min-h-[190px] flex flex-col justify-between animate-pulse">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="h-6 w-20 bg-purple-50 border border-purple-100 rounded-lg" />
+                  <div className="h-6 w-16 bg-purple-100 rounded" />
+                </div>
+                <div className="space-y-2 mb-3">
+                  <div className="h-4 w-3/4 bg-gray-200 rounded" />
+                  <div className="h-3 w-1/2 bg-gray-200 rounded" />
+                </div>
+                <div className="h-9 sm:h-10 w-full bg-purple-200/80 rounded-xl" />
+              </div>
+            </div>
+
+            {/* Card 3 */}
+            <div className="hidden lg:block lg:basis-1/3 shrink-0">
+              <div className="bg-white border-2 border-purple-200 rounded-2xl p-4 sm:p-5 shadow-xl min-h-[190px] flex flex-col justify-between animate-pulse">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="h-6 w-20 bg-purple-50 border border-purple-100 rounded-lg" />
+                  <div className="h-6 w-16 bg-purple-100 rounded" />
+                </div>
+                <div className="space-y-2 mb-3">
+                  <div className="h-4 w-3/4 bg-gray-200 rounded" />
+                  <div className="h-3 w-1/2 bg-gray-200 rounded" />
+                </div>
+                <div className="h-9 sm:h-10 w-full bg-purple-200/80 rounded-xl" />
+              </div>
+            </div>
+          </div>
+
+          {/* Carousel Dots */}
+          <div className="flex justify-center gap-1.5 mt-4">
+            <div className="w-6 h-1.5 bg-purple-400 rounded-full animate-pulse" />
+            <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse" />
+            <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse" />
+          </div>
         </div>
 
         {/* Stats Cards Skeleton */}
