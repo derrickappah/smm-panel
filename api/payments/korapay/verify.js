@@ -217,7 +217,7 @@ export default async function handler(req, res) {
 
     } catch (error) {
         console.error('Error in KoraPay verify:', error);
-        return res.status(500).json({ error: 'Internal server error', message: error.message });
+        return res.status(500).json({ error: 'Payment verification failed. Please try again or contact support.' });
     }
 }
 

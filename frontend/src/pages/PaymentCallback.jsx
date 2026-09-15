@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { trackMetaEvent } from '@/lib/metaPixel';
+import { formatUserErrorMessage } from '@/lib/errorHandler';
 
 /**
  * Payment Callback Page
@@ -288,7 +289,7 @@ const PaymentCallback = ({ onUpdateUser }) => {
       } catch (error) {
         console.error('Verification error:', error);
         setStatus('failed');
-        setMessage(error.message || 'Verification failed.');
+        setMessage(formatUserErrorMessage(error, 'Payment verification could not be completed. Please check your dashboard or contact support.'));
         setTimeout(() => navigate('/dashboard'), 5000);
       }
     };

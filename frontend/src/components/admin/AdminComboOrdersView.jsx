@@ -38,7 +38,7 @@ export default function AdminComboOrdersView() {
         data = JSON.parse(resText);
       } catch (parseErr) {
         console.error('Non-JSON response:', resText);
-        toast.error('Server error: ' + (resText.slice(0, 100) || 'Invalid response'));
+        toast.error('Server returned an invalid response. Please try again.');
         return;
       }
 
@@ -95,7 +95,7 @@ export default function AdminComboOrdersView() {
         data = JSON.parse(retryText);
       } catch (parseErr) {
         console.error('Non-JSON response:', retryText);
-        toast.error('Server error: ' + (retryText.slice(0, 100) || 'Invalid response'));
+        toast.error('Server returned an invalid response while retrying order.');
         return;
       }
 

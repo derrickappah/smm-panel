@@ -283,7 +283,8 @@ const OrderHistory = ({ user, onLogout }) => {
       });
 
       if (result.errors && result.errors.length > 0) {
-        toast.error(`Error checking order: ${result.errors[0].error}`);
+        console.warn('Order status query issue:', result.errors[0].error);
+        toast.error('Unable to refresh order status at the moment. Please try again shortly.');
       } else {
         toast.success(`Order status checked: ${result.newStatus || order.status}`);
         fetchData();
@@ -291,7 +292,7 @@ const OrderHistory = ({ user, onLogout }) => {
 
     } catch (error) {
       console.error(`Error checking status for order ${order.id}:`, error);
-      toast.error(error.message || 'An error occurred while checking order status');
+      toast.error('Unable to check order status. Please check your connection and try again.');
     } finally {
       setCheckingStatus(prev => ({ ...prev, [order.id]: false }));
     }

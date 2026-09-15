@@ -570,10 +570,11 @@ export default async function handler(req, res) {
       stack: error.stack,
       body: req.body
     });
+    const isDev = process.env.NODE_ENV === 'development';
     return res.status(500).json({
-      error: error.message || 'Internal server error',
-      message: error.message,
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      error: isDev ? error.message : 'An unexpected error occurred while placing your order. Please try again later.',
+      message: isDev ? error.message : 'An unexpected error occurred while placing your order. Please try again later.',
+      details: isDev ? error.stack : undefined
     });
   }
 }

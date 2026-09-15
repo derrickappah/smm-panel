@@ -443,7 +443,7 @@ const TransactionsPage = ({ user, onLogout }) => {
 
       if (balanceError) {
         console.error('Error updating balance:', balanceError);
-        toast.error('Failed to update balance: ' + balanceError.message);
+        toast.error('Unable to update balance due to a system error. Please try again.');
         return;
       }
 
@@ -472,7 +472,7 @@ const TransactionsPage = ({ user, onLogout }) => {
       // Balance checks will run automatically via useEffect, but will skip already verified transactions
     } catch (error) {
       console.error('Error manually crediting balance:', error);
-      toast.error('Failed to credit balance: ' + error.message);
+      toast.error('Unable to credit balance at this time. Please try again or contact support.');
     } finally {
       setManuallyCrediting(null);
     }

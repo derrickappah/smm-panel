@@ -75,7 +75,7 @@ export default function AdminComboBuilder() {
         data = JSON.parse(resText);
       } catch (parseErr) {
         console.error('Non-JSON response:', resText);
-        toast.error('Server error: ' + (resText.slice(0, 100) || 'Invalid response'));
+        toast.error('Server returned an invalid response. Please try again.');
         return;
       }
 
@@ -230,7 +230,7 @@ export default function AdminComboBuilder() {
         data = JSON.parse(resText);
       } catch (parseErr) {
         console.error('Non-JSON response:', resText);
-        toast.error('Server error: ' + (resText.slice(0, 100) || 'Invalid response'));
+        toast.error('Server returned an invalid response while saving combo service.');
         return;
       }
 
@@ -277,7 +277,7 @@ export default function AdminComboBuilder() {
         data = JSON.parse(resText);
       } catch (parseErr) {
         console.error('Non-JSON response:', resText);
-        toast.error('Server error: ' + (resText.slice(0, 100) || 'Invalid response'));
+        toast.error('Server returned an invalid response while deleting combo service.');
         return;
       }
 

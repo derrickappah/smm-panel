@@ -646,7 +646,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
       await markMessagesAsRead(currentTicket.id, true);
     } catch (error: any) {
       console.error('Error sending ticket message:', error);
-      toast.error(error.message || 'Failed to send message');
+      toast.error('Failed to send message. Please try again.');
     }
   }, [currentTicket, userRole?.userId, isAdmin, markMessagesAsRead]);
 
@@ -855,7 +855,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
         if (error.code === '42501' || error.message?.includes('permission denied') || error.message?.includes('policy')) {
           toast.error('You do not have permission to update this conversation');
         } else {
-          toast.error(`Failed to update conversation status: ${error.message || 'Unknown error'}`);
+          toast.error('Failed to update conversation status. Please try again.');
         }
         throw error;
       }
@@ -1234,7 +1234,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
       return ticket;
     } catch (error: any) {
       console.error('Error creating ticket:', error);
-      toast.error(error.message || 'Failed to create ticket');
+      toast.error('Failed to create ticket. Please try again.');
       return null;
     }
   }, [userRole?.userId]);
@@ -1321,7 +1321,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
       toast.success('Ticket closed');
     } catch (error: any) {
       console.error('Error closing ticket:', error);
-      toast.error(error.message || 'Failed to close ticket');
+      toast.error('Failed to close ticket. Please try again.');
     }
   }, [isAdmin, userRole?.userId, currentTicket]);
 

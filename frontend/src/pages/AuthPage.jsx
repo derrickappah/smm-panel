@@ -231,7 +231,7 @@ const AuthPage = () => {
     try {
       // Check if Supabase is configured
       if (!isConfigured) {
-        toast.error('Supabase is not configured. Please check your environment variables.');
+        toast.error('Service is temporarily undergoing maintenance. Please try again shortly.');
         console.error('Supabase configuration check failed. REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY must be set.');
         setLoading(false);
         return;

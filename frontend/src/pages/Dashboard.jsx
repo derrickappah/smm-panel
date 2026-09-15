@@ -1738,7 +1738,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                     // Now call the async handler after reference is stored
                     handlePaymentSuccess(response.reference).catch((error) => {
                       console.error('Payment success handler error:', error);
-                      toast.error(`Payment processed but failed to update: ${error.message || 'Unknown error'}. Transaction ID: ${pendingTransaction?.id || 'N/A'}, Reference: ${response.reference || 'N/A'}. Please contact support.`);
+                      toast.error(`Payment was received, but balance update is taking longer than usual. Reference: ${response.reference || 'N/A'}. If your balance does not update within 5 minutes, please contact support.`);
                     });
                   })
                   .catch((refError) => {
@@ -1746,7 +1746,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                     // Continue anyway - handlePaymentSuccess will try to store it again
                     handlePaymentSuccess(response.reference).catch((error) => {
                       console.error('Payment success handler error:', error);
-                      toast.error(`Payment processed but failed to update: ${error.message || 'Unknown error'}. Transaction ID: ${pendingTransaction?.id || 'N/A'}, Reference: ${response.reference || 'N/A'}. Please contact support.`);
+                      toast.error(`Payment was received, but balance update is taking longer than usual. Reference: ${response.reference || 'N/A'}. If your balance does not update within 5 minutes, please contact support.`);
                     });
                   });
               } else {
@@ -1758,7 +1758,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
                 // Call handler even if reference storage isn't possible
                 handlePaymentSuccess(response.reference).catch((error) => {
                   console.error('Payment success handler error:', error);
-                  toast.error(`Payment processed but failed to update: ${error.message || 'Unknown error'}. Transaction ID: ${pendingTransaction?.id || 'N/A'}, Reference: ${response.reference || 'N/A'}. Please contact support.`);
+                  toast.error(`Payment was received, but balance update is taking longer than usual. Reference: ${response.reference || 'N/A'}. If your balance does not update within 5 minutes, please contact support.`);
                 });
               }
             },
@@ -1813,11 +1813,11 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           // Check for specific error messages
           const errorMessage = error.message || '';
           if (errorMessage.includes('400') || errorMessage.includes('Bad Request')) {
-            toast.error(`Invalid payment request. Please check: 1) Paystack key is valid, 2) Amount is at least ₵${minDepositSettings.paystack_min}, 3) Email is valid.`);
+            toast.error(`Invalid payment request. Please ensure amount is at least ₵${minDepositSettings.paystack_min} and try again.`);
           } else if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
-            toast.error('Invalid Paystack public key. Please check your REACT_APP_PAYSTACK_PUBLIC_KEY in .env file.');
+            toast.error('Payment service is temporarily unavailable. Please try another payment method or contact support.');
           } else {
-            toast.error('Failed to initialize payment: ' + (errorMessage || 'Unknown error'));
+            toast.error('Failed to initialize payment. Please try again or use another payment method.');
           }
 
           // Update transaction status to rejected when payment initialization fails
@@ -3205,7 +3205,12 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
       });
       clearTimeout(timeoutId);
 
-      const result = await response.json();
+      let result = {};
+      try {
+        result = await response.json();
+      } catch (jsonParseErr) {
+        console.warn('Failed to parse order response JSON:', jsonParseErr);
+      }
 
       if (!response.ok) {
         if (response.status === 401) {
@@ -3213,7 +3218,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           if (onLogout) onLogout();
           return;
         }
-        throw new Error(result.error || result.message || 'Failed to place order');
+        throw new Error(result?.error || result?.message || 'Failed to place order. Please try again.');
       }
 
       // Success

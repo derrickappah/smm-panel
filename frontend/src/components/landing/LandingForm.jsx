@@ -191,8 +191,16 @@ export const LandingForm = () => {
                             } catch (e) {}
                         }
                         setCaptchaToken('');
-                        await logLoginAttempt({ success: false, email: loginIdentifier, error: error.message });
-                        toast.error(error.message || 'Login failed');
+                        let errorMsg = 'Login failed';
+                        if (error.message?.includes('Invalid login credentials') || error.message?.includes('invalid_credentials')) {
+                            errorMsg = 'Invalid email or password';
+                        } else if (error.message?.includes('Email not confirmed')) {
+                            errorMsg = 'Please check your email and confirm your account';
+                        } else {
+                            errorMsg = error.message || 'Login failed. Please try again.';
+                        }
+                        await logLoginAttempt({ success: false, email: loginIdentifier, error: errorMsg });
+                        toast.error(errorMsg);
                         return;
                     }
 

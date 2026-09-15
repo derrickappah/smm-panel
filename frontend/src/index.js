@@ -4,6 +4,8 @@ import "@/index.css";
 import App from "@/App";
 
 import { supabase } from "@/lib/supabase";
+import "@/lib/sanitizeToast";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 // GLOBAL FETCH INTERCEPTOR
 // Automatically inject Authorization: Bearer token for all internal API requests
@@ -39,6 +41,8 @@ window.fetch = async function (url, options = {}) {
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </React.StrictMode>,
 );
