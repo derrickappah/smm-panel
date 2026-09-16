@@ -11,7 +11,8 @@ export const useAdminDeposits = (options = {}) => {
     limit = 50,
     search = '',
     status = 'all',
-    date = ''
+    date = '',
+    minAmount = null
   } = options;
 
   // Check role at hook level (cached)
@@ -43,6 +44,7 @@ export const useAdminDeposits = (options = {}) => {
           console.log('[useAdminDeposits] Realtime event received:', payload.eventType);
           // Invalidate admin deposits, stats, and users to trigger a fresh background fetch
           queryClient.invalidateQueries({ queryKey: ['admin', 'deposits'] });
+          queryClient.invalidateQueries({ queryKey: ['admin', 'high-deposits-stats'] });
           queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
           queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
         }
@@ -61,7 +63,7 @@ export const useAdminDeposits = (options = {}) => {
   }, [queryEnabled, queryClient]);
 
   return useQuery({
-    queryKey: ['admin', 'deposits', { page, limit, search, status, date }],
+    queryKey: ['admin', 'deposits', { page, limit, search, status, date, minAmount }],
     queryFn: async () => {
       const from = (page - 1) * limit;
       const to = from + limit - 1;
@@ -71,6 +73,13 @@ export const useAdminDeposits = (options = {}) => {
         .select('id, user_id, amount, type, status, created_at, paystack_status, paystack_reference, manual_reference, korapay_reference, moolre_id, moolre_reference, deposit_method, payment_proof_url, profiles!transactions_user_id_fkey(email, name, phone_number)', { count: 'exact' })
         .eq('type', 'deposit')
         .order('created_at', { ascending: false });
+
+      if (minAmount !== null && minAmount !== undefined && minAmount !== '') {
+        const minNum = parseFloat(minAmount);
+        if (!isNaN(minNum)) {
+          query = query.gt('amount', minNum);
+        }
+      }
 
       if (status && status !== 'all') {
         query = query.eq('status', status);
@@ -141,6 +150,45 @@ export const useAdminDeposits = (options = {}) => {
     staleTime: 2 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     placeholderData: (previousData) => previousData,
+  });
+};
+
+export const useAdminHighDepositStats = (options = {}) => {
+  const { minAmount = 200, enabled = true } = options;
+  const { data: userRole, isLoading: roleLoading } = useUserRole();
+  const isAdmin = userRole?.isAdmin ?? false;
+  const queryEnabled = enabled && !roleLoading && isAdmin;
+
+  return useQuery({
+    queryKey: ['admin', 'high-deposits-stats', { minAmount }],
+    queryFn: async () => {
+      const minNum = parseFloat(minAmount) || 200;
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('amount, status')
+        .eq('type', 'deposit')
+        .gt('amount', minNum);
+
+      if (error) throw error;
+
+      const totalCount = data?.length || 0;
+      const totalVolume = data?.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0) || 0;
+      const avgDeposit = totalCount > 0 ? totalVolume / totalCount : 0;
+      const maxDeposit = data?.reduce((max, curr) => Math.max(max, parseFloat(curr.amount) || 0), 0) || 0;
+      const approvedCount = data?.filter(d => d.status === 'approved').length || 0;
+      const pendingCount = data?.filter(d => d.status === 'pending').length || 0;
+
+      return {
+        totalCount,
+        totalVolume,
+        avgDeposit,
+        maxDeposit,
+        approvedCount,
+        pendingCount
+      };
+    },
+    enabled: queryEnabled,
+    staleTime: 60 * 1000,
   });
 };;
 

@@ -9,7 +9,8 @@ import {
   Users, ShoppingCart, DollarSign, Package, Wallet, Receipt,
   MessageSquare, UserPlus, RefreshCw, BarChart3, Menu, X, LayoutDashboard, Tag,
   ChevronLeft, ChevronRight, FileText, Server, HelpCircle, CreditCard, Scale, Bell, Video,
-  Gift, Settings, Layers, Search, Download, ShieldAlert, ShieldCheck, Sliders, Clock
+  Gift, Settings, Layers, Search, Download, ShieldAlert, ShieldCheck, Sliders, Clock,
+  TrendingUp
 } from 'lucide-react';
 import { useReferralStats } from '@/hooks/useAdminReferrals';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -26,6 +27,7 @@ const AdminUserTransactionsSearch = lazy(() => import('@/pages/admin/AdminUserTr
 const AdminOrders = lazy(() => import('@/pages/admin/AdminOrders'));
 const AdminOrderSearch = lazy(() => import('@/pages/admin/AdminOrderSearch'));
 const AdminDeposits = lazy(() => import('@/pages/admin/AdminDeposits'));
+const AdminHighDeposits = lazy(() => import('@/pages/admin/AdminHighDeposits'));
 const AdminTransactions = lazy(() => import('@/pages/admin/AdminTransactions'));
 const AdminServices = lazy(() => import('@/pages/admin/AdminServices'));
 const AdminComboBuilder = lazy(() => import('@/pages/admin/AdminComboBuilder'));
@@ -83,6 +85,8 @@ const AdminDashboard = memo(({ user, onLogout }) => {
         'dashboard': 'dashboard',
         'analytics': 'analytics',
         'deposits': 'deposits',
+        'high-deposits': 'high-deposits',
+        'deposits/high': 'high-deposits',
         'orders': 'orders',
         'order-search': 'order-search',
         'orders/search': 'order-search',
@@ -339,6 +343,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     dashboard: 'Dashboard',
     analytics: 'Analytics & Segmentation',
     deposits: 'Deposits',
+    'high-deposits': 'High Deposits (>200 GHS)',
     orders: 'Orders',
     'order-search': 'Search',
     services: 'Services',
@@ -378,6 +383,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'deposits', label: 'Deposits', icon: DollarSign, badge: stats.pending_deposits },
+    { id: 'high-deposits', label: 'High Deposits (>200)', icon: TrendingUp },
     { id: 'orders', label: 'Orders', icon: ShoppingCart },
     { id: 'order-search', label: 'Search', icon: Search },
     { id: 'services', label: 'Services', icon: Package },
@@ -740,6 +746,13 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                 <TabsContent value="deposits" className="lg:mt-0 w-full max-w-full">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminDeposits onRefresh={handleRefresh} refreshing={refreshing} />
+                  </Suspense>
+                </TabsContent>
+
+                {/* High Deposits (>200 GHS) Section */}
+                <TabsContent value="high-deposits" className="lg:mt-0 w-full max-w-full">
+                  <Suspense fallback={<ComponentLoader />}>
+                    <AdminHighDeposits onRefresh={handleRefresh} refreshing={refreshing} />
                   </Suspense>
                 </TabsContent>
 
