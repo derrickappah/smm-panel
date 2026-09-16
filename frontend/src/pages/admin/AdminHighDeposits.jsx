@@ -649,14 +649,14 @@ const AdminHighDeposits = memo(({ onRefresh, refreshing = false }) => {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6 pt-6 border-t border-gray-100">
           <div className="bg-gradient-to-br from-amber-50 to-orange-50/40 p-4 rounded-xl border border-amber-200/70">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-amber-800 uppercase tracking-wider">Total Volume</span>
+              <span className="text-xs font-medium text-amber-800 uppercase tracking-wider">Approved Volume</span>
               <DollarSign className="w-4 h-4 text-amber-600" />
             </div>
             <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-2">
-              ₵{(statsData?.totalVolume || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ₵{(statsData?.totalApprovedVolume || statsData?.totalVolume || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
             <span className="text-[11px] text-amber-700 mt-1 block">
-              Sum of deposits &gt; ₵{minAmount}
+              {statsData?.approvedCount || 0} approved deposits &gt; ₵{minAmount}
             </span>
           </div>
 
@@ -666,7 +666,7 @@ const AdminHighDeposits = memo(({ onRefresh, refreshing = false }) => {
               <Layers className="w-4 h-4 text-blue-600" />
             </div>
             <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-2">
-              {(statsData?.totalCount || 0).toLocaleString()}
+              {(statsData?.totalCount || totalCount || 0).toLocaleString()}
             </p>
             <span className="text-[11px] text-blue-700 mt-1 block">
               {statsData?.approvedCount || 0} approved, {statsData?.pendingCount || 0} pending
@@ -675,27 +675,27 @@ const AdminHighDeposits = memo(({ onRefresh, refreshing = false }) => {
 
           <div className="bg-gradient-to-br from-emerald-50 to-teal-50/40 p-4 rounded-xl border border-emerald-200/70">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-emerald-800 uppercase tracking-wider">Average Deposit</span>
+              <span className="text-xs font-medium text-emerald-800 uppercase tracking-wider">Avg Approved Deposit</span>
               <TrendingUp className="w-4 h-4 text-emerald-600" />
             </div>
             <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-2">
-              ₵{(statsData?.avgDeposit || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ₵{(statsData?.avgApprovedDeposit || statsData?.avgDeposit || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
             <span className="text-[11px] text-emerald-700 mt-1 block">
-              Mean value in this bracket
+              Mean value of confirmed deposits
             </span>
           </div>
 
           <div className="bg-gradient-to-br from-purple-50 to-pink-50/40 p-4 rounded-xl border border-purple-200/70">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-purple-800 uppercase tracking-wider">Peak Single Deposit</span>
+              <span className="text-xs font-medium text-purple-800 uppercase tracking-wider">Peak Approved Deposit</span>
               <Award className="w-4 h-4 text-purple-600" />
             </div>
             <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-2">
-              ₵{(statsData?.maxDeposit || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ₵{(statsData?.maxApprovedDeposit || statsData?.maxDeposit || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
             <span className="text-[11px] text-purple-700 mt-1 block">
-              Highest recorded deposit
+              Highest confirmed single deposit
             </span>
           </div>
         </div>
@@ -826,12 +826,13 @@ const AdminHighDeposits = memo(({ onRefresh, refreshing = false }) => {
 
       {/* Data Table */}
       <ResponsiveTable
-        data={allDeposits}
+        items={allDeposits}
         isLoading={isLoading}
         renderTableHeader={renderTableHeader}
         renderTableRow={renderTableRow}
-        renderMobileCard={renderMobileCard}
+        renderCard={renderMobileCard}
         emptyMessage={`No deposits found higher than ₵${minAmount} GHS.`}
+        minTableWidth="1100px"
       />
 
       {/* Pagination Controls */}

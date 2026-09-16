@@ -65,6 +65,47 @@ export const useAdminDeposits = (options = {}) => {
   return useQuery({
     queryKey: ['admin', 'deposits', { page, limit, search, status, date, minAmount }],
     queryFn: async () => {
+      // 1. If minAmount is specified, use the high-speed Server Action endpoint
+      if (minAmount !== null && minAmount !== undefined && minAmount !== '') {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const token = session?.access_token;
+          if (token) {
+            const resp = await fetch('/api/admin/high-deposits', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                page,
+                limit,
+                minAmount,
+                statusFilter: status,
+                dateFilter: date,
+                searchTerm: search
+              })
+            });
+
+            if (resp.ok) {
+              const resJson = await resp.json();
+              if (resJson.success) {
+                if (resJson.stats) {
+                  queryClient.setQueryData(['admin', 'high-deposits-stats', { minAmount }], resJson.stats);
+                }
+                return {
+                  data: resJson.data || [],
+                  total: resJson.total || 0,
+                  stats: resJson.stats
+                };
+              }
+            }
+          }
+        } catch (serverActionErr) {
+          console.warn('[useAdminDeposits] /api/admin/high-deposits server action failed, using Supabase fallback:', serverActionErr);
+        }
+      }
+
       const from = (page - 1) * limit;
       const to = from + limit - 1;
 
@@ -163,6 +204,37 @@ export const useAdminHighDepositStats = (options = {}) => {
     queryKey: ['admin', 'high-deposits-stats', { minAmount }],
     queryFn: async () => {
       const minNum = parseFloat(minAmount) || 200;
+
+      // 1. Try Server Action endpoint
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        if (token) {
+          const resp = await fetch('/api/admin/high-deposits', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              page: 1,
+              limit: 1,
+              minAmount: minNum
+            })
+          });
+
+          if (resp.ok) {
+            const resJson = await resp.json();
+            if (resJson.success && resJson.stats) {
+              return resJson.stats;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[useAdminHighDepositStats] Server action failed, using fallback:', err);
+      }
+
+      // 2. Fallback
       const { data, error } = await supabase
         .from('transactions')
         .select('amount, status')
@@ -172,19 +244,25 @@ export const useAdminHighDepositStats = (options = {}) => {
       if (error) throw error;
 
       const totalCount = data?.length || 0;
-      const totalVolume = data?.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0) || 0;
-      const avgDeposit = totalCount > 0 ? totalVolume / totalCount : 0;
-      const maxDeposit = data?.reduce((max, curr) => Math.max(max, parseFloat(curr.amount) || 0), 0) || 0;
-      const approvedCount = data?.filter(d => d.status === 'approved').length || 0;
+      const approvedItems = data?.filter(d => d.status === 'approved') || [];
+      const approvedVol = approvedItems.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
+      const totalVol = data?.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0) || 0;
+      const approvedCount = approvedItems.length;
       const pendingCount = data?.filter(d => d.status === 'pending').length || 0;
+      const rejectedCount = data?.filter(d => d.status === 'rejected').length || 0;
+      const avgDeposit = approvedCount > 0 ? approvedVol / approvedCount : (totalCount > 0 ? totalVol / totalCount : 0);
+      const maxApprovedDeposit = approvedItems.reduce((max, curr) => Math.max(max, parseFloat(curr.amount) || 0), 0);
 
       return {
         totalCount,
-        totalVolume,
+        totalVolume: approvedVol > 0 ? approvedVol : totalVol,
+        totalApprovedVolume: approvedVol,
+        totalOverallVolume: totalVol,
         avgDeposit,
-        maxDeposit,
+        maxDeposit: maxApprovedDeposit,
         approvedCount,
-        pendingCount
+        pendingCount,
+        rejectedCount
       };
     },
     enabled: queryEnabled,
