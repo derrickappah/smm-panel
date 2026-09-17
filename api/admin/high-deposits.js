@@ -228,9 +228,32 @@ export default async function handler(req, res) {
       });
     }
 
+    // 5. Check banned status for the users in this batch
+    const userIds = [...new Set((deposits || []).map(d => d.user_id).filter(Boolean))];
+    let bannedUserMap = new Map();
+    if (userIds.length > 0) {
+      try {
+        const { data: bannedData } = await supabase
+          .from('banned_users')
+          .select('user_id, reason')
+          .in('user_id', userIds);
+        if (bannedData) {
+          bannedData.forEach(b => bannedUserMap.set(b.user_id, b.reason || 'Banned'));
+        }
+      } catch (banCheckErr) {
+        console.warn('Error checking banned users batch:', banCheckErr.message);
+      }
+    }
+
+    const enhancedDeposits = (deposits || []).map(d => ({
+      ...d,
+      is_user_banned: bannedUserMap.has(d.user_id),
+      user_ban_reason: bannedUserMap.get(d.user_id) || null
+    }));
+
     return res.status(200).json({
       success: true,
-      data: deposits || [],
+      data: enhancedDeposits,
       total: totalCount || 0,
       page: pageNum,
       limit: limitNum,

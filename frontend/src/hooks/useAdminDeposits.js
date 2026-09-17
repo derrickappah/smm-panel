@@ -182,8 +182,29 @@ export const useAdminDeposits = (options = {}) => {
         throw error;
       }
 
+      // Check banned status for users in fallback
+      const userIds = [...new Set((data || []).map(d => d.user_id).filter(Boolean))];
+      let bannedUserMap = new Map();
+      if (userIds.length > 0) {
+        try {
+          const { data: bannedData } = await supabase
+            .from('banned_users')
+            .select('user_id, reason')
+            .in('user_id', userIds);
+          if (bannedData) {
+            bannedData.forEach(b => bannedUserMap.set(b.user_id, b.reason || 'Banned'));
+          }
+        } catch (e) {}
+      }
+
+      const enhancedData = (data || []).map(d => ({
+        ...d,
+        is_user_banned: d.is_user_banned ?? bannedUserMap.has(d.user_id),
+        user_ban_reason: d.user_ban_reason ?? bannedUserMap.get(d.user_id) ?? null
+      }));
+
       return {
-        data: data || [],
+        data: enhancedData,
         total: count || 0
       };
     },

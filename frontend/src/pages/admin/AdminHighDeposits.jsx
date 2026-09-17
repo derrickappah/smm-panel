@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { 
   Search, RefreshCw, CheckCircle, XCircle, AlertCircle, Image as ImageIcon, 
   ShieldAlert, Download, TrendingUp, DollarSign, Award, Layers, ExternalLink,
-  Filter, ArrowUpDown, ChevronLeft, ChevronRight
+  Filter, ArrowUpDown, ChevronLeft, ChevronRight, Phone, Copy, UserX
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -365,21 +365,33 @@ const AdminHighDeposits = memo(({ onRefresh, refreshing = false }) => {
             {(deposit.profiles?.name || 'U').charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <span className="font-semibold text-gray-900 text-sm truncate">
                 {deposit.profiles?.name || 'Unknown User'}
               </span>
-              <button
-                onClick={() => setBanUserDialog({ open: true, deposit, reason: 'High deposit exploit investigation', rejectPending: true, isBanning: false })}
-                title="Ban User"
-                className="text-red-400 hover:text-red-600 p-0.5 rounded transition-colors"
-              >
-                <ShieldAlert className="w-4 h-4" />
-              </button>
+              {deposit.is_user_banned ? (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-bold bg-red-100 text-red-700 border border-red-200">
+                  <ShieldAlert className="w-3 h-3 text-red-600" /> BANNED
+                </span>
+              ) : (
+                <button
+                  onClick={() => setBanUserDialog({ open: true, deposit, reason: 'High deposit exploit investigation', rejectPending: true, isBanning: false })}
+                  title="Ban User"
+                  className="text-red-400 hover:text-red-600 p-0.5 rounded transition-colors"
+                >
+                  <ShieldAlert className="w-4 h-4" />
+                </button>
+              )}
             </div>
             <p className="text-xs text-gray-600 truncate">{deposit.profiles?.email || deposit.user_id}</p>
             {deposit.profiles?.phone_number && (
-              <p className="text-xs text-gray-500 font-mono mt-0.5">📱 {deposit.profiles.phone_number}</p>
+              <a
+                href={`tel:${deposit.profiles.phone_number}`}
+                className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-indigo-600 font-mono mt-0.5"
+              >
+                <Phone className="w-3 h-3 text-gray-400" />
+                <span>{deposit.profiles.phone_number}</span>
+              </a>
             )}
           </div>
         </div>
@@ -518,22 +530,54 @@ const AdminHighDeposits = memo(({ onRefresh, refreshing = false }) => {
     const isMoolre = depositMethod === 'moolre' || depositMethod === 'moolre_web';
     const isManual = depositMethod === 'manual' || depositMethod === 'momo';
     const amount = Number(deposit.amount || 0);
+    const reference = deposit.paystack_reference || deposit.manual_reference || deposit.korapay_reference || deposit.moolre_reference || '';
 
     return (
-      <div key={deposit.id} className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm space-y-3">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center font-bold text-xs">
+      <div key={deposit.id} className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3.5 my-2">
+        {/* Top: User Avatar, Name, Ban Status & Amount */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-2.5 min-w-0 flex-1">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-amber-500 to-amber-300 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-sm mt-0.5">
               {(deposit.profiles?.name || 'U').charAt(0).toUpperCase()}
             </div>
-            <div>
-              <p className="font-semibold text-gray-900 text-sm">{deposit.profiles?.name || 'Unknown'}</p>
-              <p className="text-xs text-gray-500 truncate max-w-[180px]">{deposit.profiles?.email || deposit.user_id}</p>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <p className="font-bold text-gray-900 text-sm truncate">
+                  {deposit.profiles?.name || 'Unknown User'}
+                </p>
+                {deposit.is_user_banned ? (
+                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 border border-red-200">
+                    <ShieldAlert className="w-3 h-3 text-red-600" /> BANNED
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    Active
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-gray-500 truncate mt-0.5">{deposit.profiles?.email || deposit.user_id}</p>
+              
+              {/* User Phone Number on Mobile */}
+              {deposit.profiles?.phone_number ? (
+                <div className="flex items-center gap-1.5 mt-1">
+                  <a
+                    href={`tel:${deposit.profiles.phone_number}`}
+                    className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-mono font-medium bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100"
+                  >
+                    <Phone className="w-3 h-3 text-indigo-500" />
+                    <span>{deposit.profiles.phone_number}</span>
+                  </a>
+                </div>
+              ) : (
+                <p className="text-[11px] text-gray-400 mt-0.5">No phone number</p>
+              )}
             </div>
           </div>
-          <div className="text-right">
-            <p className="font-bold text-amber-600 text-base">₵{amount.toFixed(2)}</p>
-            <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+
+          {/* Amount and Status Badge */}
+          <div className="text-right shrink-0">
+            <p className="font-extrabold text-gray-900 text-base">₵{amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <span className={`inline-block mt-1 text-[11px] px-2 py-0.5 rounded-full font-semibold ${
               deposit.status === 'approved' ? 'bg-green-100 text-green-800' :
               deposit.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
               'bg-red-100 text-red-800'
@@ -543,49 +587,123 @@ const AdminHighDeposits = memo(({ onRefresh, refreshing = false }) => {
           </div>
         </div>
 
-        <div className="flex items-center justify-between text-xs pt-2 border-t border-gray-100">
-          <span className={`px-2 py-0.5 rounded border text-[11px] ${getMethodBadgeClass(depositMethod)}`}>
-            {formatPaymentMethod(depositMethod)}
-          </span>
-          <span className="text-gray-500">
-            {new Date(deposit.created_at).toLocaleDateString()} {new Date(deposit.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </span>
+        {/* Payment Method, Date, and Reference Details */}
+        <div className="bg-gray-50/80 rounded-lg p-2.5 space-y-1.5 text-xs text-gray-600 border border-gray-100">
+          <div className="flex items-center justify-between">
+            <span className={`px-2 py-0.5 rounded text-[11px] font-medium border ${getMethodBadgeClass(depositMethod)}`}>
+              {formatPaymentMethod(depositMethod)}
+            </span>
+            <span className="text-gray-500 text-[11px]">
+              {new Date(deposit.created_at).toLocaleDateString()} {new Date(deposit.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          </div>
+          {reference && (
+            <div className="flex items-center justify-between text-[11px] font-mono text-gray-500 pt-1 border-t border-gray-200/60">
+              <span className="truncate max-w-[220px]">Ref: {reference}</span>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(reference);
+                  toast.success('Reference copied');
+                }}
+                className="text-gray-400 hover:text-gray-600 p-0.5"
+                title="Copy Reference"
+              >
+                <Copy className="w-3 h-3" />
+              </button>
+            </div>
+          )}
         </div>
 
-        {deposit.status === 'pending' && (
-          <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
-            {isManual && deposit.payment_proof_url && (
-              <Button
-                onClick={() => setPaymentProofDialog({ open: true, imageUrl: deposit.payment_proof_url, deposit })}
-                variant="outline"
-                size="sm"
-                className="flex-1 text-xs"
-              >
-                Proof
-              </Button>
-            )}
+        {/* Mobile Action Buttons */}
+        <div className="pt-1 flex flex-wrap items-center gap-2">
+          {/* Ban User Button for Mobile */}
+          {!deposit.is_user_banned ? (
             <Button
-              onClick={() => handleApproveDeposit(deposit)}
-              disabled={approvingDeposit === deposit.id}
+              variant="outline"
               size="sm"
-              className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs"
+              onClick={() => setBanUserDialog({
+                open: true,
+                deposit,
+                reason: 'High deposit exploit investigation',
+                rejectPending: true,
+                isBanning: false
+              })}
+              className="h-8 text-xs text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 px-2.5 flex items-center gap-1"
             >
-              Approve
+              <ShieldAlert className="w-3.5 h-3.5 text-red-500" />
+              Ban User
             </Button>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-[11px] text-red-600 bg-red-50 px-2.5 py-1 rounded border border-red-200 font-semibold">
+              <ShieldAlert className="w-3.5 h-3.5" /> Account Banned
+            </span>
+          )}
+
+          {/* Proof Button for Mobile */}
+          {isManual && deposit.payment_proof_url && (
             <Button
-              onClick={() => handleRejectDeposit(deposit.id)}
-              disabled={approvingDeposit === deposit.id}
-              variant="destructive"
+              onClick={() => setPaymentProofDialog({ open: true, imageUrl: deposit.payment_proof_url, deposit })}
+              variant="outline"
               size="sm"
-              className="flex-1 text-xs"
+              className="h-8 text-xs text-blue-600 border-blue-300 hover:bg-blue-50 px-2.5"
             >
-              Reject
+              <ImageIcon className="w-3.5 h-3.5 mr-1" />
+              Proof
             </Button>
-          </div>
-        )}
+          )}
+
+          {/* Gateway Verify & Approve/Reject */}
+          {deposit.status === 'pending' && (
+            <>
+              {isPaystack && (
+                <Button
+                  onClick={() => handleVerifyPaystack(deposit)}
+                  disabled={verifyingDeposit === deposit.id}
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs text-purple-600 border-purple-300 hover:bg-purple-50 px-2.5"
+                >
+                  {verifyingDeposit === deposit.id ? 'Checking...' : 'Verify'}
+                </Button>
+              )}
+
+              {isMoolre && (
+                <Button
+                  onClick={() => handleVerifyMoolre(deposit)}
+                  disabled={verifyingDeposit === deposit.id}
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs text-teal-600 border-teal-300 hover:bg-teal-50 px-2.5"
+                >
+                  {verifyingDeposit === deposit.id ? 'Checking...' : 'Verify'}
+                </Button>
+              )}
+
+              <div className="flex items-center gap-2 flex-1 min-w-[140px]">
+                <Button
+                  onClick={() => handleApproveDeposit(deposit)}
+                  disabled={approvingDeposit === deposit.id}
+                  size="sm"
+                  className="flex-1 h-8 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold"
+                >
+                  {approvingDeposit === deposit.id ? 'Approving...' : 'Approve'}
+                </Button>
+                <Button
+                  onClick={() => handleRejectDeposit(deposit.id)}
+                  disabled={approvingDeposit === deposit.id}
+                  variant="destructive"
+                  size="sm"
+                  className="flex-1 h-8 text-xs font-semibold"
+                >
+                  Reject
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     );
-  }, [approvingDeposit, formatPaymentMethod, getMethodBadgeClass, handleApproveDeposit, handleRejectDeposit]);
+  }, [approvingDeposit, verifyingDeposit, formatPaymentMethod, getMethodBadgeClass, handleApproveDeposit, handleRejectDeposit, handleVerifyPaystack, handleVerifyMoolre]);
 
   return (
     <div className="space-y-6">
