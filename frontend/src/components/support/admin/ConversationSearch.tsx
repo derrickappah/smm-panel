@@ -2,7 +2,7 @@ import React from 'react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, Filter } from 'lucide-react';
-import type { ConversationFilters, ConversationStatus, MessagePriority } from '@/types/support';
+import type { ConversationFilters, ConversationFilterStatus, MessagePriority } from '@/types/support';
 
 interface ConversationSearchProps {
   filters: ConversationFilters;
@@ -38,7 +38,7 @@ export const ConversationSearch: React.FC<ConversationSearchProps> = ({
           <Select
             value={filters.status || 'all'}
             onValueChange={(value) =>
-              onFiltersChange({ ...filters, status: value === 'all' ? undefined : (value as ConversationStatus) })
+              onFiltersChange({ ...filters, status: value === 'all' ? undefined : (value as ConversationFilterStatus) })
             }
           >
             <SelectTrigger>
@@ -46,6 +46,8 @@ export const ConversationSearch: React.FC<ConversationSearchProps> = ({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="unread">Unread</SelectItem>
+              <SelectItem value="unreplied">Unreplied</SelectItem>
               <SelectItem value="open">Open</SelectItem>
               <SelectItem value="closed">Closed</SelectItem>
               <SelectItem value="resolved">Resolved</SelectItem>

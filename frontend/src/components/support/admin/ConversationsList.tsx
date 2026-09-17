@@ -29,8 +29,27 @@ export const ConversationsList: React.FC<ConversationsListProps> = ({
   const filteredConversations = useMemo(() => {
     return conversations.filter((conv) => {
       // Status filter
-      if (filters.status && conv.status !== filters.status) {
-        return false;
+      if (filters.status) {
+        if (filters.status === 'unread') {
+          if ((conv.unread_count || 0) <= 0) {
+            return false;
+          }
+        } else if (filters.status === 'unreplied') {
+          const isClosedOrResolved = conv.status === 'closed' || conv.status === 'resolved';
+          if (isClosedOrResolved) {
+            return false;
+          }
+          const isLastFromUser =
+            conv.last_sender_role === 'user' ||
+            conv.last_message?.sender_role === 'user' ||
+            (conv.last_message && conv.last_message.sender_id === conv.user_id) ||
+            (conv.unread_count || 0) > 0;
+          if (!isLastFromUser) {
+            return false;
+          }
+        } else if (conv.status !== filters.status) {
+          return false;
+        }
       }
 
       // Priority filter

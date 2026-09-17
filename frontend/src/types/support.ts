@@ -20,6 +20,7 @@ export interface Conversation {
   // Optional fields populated by joins
   unread_count?: number;
   last_message?: Message;
+  last_sender_role?: SenderRole;
   user?: {
     id: string;
     name: string;
@@ -141,8 +142,10 @@ export interface AdminPerformance {
   messages_sent: number;
 }
 
+export type ConversationFilterStatus = ConversationStatus | 'unread' | 'unreplied' | 'all';
+
 export interface ConversationFilters {
-  status?: ConversationStatus | 'all';
+  status?: ConversationFilterStatus;
   priority?: MessagePriority | 'all';
   assigned_to?: string | 'all' | 'unassigned';
   search?: string;

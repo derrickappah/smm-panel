@@ -180,6 +180,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
       // Get all unread counts and most recent unread timestamps in a single query (fixes N+1 problem)
       let unreadCountMap: Record<string, number> = {};
       let unreadLatestMap: Record<string, string> = {};
+      let lastMessageMap: Record<string, any> = {};
       if (userRole?.userId) {
         const conversationIds = data.map(c => c.id);
 
@@ -202,16 +203,34 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
             unreadLatestMap[msg.conversation_id] = msg.created_at;
           }
         });
+
+        // Also fetch the most recent message for each conversation
+        const { data: recentMessages } = await supabase
+          .from('messages')
+          .select('*')
+          .in('conversation_id', conversationIds)
+          .order('created_at', { ascending: false });
+
+        (recentMessages || []).forEach((msg) => {
+          if (!lastMessageMap[msg.conversation_id]) {
+            lastMessageMap[msg.conversation_id] = msg;
+          }
+        });
       }
 
       // Combine conversations with profiles and unread counts
-      const conversationsWithUnread = data.map((conv) => ({
-        ...conv,
-        unread_count: unreadCountMap[conv.id] || 0,
-        unread_latest_at: unreadLatestMap[conv.id] || null,
-        user: profilesMap[conv.user_id] || null,
-        assigned_admin: conv.assigned_to ? (profilesMap[conv.assigned_to] || null) : null,
-      }));
+      const conversationsWithUnread = data.map((conv) => {
+        const lastMsg = lastMessageMap[conv.id] || null;
+        return {
+          ...conv,
+          unread_count: unreadCountMap[conv.id] || 0,
+          unread_latest_at: unreadLatestMap[conv.id] || null,
+          last_message: lastMsg,
+          last_sender_role: lastMsg?.sender_role || null,
+          user: profilesMap[conv.user_id] || null,
+          assigned_admin: conv.assigned_to ? (profilesMap[conv.assigned_to] || null) : null,
+        };
+      });
 
       // Sort conversations: unread first (by most recent unread), then read (by last_message_at)
       conversationsWithUnread.sort((a, b) => {
@@ -699,7 +718,12 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
       setConversations((prev) =>
         prev.map((conv) =>
           conv.id === currentConversation.id
-            ? { ...conv, last_message_at: new Date().toISOString() }
+            ? {
+                ...conv,
+                last_message_at: new Date().toISOString(),
+                last_message: data,
+                last_sender_role: data.sender_role,
+              }
             : conv
         )
       );
@@ -1553,6 +1577,8 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
                     ? {
                       ...conv,
                       last_message_at: newMessage.created_at,
+                      last_message: newMessage,
+                      last_sender_role: newMessage.sender_role,
                       // Increment unread count if message is not from current user
                       unread_count: newMessage.sender_id !== userRole.userId
                         ? (conv.unread_count || 0) + 1
