@@ -392,11 +392,6 @@ const AdminHighDeposits = memo(({ onRefresh, refreshing = false }) => {
               ₵{amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
-          {amount >= 1000 && (
-            <span className="block mt-1 text-[11px] font-semibold text-amber-600 uppercase tracking-wide">
-              ★ VIP Deposit
-            </span>
-          )}
         </div>
 
         {/* Status & Method */}
