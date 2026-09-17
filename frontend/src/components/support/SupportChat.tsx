@@ -10,6 +10,7 @@ import { MessageSearch } from './MessageSearch';
 import { ConnectionStatus } from './ConnectionStatus';
 import { toast } from 'sonner';
 import type { AttachmentType } from '@/types/support';
+import { QuickRepliesPopover } from './admin/QuickRepliesPopover';
 
 interface SupportChatProps {
   hideHeader?: boolean;
@@ -39,7 +40,7 @@ export const SupportChat: React.FC<SupportChatProps> = ({ hideHeader = false }) 
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isAtBottomRef = useRef(true);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -139,6 +140,24 @@ export const SupportChat: React.FC<SupportChatProps> = ({ hideHeader = false }) 
       }
     },
     [currentConversation, currentTicket, setTyping]
+  );
+
+  // Handle inserting quick reply
+  const handleSelectQuickReply = useCallback(
+    (replyText: string) => {
+      setMessageContent(replyText);
+      handleInputChange(replyText);
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        setTimeout(() => {
+          if (textareaRef.current) {
+            textareaRef.current.style.height = 'auto';
+            textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
+          }
+        }, 0);
+      }
+    },
+    [handleInputChange]
   );
 
   // Determine if input should be disabled
@@ -281,7 +300,12 @@ export const SupportChat: React.FC<SupportChatProps> = ({ hideHeader = false }) 
               <Paperclip className="w-5 h-5 rotate-45" />
             </Button>
 
+            {isAdmin && (
+              <QuickRepliesPopover onSelectReply={handleSelectQuickReply} />
+            )}
+
             <textarea
+              ref={textareaRef}
               rows={1}
               placeholder="Type a message"
               value={messageContent}
