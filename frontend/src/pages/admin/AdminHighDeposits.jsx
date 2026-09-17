@@ -1,6 +1,6 @@
 import React, { memo, useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useAdminDeposits, useAdminHighDepositStats, useApproveDeposit, useRejectDeposit, useBanUser } from '@/hooks/useAdminDeposits';
+import { useAdminDeposits, useApproveDeposit, useRejectDeposit, useBanUser } from '@/hooks/useAdminDeposits';
 import { useDebounce } from '@/hooks/useDebounce';
 import ResponsiveTable from '@/components/admin/ResponsiveTable';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { 
   Search, RefreshCw, CheckCircle, XCircle, AlertCircle, Image as ImageIcon, 
-  ShieldAlert, Download, TrendingUp, DollarSign, Award, Layers, ExternalLink,
+  ShieldAlert, Download, TrendingUp, ExternalLink,
   Filter, ArrowUpDown, ChevronLeft, ChevronRight, Phone, Copy, UserX
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -65,12 +65,6 @@ const AdminHighDeposits = memo(({ onRefresh, refreshing = false }) => {
     minAmount: minAmount
   });
 
-  // Query summary KPI statistics for high deposits
-  const { data: statsData, isLoading: statsLoading, refetch: refetchStats } = useAdminHighDepositStats({
-    minAmount: minAmount,
-    enabled: true
-  });
-
   const approveDepositMutation = useApproveDeposit();
   const rejectDepositMutation = useRejectDeposit();
   const banUserMutation = useBanUser();
@@ -113,7 +107,6 @@ const AdminHighDeposits = memo(({ onRefresh, refreshing = false }) => {
         paymentMethod: deposit.deposit_method || deposit.payment_method || 'manual'
       });
       toast.success(`Deposit of ₵${Number(deposit.amount).toFixed(2)} approved successfully`);
-      refetchStats();
       if (onRefresh) onRefresh();
     } catch (error) {
       console.error('Failed to approve deposit:', error);
@@ -122,7 +115,7 @@ const AdminHighDeposits = memo(({ onRefresh, refreshing = false }) => {
     } finally {
       setApprovingDeposit(null);
     }
-  }, [approveDepositMutation, onRefresh, queryClient, refetchStats]);
+  }, [approveDepositMutation, onRefresh, queryClient]);
 
   // Actions: Reject deposit
   const handleRejectDeposit = useCallback(async (depositId) => {
@@ -142,13 +135,12 @@ const AdminHighDeposits = memo(({ onRefresh, refreshing = false }) => {
     try {
       await rejectDepositMutation.mutateAsync(depositId);
       toast.success('Deposit rejected');
-      refetchStats();
       if (onRefresh) onRefresh();
     } catch (error) {
       console.error('Failed to reject deposit:', error);
       queryClient.invalidateQueries({ queryKey: ['admin', 'deposits'] });
     }
-  }, [rejectDepositMutation, onRefresh, queryClient, refetchStats]);
+  }, [rejectDepositMutation, onRefresh, queryClient]);
 
   // Actions: Verify Paystack
   const handleVerifyPaystack = useCallback(async (deposit) => {
@@ -172,7 +164,6 @@ const AdminHighDeposits = memo(({ onRefresh, refreshing = false }) => {
       }
 
       queryClient.invalidateQueries({ queryKey: ['admin', 'deposits'] });
-      queryClient.invalidateQueries({ queryKey: ['admin', 'high-deposits-stats'] });
       refetch();
     } catch (error) {
       console.error('Verify Paystack error:', error);
@@ -208,7 +199,6 @@ const AdminHighDeposits = memo(({ onRefresh, refreshing = false }) => {
       }
 
       queryClient.invalidateQueries({ queryKey: ['admin', 'deposits'] });
-      queryClient.invalidateQueries({ queryKey: ['admin', 'high-deposits-stats'] });
       refetch();
     } catch (error) {
       console.error('Verify Moolre error:', error);
@@ -232,13 +222,12 @@ const AdminHighDeposits = memo(({ onRefresh, refreshing = false }) => {
       toast.success('User banned and pending deposits handled');
       setBanUserDialog({ open: false, deposit: null, reason: 'High deposit investigation', rejectPending: true, isBanning: false });
       refetch();
-      refetchStats();
     } catch (error) {
       console.error('Ban user error:', error);
       toast.error(error.message || 'Failed to ban user');
       setBanUserDialog(prev => ({ ...prev, isBanning: false }));
     }
-  }, [banUserDialog, banUserMutation, refetch, refetchStats]);
+  }, [banUserDialog, banUserMutation, refetch]);
 
   // Export CSV
   const handleExportCSV = useCallback(async () => {
@@ -709,24 +698,12 @@ const AdminHighDeposits = memo(({ onRefresh, refreshing = false }) => {
     <div className="space-y-6">
       {/* Header Bar */}
       <div className="bg-white border border-gray-200 rounded-xl p-5 sm:p-6 shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 bg-amber-500 text-white rounded-lg shadow-sm">
-                <TrendingUp className="w-6 h-6" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-xl sm:text-2xl font-bold text-gray-900">High-Value Deposits</h1>
-                  <span className="bg-amber-100 text-amber-800 text-xs font-semibold px-2.5 py-0.5 rounded-full border border-amber-300">
-                    &gt; ₵{minAmount} GHS
-                  </span>
-                </div>
-                <p className="text-sm text-gray-500 mt-0.5">
-                  Monitor, verify, and audit deposits exceeding ₵{minAmount} GHS across all payment methods.
-                </p>
-              </div>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-amber-500 text-white rounded-lg shadow-sm">
+              <TrendingUp className="w-6 h-6" />
             </div>
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">High-Value Deposits</h1>
           </div>
 
           {/* Action Buttons */}
@@ -744,7 +721,6 @@ const AdminHighDeposits = memo(({ onRefresh, refreshing = false }) => {
             <Button
               onClick={() => {
                 refetch();
-                refetchStats();
                 if (onRefresh) onRefresh();
               }}
               disabled={refreshing || isLoading}
@@ -755,61 +731,6 @@ const AdminHighDeposits = memo(({ onRefresh, refreshing = false }) => {
               <RefreshCw className={`w-4 h-4 mr-2 ${refreshing || isLoading ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
-          </div>
-        </div>
-
-        {/* Metric KPI Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6 pt-6 border-t border-gray-100">
-          <div className="bg-gradient-to-br from-amber-50 to-orange-50/40 p-4 rounded-xl border border-amber-200/70">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-amber-800 uppercase tracking-wider">Approved Volume</span>
-              <DollarSign className="w-4 h-4 text-amber-600" />
-            </div>
-            <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-2">
-              ₵{(statsData?.totalApprovedVolume || statsData?.totalVolume || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </p>
-            <span className="text-[11px] text-amber-700 mt-1 block">
-              {statsData?.approvedCount || 0} approved deposits &gt; ₵{minAmount}
-            </span>
-          </div>
-
-          <div className="bg-gradient-to-br from-blue-50 to-indigo-50/40 p-4 rounded-xl border border-blue-200/70">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-blue-800 uppercase tracking-wider">Total High Deposits</span>
-              <Layers className="w-4 h-4 text-blue-600" />
-            </div>
-            <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-2">
-              {(statsData?.totalCount || totalCount || 0).toLocaleString()}
-            </p>
-            <span className="text-[11px] text-blue-700 mt-1 block">
-              {statsData?.approvedCount || 0} approved, {statsData?.pendingCount || 0} pending
-            </span>
-          </div>
-
-          <div className="bg-gradient-to-br from-emerald-50 to-teal-50/40 p-4 rounded-xl border border-emerald-200/70">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-emerald-800 uppercase tracking-wider">Avg Approved Deposit</span>
-              <TrendingUp className="w-4 h-4 text-emerald-600" />
-            </div>
-            <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-2">
-              ₵{(statsData?.avgApprovedDeposit || statsData?.avgDeposit || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </p>
-            <span className="text-[11px] text-emerald-700 mt-1 block">
-              Mean value of confirmed deposits
-            </span>
-          </div>
-
-          <div className="bg-gradient-to-br from-purple-50 to-pink-50/40 p-4 rounded-xl border border-purple-200/70">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-purple-800 uppercase tracking-wider">Peak Approved Deposit</span>
-              <Award className="w-4 h-4 text-purple-600" />
-            </div>
-            <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-2">
-              ₵{(statsData?.maxApprovedDeposit || statsData?.maxDeposit || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </p>
-            <span className="text-[11px] text-purple-700 mt-1 block">
-              Highest confirmed single deposit
-            </span>
           </div>
         </div>
       </div>
