@@ -82,6 +82,7 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
   const currentConversationRef = useRef<Conversation | null>(null);
   const presenceHeartbeatRef = useRef<NodeJS.Timeout | null>(null);
   const globalPresenceHeartbeatRef = useRef<NodeJS.Timeout | null>(null);
+  const inFlightConversationRef = useRef<Promise<Conversation | null> | null>(null);
 
   // Load user's conversations (should only be 0 or 1 conversation)
   const loadConversations = useCallback(async () => {
@@ -284,6 +285,11 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
       return null; // Don't create if user ID is not available
     }
 
+    if (inFlightConversationRef.current) {
+      return inFlightConversationRef.current;
+    }
+
+    const executeGetOrCreate = async (): Promise<Conversation | null> => {
     try {
       // Verify authentication before making queries
       const { data: { session }, error: authError } = await supabase.auth.getSession();
@@ -414,7 +420,15 @@ export const SupportProvider: React.FC<SupportProviderProps> = ({ children }) =>
       }
       return null;
     }
-  }, [isAdmin, userRole?.userId]);
+  };
+
+  const task = executeGetOrCreate().finally(() => {
+    inFlightConversationRef.current = null;
+  });
+
+  inFlightConversationRef.current = task;
+  return task;
+}, [isAdmin, userRole?.userId]);
 
   // Load messages for a conversation or ticket
   const loadMessages = useCallback(async (ticketIdOrConversationId: string, isTicket: boolean = false) => {
