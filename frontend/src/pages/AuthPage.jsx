@@ -484,16 +484,16 @@ const AuthPage = () => {
 
           toast.success('Welcome back!');
 
-          // Create profile if it doesn't exist (non-blocking)
-          supabase.from('profiles').insert({
-            id: authUser.id,
-            email: authUser.email,
-            name: (authUser.email || 'user').split('@')[0],
-            balance: 0.0,
-            role: 'user',
-          }).then(({ error: profileError }) => {
-            if (profileError && !profileError.message?.includes('duplicate')) {
-              console.warn('Profile creation warning:', profileError);
+          // Create profile only if it doesn't exist (non-blocking fallback for legacy accounts)
+          supabase.from('profiles').select('id').eq('id', authUser.id).maybeSingle().then(({ data: existingProfile }) => {
+            if (!existingProfile) {
+              supabase.from('profiles').insert({
+                id: authUser.id,
+                email: authUser.email,
+                name: (authUser.email || 'user').split('@')[0],
+                balance: 0.0,
+                role: 'user',
+              }).catch(() => {});
             }
           }).catch(() => {});
 
