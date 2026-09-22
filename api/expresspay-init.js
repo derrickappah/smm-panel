@@ -112,6 +112,7 @@ export default async function handler(req, res) {
         type: 'deposit',
         status: 'pending',
         deposit_method: 'expresspay',
+        payment_method: 'expresspay',
         expresspay_order_id: orderId
       })
       .select('id, amount, status, deposit_method, created_at')
@@ -119,7 +120,10 @@ export default async function handler(req, res) {
 
     if (insertError) {
       console.error('[expressPay Init] Failed to create transaction:', insertError);
-      return res.status(500).json({ error: 'Failed to record deposit transaction' });
+      return res.status(500).json({ 
+        error: 'Failed to record deposit transaction', 
+        details: insertError.message || insertError 
+      });
     }
 
     // Determine host origin for callbacks

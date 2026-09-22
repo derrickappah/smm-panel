@@ -12,6 +12,11 @@ ADD COLUMN IF NOT EXISTS expresspay_transaction_id TEXT;
 CREATE INDEX IF NOT EXISTS idx_transactions_expresspay_token ON public.transactions(expresspay_token);
 CREATE INDEX IF NOT EXISTS idx_transactions_expresspay_order_id ON public.transactions(expresspay_order_id);
 
+-- Update transactions_deposit_method_check constraint to include 'expresspay'
+ALTER TABLE public.transactions DROP CONSTRAINT IF EXISTS transactions_deposit_method_check;
+ALTER TABLE public.transactions ADD CONSTRAINT transactions_deposit_method_check 
+CHECK (deposit_method IN ('paystack', 'manual', 'momo', 'hubtel', 'korapay', 'ref_bonus', 'moolre', 'moolre_web', 'expresspay'));
+
 -- 2. Insert expressPay default app_settings
 INSERT INTO public.app_settings (key, value, description)
 VALUES 
