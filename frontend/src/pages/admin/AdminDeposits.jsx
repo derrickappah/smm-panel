@@ -556,6 +556,51 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
     }
   }, [onRefresh, queryClient, refetch]);
 
+  const handleVerifyExpressPayDeposit = useCallback(async (deposit) => {
+    setVerifyingDeposit(deposit.id);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Please log in again as admin.');
+      }
+
+      const response = await fetch('/api/manual-verify-expresspay-deposit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          transactionId: deposit.id,
+          token: deposit.expresspay_token,
+          orderId: deposit.expresspay_order_id
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || data.message || 'Failed to verify expressPay deposit');
+      }
+
+      if (data.status === 'approved') {
+        toast.success('expressPay deposit verified and balance credited successfully!');
+      } else {
+        toast.info(data.message || 'expressPay deposit status checked.');
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['admin', 'deposits'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
+      refetch();
+      if (onRefresh) onRefresh();
+    } catch (error) {
+      console.error('Failed to verify expressPay deposit:', error);
+      toast.error(error.message || 'Failed to verify expressPay deposit');
+    } finally {
+      setVerifyingDeposit(null);
+    }
+  }, [onRefresh, queryClient, refetch]);
+
   const handleManualReferenceSubmit = useCallback(async () => {
     if (!manualRefDialog.deposit || !manualReference.trim()) {
       const isMoolreMethod = manualRefDialog.paymentMethod === 'moolre' || manualRefDialog.paymentMethod === 'moolre_expired';
@@ -622,6 +667,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
       'korapay': 'Korapay (Nigeria)',
       'moolre': 'Moolre',
       'moolre_web': 'Moolre Web',
+      'expresspay': 'expressPay Ghana',
       'ref_bonus': 'Referral Bonus'
     };
     return methodMap[method.toLowerCase()] || method.charAt(0).toUpperCase() + method.slice(1);
@@ -639,6 +685,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
       'korapay': 'bg-indigo-100 text-indigo-700 border-indigo-200',
       'moolre': 'bg-teal-100 text-teal-700 border-teal-200',
       'moolre_web': 'bg-cyan-100 text-cyan-700 border-cyan-200',
+      'expresspay': 'bg-emerald-100 text-emerald-700 border-emerald-200',
       'ref_bonus': 'bg-pink-100 text-pink-700 border-pink-200'
     };
     return colorMap[methodLower] || 'bg-gray-100 text-gray-700 border-gray-200';
@@ -663,6 +710,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
     const isKorapay = depositMethod === 'korapay';
     const isMoolre = depositMethod === 'moolre';
     const isMoolreWeb = depositMethod === 'moolre_web';
+    const isExpressPay = depositMethod === 'expresspay';
 
     return (
       <div className="grid grid-cols-12 gap-4 p-4 items-center bg-white hover:bg-gray-50 transition-colors border-b border-gray-200 min-w-[1200px]">
@@ -706,6 +754,12 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
           )}
           {deposit.moolre_reference && (
             <p className="text-xs text-gray-500 mt-1">Ref: {deposit.moolre_reference}</p>
+          )}
+          {deposit.expresspay_order_id && (
+            <p className="text-xs text-gray-500 mt-1">Order: {deposit.expresspay_order_id}</p>
+          )}
+          {deposit.expresspay_token && (
+            <p className="text-xs text-gray-500 mt-1">Token: {deposit.expresspay_token.slice(0, 14)}...</p>
           )}
         </div>
         <div className="col-span-2">
@@ -760,6 +814,17 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
                   className="text-xs min-h-[36px] border-cyan-500 text-cyan-600 hover:bg-cyan-50"
                 >
                   {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with Moolre Web'}
+                </Button>
+              )}
+              {isExpressPay && (
+                <Button
+                  onClick={() => handleVerifyExpressPayDeposit(deposit)}
+                  disabled={verifyingDeposit === deposit.id}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs min-h-[36px] border-emerald-500 text-emerald-600 hover:bg-emerald-50"
+                >
+                  {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with expressPay'}
                 </Button>
               )}
 
@@ -843,7 +908,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
         </div>
       </div>
     );
-  }, [handleApproveDeposit, handleRejectDeposit, handleApproveManualDeposit, handleVerifyPaystackDeposit, handleVerifyMoolreDeposit, handleVerifyMoolreWebDeposit, handleVerifyExpiredMoolreDeposit, handleBanUserClick, approvingDeposit, verifyingDeposit, formatPaymentMethod, getPaymentMethodColors]);
+  }, [handleApproveDeposit, handleRejectDeposit, handleApproveManualDeposit, handleVerifyPaystackDeposit, handleVerifyMoolreDeposit, handleVerifyMoolreWebDeposit, handleVerifyExpiredMoolreDeposit, handleVerifyExpressPayDeposit, handleBanUserClick, approvingDeposit, verifyingDeposit, formatPaymentMethod, getPaymentMethodColors]);
 
   const renderMobileCard = useCallback((deposit, index) => {
     const depositMethod = deposit.deposit_method || deposit.payment_method;
@@ -853,6 +918,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
     const isKorapay = depositMethod === 'korapay';
     const isMoolre = depositMethod === 'moolre';
     const isMoolreWeb = depositMethod === 'moolre_web';
+    const isExpressPay = depositMethod === 'expresspay';
 
     return (
       <div className="bg-white p-4 space-y-3">
@@ -898,6 +964,12 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
             )}
             {deposit.moolre_reference && (
               <p className="text-xs text-gray-500 mt-1">Ref: {deposit.moolre_reference}</p>
+            )}
+            {deposit.expresspay_order_id && (
+              <p className="text-xs text-gray-500 mt-1">Order: {deposit.expresspay_order_id}</p>
+            )}
+            {deposit.expresspay_token && (
+              <p className="text-xs text-gray-500 mt-1">Token: {deposit.expresspay_token}</p>
             )}
           </div>
           <div>
@@ -952,6 +1024,17 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
                 className="w-full border-cyan-500 text-cyan-600 hover:bg-cyan-50 min-h-[44px]"
               >
                 {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with Moolre Web'}
+              </Button>
+            )}
+            {isExpressPay && (
+              <Button
+                onClick={() => handleVerifyExpressPayDeposit(deposit)}
+                disabled={verifyingDeposit === deposit.id}
+                variant="outline"
+                size="sm"
+                className="w-full border-emerald-500 text-emerald-600 hover:bg-emerald-50 min-h-[44px]"
+              >
+                {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with expressPay'}
               </Button>
             )}
 
@@ -1028,7 +1111,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
         )}
       </div>
     );
-  }, [handleApproveDeposit, handleRejectDeposit, handleApproveManualDeposit, handleVerifyPaystackDeposit, handleVerifyMoolreDeposit, handleVerifyMoolreWebDeposit, handleVerifyExpiredMoolreDeposit, handleBanUserClick, approvingDeposit, verifyingDeposit, formatPaymentMethod, getPaymentMethodColors]);
+  }, [handleApproveDeposit, handleRejectDeposit, handleApproveManualDeposit, handleVerifyPaystackDeposit, handleVerifyMoolreDeposit, handleVerifyMoolreWebDeposit, handleVerifyExpiredMoolreDeposit, handleVerifyExpressPayDeposit, handleBanUserClick, approvingDeposit, verifyingDeposit, formatPaymentMethod, getPaymentMethodColors]);
 
   if (isLoading) {
     return (

@@ -148,7 +148,7 @@ export default async function handler(req, res) {
     }
 
     // Validate payment method
-    const validPaymentMethods = ['paystack', 'korapay', 'moolre', 'moolre_web', 'manual', 'momo', 'hubtel'];
+    const validPaymentMethods = ['paystack', 'korapay', 'moolre', 'moolre_web', 'manual', 'momo', 'hubtel', 'expresspay'];
     const method = payment_method || 'paystack';
     if (!validPaymentMethods.includes(method)) {
       return res.status(400).json({

@@ -2408,6 +2408,61 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     }
   }, [depositAmount, minDepositSettings, user]);
 
+  const handleExpressPayDeposit = useCallback(async (e) => {
+    e.preventDefault();
+    if (!depositAmount || parseFloat(depositAmount) <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
+    const amount = parseFloat(depositAmount);
+    const minAmount = minDepositSettings.expresspay_min || 1;
+    if (amount < minAmount) {
+      toast.error(`Minimum deposit amount for expressPay is ₵${minAmount}`);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        toast.error('Please log in to continue.');
+        if (onLogout) onLogout();
+        return;
+      }
+
+      const response = await fetch('/api/expresspay-init', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          amount: amount
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        toast.error(data.error || 'Failed to initiate expressPay deposit');
+        return;
+      }
+
+      if (data.checkout_url) {
+        toast.loading('Redirecting to expressPay payment gateway...');
+        window.location.href = data.checkout_url;
+      } else {
+        toast.error('Did not receive expressPay payment link');
+      }
+    } catch (error) {
+      console.error('Error in expressPay deposit:', error);
+      toast.error(error.message || 'Failed to initiate payment. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [depositAmount, minDepositSettings.expresspay_min, onLogout]);
+
   const handleMoolreDeposit = useCallback(async (e) => {
     e.preventDefault();
 
@@ -3342,6 +3397,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
               handleKorapayDeposit={handleKorapayDeposit}
               handleMoolreDeposit={handleMoolreDeposit}
               handleMoolreWebDeposit={handleMoolreWebDeposit}
+              handleExpressPayDeposit={handleExpressPayDeposit}
               moolrePhoneNumber={moolrePhoneNumber}
               setMoolrePhoneNumber={setMoolrePhoneNumber}
               moolreChannel={moolreChannel}

@@ -13,7 +13,8 @@ export const DEFAULT_PAYMENT_SETTINGS = {
     hubtel_enabled: false,
     korapay_enabled: false,
     moolre_enabled: false,
-    moolre_web_enabled: true // Enable by default for immediate UI
+    moolre_web_enabled: true, // Enable by default for immediate UI
+    expresspay_enabled: true
   },
   minDepositSettings: {
     paystack_min: 10,
@@ -21,7 +22,8 @@ export const DEFAULT_PAYMENT_SETTINGS = {
     hubtel_min: 1,
     korapay_min: 1,
     moolre_min: 1,
-    moolre_web_min: 1
+    moolre_web_min: 1,
+    expresspay_min: 1
   },
   manualDepositDetails: {
     phone_number: '',
@@ -45,12 +47,14 @@ export const isPaymentMethodEnabled = (method, paymentMethodSettings) => {
   if (method === 'korapay') return !!paymentMethodSettings.korapay_enabled;
   if (method === 'moolre') return !!paymentMethodSettings.moolre_enabled;
   if (method === 'moolre_web') return !!paymentMethodSettings.moolre_web_enabled;
+  if (method === 'expresspay') return !!paymentMethodSettings.expresspay_enabled;
   return false;
 };
 
 export const getFirstEnabledPaymentMethod = (paymentMethodSettings) => {
   if (!paymentMethodSettings) return null;
   if (paymentMethodSettings.moolre_web_enabled) return 'moolre_web';
+  if (paymentMethodSettings.expresspay_enabled) return 'expresspay';
   if (paymentMethodSettings.moolre_enabled) return 'moolre';
   if (paymentMethodSettings.paystack_enabled) return 'paystack';
   if (paymentMethodSettings.manual_enabled) return 'manual';
@@ -71,12 +75,14 @@ export const fetchPaymentSettingsFn = async () => {
       'payment_method_korapay_enabled',
       'payment_method_moolre_enabled',
       'payment_method_moolre_web_enabled',
+      'payment_method_expresspay_enabled',
       'payment_method_paystack_min_deposit',
       'payment_method_manual_min_deposit',
       'payment_method_hubtel_min_deposit',
       'payment_method_korapay_min_deposit',
       'payment_method_moolre_min_deposit',
       'payment_method_moolre_web_min_deposit',
+      'payment_method_expresspay_min_deposit',
       'manual_deposit_phone_number',
       'manual_deposit_account_name',
       'manual_deposit_instructions',
@@ -129,7 +135,8 @@ export const fetchPaymentSettingsFn = async () => {
     hubtel_enabled: getEnabled('payment_method_hubtel_enabled', DEFAULT_PAYMENT_SETTINGS.paymentMethodSettings.hubtel_enabled),
     korapay_enabled: getEnabled('payment_method_korapay_enabled', DEFAULT_PAYMENT_SETTINGS.paymentMethodSettings.korapay_enabled),
     moolre_enabled: getEnabled('payment_method_moolre_enabled', DEFAULT_PAYMENT_SETTINGS.paymentMethodSettings.moolre_enabled),
-    moolre_web_enabled: getEnabled('payment_method_moolre_web_enabled', DEFAULT_PAYMENT_SETTINGS.paymentMethodSettings.moolre_web_enabled)
+    moolre_web_enabled: getEnabled('payment_method_moolre_web_enabled', DEFAULT_PAYMENT_SETTINGS.paymentMethodSettings.moolre_web_enabled),
+    expresspay_enabled: getEnabled('payment_method_expresspay_enabled', DEFAULT_PAYMENT_SETTINGS.paymentMethodSettings.expresspay_enabled)
   };
 
   // Parse Min Deposits
@@ -139,7 +146,8 @@ export const fetchPaymentSettingsFn = async () => {
     hubtel_min: getMin('payment_method_hubtel_min_deposit', DEFAULT_PAYMENT_SETTINGS.minDepositSettings.hubtel_min),
     korapay_min: getMin('payment_method_korapay_min_deposit', DEFAULT_PAYMENT_SETTINGS.minDepositSettings.korapay_min),
     moolre_min: getMin('payment_method_moolre_min_deposit', DEFAULT_PAYMENT_SETTINGS.minDepositSettings.moolre_min),
-    moolre_web_min: getMin('payment_method_moolre_web_min_deposit', DEFAULT_PAYMENT_SETTINGS.minDepositSettings.moolre_web_min)
+    moolre_web_min: getMin('payment_method_moolre_web_min_deposit', DEFAULT_PAYMENT_SETTINGS.minDepositSettings.moolre_web_min),
+    expresspay_min: getMin('payment_method_expresspay_min_deposit', DEFAULT_PAYMENT_SETTINGS.minDepositSettings.expresspay_min)
   };
 
   // Parse Manual Details

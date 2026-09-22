@@ -27,21 +27,25 @@ const PaymentCallback = ({ onUpdateUser }) => {
     const verifyPayment = async () => {
       try {
         // Get reference from URL params (Korapay may use different param names)
+        const tokenParam = searchParams.get('token');
+        const orderIdParam = searchParams.get('order-id') || searchParams.get('order_id');
         const reference = searchParams.get('reference') ||
           searchParams.get('ref') ||
           searchParams.get('trxref') ||
           searchParams.get('reference_id') ||
           searchParams.get('externalref') ||
-          searchParams.get('external_ref');
-        const paymentMethod = searchParams.get('method') || 'korapay'; // Default to korapay
+          searchParams.get('external_ref') ||
+          tokenParam ||
+          orderIdParam;
+        const paymentMethod = searchParams.get('method') || (tokenParam || orderIdParam ? 'expresspay' : 'korapay');
 
         // Validate reference format and length
         const isValidReference = (ref) => {
           return ref &&
             typeof ref === 'string' &&
             ref.length >= 3 &&
-            ref.length <= 100 &&
-            /^[a-zA-Z0-9_-]+$/.test(ref);
+            ref.length <= 1024 &&
+            /^[a-zA-Z0-9_\-\.]+$/.test(ref);
         };
 
         if (!reference || !isValidReference(reference)) {
@@ -280,6 +284,64 @@ const PaymentCallback = ({ onUpdateUser }) => {
             setStatus('verifying');
             setMessage(`Processing... (${retryCountRef.current}/${MAX_RETRIES})`);
             setTimeout(() => verifyPayment(), 5000);
+          }
+        } else if (paymentMethod === 'expresspay') {
+          const verifyResponse = await fetch('/api/expresspay-verify', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': authToken
+            },
+            body: JSON.stringify({
+              token: tokenParam || reference,
+              order_id: orderIdParam
+            })
+          });
+
+          const verifyData = await verifyResponse.json();
+
+          if (!verifyResponse.ok) {
+            throw new Error(verifyData.error || 'expressPay verification failed');
+          }
+
+          if (verifyData.status === 'approved' || verifyData.success) {
+            if (onUpdateUser) {
+              const { data: updatedProfile } = await supabase
+                .from('profiles')
+                .select('id, balance')
+                .eq('id', authUser.id)
+                .single();
+              if (updatedProfile) onUpdateUser(updatedProfile);
+            }
+
+            setStatus('success');
+            const amt = parseFloat(verifyData.amount || 0).toFixed(2);
+            setMessage(`Payment successful! ₵${amt} has been added to your account.`);
+            toast.success(`Payment successful! ₵${amt} added to your balance.`);
+
+            trackMetaEvent('Purchase', {
+              value: parseFloat(verifyData.amount || 0),
+              currency: 'GHS',
+              content_name: 'Wallet Deposit (expressPay)'
+            });
+
+            setTimeout(() => navigate('/dashboard'), 3000);
+          } else if (verifyData.status === 'pending') {
+            retryCountRef.current += 1;
+            if (retryCountRef.current >= MAX_RETRIES) {
+              setStatus('success');
+              setMessage('Your payment is pending confirmation by your mobile network. Your balance will be credited as soon as completed.');
+              setTimeout(() => navigate('/dashboard'), 5000);
+              return;
+            }
+            setStatus('verifying');
+            setMessage(`Waiting for confirmation... (${retryCountRef.current}/${MAX_RETRIES})`);
+            setTimeout(() => verifyPayment(), 5000);
+          } else {
+            setStatus('failed');
+            setMessage(verifyData.message || 'Payment not approved or was declined.');
+            toast.error(verifyData.message || 'Payment failed.');
+            setTimeout(() => navigate('/dashboard'), 3500);
           }
         } else {
           setStatus('failed');

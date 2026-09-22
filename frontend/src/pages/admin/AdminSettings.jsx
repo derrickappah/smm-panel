@@ -59,6 +59,56 @@ const AdminSettings = memo(() => {
   const [creatingSenderId, setCreatingSenderId] = useState(false);
   const [savingMoolreConfig, setSavingMoolreConfig] = useState(false);
 
+  // expressPay Ghana State
+  const [expresspayMerchantId, setExpresspayMerchantId] = useState('332604139135');
+  const [expresspayApiKey, setExpresspayApiKey] = useState('yMKBvZToq1Qkv4Vx7jFqs-Qs84utOyvl5zmfrhO27q-T2pi8YTuGAKdS9TcKFDK-VEbuTviKFqzMF3qtQ4O');
+  const [expresspayMode, setExpresspayMode] = useState('sandbox');
+  const [savingExpresspayConfig, setSavingExpresspayConfig] = useState(false);
+
+  const fetchExpressPaySettings = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('app_settings')
+        .select('key, value')
+        .in('key', ['expresspay_merchant_id', 'expresspay_api_key', 'expresspay_mode']);
+
+      if (!error && data) {
+        data.forEach(item => {
+          if (item.key === 'expresspay_merchant_id' && item.value) setExpresspayMerchantId(item.value);
+          if (item.key === 'expresspay_api_key' && item.value) setExpresspayApiKey(item.value);
+          if (item.key === 'expresspay_mode' && item.value) setExpresspayMode(item.value);
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to load expressPay settings:', err);
+    }
+  }, []);
+
+  const handleSaveExpressPaySettings = async () => {
+    setSavingExpresspayConfig(true);
+    try {
+      const updates = [
+        { key: 'expresspay_merchant_id', value: expresspayMerchantId.trim(), description: 'expressPay Ghana Merchant ID' },
+        { key: 'expresspay_api_key', value: expresspayApiKey.trim(), description: 'expressPay Ghana Security API Key' },
+        { key: 'expresspay_mode', value: expresspayMode.trim(), description: 'expressPay Ghana environment mode (sandbox or live)' }
+      ];
+
+      for (const item of updates) {
+        const { error } = await supabase
+          .from('app_settings')
+          .upsert(item, { onConflict: 'key' });
+        if (error) throw error;
+      }
+
+      toast.success('expressPay configuration saved successfully!');
+    } catch (err) {
+      console.error('Failed to save expressPay settings:', err);
+      toast.error(err.message || 'Failed to save expressPay settings');
+    } finally {
+      setSavingExpresspayConfig(false);
+    }
+  };
+
   const fetchMoolreSettingsAndData = useCallback(async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -105,7 +155,8 @@ const AdminSettings = memo(() => {
       setMoolreSenderId(remoteMoolreSenderId || 'Boostupgh');
     }
     fetchMoolreSettingsAndData();
-  }, [remotePaymentSettings, remoteMinDepositSettings, remoteManualDepositDetails, remoteWhatsappNumber, remoteSupportPhoneNumber, remoteRequireCaptcha, remoteRequireOtp, remoteRequirePhoneVerification, remoteMoolreSenderId, isLoading, fetchMoolreSettingsAndData]);
+    fetchExpressPaySettings();
+  }, [remotePaymentSettings, remoteMinDepositSettings, remoteManualDepositDetails, remoteWhatsappNumber, remoteSupportPhoneNumber, remoteRequireCaptcha, remoteRequireOtp, remoteRequirePhoneVerification, remoteMoolreSenderId, isLoading, fetchMoolreSettingsAndData, fetchExpressPaySettings]);
 
   const handleSaveMoolreSettings = async () => {
     setSavingMoolreConfig(true);
@@ -332,6 +383,11 @@ const AdminSettings = memo(() => {
         description = 'Enable/disable Moolre Web payment method';
         stateKey = 'moolre_web_enabled';
         displayName = 'Moolre Web';
+      } else if (method === 'expresspay') {
+        settingKey = 'payment_method_expresspay_enabled';
+        description = 'Enable/disable expressPay Ghana payment method';
+        stateKey = 'expresspay_enabled';
+        displayName = 'expressPay Ghana';
       } else {
         throw new Error('Unknown payment method');
       }
@@ -440,6 +496,11 @@ const AdminSettings = memo(() => {
         description = 'Minimum deposit amount for Moolre Web payment method';
         stateKey = 'moolre_web_min';
         displayName = 'Moolre Web';
+      } else if (method === 'expresspay') {
+        settingKey = 'payment_method_expresspay_min_deposit';
+        description = 'Minimum deposit amount for expressPay Ghana payment method';
+        stateKey = 'expresspay_min';
+        displayName = 'expressPay Ghana';
       } else {
         throw new Error('Unknown payment method');
       }
@@ -805,6 +866,15 @@ const AdminSettings = memo(() => {
       color: 'bg-indigo-100 text-indigo-600',
       enabled: paymentMethodSettings.moolre_web_enabled,
       min: minDepositSettings.moolre_web_min
+    },
+    {
+      id: 'expresspay',
+      name: 'expressPay Ghana',
+      description: 'expressPay Ghana Mobile Money & Cards',
+      icon: CreditCard,
+      color: 'bg-emerald-100 text-emerald-600',
+      enabled: paymentMethodSettings.expresspay_enabled,
+      min: minDepositSettings.expresspay_min
     }
   ];
 
@@ -883,7 +953,81 @@ const AdminSettings = memo(() => {
       <Separator className="my-8" />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-6">
+          {/* expressPay Ghana Gateway Credentials */}
+          <Card className="border-2 border-emerald-100 shadow-md">
+            <CardHeader className="bg-gradient-to-r from-emerald-50/60 to-teal-50/60">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-emerald-100 text-emerald-700 rounded-lg">
+                    <Key className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <CardTitle>expressPay Ghana Gateway Configuration</CardTitle>
+                    <CardDescription>Configure expressPay Merchant ID, API Key, and Sandbox/Live environment.</CardDescription>
+                  </div>
+                </div>
+                <Badge variant={expresspayMode === 'live' ? 'default' : 'secondary'} className={expresspayMode === 'live' ? 'bg-green-600' : 'bg-amber-500 text-white'}>
+                  {expresspayMode === 'live' ? 'Production Mode' : 'Sandbox / Test Mode'}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-6 pt-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="expresspay-merchant-id">Merchant ID</Label>
+                  <Input
+                    id="expresspay-merchant-id"
+                    value={expresspayMerchantId}
+                    onChange={(e) => setExpresspayMerchantId(e.target.value)}
+                    placeholder="e.g. 332604139135"
+                    className="font-mono text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">ID assigned to your merchant account by expressPay.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="expresspay-mode-select">Environment Mode</Label>
+                  <select
+                    id="expresspay-mode-select"
+                    value={expresspayMode}
+                    onChange={(e) => setExpresspayMode(e.target.value)}
+                    className="w-full h-10 px-3 text-sm bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
+                  >
+                    <option value="sandbox">Sandbox (Testing)</option>
+                    <option value="live">Live (Production)</option>
+                  </select>
+                  <p className="text-xs text-muted-foreground">Switch to Live once production credentials are ready.</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="expresspay-api-key">Security API Key</Label>
+                <Input
+                  id="expresspay-api-key"
+                  type="text"
+                  value={expresspayApiKey}
+                  onChange={(e) => setExpresspayApiKey(e.target.value)}
+                  placeholder="Enter API key"
+                  className="font-mono text-sm"
+                />
+                <p className="text-xs text-muted-foreground">Security API key to authenticate requests with expressPay.</p>
+              </div>
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 space-y-1">
+                <p className="font-semibold">⚠️ expressPay IP Whitelisting Notice:</p>
+                <p>expressPay requires that server IP addresses making API requests be whitelisted. If you receive an &quot;Invalid API Credentials (status: 4)&quot; error, contact <span className="font-semibold">integration@expresspaygh.com</span> to authorize your hosting server&apos;s outbound IP.</p>
+              </div>
+            </CardContent>
+            <CardFooter className="bg-gray-50/50 justify-end rounded-b-xl border-t p-4">
+              <Button
+                onClick={handleSaveExpressPaySettings}
+                disabled={savingExpresspayConfig}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+              >
+                <Save className="w-4 h-4 mr-2" />
+                {savingExpresspayConfig ? 'Saving...' : 'Save expressPay Settings'}
+              </Button>
+            </CardFooter>
+          </Card>
+
           <Card className="border-2 border-primary/5 shadow-md">
             <CardHeader>
               <div className="flex items-center gap-3">

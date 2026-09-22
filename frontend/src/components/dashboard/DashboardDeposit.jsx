@@ -22,6 +22,7 @@ const DashboardDeposit = React.memo(({
   handleKorapayDeposit,
   handleMoolreDeposit,
   handleMoolreWebDeposit,
+  handleExpressPayDeposit,
   moolrePhoneNumber,
   setMoolrePhoneNumber,
   moolreChannel,
@@ -47,12 +48,13 @@ const DashboardDeposit = React.memo(({
   const whatsappLink = `https://wa.me/233${displayWhatsappNumber.startsWith('0') ? displayWhatsappNumber.substring(1) : displayWhatsappNumber}`;
 
   const enabledMethods = useMemo(() => [
+    paymentMethodSettings.expresspay_enabled && 'expresspay',
+    paymentMethodSettings.moolre_web_enabled && 'moolre_web',
     paymentMethodSettings.paystack_enabled && 'paystack',
     paymentMethodSettings.manual_enabled && 'manual',
     paymentMethodSettings.hubtel_enabled && 'hubtel',
     paymentMethodSettings.korapay_enabled && 'korapay',
-    paymentMethodSettings.moolre_enabled && 'moolre',
-    paymentMethodSettings.moolre_web_enabled && 'moolre_web'
+    paymentMethodSettings.moolre_enabled && 'moolre'
   ].filter(Boolean), [paymentMethodSettings]);
 
   const handleFileChange = useCallback((e) => {
@@ -71,6 +73,7 @@ const DashboardDeposit = React.memo(({
   }, [setManualDepositForm]);
 
   const allMethodsDisabled = useMemo(() =>
+    !paymentMethodSettings.expresspay_enabled &&
     !paymentMethodSettings.paystack_enabled &&
     !paymentMethodSettings.manual_enabled &&
     !paymentMethodSettings.hubtel_enabled &&
@@ -199,12 +202,36 @@ const DashboardDeposit = React.memo(({
       </div>
 
       {enabledMethods.length > 1 && depositMethod !== null && (
-        <div className="flex gap-2 mb-6 p-1 bg-gray-100 rounded-lg">
+        <div className="flex flex-wrap gap-2 mb-6 p-1 bg-gray-100 rounded-lg">
+          {paymentMethodSettings.expresspay_enabled && (
+            <button
+              type="button"
+              onClick={() => setDepositMethod('expresspay')}
+              className={`flex-1 min-w-[130px] py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'expresspay'
+                ? 'bg-white text-indigo-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+            >
+              expressPay (MoMo/Card)
+            </button>
+          )}
+          {paymentMethodSettings.moolre_web_enabled && (
+            <button
+              type="button"
+              onClick={() => setDepositMethod('moolre_web')}
+              className={`flex-1 min-w-[120px] py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'moolre_web'
+                ? 'bg-white text-indigo-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+            >
+              Moolre MoMo
+            </button>
+          )}
           {paymentMethodSettings.paystack_enabled && (
             <button
               type="button"
               onClick={() => setDepositMethod('paystack')}
-              className={`flex-1 py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'paystack'
+              className={`flex-1 min-w-[100px] py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'paystack'
                 ? 'bg-white text-indigo-600 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
@@ -216,7 +243,7 @@ const DashboardDeposit = React.memo(({
             <button
               type="button"
               onClick={() => setDepositMethod('manual')}
-              className={`flex-1 py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'manual'
+              className={`flex-1 min-w-[120px] py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'manual'
                 ? 'bg-white text-indigo-600 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
@@ -228,7 +255,7 @@ const DashboardDeposit = React.memo(({
             <button
               type="button"
               onClick={() => setDepositMethod('hubtel')}
-              className={`flex-1 py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'hubtel'
+              className={`flex-1 min-w-[100px] py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'hubtel'
                 ? 'bg-white text-indigo-600 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
@@ -240,7 +267,7 @@ const DashboardDeposit = React.memo(({
             <button
               type="button"
               onClick={() => setDepositMethod('korapay')}
-              className={`flex-1 py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'korapay'
+              className={`flex-1 min-w-[130px] py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'korapay'
                 ? 'bg-white text-indigo-600 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
@@ -252,24 +279,12 @@ const DashboardDeposit = React.memo(({
             <button
               type="button"
               onClick={() => setDepositMethod('moolre')}
-              className={`flex-1 py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'moolre'
+              className={`flex-1 min-w-[90px] py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'moolre'
                 ? 'bg-white text-indigo-600 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
             >
               Moolre
-            </button>
-          )}
-          {paymentMethodSettings.moolre_web_enabled && (
-            <button
-              type="button"
-              onClick={() => setDepositMethod('moolre_web')}
-              className={`flex-1 py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'moolre_web'
-                ? 'bg-white text-indigo-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                }`}
-            >
-              Moolre MoMo
             </button>
           )}
         </div>
@@ -860,6 +875,56 @@ const DashboardDeposit = React.memo(({
                 </AccordionContent>
               </AccordionItem>
             </Accordion>
+          </div>
+        </form>
+      ) : depositMethod === 'expresspay' && paymentMethodSettings.expresspay_enabled ? (
+        <form onSubmit={handleExpressPayDeposit} className="space-y-4">
+          <div>
+            <Label htmlFor="expresspay-amount" className="text-sm font-medium text-gray-700 mb-2 block">Amount (GHS)</Label>
+            <Input
+              id="expresspay-amount"
+              type="number"
+              step="0.01"
+              min="1"
+              placeholder="Enter amount"
+              value={depositAmount}
+              onChange={(e) => setDepositAmount(e.target.value)}
+              className="w-full h-11 rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              required
+            />
+            {renderChargedNotice('GH₵')}
+          </div>
+          <Button
+            type="submit"
+            disabled={loading || !depositAmount}
+            className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? 'Processing...' : 'Pay with expressPay (MoMo / Card)'}
+          </Button>
+          <div className="flex flex-wrap items-center justify-center gap-1.5 pt-2">
+            <span className="text-xs text-gray-500 font-medium mr-1">Accepted:</span>
+            <span className="text-[11px] bg-yellow-100 text-yellow-800 font-semibold px-2 py-0.5 rounded">MTN Mobile Money</span>
+            <span className="text-[11px] bg-red-100 text-red-800 font-semibold px-2 py-0.5 rounded">Telecel Cash</span>
+            <span className="text-[11px] bg-blue-100 text-blue-800 font-semibold px-2 py-0.5 rounded">AT Money</span>
+            <span className="text-[11px] bg-purple-100 text-purple-800 font-semibold px-2 py-0.5 rounded">Visa / Mastercard</span>
+          </div>
+          <p className="text-xs sm:text-sm text-gray-600 text-center">
+            Secure payment via expressPay Ghana. You will be redirected to the secure expressPay payment gateway to complete your transaction.
+          </p>
+          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-xs sm:text-sm text-blue-800 text-center">
+              <span className="font-semibold">Having issues with deposits?</span>
+              <br />
+              <span className="mt-1 block">Text us on WhatsApp: </span>
+              <a
+                href={whatsappLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-blue-600 hover:text-blue-800 underline focus:outline-none focus:ring-2 focus:blue-500 rounded"
+              >
+                {displayWhatsappNumber}
+              </a>
+            </p>
           </div>
         </form>
       ) : null}

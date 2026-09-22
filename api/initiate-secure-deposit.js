@@ -26,7 +26,8 @@ const DEPOSIT_LIMITS = {
   paystack: { min: 1, max: 10000 },
   korapay: { min: 1, max: 50000 },
   moolre: { min: 1, max: 1000 },
-  moolre_web: { min: 1, max: 1000 }
+  moolre_web: { min: 1, max: 1000 },
+  expresspay: { min: 1, max: 5000 }
 };
 
 // Rate limiting: 5 deposits per hour per user
@@ -177,7 +178,8 @@ export default async function handler(req, res) {
         ...(method === 'paystack' && { paystack_reference: depositReference }),
         ...(method === 'korapay' && { korapay_reference: depositReference }),
         ...(method === 'moolre' && { moolre_reference: depositReference }),
-        ...(method === 'moolre_web' && { moolre_reference: depositReference })
+        ...(method === 'moolre_web' && { moolre_reference: depositReference }),
+        ...(method === 'expresspay' && { expresspay_order_id: depositReference })
       })
       .select('id, amount, type, status, deposit_method, created_at')
       .single();
