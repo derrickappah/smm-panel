@@ -86,7 +86,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
       console.log('[AdminOrders] Fetching pending orders for status check...');
       const { data, error } = await supabase
         .from('orders')
-        .select('id, user_id, service_id, promotion_package_id, link, quantity, total_cost, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, tiksta_order_id, component_provider_order_ids, created_at, completed_at, refund_status, last_status_check, is_reward, services(name, platform, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id, tiksta_service_id, is_combo), promotion_packages(name, platform, service_type, smmgen_service_id, oldsmm_service_id, apiowner_service_id, tiksta_service_id, is_combo), profiles(name, email, phone_number)')
+        .select('id, user_id, service_id, promotion_package_id, link, quantity, total_cost, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, tiksta_order_id, smmraja_order_id, component_provider_order_ids, created_at, completed_at, refund_status, last_status_check, is_reward, services(name, platform, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id, tiksta_service_id, smmraja_service_id, is_combo), promotion_packages(name, platform, service_type, smmgen_service_id, oldsmm_service_id, apiowner_service_id, tiksta_service_id, smmraja_service_id, is_combo), profiles(name, email, phone_number)')
         .in('status', ['pending', 'processing', 'in progress'])
         .not('status', 'eq', 'completed')
         .not('status', 'eq', 'refunded')
@@ -499,8 +499,10 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
             const serviceHasOldsmm = order.services?.oldsmm_service_id;
             const serviceHasApiowner = order.services?.apiowner_service_id;
             const serviceHasTiksta = order.services?.tiksta_service_id;
+            const serviceHasSmmraja = order.services?.smmraja_service_id;
 
-            // Prioritize: Tiksta > ApiOwner > OldSMM > G1618 > WorldOfSMM > SMMCost > JB SMM Panel > SMMGen
+            // Prioritize: SMM Raja > Tiksta > ApiOwner > OldSMM > G1618 > WorldOfSMM > SMMCost > JB SMM Panel > SMMGen
+            const hasSmmraja = order.smmraja_order_id && order.smmraja_order_id !== "order not placed at smmraja";
             const hasTiksta = order.tiksta_order_id && order.tiksta_order_id !== "order not placed at tiksta";
             const hasApiowner = order.apiowner_order_id && order.apiowner_order_id !== "order not placed at apiowner";
             const hasOldsmm = order.oldsmm_order_id && order.oldsmm_order_id !== "order not placed at oldsmm";
@@ -510,7 +512,9 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
             const hasJbsmmpanel = order.jbsmmpanel_order_id && String(order.jbsmmpanel_order_id).toLowerCase() !== "order not placed at jbsmmpanel";
             const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
 
-            if (hasTiksta) {
+            if (hasSmmraja) {
+              return <p className="font-medium text-gray-900 text-sm">{order.smmraja_order_id}</p>;
+            } else if (hasTiksta) {
               return <p className="font-medium text-gray-900 text-sm">{order.tiksta_order_id}</p>;
             } else if (hasApiowner) {
               return <p className="font-medium text-gray-900 text-sm">{order.apiowner_order_id}</p>;
@@ -579,7 +583,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                   <p className="text-xs text-blue-600 italic font-medium">Processed Reward</p>
                 </div>
               );
-            } else if (order.smmcost_order_id === null && order.jbsmmpanel_order_id === null && order.smmgen_order_id === null && order.worldofsmm_order_id === null) {
+            } else if (order.smmcost_order_id === null && order.jbsmmpanel_order_id === null && order.smmgen_order_id === null && order.worldofsmm_order_id === null && order.g1618_order_id === null && order.oldsmm_order_id === null && order.apiowner_order_id === null && order.tiksta_order_id === null && order.smmraja_order_id === null) {
               // No order IDs at all
               return (
                 <div className="flex items-center gap-1">
@@ -882,8 +886,10 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               const serviceHasOldsmm = order.services?.oldsmm_service_id;
               const serviceHasApiowner = order.services?.apiowner_service_id;
               const serviceHasTiksta = order.services?.tiksta_service_id;
+              const serviceHasSmmraja = order.services?.smmraja_service_id;
 
-              // Prioritize: Tiksta > ApiOwner > OldSMM > G1618 > WorldOfSMM > SMMCost > JB SMM Panel > SMMGen
+              // Prioritize: SMM Raja > Tiksta > ApiOwner > OldSMM > G1618 > WorldOfSMM > SMMCost > JB SMM Panel > SMMGen
+              const hasSmmraja = order.smmraja_order_id && order.smmraja_order_id !== "order not placed at smmraja";
               const hasTiksta = order.tiksta_order_id && order.tiksta_order_id !== "order not placed at tiksta";
               const hasApiowner = order.apiowner_order_id && order.apiowner_order_id !== "order not placed at apiowner";
               const hasOldsmm = order.oldsmm_order_id && order.oldsmm_order_id !== "order not placed at oldsmm";
@@ -893,7 +899,9 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               const hasJbsmmpanel = order.jbsmmpanel_order_id && String(order.jbsmmpanel_order_id).toLowerCase() !== "order not placed at jbsmmpanel";
               const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
 
-              if (hasTiksta) {
+              if (hasSmmraja) {
+                return <p className="font-semibold text-gray-900 text-base">Order No: {order.smmraja_order_id}</p>;
+              } else if (hasTiksta) {
                 return <p className="font-semibold text-gray-900 text-base">Order No: {order.tiksta_order_id}</p>;
               } else if (hasApiowner) {
                 return <p className="font-semibold text-gray-900 text-base">Order No: {order.apiowner_order_id}</p>;
@@ -1004,6 +1012,20 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                     <p className="text-xs text-red-600 italic font-medium">Order not placed at Tiksta</p>
                   </div>
                 );
+              } else if (order.smmraja_order_id === "order not placed at smmraja" || String(order.smmraja_order_id || '').toLowerCase() === "order not placed at smmraja") {
+                return (
+                  <div className="flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-4 h-4 text-red-500" />
+                    <p className="text-xs text-red-600 italic font-medium">Order not placed at SMM Raja</p>
+                  </div>
+                );
+              } else if (serviceHasSmmraja && !hasSmmraja) {
+                return (
+                  <div className="flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-4 h-4 text-red-500" />
+                    <p className="text-xs text-red-600 italic font-medium">Order not placed at SMM Raja</p>
+                  </div>
+                );
               } else if (order.is_reward) {
                 return (
                   <div className="flex items-center gap-1 mt-1">
@@ -1011,7 +1033,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                     <p className="text-xs text-blue-600 italic font-medium">Processed Reward</p>
                   </div>
                 );
-              } else if (order.smmcost_order_id === null && order.jbsmmpanel_order_id === null && order.smmgen_order_id === null && order.worldofsmm_order_id === null && order.g1618_order_id === null && order.oldsmm_order_id === null && order.apiowner_order_id === null && order.tiksta_order_id === null) {
+              } else if (order.smmcost_order_id === null && order.jbsmmpanel_order_id === null && order.smmgen_order_id === null && order.worldofsmm_order_id === null && order.g1618_order_id === null && order.oldsmm_order_id === null && order.apiowner_order_id === null && order.tiksta_order_id === null && order.smmraja_order_id === null) {
                 return (
                   <div className="flex items-center gap-1 mt-1">
                     <AlertCircle className="w-4 h-4 text-orange-500" />
@@ -1028,6 +1050,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               }
             })()}
             {(() => {
+              const hasSmmraja = order.smmraja_order_id && String(order.smmraja_order_id).toLowerCase() !== "order not placed at smmraja";
               const hasTiksta = order.tiksta_order_id && String(order.tiksta_order_id).toLowerCase() !== "order not placed at tiksta";
               const hasApiowner = order.apiowner_order_id && String(order.apiowner_order_id).toLowerCase() !== "order not placed at apiowner";
               const hasOldsmm = order.oldsmm_order_id && order.oldsmm_order_id !== "order not placed at oldsmm";
@@ -1038,6 +1061,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
 
               const panelIds = [];
+              if (hasSmmraja) panelIds.push(`SMM Raja: ${order.smmraja_order_id}`);
               if (hasTiksta) panelIds.push(`Tiksta: ${order.tiksta_order_id}`);
               if (hasApiowner) panelIds.push(`ApiOwner: ${order.apiowner_order_id}`);
               if (hasOldsmm) panelIds.push(`OldSMM: ${order.oldsmm_order_id}`);

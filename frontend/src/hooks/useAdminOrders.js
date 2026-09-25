@@ -40,7 +40,8 @@ const buildOrderFieldConditions = (trimmedSearch, includeLink = false) => {
     `g1618_order_id.ilike.${searchPattern}`,
     `oldsmm_order_id.ilike.${searchPattern}`,
     `apiowner_order_id.ilike.${searchPattern}`,
-    `tiksta_order_id.ilike.${searchPattern}`
+    `tiksta_order_id.ilike.${searchPattern}`,
+    `smmraja_order_id.ilike.${searchPattern}`
   ];
 
   if (includeLink) {
@@ -124,7 +125,7 @@ const fetchOrders = async ({
   // Build the base query
   let query = supabase
     .from('orders')
-    .select('id, user_id, service_id, promotion_package_id, link, quantity, total_cost, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, tiksta_order_id, component_provider_order_ids, created_at, completed_at, refund_status, last_status_check, services(name, platform, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id, tiksta_service_id, is_combo), promotion_packages(name, platform, service_type, smmgen_service_id, oldsmm_service_id, apiowner_service_id, tiksta_service_id, is_combo), profiles(name, email, phone_number)', { count: 'exact' })
+    .select('id, user_id, service_id, promotion_package_id, link, quantity, total_cost, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, tiksta_order_id, smmraja_order_id, component_provider_order_ids, created_at, completed_at, refund_status, last_status_check, services(name, platform, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id, tiksta_service_id, smmraja_service_id, is_combo), promotion_packages(name, platform, service_type, smmgen_service_id, oldsmm_service_id, apiowner_service_id, tiksta_service_id, smmraja_service_id, is_combo), profiles(name, email, phone_number)', { count: 'exact' })
     .order('created_at', { ascending: false });
 
   // Apply status filter
@@ -145,6 +146,7 @@ const fetchOrders = async ({
         .is('oldsmm_order_id', null)
         .is('apiowner_order_id', null)
         .is('tiksta_order_id', null)
+        .is('smmraja_order_id', null)
         .neq('status', 'completed')
         .neq('status', 'cancelled')
         .neq('status', 'canceled')
@@ -422,7 +424,7 @@ const fetchAllOrders = async (checkSMMGenStatus = false) => {
 
     const { data, error } = await supabase
       .from('orders')
-      .select('id, user_id, service_id, promotion_package_id, link, quantity, total_cost, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, tiksta_order_id, component_provider_order_ids, created_at, completed_at, refund_status, last_status_check, services(name, platform, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id, tiksta_service_id, is_combo), promotion_packages(name, platform, service_type, smmgen_service_id, oldsmm_service_id, apiowner_service_id, tiksta_service_id, is_combo), profiles(name, email, phone_number)')
+      .select('id, user_id, service_id, promotion_package_id, link, quantity, total_cost, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, tiksta_order_id, smmraja_order_id, component_provider_order_ids, created_at, completed_at, refund_status, last_status_check, services(name, platform, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id, tiksta_service_id, smmraja_service_id, is_combo), promotion_packages(name, platform, service_type, smmgen_service_id, oldsmm_service_id, apiowner_service_id, tiksta_service_id, smmraja_service_id, is_combo), profiles(name, email, phone_number)')
       .order('created_at', { ascending: false })
       .range(from, to);
 

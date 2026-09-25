@@ -38,6 +38,8 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
 
   // Helper function to get Order ID based on priority
   const getOrderId = (order) => {
+    const hasSmmRaja = order.smmraja_order_id &&
+      String(order.smmraja_order_id).toLowerCase() !== "order not placed at smmraja";
     const hasTiksta = order.tiksta_order_id &&
       String(order.tiksta_order_id).toLowerCase() !== "order not placed at tiksta";
     const hasApiOwner = order.apiowner_order_id &&
@@ -49,7 +51,9 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
     const hasWorldofsmm = order.worldofsmm_order_id &&
       String(order.worldofsmm_order_id).toLowerCase() !== "order not placed at worldofsmm";
 
-    if (hasTiksta) {
+    if (hasSmmRaja) {
+      return { id: order.smmraja_order_id, type: 'smmraja' };
+    } else if (hasTiksta) {
       return { id: order.tiksta_order_id, type: 'tiksta' };
     } else if (hasApiOwner) {
       return { id: order.apiowner_order_id, type: 'apiowner' };
@@ -74,7 +78,7 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
   // Get Order ID display value
   const getOrderIdDisplay = (order) => {
     const orderIdInfo = getOrderId(order);
-    if (orderIdInfo.type === 'uuid' && !order.smmcost_order_id && !order.jbsmmpanel_order_id && !order.smmgen_order_id && !order.worldofsmm_order_id && !order.g1618_order_id && !order.oldsmm_order_id && !order.apiowner_order_id && !order.tiksta_order_id) {
+    if (orderIdInfo.type === 'uuid' && !order.smmcost_order_id && !order.jbsmmpanel_order_id && !order.smmgen_order_id && !order.worldofsmm_order_id && !order.g1618_order_id && !order.oldsmm_order_id && !order.apiowner_order_id && !order.tiksta_order_id && !order.smmraja_order_id) {
       return 'order not placed';
     }
     return orderIdInfo.id;
@@ -106,6 +110,8 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
     String(order.apiowner_order_id).toLowerCase() !== "order not placed at apiowner";
   const hasTiksta = order.tiksta_order_id &&
     String(order.tiksta_order_id).toLowerCase() !== "order not placed at tiksta";
+  const hasSmmRaja = order.smmraja_order_id &&
+    String(order.smmraja_order_id).toLowerCase() !== "order not placed at smmraja";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -127,6 +133,9 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
                   <p className="text-2xl sm:text-3xl font-bold text-indigo-600 font-mono">
                     {orderIdDisplay}
                   </p>
+                  {orderIdInfo.type === 'smmraja' && (
+                    <p className="text-xs text-gray-500 mt-1">SMM Raja Order ID</p>
+                  )}
                   {orderIdInfo.type === 'tiksta' && (
                     <p className="text-xs text-gray-500 mt-1">Tiksta Order ID</p>
                   )}
@@ -287,14 +296,20 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
                     <span className="text-sm font-mono font-bold text-gray-900">{order.tiksta_order_id}</span>
                   </div>
                 )}
-                {(hasSmmcost || hasJbsmmpanel || hasSmmgen || hasWorldofsmm || hasG1618 || hasOldSmm || hasApiOwner || hasTiksta) &&
-                  ([hasSmmcost, hasJbsmmpanel, hasSmmgen, hasWorldofsmm, hasG1618, hasOldSmm, hasApiOwner, hasTiksta].filter(Boolean).length > 1) && (
+                {hasSmmRaja && (
+                  <div className="flex items-center justify-between p-2 bg-amber-50 rounded-lg">
+                    <span className="text-sm font-medium text-gray-700">SMM Raja:</span>
+                    <span className="text-sm font-mono font-bold text-gray-900">{order.smmraja_order_id}</span>
+                  </div>
+                )}
+                {(hasSmmcost || hasJbsmmpanel || hasSmmgen || hasWorldofsmm || hasG1618 || hasOldSmm || hasApiOwner || hasTiksta || hasSmmRaja) &&
+                  ([hasSmmcost, hasJbsmmpanel, hasSmmgen, hasWorldofsmm, hasG1618, hasOldSmm, hasApiOwner, hasTiksta, hasSmmRaja].filter(Boolean).length > 1) && (
                     <div className="flex items-center justify-between p-2 bg-purple-50 rounded-lg">
                       <span className="text-sm font-medium text-gray-700">Multiple panels active</span>
-                      <span className="text-xs text-gray-500">Tiksta &gt; ApiOwner &gt; OldSMM &gt; G1618 &gt; WorldOfSMM priority</span>
+                      <span className="text-xs text-gray-500">SMM Raja &gt; Tiksta &gt; ApiOwner &gt; OldSMM &gt; G1618 &gt; WorldOfSMM priority</span>
                     </div>
                   )}
-                {!hasSmmcost && !hasJbsmmpanel && !hasSmmgen && !hasWorldofsmm && !hasG1618 && !hasOldSmm && !hasApiOwner && !hasTiksta && (
+                {!hasSmmcost && !hasJbsmmpanel && !hasSmmgen && !hasWorldofsmm && !hasG1618 && !hasOldSmm && !hasApiOwner && !hasTiksta && !hasSmmRaja && (
                   <div className="flex items-center gap-2 p-2 bg-red-50 rounded-lg">
                     <AlertCircle className="w-4 h-4 text-red-500" />
                     <span className="text-sm text-red-600 italic font-medium">order not placed</span>
