@@ -135,7 +135,7 @@ export default async function handler(req, res) {
                     const componentIds = service.combo_service_ids.map(item => typeof item === 'object' && item !== null ? item.id : item);
                     const { data: compServices, error: compErr } = await supabase
                         .from('services')
-                        .select('id, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id')
+                        .select('id, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id, tiksta_service_id')
                         .in('id', componentIds);
 
                     if (!compErr && compServices) {
@@ -164,6 +164,9 @@ export default async function handler(req, res) {
                             } else if (s.apiowner_service_id) {
                                 compProvider = 'apiowner';
                                 compProviderId = s.apiowner_service_id;
+                            } else if (s.tiksta_service_id) {
+                                compProvider = 'tiksta';
+                                compProviderId = s.tiksta_service_id;
                             }
 
                             if (compProvider && compProviderId) {
@@ -197,6 +200,9 @@ export default async function handler(req, res) {
                 } else if (service.apiowner_service_id) {
                     provider = 'apiowner';
                     provider_service_id = service.apiowner_service_id;
+                } else if (service.tiksta_service_id) {
+                    provider = 'tiksta';
+                    provider_service_id = service.tiksta_service_id;
                 }
 
                 if (provider && provider_service_id) {
@@ -267,6 +273,9 @@ export default async function handler(req, res) {
             } else if (pkg.apiowner_service_id) {
                 provider = 'apiowner';
                 provider_service_id = pkg.apiowner_service_id;
+            } else if (pkg.tiksta_service_id) {
+                provider = 'tiksta';
+                provider_service_id = pkg.tiksta_service_id;
             }
 
             if (provider && provider_service_id) {
@@ -424,6 +433,7 @@ export default async function handler(req, res) {
                     if (p === 'g1618')      updateData.g1618_order_id      = pid;
                     if (p === 'oldsmm')     updateData.oldsmm_order_id     = pid;
                     if (p === 'apiowner')   updateData.apiowner_order_id   = pid;
+                    if (p === 'tiksta')     updateData.tiksta_order_id     = pid;
                 }
             }
 
@@ -441,7 +451,7 @@ export default async function handler(req, res) {
 
             // Update transaction description with provider order ID
             try {
-                const primaryProviderOrderId = updateData.oldsmm_order_id || updateData.apiowner_order_id || updateData.smmgen_order_id || updateData.smmcost_order_id || updateData.jbsmmpanel_order_id || updateData.worldofsmm_order_id || updateData.g1618_order_id;
+                const primaryProviderOrderId = updateData.oldsmm_order_id || updateData.apiowner_order_id || updateData.tiksta_order_id || updateData.smmgen_order_id || updateData.smmcost_order_id || updateData.jbsmmpanel_order_id || updateData.worldofsmm_order_id || updateData.g1618_order_id;
                 if (primaryProviderOrderId) {
                     await supabase.from('transactions').update({
                         description: `Order #${primaryProviderOrderId} (${serviceItemName})`
@@ -691,6 +701,11 @@ async function getProviderApiConfig(provider) {
         apiowner: {
             url: await getConfig('APIOWNER_API_URL', 'https://apiowner.com/api/v2'),
             key: await getConfig('APIOWNER_API_KEY'),
+            useJson: false,
+        },
+        tiksta: {
+            url: await getConfig('TIKSTA_API_URL', 'https://tiksta.com/api/v2'),
+            key: await getConfig('TIKSTA_API_KEY'),
             useJson: false,
         },
     };

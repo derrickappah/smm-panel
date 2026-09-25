@@ -15,7 +15,8 @@ import {
     mapWorldOfSMMStatus,
     mapG1618Status,
     mapOldSMMStatus,
-    mapApiOwnerStatus
+    mapApiOwnerStatus,
+    mapTikstaStatus
 } from './utils/statusMapping.js';
 import { setCorsHeaders } from './utils/corsHeaders.js';
 import { calculatePackageComboRefund } from './utils/comboRefundHelper.js';
@@ -188,7 +189,8 @@ export default async function handler(req, res) {
             worldofsmm: orders.filter(o => o.worldofsmm_order_id && o.worldofsmm_order_id !== "order not placed at worldofsmm"),
             g1618: orders.filter(o => o.g1618_order_id && o.g1618_order_id !== "order not placed at g1618"),
             oldsmm: orders.filter(o => o.oldsmm_order_id && o.oldsmm_order_id !== "order not placed at oldsmm"),
-            apiowner: orders.filter(o => o.apiowner_order_id && o.apiowner_order_id !== "order not placed at apiowner")
+            apiowner: orders.filter(o => o.apiowner_order_id && o.apiowner_order_id !== "order not placed at apiowner"),
+            tiksta: orders.filter(o => o.tiksta_order_id && o.tiksta_order_id !== "order not placed at tiksta")
         };
 
         const results = {
@@ -356,7 +358,8 @@ export default async function handler(req, res) {
             worldofsmmUrl, worldofsmmKey,
             g1618Url, g1618Key,
             oldsmmUrl, oldsmmKey,
-            apiownerUrl, apiownerKey
+            apiownerUrl, apiownerKey,
+            tikstaUrl, tikstaKey
         ] = await Promise.all([
             getConfig('SMMGEN_API_URL', 'https://smmgen.com/api/v2'),
             getConfig('SMMGEN_API_KEY'),
@@ -371,7 +374,9 @@ export default async function handler(req, res) {
             getConfig('OLDSMM_API_URL', 'https://oldsmm.com/api/v2'),
             getConfig('OLDSMM_API_KEY'),
             getConfig('APIOWNER_API_URL', 'https://apiowner.com/api/v2'),
-            getConfig('APIOWNER_API_KEY')
+            getConfig('APIOWNER_API_KEY'),
+            getConfig('TIKSTA_API_URL', 'https://tiksta.com/api/v2'),
+            getConfig('TIKSTA_API_KEY')
         ]);
 
         // 5-11. Process all providers in parallel batches
@@ -382,7 +387,8 @@ export default async function handler(req, res) {
             processProviderBatch('worldofsmm', groups.worldofsmm, worldofsmmUrl, worldofsmmKey, mapWorldOfSMMStatus, 'worldofsmm_order_id'),
             processProviderBatch('g1618', groups.g1618, g1618Url, g1618Key, mapG1618Status, 'g1618_order_id'),
             processProviderBatch('oldsmm', groups.oldsmm, oldsmmUrl, oldsmmKey, mapOldSMMStatus, 'oldsmm_order_id'),
-            processProviderBatch('apiowner', groups.apiowner, apiownerUrl, apiownerKey, mapApiOwnerStatus, 'apiowner_order_id')
+            processProviderBatch('apiowner', groups.apiowner, apiownerUrl, apiownerKey, mapApiOwnerStatus, 'apiowner_order_id'),
+            processProviderBatch('tiksta', groups.tiksta, tikstaUrl, tikstaKey, mapTikstaStatus, 'tiksta_order_id')
         ]);
 
         return res.status(200).json({ success: true, ...results });

@@ -197,3 +197,34 @@ export const mapApiOwnerStatus = (apiownerStatus) => {
     return null;
 };
 
+/**
+ * Map Tiksta status to our status format
+ * @param {string} tikstaStatus - Status from Tiksta API
+ * @returns {string|null} Mapped status or null if unknown
+ */
+export const mapTikstaStatus = (tikstaStatus) => {
+    if (tikstaStatus === null || tikstaStatus === undefined) return null;
+
+    const statusString = String(tikstaStatus).trim();
+    if (!statusString) return null;
+
+    const statusLower = statusString.toLowerCase();
+
+    if (statusLower === 'pending') return 'pending';
+    if (statusLower === 'in progress' || statusLower === 'in-progress' || statusLower === 'inprogress') return 'in progress';
+    if (statusLower === 'completed' || statusLower === 'complete') return 'completed';
+    if (statusLower === 'partial') return 'partial';
+    if (statusLower === 'processing' || statusLower === 'process') return 'processing';
+    if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower === 'cancel') return 'canceled';
+    if (statusLower === 'refunds' || statusLower === 'refunded' || statusLower === 'refund') return 'refunded';
+
+    if (statusLower.includes('in progress') || statusLower.includes('in-progress')) return 'in progress';
+    if (statusLower.includes('completed') || statusLower.includes('complete')) return 'completed';
+    if (statusLower.includes('partial')) return 'partial';
+    if (statusLower.includes('processing') || statusLower.includes('process')) return 'processing';
+    if (statusLower.includes('cancel')) return 'canceled';
+    if (statusLower.includes('refund')) return 'refunded';
+    if (statusLower.includes('pending')) return 'pending';
+
+    return null;
+};

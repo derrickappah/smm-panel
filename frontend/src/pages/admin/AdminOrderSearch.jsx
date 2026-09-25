@@ -29,7 +29,8 @@ const buildSearchConditions = (trimmedSearch, searchMode = 'all') => {
     `worldofsmm_order_id.ilike.${searchPattern}`,
     `g1618_order_id.ilike.${searchPattern}`,
     `oldsmm_order_id.ilike.${searchPattern}`,
-    `apiowner_order_id.ilike.${searchPattern}`
+    `apiowner_order_id.ilike.${searchPattern}`,
+    `tiksta_order_id.ilike.${searchPattern}`
   ];
 
   if (searchMode === 'all' || searchMode === 'link') {
@@ -94,7 +95,7 @@ const executeInstantOrderSearch = async ({ searchTerm, searchMode = 'all', statu
     .select(`
       id, user_id, service_id, promotion_package_id, link, quantity, total_cost, 
       status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, 
-      g1618_order_id, oldsmm_order_id, apiowner_order_id, component_provider_order_ids, 
+      g1618_order_id, oldsmm_order_id, apiowner_order_id, tiksta_order_id, component_provider_order_ids, 
       created_at, completed_at, refund_status, last_status_check, is_reward,
       services(name, platform, service_type, is_combo), 
       promotion_packages(name, platform, service_type, is_combo), 
@@ -188,7 +189,7 @@ const executeInstantOrderSearch = async ({ searchTerm, searchMode = 'all', statu
         .select(`
           id, user_id, service_id, promotion_package_id, link, quantity, total_cost, 
           status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, 
-          g1618_order_id, oldsmm_order_id, apiowner_order_id, component_provider_order_ids, 
+          g1618_order_id, oldsmm_order_id, apiowner_order_id, tiksta_order_id, component_provider_order_ids, 
           created_at, completed_at, refund_status, last_status_check, is_reward,
           services(name, platform, service_type, is_combo), 
           promotion_packages(name, platform, service_type, is_combo), 
@@ -325,6 +326,7 @@ const AdminOrderSearch = memo(({ refreshing = false }) => {
     const isG1618 = String(order.g1618_order_id || '').toLowerCase().includes(clean);
     const isOldSMM = String(order.oldsmm_order_id || '').toLowerCase().includes(clean);
     const isApiOwner = String(order.apiowner_order_id || '').toLowerCase().includes(clean);
+    const isTiksta = String(order.tiksta_order_id || '').toLowerCase().includes(clean);
 
     if (isExactUuid) return <span className="bg-indigo-600 text-white text-[10px] px-2 py-0.5 rounded font-mono font-bold">MATCH: SYSTEM UUID</span>;
     if (isJb) return <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded font-mono font-bold">MATCH: JB PANEL ID ({order.jbsmmpanel_order_id})</span>;
@@ -334,6 +336,7 @@ const AdminOrderSearch = memo(({ refreshing = false }) => {
     if (isG1618) return <span className="bg-orange-600 text-white text-[10px] px-2 py-0.5 rounded font-mono font-bold">MATCH: G1618 ID</span>;
     if (isOldSMM) return <span className="bg-teal-600 text-white text-[10px] px-2 py-0.5 rounded font-mono font-bold">MATCH: OLDSMM ID</span>;
     if (isApiOwner) return <span className="bg-rose-600 text-white text-[10px] px-2 py-0.5 rounded font-mono font-bold">MATCH: APIOWNER ID</span>;
+    if (isTiksta) return <span className="bg-sky-600 text-white text-[10px] px-2 py-0.5 rounded font-mono font-bold">MATCH: TIKSTA ID</span>;
 
     if (order.profiles?.email?.toLowerCase().includes(clean)) return <span className="bg-gray-700 text-white text-[10px] px-2 py-0.5 rounded font-mono">MATCH: USER EMAIL</span>;
     if (order.link?.toLowerCase().includes(clean)) return <span className="bg-gray-700 text-white text-[10px] px-2 py-0.5 rounded font-mono">MATCH: LINK/URL</span>;
@@ -641,7 +644,13 @@ const AdminOrderSearch = memo(({ refreshing = false }) => {
                             <span className="font-bold text-rose-800 truncate max-w-[140px]">{order.apiowner_order_id}</span>
                           </div>
                         )}
-                        {!order.jbsmmpanel_order_id && !order.smmgen_order_id && !order.smmcost_order_id && !order.apiowner_order_id && (
+                        {order.tiksta_order_id && (
+                          <div className="flex items-center justify-between bg-sky-50 px-2 py-1 rounded border border-sky-200">
+                            <span className="text-sky-900 font-semibold">Tiksta:</span>
+                            <span className="font-bold text-sky-800 truncate max-w-[140px]">{order.tiksta_order_id}</span>
+                          </div>
+                        )}
+                        {!order.jbsmmpanel_order_id && !order.smmgen_order_id && !order.smmcost_order_id && !order.apiowner_order_id && !order.tiksta_order_id && (
                           <span className="text-gray-400 italic">No provider ID</span>
                         )}
                       </div>

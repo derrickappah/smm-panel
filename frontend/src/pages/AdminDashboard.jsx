@@ -44,6 +44,7 @@ const AdminWorldOfSMM = lazy(() => import('@/pages/admin/AdminWorldOfSMM'));
 const AdminG1618 = lazy(() => import('@/pages/admin/AdminG1618'));
 const AdminOldSMM = lazy(() => import('@/pages/admin/AdminOldSMM'));
 const AdminApiOwner = lazy(() => import('@/pages/admin/AdminApiOwner'));
+const AdminTiksta = lazy(() => import('@/pages/admin/AdminTiksta'));
 const AdminMoolre = lazy(() => import('@/pages/admin/AdminMoolre'));
 const AdminFAQ = lazy(() => import('@/pages/admin/AdminFAQ'));
 const AdminTerms = lazy(() => import('@/pages/admin/AdminTerms'));
@@ -117,6 +118,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
         'g1618': 'g1618',
         'oldsmm': 'oldsmm',
         'apiowner': 'apiowner',
+        'tiksta': 'tiksta',
         'moolre': 'moolre',
         'faq': 'faq',
         'terms': 'terms',
@@ -370,6 +372,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     g1618: 'G1618 Integration',
     oldsmm: 'OldSMM Integration',
     apiowner: 'ApiOwner Integration',
+    tiksta: 'Tiksta Integration',
     moolre: 'Moolre Transactions',
     rewards: 'Reward Claims',
     'rewards-settings': 'Reward Settings',
@@ -412,6 +415,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     { id: 'g1618', label: 'G1618', icon: Server },
     { id: 'oldsmm', label: 'OldSMM', icon: Server },
     { id: 'apiowner', label: 'ApiOwner', icon: Server },
+    { id: 'tiksta', label: 'Tiksta', icon: Server },
     { id: 'moolre', label: 'Moolre', icon: CreditCard },
     { id: 'rewards', label: 'Rewards', icon: Gift },
     { id: 'rewards-settings', label: 'Reward Settings', icon: Settings },
@@ -912,6 +916,13 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                 <TabsContent value="apiowner" className="lg:mt-0">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminApiOwner />
+                  </Suspense>
+                </TabsContent>
+
+                {/* Tiksta Section */}
+                <TabsContent value="tiksta" className="lg:mt-0">
+                  <Suspense fallback={<ComponentLoader />}>
+                    <AdminTiksta />
                   </Suspense>
                 </TabsContent>
 
