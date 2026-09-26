@@ -208,7 +208,7 @@ export async function resolveDevice(req, res = null, options = {}) {
   const banCacheKey = `smm:device:${deviceHash}:banned`;
   let isBannedCached = await getCached(banCacheKey);
 
-  if (isBannedCached === 'true') {
+  if (isBannedCached === true || isBannedCached === 'true') {
     return {
       deviceId,
       deviceHash,

@@ -124,7 +124,7 @@ export async function verifyAuth(req) {
     }
   }
 
-  if (isBanned === 'true') {
+  if (isBanned === true || isBanned === 'true') {
     throw new Error('Account suspended: Your account has been banned. Please contact support if you believe this is an error.');
   }
 

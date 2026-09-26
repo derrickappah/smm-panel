@@ -36,7 +36,14 @@ async function getCached(key) {
   try {
     const data = await redis.get(key);
     if (data === null || data === undefined) return null;
-    return typeof data === 'string' ? JSON.parse(data) : data;
+    if (typeof data === 'string') {
+      try {
+        return JSON.parse(data);
+      } catch {
+        return data; // Return plain string as-is if not valid JSON
+      }
+    }
+    return data;
   } catch (err) {
     console.error(`[REDIS ERROR] getCached(${key}):`, err.message);
     return null;
