@@ -8,6 +8,7 @@ import {
   Eye, MessageCircle, Share2, UserCheck, Activity, Bell, Tag, AlertTriangle, Loader2
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import ProviderBalancesRow from '@/components/admin/ProviderBalancesRow';
 
 const AdminStats = memo(({ 
   dateRangeStart, 
@@ -428,6 +429,9 @@ const AdminStats = memo(({
           </p>
         </div>
       </div>
+
+      {/* External SMM Provider Balances Row */}
+      <ProviderBalancesRow onSectionChange={handleSectionClick} />
 
       {/* Service Type Stats Cards */}
       <div className="mt-6">
