@@ -20,7 +20,8 @@ import {
     mapOldSMMStatus,
     mapApiOwnerStatus,
     mapTikstaStatus,
-    mapSmmRajaStatus
+    mapSmmRajaStatus,
+    mapSmmTakeStatus
 } from '../utils/statusMapping.js';
 import { setCorsHeaders } from '../utils/corsHeaders.js';
 
@@ -146,7 +147,7 @@ export default async function handler(req, res) {
         // 1. Fetch all unfinalized orders
         const { data: orders, error: fetchError } = await supabase
             .from('orders')
-            .select('id, status, oldsmm_order_id, apiowner_order_id, tiksta_order_id, smmraja_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, smmgen_order_id, quantity, total_cost, completed_at, created_at')
+            .select('id, status, oldsmm_order_id, apiowner_order_id, tiksta_order_id, smmraja_order_id, smmtake_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, smmgen_order_id, quantity, total_cost, completed_at, created_at')
             .in('status', ['pending', 'processing', 'in progress'])
             .order('created_at', { ascending: false });
 
@@ -172,6 +173,7 @@ export default async function handler(req, res) {
             apiowner: orders.filter(o => o.apiowner_order_id && String(o.apiowner_order_id).trim() !== '' && !String(o.apiowner_order_id).toLowerCase().startsWith('order not placed')),
             tiksta: orders.filter(o => o.tiksta_order_id && String(o.tiksta_order_id).trim() !== '' && !String(o.tiksta_order_id).toLowerCase().startsWith('order not placed')),
             smmraja: orders.filter(o => o.smmraja_order_id && String(o.smmraja_order_id).trim() !== '' && !String(o.smmraja_order_id).toLowerCase().startsWith('order not placed')),
+            smmtake: orders.filter(o => o.smmtake_order_id && String(o.smmtake_order_id).trim() !== '' && !String(o.smmtake_order_id).toLowerCase().startsWith('order not placed')),
             smmcost: orders.filter(o => o.smmcost_order_id && String(o.smmcost_order_id).trim() !== '' && !String(o.smmcost_order_id).toLowerCase().startsWith('order not placed')),
             jbsmmpanel: orders.filter(o => o.jbsmmpanel_order_id && Number(o.jbsmmpanel_order_id) > 0),
             worldofsmm: orders.filter(o => o.worldofsmm_order_id && String(o.worldofsmm_order_id).trim() !== '' && !String(o.worldofsmm_order_id).toLowerCase().startsWith('order not placed')),
@@ -185,6 +187,7 @@ export default async function handler(req, res) {
             apiownerUrl, apiownerKey,
             tikstaUrl, tikstaKey,
             smmrajaUrl, smmrajaKey,
+            smmtakeUrl, smmtakeKey,
             smmcostUrl, smmcostKey,
             jbsmmpanelUrl, jbsmmpanelKey,
             worldofsmmUrl, worldofsmmKey,
@@ -199,6 +202,8 @@ export default async function handler(req, res) {
             getConfig('TIKSTA_API_KEY'),
             getConfig('SMMRAJA_API_URL', 'https://www.smmraja.com/api/v3'),
             getConfig('SMMRAJA_API_KEY'),
+            getConfig('SMMTAKE_API_URL', 'https://smmtake.com/api/v2'),
+            getConfig('SMMTAKE_API_KEY'),
             getConfig('SMMCOST_API_URL', 'https://api.smmcost.com'),
             getConfig('SMMCOST_API_KEY'),
             getConfig('JBSMMPANEL_API_URL', 'https://jbsmmpanel.com/api/v2'),
@@ -334,6 +339,7 @@ export default async function handler(req, res) {
             processBatch('apiowner', groups.apiowner, apiownerUrl, apiownerKey, mapApiOwnerStatus, 'apiowner_order_id'),
             processBatch('tiksta', groups.tiksta, tikstaUrl, tikstaKey, mapTikstaStatus, 'tiksta_order_id'),
             processBatch('smmraja', groups.smmraja, smmrajaUrl, smmrajaKey, mapSmmRajaStatus, 'smmraja_order_id'),
+            processBatch('smmtake', groups.smmtake, smmtakeUrl, smmtakeKey, mapSmmTakeStatus, 'smmtake_order_id'),
             processBatch('smmcost', groups.smmcost, smmcostUrl, smmcostKey, mapSMMCostStatus, 'smmcost_order_id', true),
             processBatch('jbsmmpanel', groups.jbsmmpanel, jbsmmpanelUrl, jbsmmpanelKey, mapJBSMMPanelStatus, 'jbsmmpanel_order_id'),
             processBatch('worldofsmm', groups.worldofsmm, worldofsmmUrl, worldofsmmKey, mapWorldOfSMMStatus, 'worldofsmm_order_id'),

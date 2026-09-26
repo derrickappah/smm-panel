@@ -7,8 +7,17 @@ const REQUEST_TIMEOUT = 12000; // 12 seconds per provider
 const SUMMARY_CACHE_KEY = 'admin:provider_balances:summary';
 const SUMMARY_CACHE_TTL = 120; // 2 minutes
 
-// Definition of all 9 external SMM providers
+// Definition of all 10 external SMM providers
 const PROVIDERS = [
+  {
+    id: 'smmtake',
+    name: 'SMM Take',
+    tab: 'smmtake',
+    urlKey: 'SMMTAKE_API_URL',
+    defaultUrl: 'https://smmtake.com/api/v2',
+    keyKey: 'SMMTAKE_API_KEY',
+    format: 'form'
+  },
   {
     id: 'smmraja',
     name: 'SMM Raja',

@@ -268,6 +268,38 @@ const mapSMMRajaStatus = (smmrajaStatus) => {
 };
 
 /**
+ * Map SMM Take status to our status format
+ * @param {string} smmtakeStatus - Status from SMM Take API
+ * @returns {string|null} Mapped status or null if unknown
+ */
+const mapSMMTakeStatus = (smmtakeStatus) => {
+  if (smmtakeStatus === null || smmtakeStatus === undefined) return null;
+
+  const statusString = String(smmtakeStatus).trim();
+  if (!statusString) return null;
+
+  const statusLower = statusString.toLowerCase();
+
+  if (statusLower === 'pending') return 'pending';
+  if (statusLower === 'in progress' || statusLower === 'in-progress' || statusLower === 'inprogress') return 'in progress';
+  if (statusLower === 'completed' || statusLower === 'complete') return 'completed';
+  if (statusLower === 'partial') return 'partial';
+  if (statusLower === 'processing' || statusLower === 'process') return 'processing';
+  if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower === 'cancel') return 'canceled';
+  if (statusLower === 'refunds' || statusLower === 'refunded' || statusLower === 'refund') return 'refunded';
+
+  if (statusLower.includes('in progress') || statusLower.includes('in-progress')) return 'in progress';
+  if (statusLower.includes('completed') || statusLower.includes('complete')) return 'completed';
+  if (statusLower.includes('partial')) return 'partial';
+  if (statusLower.includes('processing') || statusLower.includes('process')) return 'processing';
+  if (statusLower.includes('cancel')) return 'canceled';
+  if (statusLower.includes('refund')) return 'refunded';
+  if (statusLower.includes('pending')) return 'pending';
+
+  return null;
+};
+
+/**
  * Check if an order should be checked for status updates
  * @param {Object} order - Order object
  * @param {number} minIntervalMinutes - Minimum minutes since last check (default: 5)
@@ -292,6 +324,7 @@ export const shouldCheckOrder = (order, minIntervalMinutes = 5) => {
   const hasApiOwnerId = order.apiowner_order_id && String(order.apiowner_order_id).toLowerCase() !== "order not placed at apiowner";
   const hasTikstaId = order.tiksta_order_id && String(order.tiksta_order_id).toLowerCase() !== "order not placed at tiksta";
   const hasSmmRajaId = order.smmraja_order_id && String(order.smmraja_order_id).toLowerCase() !== "order not placed at smmraja";
+  const hasSmmTakeId = order.smmtake_order_id && String(order.smmtake_order_id).toLowerCase() !== "order not placed at smmtake";
 
   // Debug logging for JB SMM Panel orders
   if (jbsmmpanelId) {
@@ -314,7 +347,7 @@ export const shouldCheckOrder = (order, minIntervalMinutes = 5) => {
   }
 
   // Skip if no valid order ID from any panel
-  if (!hasSmmgenId && !hasSmmcostId && !hasJbsmmpanelId && !hasWorldofsmmId && !hasG1618Id && !hasOldSmmId && !hasApiOwnerId && !hasTikstaId && !hasSmmRajaId) {
+  if (!hasSmmgenId && !hasSmmcostId && !hasJbsmmpanelId && !hasWorldofsmmId && !hasG1618Id && !hasOldSmmId && !hasApiOwnerId && !hasTikstaId && !hasSmmRajaId && !hasSmmTakeId) {
     if (jbsmmpanelId) {
       console.log('[orderStatusCheck] shouldCheckOrder - Skipping JB SMM Panel order (no valid ID):', {
         orderId: order.id,
@@ -440,8 +473,9 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
     const hasApiOwnerId = order.apiowner_order_id && String(order.apiowner_order_id).toLowerCase() !== "order not placed at apiowner";
     const hasTikstaId = order.tiksta_order_id && String(order.tiksta_order_id).toLowerCase() !== "order not placed at tiksta";
     const hasSmmRajaId = order.smmraja_order_id && String(order.smmraja_order_id).toLowerCase() !== "order not placed at smmraja";
+    const hasSmmTakeId = order.smmtake_order_id && String(order.smmtake_order_id).toLowerCase() !== "order not placed at smmtake";
 
-    // Prioritize: SMM Raja > Tiksta > ApiOwner > WorldOfSMM > SMMCost > JB SMM Panel > G1618 > OldSMM > SMMGen
+    // Prioritize: SMM Raja > SMM Take > Tiksta > ApiOwner > WorldOfSMM > SMMCost > JB SMM Panel > G1618 > OldSMM > SMMGen
     if (hasSmmRajaId) {
       // Get status from SMM Raja
       const { getSmmRajaStatus } = await import('./smmraja');
@@ -449,6 +483,13 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
       const smmrajaStatus = statusData?.status || statusData?.Status;
       mappedStatus = mapSMMRajaStatus(smmrajaStatus);
       panelSource = 'smmraja';
+    } else if (hasSmmTakeId) {
+      // Get status from SMM Take
+      const { getSmmTakeStatus } = await import('./smmtake');
+      statusData = await getSmmTakeStatus(order.smmtake_order_id);
+      const smmtakeStatus = statusData?.status || statusData?.Status;
+      mappedStatus = mapSMMTakeStatus(smmtakeStatus);
+      panelSource = 'smmtake';
     } else if (hasTikstaId) {
       // Get status from Tiksta
       const { getTikstaStatus } = await import('./tiksta');
@@ -754,6 +795,7 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
       apiownerOrderId: order.apiowner_order_id,
       tikstaOrderId: order.tiksta_order_id,
       smmrajaOrderId: order.smmraja_order_id,
+      smmtakeOrderId: order.smmtake_order_id,
       panelSource: panelSource || 'unknown'
     });
     result.error = error.message;
@@ -875,7 +917,8 @@ export const checkOrdersStatusBatch = async (orders, options = {}) => {
         const hasApiOwnerId = order.apiowner_order_id && String(order.apiowner_order_id).toLowerCase() !== "order not placed at apiowner";
         const hasTikstaId = order.tiksta_order_id && String(order.tiksta_order_id).toLowerCase() !== "order not placed at tiksta";
         const hasSmmRajaId = order.smmraja_order_id && String(order.smmraja_order_id).toLowerCase() !== "order not placed at smmraja";
-        const hasValidId = hasSmmgenId || hasSmmcostId || hasJbsmmpanelId || hasWorldofsmmId || hasG1618Id || hasOldSmmId || hasApiOwnerId || hasTikstaId || hasSmmRajaId;
+        const hasSmmTakeId = order.smmtake_order_id && String(order.smmtake_order_id).toLowerCase() !== "order not placed at smmtake";
+        const hasValidId = hasSmmgenId || hasSmmcostId || hasJbsmmpanelId || hasWorldofsmmId || hasG1618Id || hasOldSmmId || hasApiOwnerId || hasTikstaId || hasSmmRajaId || hasSmmTakeId;
         const isCompleted = order.status === 'completed' || order.status === 'refunded';
         const recentlyChecked = minIntervalMinutes > 0 && order.last_status_check &&
           (new Date() - new Date(order.last_status_check)) / (1000 * 60) < minIntervalMinutes;
@@ -892,6 +935,7 @@ export const checkOrdersStatusBatch = async (orders, options = {}) => {
           hasApiOwnerId,
           hasTikstaId,
           hasSmmRajaId,
+          hasSmmTakeId,
           jbsmmpanel_order_id: order.jbsmmpanel_order_id,
           worldofsmm_order_id: order.worldofsmm_order_id,
           g1618_order_id: order.g1618_order_id,
@@ -899,6 +943,7 @@ export const checkOrdersStatusBatch = async (orders, options = {}) => {
           apiowner_order_id: order.apiowner_order_id,
           tiksta_order_id: order.tiksta_order_id,
           smmraja_order_id: order.smmraja_order_id,
+          smmtake_order_id: order.smmtake_order_id,
           isCompleted,
           recentlyChecked,
           status: order.status,
@@ -1045,8 +1090,9 @@ export const checkOrdersStatusBatch = async (orders, options = {}) => {
     const hasApiOwnerId = order.apiowner_order_id && String(order.apiowner_order_id).toLowerCase() !== "order not placed at apiowner";
     const hasTikstaId = order.tiksta_order_id && String(order.tiksta_order_id).toLowerCase() !== "order not placed at tiksta";
     const hasSmmRajaId = order.smmraja_order_id && String(order.smmraja_order_id).toLowerCase() !== "order not placed at smmraja";
+    const hasSmmTakeId = order.smmtake_order_id && String(order.smmtake_order_id).toLowerCase() !== "order not placed at smmtake";
     return !shouldCheckOrder(order, minIntervalMinutes) &&
-      (hasSmmgenId || hasSmmcostId || hasJbsmmpanelId || hasWorldofsmmId || hasG1618Id || hasOldSmmId || hasApiOwnerId || hasTikstaId || hasSmmRajaId) &&
+      (hasSmmgenId || hasSmmcostId || hasJbsmmpanelId || hasWorldofsmmId || hasG1618Id || hasOldSmmId || hasApiOwnerId || hasTikstaId || hasSmmRajaId || hasSmmTakeId) &&
       order.status !== 'completed' &&
       order.status !== 'refunded';
   });

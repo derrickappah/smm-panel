@@ -48,6 +48,7 @@ const AdminPromotionPackages = memo(() => {
     apiowner_service_id: '',
     tiksta_service_id: '',
     smmraja_service_id: '',
+    smmtake_service_id: '',
     url_type: '',
     enabled: true,
     display_order: '0',
@@ -87,6 +88,7 @@ const AdminPromotionPackages = memo(() => {
         apiowner_service_id: packageForm.apiowner_service_id || null,
         tiksta_service_id: packageForm.tiksta_service_id || null,
         smmraja_service_id: packageForm.smmraja_service_id || null,
+        smmtake_service_id: packageForm.smmtake_service_id || null,
         url_type: packageForm.url_type || null,
         enabled: Boolean(packageForm.enabled !== false),
         display_order: parseInt(packageForm.display_order) || 0,
@@ -115,6 +117,7 @@ const AdminPromotionPackages = memo(() => {
         apiowner_service_id: '',
         tiksta_service_id: '',
         smmraja_service_id: '',
+        smmtake_service_id: '',
         url_type: '',
         enabled: true,
         display_order: '0',
@@ -467,6 +470,14 @@ const AdminPromotionPackages = memo(() => {
                 onChange={(e) => setPackageForm({ ...packageForm, smmraja_service_id: e.target.value })}
               />
             </div>
+            <div>
+              <Label>SMM Take ID</Label>
+              <Input
+                placeholder="SMM Take ID"
+                value={packageForm.smmtake_service_id}
+                onChange={(e) => setPackageForm({ ...packageForm, smmtake_service_id: e.target.value })}
+              />
+            </div>
           </div>
 
           {/* Combo Package Options */}
@@ -711,6 +722,7 @@ const AdminPromotionPackages = memo(() => {
                         {pkg.apiowner_service_id && <p><span className="font-medium">ApiOwner ID:</span> {pkg.apiowner_service_id}</p>}
                         {pkg.tiksta_service_id && <p><span className="font-medium">Tiksta ID:</span> {pkg.tiksta_service_id}</p>}
                         {pkg.smmraja_service_id && <p><span className="font-medium">SMM Raja ID:</span> {pkg.smmraja_service_id}</p>}
+                        {pkg.smmtake_service_id && <p><span className="font-medium">SMM Take ID:</span> {pkg.smmtake_service_id}</p>}
                         {pkg.url_type && (
                           <p>
                             <span className="font-medium">URL Type:</span>{' '}
@@ -782,6 +794,7 @@ const PackageEditForm = ({ pkg, onSave, onCancel, packages = [] }) => {
     apiowner_service_id: pkg.apiowner_service_id || '',
     tiksta_service_id: pkg.tiksta_service_id || '',
     smmraja_service_id: pkg.smmraja_service_id || '',
+    smmtake_service_id: pkg.smmtake_service_id || '',
     url_type: pkg.url_type || '',
     enabled: pkg.enabled === true,
     display_order: pkg.display_order || 0,
@@ -808,6 +821,7 @@ const PackageEditForm = ({ pkg, onSave, onCancel, packages = [] }) => {
       apiowner_service_id: formData.apiowner_service_id || null,
       tiksta_service_id: formData.tiksta_service_id || null,
       smmraja_service_id: formData.smmraja_service_id || null,
+      smmtake_service_id: formData.smmtake_service_id || null,
       url_type: formData.url_type || null,
       enabled: Boolean(formData.enabled !== false),
       display_order: parseInt(formData.display_order) || 0,
@@ -1002,6 +1016,14 @@ const PackageEditForm = ({ pkg, onSave, onCancel, packages = [] }) => {
             className="h-8 text-xs"
             value={formData.smmraja_service_id}
             onChange={(e) => setFormData({ ...formData, smmraja_service_id: e.target.value })}
+          />
+        </div>
+        <div>
+          <Label className="text-xs">SMM Take ID</Label>
+          <Input
+            className="h-8 text-xs"
+            value={formData.smmtake_service_id}
+            onChange={(e) => setFormData({ ...formData, smmtake_service_id: e.target.value })}
           />
         </div>
       </div>

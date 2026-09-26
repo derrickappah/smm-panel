@@ -46,6 +46,7 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
     apiowner_service_id: service.apiowner_service_id || '',
     tiksta_service_id: service.tiksta_service_id || '',
     smmraja_service_id: service.smmraja_service_id || '',
+    smmtake_service_id: service.smmtake_service_id || '',
     url_type: service.url_type || '',          // 'post' | 'profile' | '' (no validation)
     is_combo: service.is_combo || false,
     combo_service_ids: normalizeComboServices(service.combo_service_ids),
@@ -181,6 +182,7 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
       apiowner_service_id: formData.apiowner_service_id || null,
       tiksta_service_id: formData.tiksta_service_id || null,
       smmraja_service_id: formData.smmraja_service_id || null,
+      smmtake_service_id: formData.smmtake_service_id || null,
       url_type: formData.url_type || null,    // null = skip URL type validation
       is_combo: Boolean(formData.is_combo),
       combo_service_ids: formData.is_combo && formData.combo_service_ids.length > 0
@@ -464,6 +466,15 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
             onChange={(e) => setFormData({ ...formData, smmraja_service_id: e.target.value })}
           />
           <p className="text-xs text-gray-500 mt-1">Enter the SMM Raja API service ID for integration</p>
+        </div>
+        <div>
+          <Label>SMM Take Service ID</Label>
+          <Input
+            placeholder="SMM Take API service ID (optional)"
+            value={formData.smmtake_service_id}
+            onChange={(e) => setFormData({ ...formData, smmtake_service_id: e.target.value })}
+          />
+          <p className="text-xs text-gray-500 mt-1">Enter the SMM Take API service ID for integration</p>
         </div>
       </div>
 

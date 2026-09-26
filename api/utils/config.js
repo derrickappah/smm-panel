@@ -36,6 +36,8 @@ export const KNOWN_ENV_VARIABLES = [
   { key: 'TIKSTA_API_KEY', label: 'Tiksta API Key', category: 'smm', default: '', isSecret: true, description: 'API Key for Tiksta integration' },
   { key: 'SMMRAJA_API_URL', label: 'SMM Raja API URL', category: 'smm', default: 'https://www.smmraja.com/api/v3', isSecret: false, description: 'SMM Raja API endpoint URL' },
   { key: 'SMMRAJA_API_KEY', label: 'SMM Raja API Key', category: 'smm', default: '', isSecret: true, description: 'API Key for SMM Raja integration' },
+  { key: 'SMMTAKE_API_URL', label: 'SMM Take API URL', category: 'smm', default: 'https://smmtake.com/api/v2', isSecret: false, description: 'SMM Take API endpoint URL' },
+  { key: 'SMMTAKE_API_KEY', label: 'SMM Take API Key', category: 'smm', default: '', isSecret: true, description: 'API Key for SMM Take integration' },
 
   // Payment Gateways
   { key: 'PAYSTACK_SECRET_KEY', label: 'Paystack Secret Key', category: 'payment', default: '', isSecret: true, description: 'Paystack live secret key (sk_live_...)' },

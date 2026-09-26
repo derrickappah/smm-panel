@@ -17,7 +17,8 @@ import {
     mapOldSMMStatus,
     mapApiOwnerStatus,
     mapTikstaStatus,
-    mapSmmRajaStatus
+    mapSmmRajaStatus,
+    mapSmmTakeStatus
 } from './utils/statusMapping.js';
 import { setCorsHeaders } from './utils/corsHeaders.js';
 import { calculatePackageComboRefund } from './utils/comboRefundHelper.js';
@@ -192,7 +193,8 @@ export default async function handler(req, res) {
             oldsmm: orders.filter(o => o.oldsmm_order_id && o.oldsmm_order_id !== "order not placed at oldsmm"),
             apiowner: orders.filter(o => o.apiowner_order_id && o.apiowner_order_id !== "order not placed at apiowner"),
             tiksta: orders.filter(o => o.tiksta_order_id && o.tiksta_order_id !== "order not placed at tiksta"),
-            smmraja: orders.filter(o => o.smmraja_order_id && o.smmraja_order_id !== "order not placed at smmraja")
+            smmraja: orders.filter(o => o.smmraja_order_id && o.smmraja_order_id !== "order not placed at smmraja"),
+            smmtake: orders.filter(o => o.smmtake_order_id && o.smmtake_order_id !== "order not placed at smmtake")
         };
 
         const results = {
@@ -362,7 +364,8 @@ export default async function handler(req, res) {
             oldsmmUrl, oldsmmKey,
             apiownerUrl, apiownerKey,
             tikstaUrl, tikstaKey,
-            smmrajaUrl, smmrajaKey
+            smmrajaUrl, smmrajaKey,
+            smmtakeUrl, smmtakeKey
         ] = await Promise.all([
             getConfig('SMMGEN_API_URL', 'https://smmgen.com/api/v2'),
             getConfig('SMMGEN_API_KEY'),
@@ -381,7 +384,9 @@ export default async function handler(req, res) {
             getConfig('TIKSTA_API_URL', 'https://tiksta.com/api/v2'),
             getConfig('TIKSTA_API_KEY'),
             getConfig('SMMRAJA_API_URL', 'https://www.smmraja.com/api/v3'),
-            getConfig('SMMRAJA_API_KEY')
+            getConfig('SMMRAJA_API_KEY'),
+            getConfig('SMMTAKE_API_URL', 'https://smmtake.com/api/v2'),
+            getConfig('SMMTAKE_API_KEY')
         ]);
 
         // 5-11. Process all providers in parallel batches
@@ -394,7 +399,8 @@ export default async function handler(req, res) {
             processProviderBatch('oldsmm', groups.oldsmm, oldsmmUrl, oldsmmKey, mapOldSMMStatus, 'oldsmm_order_id'),
             processProviderBatch('apiowner', groups.apiowner, apiownerUrl, apiownerKey, mapApiOwnerStatus, 'apiowner_order_id'),
             processProviderBatch('tiksta', groups.tiksta, tikstaUrl, tikstaKey, mapTikstaStatus, 'tiksta_order_id'),
-            processProviderBatch('smmraja', groups.smmraja, smmrajaUrl, smmrajaKey, mapSmmRajaStatus, 'smmraja_order_id')
+            processProviderBatch('smmraja', groups.smmraja, smmrajaUrl, smmrajaKey, mapSmmRajaStatus, 'smmraja_order_id'),
+            processProviderBatch('smmtake', groups.smmtake, smmtakeUrl, smmtakeKey, mapSmmTakeStatus, 'smmtake_order_id')
         ]);
 
         return res.status(200).json({ success: true, ...results });

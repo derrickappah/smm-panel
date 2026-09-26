@@ -1,0 +1,66 @@
+import { setCorsHeaders } from '../utils/corsHeaders.js';
+import { verifyAdmin } from '../utils/auth.js';
+
+const REQUEST_TIMEOUT = 30000;
+
+export default async function handler(req, res) {
+    setCorsHeaders(req, res);
+    if (req.method === 'OPTIONS') return res.status(200).end();
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+    try {
+        const { isAdmin } = await verifyAdmin(req).catch(() => ({ isAdmin: false }));
+        if (!isAdmin) return res.status(403).json({ error: 'Unauthorized: Direct provider cancel access restricted to admins' });
+
+        const { order, orders } = req.body;
+        if (!order && !orders) return res.status(400).json({ error: 'Missing required field: order or orders' });
+
+        const SMMTAKE_API_URL = process.env.SMMTAKE_API_URL || 'https://smmtake.com/api/v2';
+        const SMMTAKE_API_KEY = process.env.SMMTAKE_API_KEY;
+
+        if (!SMMTAKE_API_KEY || SMMTAKE_API_KEY.includes('PLACEHOLDER')) {
+            return res.status(400).json({ error: 'SMM Take API key not configured' });
+        }
+
+        let controller = new AbortController();
+        let timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+
+        try {
+            const params = {
+                key: SMMTAKE_API_KEY,
+                action: 'cancel',
+                orders: orders ? (Array.isArray(orders) ? orders.join(',') : String(orders)) : String(order)
+            };
+
+            const formData = new URLSearchParams(params);
+
+            const response = await fetch(SMMTAKE_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: formData.toString(),
+                signal: controller.signal
+            });
+
+            clearTimeout(timeoutId);
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                return res.status(response.status).json({
+                    error: errorData.error || errorData.message || `Cancel request failed: ${response.status}`,
+                    details: errorData
+                });
+            }
+
+            const data = await response.json();
+            return res.status(200).json(data);
+        } catch (fetchError) {
+            clearTimeout(timeoutId);
+            if (fetchError.name === 'AbortError') {
+                return res.status(504).json({ error: `Request timeout after ${REQUEST_TIMEOUT}ms`, timeout: true });
+            }
+            throw fetchError;
+        }
+    } catch (error) {
+        return res.status(500).json({ error: error.message || 'Failed to process cancel request' });
+    }
+}

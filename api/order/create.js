@@ -135,7 +135,7 @@ export default async function handler(req, res) {
                     const componentIds = service.combo_service_ids.map(item => typeof item === 'object' && item !== null ? item.id : item);
                     const { data: compServices, error: compErr } = await supabase
                         .from('services')
-                        .select('id, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id, tiksta_service_id, smmraja_service_id')
+                        .select('id, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id, tiksta_service_id, smmraja_service_id, smmtake_service_id')
                         .in('id', componentIds);
 
                     if (!compErr && compServices) {
@@ -170,6 +170,9 @@ export default async function handler(req, res) {
                             } else if (s.smmraja_service_id) {
                                 compProvider = 'smmraja';
                                 compProviderId = s.smmraja_service_id;
+                            } else if (s.smmtake_service_id) {
+                                compProvider = 'smmtake';
+                                compProviderId = s.smmtake_service_id;
                             }
 
                             if (compProvider && compProviderId) {
@@ -209,6 +212,9 @@ export default async function handler(req, res) {
                 } else if (service.smmraja_service_id) {
                     provider = 'smmraja';
                     provider_service_id = service.smmraja_service_id;
+                } else if (service.smmtake_service_id) {
+                    provider = 'smmtake';
+                    provider_service_id = service.smmtake_service_id;
                 }
 
                 if (provider && provider_service_id) {
@@ -285,6 +291,9 @@ export default async function handler(req, res) {
             } else if (pkg.smmraja_service_id) {
                 provider = 'smmraja';
                 provider_service_id = pkg.smmraja_service_id;
+            } else if (pkg.smmtake_service_id) {
+                provider = 'smmtake';
+                provider_service_id = pkg.smmtake_service_id;
             }
 
             if (provider && provider_service_id) {
@@ -444,6 +453,7 @@ export default async function handler(req, res) {
                     if (p === 'apiowner')   updateData.apiowner_order_id   = pid;
                     if (p === 'tiksta')     updateData.tiksta_order_id     = pid;
                     if (p === 'smmraja')    updateData.smmraja_order_id    = pid;
+                    if (p === 'smmtake')    updateData.smmtake_order_id    = pid;
                 }
             }
 
@@ -461,7 +471,7 @@ export default async function handler(req, res) {
 
             // Update transaction description with provider order ID
             try {
-                const primaryProviderOrderId = updateData.oldsmm_order_id || updateData.apiowner_order_id || updateData.tiksta_order_id || updateData.smmraja_order_id || updateData.smmgen_order_id || updateData.smmcost_order_id || updateData.jbsmmpanel_order_id || updateData.worldofsmm_order_id || updateData.g1618_order_id;
+                const primaryProviderOrderId = updateData.smmtake_order_id || updateData.smmraja_order_id || updateData.tiksta_order_id || updateData.apiowner_order_id || updateData.oldsmm_order_id || updateData.smmgen_order_id || updateData.smmcost_order_id || updateData.jbsmmpanel_order_id || updateData.worldofsmm_order_id || updateData.g1618_order_id;
                 if (primaryProviderOrderId) {
                     await supabase.from('transactions').update({
                         description: `Order #${primaryProviderOrderId} (${serviceItemName})`
@@ -721,6 +731,11 @@ async function getProviderApiConfig(provider) {
         smmraja: {
             url: await getConfig('SMMRAJA_API_URL', 'https://www.smmraja.com/api/v3'),
             key: await getConfig('SMMRAJA_API_KEY'),
+            useJson: false,
+        },
+        smmtake: {
+            url: await getConfig('SMMTAKE_API_URL', 'https://smmtake.com/api/v2'),
+            key: await getConfig('SMMTAKE_API_KEY'),
             useJson: false,
         },
     };
