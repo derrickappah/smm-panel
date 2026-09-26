@@ -47,6 +47,7 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
     tiksta_service_id: service.tiksta_service_id || '',
     smmraja_service_id: service.smmraja_service_id || '',
     smmtake_service_id: service.smmtake_service_id || '',
+    quickmedia_service_id: service.quickmedia_service_id || '',
     url_type: service.url_type || '',          // 'post' | 'profile' | '' (no validation)
     is_combo: service.is_combo || false,
     combo_service_ids: normalizeComboServices(service.combo_service_ids),
@@ -183,6 +184,7 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
       tiksta_service_id: formData.tiksta_service_id || null,
       smmraja_service_id: formData.smmraja_service_id || null,
       smmtake_service_id: formData.smmtake_service_id || null,
+      quickmedia_service_id: formData.quickmedia_service_id || null,
       url_type: formData.url_type || null,    // null = skip URL type validation
       is_combo: Boolean(formData.is_combo),
       combo_service_ids: formData.is_combo && formData.combo_service_ids.length > 0
@@ -475,6 +477,15 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
             onChange={(e) => setFormData({ ...formData, smmtake_service_id: e.target.value })}
           />
           <p className="text-xs text-gray-500 mt-1">Enter the SMM Take API service ID for integration</p>
+        </div>
+        <div>
+          <Label>QuickMedia Service ID</Label>
+          <Input
+            placeholder="QuickMedia API service ID (optional)"
+            value={formData.quickmedia_service_id}
+            onChange={(e) => setFormData({ ...formData, quickmedia_service_id: e.target.value })}
+          />
+          <p className="text-xs text-gray-500 mt-1">Enter the QuickMedia API service ID for integration</p>
         </div>
       </div>
 

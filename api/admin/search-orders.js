@@ -76,7 +76,7 @@ export default async function handler(req, res) {
     const selectFields = `
       id, user_id, service_id, promotion_package_id, link, quantity, total_cost, 
       status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, 
-      g1618_order_id, oldsmm_order_id, apiowner_order_id, tiksta_order_id, smmraja_order_id, smmtake_order_id, component_provider_order_ids, 
+      g1618_order_id, oldsmm_order_id, apiowner_order_id, tiksta_order_id, smmraja_order_id, smmtake_order_id, quickmedia_order_id, component_provider_order_ids, 
       combo_id, combo_name, combo_item_name, service_name, is_combo,
       created_at, completed_at, refund_status, last_status_check, is_reward,
       services(name, platform, service_type, is_combo), 
@@ -111,7 +111,8 @@ export default async function handler(req, res) {
       `apiowner_order_id.ilike.${searchPattern}`,
       `tiksta_order_id.ilike.${searchPattern}`,
       `smmraja_order_id.ilike.${searchPattern}`,
-      `smmtake_order_id.ilike.${searchPattern}`
+      `smmtake_order_id.ilike.${searchPattern}`,
+      `quickmedia_order_id.ilike.${searchPattern}`
     ];
 
     if (searchMode === 'all' || searchMode === 'link') {

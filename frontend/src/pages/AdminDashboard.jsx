@@ -47,6 +47,7 @@ const AdminApiOwner = lazy(() => import('@/pages/admin/AdminApiOwner'));
 const AdminTiksta = lazy(() => import('@/pages/admin/AdminTiksta'));
 const AdminSmmRaja = lazy(() => import('@/pages/admin/AdminSmmRaja'));
 const AdminSmmTake = lazy(() => import('@/pages/admin/AdminSmmTake'));
+const AdminQuickMedia = lazy(() => import('@/pages/admin/AdminQuickMedia'));
 const AdminMoolre = lazy(() => import('@/pages/admin/AdminMoolre'));
 const AdminFAQ = lazy(() => import('@/pages/admin/AdminFAQ'));
 const AdminTerms = lazy(() => import('@/pages/admin/AdminTerms'));
@@ -123,6 +124,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
         'tiksta': 'tiksta',
         'smmraja': 'smmraja',
         'smmtake': 'smmtake',
+        'quickmedia': 'quickmedia',
         'moolre': 'moolre',
         'faq': 'faq',
         'terms': 'terms',
@@ -379,6 +381,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     tiksta: 'Tiksta Integration',
     smmraja: 'SMM Raja Integration',
     smmtake: 'SMM Take Integration',
+    quickmedia: 'The Quick Media Soft Integration',
     moolre: 'Moolre Transactions',
     rewards: 'Reward Claims',
     'rewards-settings': 'Reward Settings',
@@ -424,6 +427,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     { id: 'tiksta', label: 'Tiksta', icon: Server },
     { id: 'smmraja', label: 'SMM Raja', icon: Server },
     { id: 'smmtake', label: 'SMM Take', icon: Server },
+    { id: 'quickmedia', label: 'QuickMedia', icon: Server },
     { id: 'moolre', label: 'Moolre', icon: CreditCard },
     { id: 'rewards', label: 'Rewards', icon: Gift },
     { id: 'rewards-settings', label: 'Reward Settings', icon: Settings },
@@ -945,6 +949,13 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                 <TabsContent value="smmtake" className="lg:mt-0">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminSmmTake />
+                  </Suspense>
+                </TabsContent>
+
+                {/* QuickMedia Section */}
+                <TabsContent value="quickmedia" className="lg:mt-0">
+                  <Suspense fallback={<ComponentLoader />}>
+                    <AdminQuickMedia />
                   </Suspense>
                 </TabsContent>
 

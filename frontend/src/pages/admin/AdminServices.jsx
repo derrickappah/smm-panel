@@ -138,7 +138,7 @@ const SortableServiceItem = memo(({ service, editingService, onEdit, onToggle, o
                   Includes {service.combo_service_ids.length} service{service.combo_service_ids.length !== 1 ? 's' : ''}
                 </p>
               )}
-              {(service.smmgen_service_id || service.smmcost_service_id || service.jbsmmpanel_service_id || service.worldofsmm_service_id || service.g1618_service_id || service.oldsmm_service_id || service.apiowner_service_id || service.tiksta_service_id || service.smmraja_service_id || service.smmtake_service_id) && (
+              {(service.smmgen_service_id || service.smmcost_service_id || service.jbsmmpanel_service_id || service.worldofsmm_service_id || service.g1618_service_id || service.oldsmm_service_id || service.apiowner_service_id || service.tiksta_service_id || service.smmraja_service_id || service.smmtake_service_id || service.quickmedia_service_id) && (
                 <div className="flex flex-wrap gap-2 text-xs text-gray-500 mt-1">
                   {service.smmgen_service_id && (
                     <span>SMMGen ID: {service.smmgen_service_id}</span>
@@ -169,6 +169,9 @@ const SortableServiceItem = memo(({ service, editingService, onEdit, onToggle, o
                   )}
                   {service.smmtake_service_id && (
                     <span>SMM Take ID: {service.smmtake_service_id}</span>
+                  )}
+                  {service.quickmedia_service_id && (
+                    <span>QuickMedia ID: {service.quickmedia_service_id}</span>
                   )}
                 </div>
               )}
@@ -259,6 +262,7 @@ const AdminServices = memo(() => {
     tiksta_service_id: '',
     smmraja_service_id: '',
     smmtake_service_id: '',
+    quickmedia_service_id: '',
     is_combo: false,
     combo_service_ids: [],
     combo_smmgen_service_ids: [],
@@ -409,6 +413,7 @@ const AdminServices = memo(() => {
         tiksta_service_id: serviceForm.tiksta_service_id || null,
         smmraja_service_id: serviceForm.smmraja_service_id || null,
         smmtake_service_id: serviceForm.smmtake_service_id || null,
+        quickmedia_service_id: serviceForm.quickmedia_service_id || null,
         is_combo: serviceForm.is_combo || false,
         combo_service_ids: serviceForm.is_combo && serviceForm.combo_service_ids.length > 0
           ? serviceForm.combo_service_ids
@@ -440,6 +445,7 @@ const AdminServices = memo(() => {
         tiksta_service_id: '',
         smmraja_service_id: '',
         smmtake_service_id: '',
+        quickmedia_service_id: '',
         is_combo: false,
         combo_service_ids: [],
         combo_smmgen_service_ids: [],
@@ -855,6 +861,15 @@ const AdminServices = memo(() => {
               />
               <p className="text-xs text-gray-500 mt-1">Enter the SMM Take API service ID for integration</p>
             </div>
+            <div>
+              <Label>QuickMedia Service ID</Label>
+              <Input
+                placeholder="QuickMedia API service ID (optional)"
+                value={serviceForm.quickmedia_service_id}
+                onChange={(e) => setServiceForm({ ...serviceForm, quickmedia_service_id: e.target.value })}
+              />
+              <p className="text-xs text-gray-500 mt-1">Enter the QuickMedia API service ID for integration</p>
+            </div>
           </div>
 
           {/* Combo Service Options */}
@@ -1121,13 +1136,16 @@ const AdminServices = memo(() => {
                           Includes {service.combo_service_ids.length} service{service.combo_service_ids.length !== 1 ? 's' : ''}
                         </p>
                       )}
-                      {(service.smmgen_service_id || service.smmcost_service_id || service.jbsmmpanel_service_id || service.worldofsmm_service_id || service.g1618_service_id || service.oldsmm_service_id || service.apiowner_service_id || service.tiksta_service_id || service.smmraja_service_id || service.smmtake_service_id) && (
+                      {(service.smmgen_service_id || service.smmcost_service_id || service.jbsmmpanel_service_id || service.worldofsmm_service_id || service.g1618_service_id || service.oldsmm_service_id || service.apiowner_service_id || service.tiksta_service_id || service.smmraja_service_id || service.smmtake_service_id || service.quickmedia_service_id) && (
                         <div className="flex flex-wrap gap-2 text-xs text-gray-500 mt-1">
                           {service.smmgen_service_id && (
                             <span>SMMGen ID: {service.smmgen_service_id}</span>
                           )}
                           {service.smmcost_service_id && (
                             <span>SMMCost ID: {service.smmcost_service_id}</span>
+                          )}
+                          {service.jbsmmpanel_service_id && (
+                            <span>JB SMM Panel ID: {service.jbsmmpanel_service_id}</span>
                           )}
                           {service.worldofsmm_service_id && (
                             <span>World of SMM ID: {service.worldofsmm_service_id}</span>
@@ -1149,6 +1167,9 @@ const AdminServices = memo(() => {
                           )}
                           {service.smmtake_service_id && (
                             <span>SMM Take ID: {service.smmtake_service_id}</span>
+                          )}
+                          {service.quickmedia_service_id && (
+                            <span>QuickMedia ID: {service.quickmedia_service_id}</span>
                           )}
                         </div>
                       )}

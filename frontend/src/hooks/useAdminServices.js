@@ -8,7 +8,7 @@ const fetchServices = async () => {
   // Try with rate_unit and video_url first, fallback if columns don't exist
   let { data, error } = await supabase
     .from('services')
-    .select('id, name, description, video_url, rate, rate_unit, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id, tiksta_service_id, smmraja_service_id, smmtake_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only')
+    .select('id, name, description, video_url, rate, rate_unit, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id, tiksta_service_id, smmraja_service_id, smmtake_service_id, quickmedia_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only')
     .order('display_order', { ascending: true })
     .order('created_at', { ascending: false });
 
@@ -17,7 +17,7 @@ const fetchServices = async () => {
     console.warn('Column not found in services, fetching with fallback:', error.message);
     const fallbackResult = await supabase
       .from('services')
-      .select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id, tiksta_service_id, smmraja_service_id, smmtake_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only')
+      .select('id, name, description, rate, platform, enabled, min_quantity, max_quantity, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id, tiksta_service_id, smmraja_service_id, smmtake_service_id, quickmedia_service_id, display_order, created_at, is_combo, combo_service_ids, combo_smmgen_service_ids, seller_only')
       .order('display_order', { ascending: true })
       .order('created_at', { ascending: false });
 

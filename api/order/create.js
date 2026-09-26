@@ -135,7 +135,7 @@ export default async function handler(req, res) {
                     const componentIds = service.combo_service_ids.map(item => typeof item === 'object' && item !== null ? item.id : item);
                     const { data: compServices, error: compErr } = await supabase
                         .from('services')
-                        .select('id, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id, tiksta_service_id, smmraja_service_id, smmtake_service_id')
+                        .select('id, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id, tiksta_service_id, smmraja_service_id, smmtake_service_id, quickmedia_service_id')
                         .in('id', componentIds);
 
                     if (!compErr && compServices) {
@@ -173,6 +173,9 @@ export default async function handler(req, res) {
                             } else if (s.smmtake_service_id) {
                                 compProvider = 'smmtake';
                                 compProviderId = s.smmtake_service_id;
+                            } else if (s.quickmedia_service_id) {
+                                compProvider = 'quickmedia';
+                                compProviderId = s.quickmedia_service_id;
                             }
 
                             if (compProvider && compProviderId) {
@@ -215,6 +218,9 @@ export default async function handler(req, res) {
                 } else if (service.smmtake_service_id) {
                     provider = 'smmtake';
                     provider_service_id = service.smmtake_service_id;
+                } else if (service.quickmedia_service_id) {
+                    provider = 'quickmedia';
+                    provider_service_id = service.quickmedia_service_id;
                 }
 
                 if (provider && provider_service_id) {
@@ -294,6 +300,9 @@ export default async function handler(req, res) {
             } else if (pkg.smmtake_service_id) {
                 provider = 'smmtake';
                 provider_service_id = pkg.smmtake_service_id;
+            } else if (pkg.quickmedia_service_id) {
+                provider = 'quickmedia';
+                provider_service_id = pkg.quickmedia_service_id;
             }
 
             if (provider && provider_service_id) {
@@ -454,6 +463,7 @@ export default async function handler(req, res) {
                     if (p === 'tiksta')     updateData.tiksta_order_id     = pid;
                     if (p === 'smmraja')    updateData.smmraja_order_id    = pid;
                     if (p === 'smmtake')    updateData.smmtake_order_id    = pid;
+                    if (p === 'quickmedia') updateData.quickmedia_order_id = pid;
                 }
             }
 
@@ -471,7 +481,7 @@ export default async function handler(req, res) {
 
             // Update transaction description with provider order ID
             try {
-                const primaryProviderOrderId = updateData.smmtake_order_id || updateData.smmraja_order_id || updateData.tiksta_order_id || updateData.apiowner_order_id || updateData.oldsmm_order_id || updateData.smmgen_order_id || updateData.smmcost_order_id || updateData.jbsmmpanel_order_id || updateData.worldofsmm_order_id || updateData.g1618_order_id;
+                const primaryProviderOrderId = updateData.quickmedia_order_id || updateData.smmtake_order_id || updateData.smmraja_order_id || updateData.tiksta_order_id || updateData.apiowner_order_id || updateData.oldsmm_order_id || updateData.smmgen_order_id || updateData.smmcost_order_id || updateData.jbsmmpanel_order_id || updateData.worldofsmm_order_id || updateData.g1618_order_id;
                 if (primaryProviderOrderId) {
                     await supabase.from('transactions').update({
                         description: `Order #${primaryProviderOrderId} (${serviceItemName})`
@@ -736,6 +746,11 @@ async function getProviderApiConfig(provider) {
         smmtake: {
             url: await getConfig('SMMTAKE_API_URL', 'https://smmtake.com/api/v2'),
             key: await getConfig('SMMTAKE_API_KEY'),
+            useJson: false,
+        },
+        quickmedia: {
+            url: await getConfig('QUICKMEDIA_API_URL', 'https://thequickmediasoft.com/api/v2'),
+            key: await getConfig('QUICKMEDIA_API_KEY'),
             useJson: false,
         },
     };

@@ -93,7 +93,7 @@ const fetchRecentOrders = async () => {
     const [ordersRes, comboRes] = await Promise.all([
       supabase
         .from('orders')
-        .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, tiksta_order_id, smmraja_order_id, smmtake_order_id, component_provider_order_ids, created_at, completed_at, refund_status, total_cost, last_status_check, is_reward, promotion_packages(name, platform, service_type, is_combo), services(id, name, platform, is_combo)', { count: 'exact' })
+        .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, tiksta_order_id, smmraja_order_id, smmtake_order_id, quickmedia_order_id, component_provider_order_ids, created_at, completed_at, refund_status, total_cost, last_status_check, is_reward, promotion_packages(name, platform, service_type, is_combo), services(id, name, platform, is_combo)', { count: 'exact' })
         .eq('user_id', authUser.id)
         .order('created_at', { ascending: false })
         .limit(5),
@@ -139,6 +139,8 @@ const fetchRecentOrders = async () => {
       } else {
         const displayId = order.smmtake_order_id && !String(order.smmtake_order_id).toLowerCase().includes('not placed')
           ? order.smmtake_order_id
+          : order.quickmedia_order_id && !String(order.quickmedia_order_id).toLowerCase().includes('not placed')
+            ? order.quickmedia_order_id
           : order.smmraja_order_id && !String(order.smmraja_order_id).toLowerCase().includes('not placed')
             ? order.smmraja_order_id
           : order.tiksta_order_id && !String(order.tiksta_order_id).toLowerCase().includes('not placed')

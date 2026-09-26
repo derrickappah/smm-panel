@@ -38,6 +38,8 @@ export const KNOWN_ENV_VARIABLES = [
   { key: 'SMMRAJA_API_KEY', label: 'SMM Raja API Key', category: 'smm', default: '', isSecret: true, description: 'API Key for SMM Raja integration' },
   { key: 'SMMTAKE_API_URL', label: 'SMM Take API URL', category: 'smm', default: 'https://smmtake.com/api/v2', isSecret: false, description: 'SMM Take API endpoint URL' },
   { key: 'SMMTAKE_API_KEY', label: 'SMM Take API Key', category: 'smm', default: '', isSecret: true, description: 'API Key for SMM Take integration' },
+  { key: 'QUICKMEDIA_API_URL', label: 'QuickMedia API URL', category: 'smm', default: 'https://thequickmediasoft.com/api/v2', isSecret: false, description: 'The Quick Media Soft API endpoint URL' },
+  { key: 'QUICKMEDIA_API_KEY', label: 'QuickMedia API Key', category: 'smm', default: '', isSecret: true, description: 'API Key for The Quick Media Soft integration' },
 
   // Payment Gateways
   { key: 'PAYSTACK_SECRET_KEY', label: 'Paystack Secret Key', category: 'payment', default: '', isSecret: true, description: 'Paystack live secret key (sk_live_...)' },

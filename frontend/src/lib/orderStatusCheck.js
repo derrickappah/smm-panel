@@ -300,6 +300,38 @@ const mapSMMTakeStatus = (smmtakeStatus) => {
 };
 
 /**
+ * Map QuickMedia status to our status format
+ * @param {string} quickmediaStatus - Status from The Quick Media Soft API
+ * @returns {string|null} Mapped status or null if unknown
+ */
+const mapQuickMediaStatus = (quickmediaStatus) => {
+  if (quickmediaStatus === null || quickmediaStatus === undefined) return null;
+
+  const statusString = String(quickmediaStatus).trim();
+  if (!statusString) return null;
+
+  const statusLower = statusString.toLowerCase();
+
+  if (statusLower === 'pending') return 'pending';
+  if (statusLower === 'in progress' || statusLower === 'in-progress' || statusLower === 'inprogress') return 'in progress';
+  if (statusLower === 'completed' || statusLower === 'complete') return 'completed';
+  if (statusLower === 'partial') return 'partial';
+  if (statusLower === 'processing' || statusLower === 'process') return 'processing';
+  if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower === 'cancel') return 'canceled';
+  if (statusLower === 'refunds' || statusLower === 'refunded' || statusLower === 'refund') return 'refunded';
+
+  if (statusLower.includes('in progress') || statusLower.includes('in-progress')) return 'in progress';
+  if (statusLower.includes('completed') || statusLower.includes('complete')) return 'completed';
+  if (statusLower.includes('partial')) return 'partial';
+  if (statusLower.includes('processing') || statusLower.includes('process')) return 'processing';
+  if (statusLower.includes('cancel')) return 'canceled';
+  if (statusLower.includes('refund')) return 'refunded';
+  if (statusLower.includes('pending')) return 'pending';
+
+  return null;
+};
+
+/**
  * Check if an order should be checked for status updates
  * @param {Object} order - Order object
  * @param {number} minIntervalMinutes - Minimum minutes since last check (default: 5)
@@ -325,6 +357,7 @@ export const shouldCheckOrder = (order, minIntervalMinutes = 5) => {
   const hasTikstaId = order.tiksta_order_id && String(order.tiksta_order_id).toLowerCase() !== "order not placed at tiksta";
   const hasSmmRajaId = order.smmraja_order_id && String(order.smmraja_order_id).toLowerCase() !== "order not placed at smmraja";
   const hasSmmTakeId = order.smmtake_order_id && String(order.smmtake_order_id).toLowerCase() !== "order not placed at smmtake";
+  const hasQuickMediaId = order.quickmedia_order_id && String(order.quickmedia_order_id).toLowerCase() !== "order not placed at quickmedia";
 
   // Debug logging for JB SMM Panel orders
   if (jbsmmpanelId) {
@@ -347,7 +380,7 @@ export const shouldCheckOrder = (order, minIntervalMinutes = 5) => {
   }
 
   // Skip if no valid order ID from any panel
-  if (!hasSmmgenId && !hasSmmcostId && !hasJbsmmpanelId && !hasWorldofsmmId && !hasG1618Id && !hasOldSmmId && !hasApiOwnerId && !hasTikstaId && !hasSmmRajaId && !hasSmmTakeId) {
+  if (!hasSmmgenId && !hasSmmcostId && !hasJbsmmpanelId && !hasWorldofsmmId && !hasG1618Id && !hasOldSmmId && !hasApiOwnerId && !hasTikstaId && !hasSmmRajaId && !hasSmmTakeId && !hasQuickMediaId) {
     if (jbsmmpanelId) {
       console.log('[orderStatusCheck] shouldCheckOrder - Skipping JB SMM Panel order (no valid ID):', {
         orderId: order.id,
@@ -474,8 +507,9 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
     const hasTikstaId = order.tiksta_order_id && String(order.tiksta_order_id).toLowerCase() !== "order not placed at tiksta";
     const hasSmmRajaId = order.smmraja_order_id && String(order.smmraja_order_id).toLowerCase() !== "order not placed at smmraja";
     const hasSmmTakeId = order.smmtake_order_id && String(order.smmtake_order_id).toLowerCase() !== "order not placed at smmtake";
+    const hasQuickMediaId = order.quickmedia_order_id && String(order.quickmedia_order_id).toLowerCase() !== "order not placed at quickmedia";
 
-    // Prioritize: SMM Raja > SMM Take > Tiksta > ApiOwner > WorldOfSMM > SMMCost > JB SMM Panel > G1618 > OldSMM > SMMGen
+    // Prioritize: SMM Raja > SMM Take > QuickMedia > Tiksta > ApiOwner > WorldOfSMM > SMMCost > JB SMM Panel > G1618 > OldSMM > SMMGen
     if (hasSmmRajaId) {
       // Get status from SMM Raja
       const { getSmmRajaStatus } = await import('./smmraja');
@@ -490,6 +524,13 @@ const checkSingleOrderStatus = async (order, onStatusUpdate = null) => {
       const smmtakeStatus = statusData?.status || statusData?.Status;
       mappedStatus = mapSMMTakeStatus(smmtakeStatus);
       panelSource = 'smmtake';
+    } else if (hasQuickMediaId) {
+      // Get status from QuickMedia
+      const { getQuickMediaStatus } = await import('./quickmedia');
+      statusData = await getQuickMediaStatus(order.quickmedia_order_id);
+      const quickmediaStatus = statusData?.status || statusData?.Status;
+      mappedStatus = mapQuickMediaStatus(quickmediaStatus);
+      panelSource = 'quickmedia';
     } else if (hasTikstaId) {
       // Get status from Tiksta
       const { getTikstaStatus } = await import('./tiksta');

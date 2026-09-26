@@ -7,8 +7,17 @@ const REQUEST_TIMEOUT = 12000; // 12 seconds per provider
 const SUMMARY_CACHE_KEY = 'admin:provider_balances:summary';
 const SUMMARY_CACHE_TTL = 120; // 2 minutes
 
-// Definition of all 10 external SMM providers
+// Definition of all 11 external SMM providers
 const PROVIDERS = [
+  {
+    id: 'quickmedia',
+    name: 'QuickMedia',
+    tab: 'quickmedia',
+    urlKey: 'QUICKMEDIA_API_URL',
+    defaultUrl: 'https://thequickmediasoft.com/api/v2',
+    keyKey: 'QUICKMEDIA_API_KEY',
+    format: 'form'
+  },
   {
     id: 'smmtake',
     name: 'SMM Take',

@@ -18,7 +18,8 @@ import {
     mapApiOwnerStatus,
     mapTikstaStatus,
     mapSmmRajaStatus,
-    mapSmmTakeStatus
+    mapSmmTakeStatus,
+    mapQuickMediaStatus
 } from './utils/statusMapping.js';
 import { setCorsHeaders } from './utils/corsHeaders.js';
 import { calculatePackageComboRefund } from './utils/comboRefundHelper.js';
@@ -194,7 +195,8 @@ export default async function handler(req, res) {
             apiowner: orders.filter(o => o.apiowner_order_id && o.apiowner_order_id !== "order not placed at apiowner"),
             tiksta: orders.filter(o => o.tiksta_order_id && o.tiksta_order_id !== "order not placed at tiksta"),
             smmraja: orders.filter(o => o.smmraja_order_id && o.smmraja_order_id !== "order not placed at smmraja"),
-            smmtake: orders.filter(o => o.smmtake_order_id && o.smmtake_order_id !== "order not placed at smmtake")
+            smmtake: orders.filter(o => o.smmtake_order_id && o.smmtake_order_id !== "order not placed at smmtake"),
+            quickmedia: orders.filter(o => o.quickmedia_order_id && o.quickmedia_order_id !== "order not placed at quickmedia")
         };
 
         const results = {
@@ -365,7 +367,8 @@ export default async function handler(req, res) {
             apiownerUrl, apiownerKey,
             tikstaUrl, tikstaKey,
             smmrajaUrl, smmrajaKey,
-            smmtakeUrl, smmtakeKey
+            smmtakeUrl, smmtakeKey,
+            quickmediaUrl, quickmediaKey
         ] = await Promise.all([
             getConfig('SMMGEN_API_URL', 'https://smmgen.com/api/v2'),
             getConfig('SMMGEN_API_KEY'),
@@ -386,7 +389,9 @@ export default async function handler(req, res) {
             getConfig('SMMRAJA_API_URL', 'https://www.smmraja.com/api/v3'),
             getConfig('SMMRAJA_API_KEY'),
             getConfig('SMMTAKE_API_URL', 'https://smmtake.com/api/v2'),
-            getConfig('SMMTAKE_API_KEY')
+            getConfig('SMMTAKE_API_KEY'),
+            getConfig('QUICKMEDIA_API_URL', 'https://thequickmediasoft.com/api/v2'),
+            getConfig('QUICKMEDIA_API_KEY')
         ]);
 
         // 5-11. Process all providers in parallel batches
@@ -400,7 +405,8 @@ export default async function handler(req, res) {
             processProviderBatch('apiowner', groups.apiowner, apiownerUrl, apiownerKey, mapApiOwnerStatus, 'apiowner_order_id'),
             processProviderBatch('tiksta', groups.tiksta, tikstaUrl, tikstaKey, mapTikstaStatus, 'tiksta_order_id'),
             processProviderBatch('smmraja', groups.smmraja, smmrajaUrl, smmrajaKey, mapSmmRajaStatus, 'smmraja_order_id'),
-            processProviderBatch('smmtake', groups.smmtake, smmtakeUrl, smmtakeKey, mapSmmTakeStatus, 'smmtake_order_id')
+            processProviderBatch('smmtake', groups.smmtake, smmtakeUrl, smmtakeKey, mapSmmTakeStatus, 'smmtake_order_id'),
+            processProviderBatch('quickmedia', groups.quickmedia, quickmediaUrl, quickmediaKey, mapQuickMediaStatus, 'quickmedia_order_id')
         ]);
 
         return res.status(200).json({ success: true, ...results });

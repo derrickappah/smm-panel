@@ -42,6 +42,8 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
       String(order.smmraja_order_id).toLowerCase() !== "order not placed at smmraja";
     const hasSmmTake = order.smmtake_order_id &&
       String(order.smmtake_order_id).toLowerCase() !== "order not placed at smmtake";
+    const hasQuickMedia = order.quickmedia_order_id &&
+      String(order.quickmedia_order_id).toLowerCase() !== "order not placed at quickmedia";
     const hasTiksta = order.tiksta_order_id &&
       String(order.tiksta_order_id).toLowerCase() !== "order not placed at tiksta";
     const hasApiOwner = order.apiowner_order_id &&
@@ -57,6 +59,8 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
       return { id: order.smmraja_order_id, type: 'smmraja' };
     } else if (hasSmmTake) {
       return { id: order.smmtake_order_id, type: 'smmtake' };
+    } else if (hasQuickMedia) {
+      return { id: order.quickmedia_order_id, type: 'quickmedia' };
     } else if (hasTiksta) {
       return { id: order.tiksta_order_id, type: 'tiksta' };
     } else if (hasApiOwner) {
@@ -82,7 +86,7 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
   // Get Order ID display value
   const getOrderIdDisplay = (order) => {
     const orderIdInfo = getOrderId(order);
-    if (orderIdInfo.type === 'uuid' && !order.smmcost_order_id && !order.jbsmmpanel_order_id && !order.smmgen_order_id && !order.worldofsmm_order_id && !order.g1618_order_id && !order.oldsmm_order_id && !order.apiowner_order_id && !order.tiksta_order_id && !order.smmraja_order_id && !order.smmtake_order_id) {
+    if (orderIdInfo.type === 'uuid' && !order.smmcost_order_id && !order.jbsmmpanel_order_id && !order.smmgen_order_id && !order.worldofsmm_order_id && !order.g1618_order_id && !order.oldsmm_order_id && !order.apiowner_order_id && !order.tiksta_order_id && !order.smmraja_order_id && !order.smmtake_order_id && !order.quickmedia_order_id) {
       return 'order not placed';
     }
     return orderIdInfo.id;
@@ -118,6 +122,8 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
     String(order.smmraja_order_id).toLowerCase() !== "order not placed at smmraja";
   const hasSmmTake = order.smmtake_order_id &&
     String(order.smmtake_order_id).toLowerCase() !== "order not placed at smmtake";
+  const hasQuickMedia = order.quickmedia_order_id &&
+    String(order.quickmedia_order_id).toLowerCase() !== "order not placed at quickmedia";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -317,14 +323,20 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
                     <span className="text-sm font-mono font-bold text-gray-900">{order.smmtake_order_id}</span>
                   </div>
                 )}
-                {(hasSmmcost || hasJbsmmpanel || hasSmmgen || hasWorldofsmm || hasG1618 || hasOldSmm || hasApiOwner || hasTiksta || hasSmmRaja || hasSmmTake) &&
-                  ([hasSmmcost, hasJbsmmpanel, hasSmmgen, hasWorldofsmm, hasG1618, hasOldSmm, hasApiOwner, hasTiksta, hasSmmRaja, hasSmmTake].filter(Boolean).length > 1) && (
+                {hasQuickMedia && (
+                  <div className="flex items-center justify-between p-2 bg-yellow-50 rounded-lg">
+                    <span className="text-sm font-medium text-gray-700">QuickMedia:</span>
+                    <span className="text-sm font-mono font-bold text-gray-900">{order.quickmedia_order_id}</span>
+                  </div>
+                )}
+                {(hasSmmcost || hasJbsmmpanel || hasSmmgen || hasWorldofsmm || hasG1618 || hasOldSmm || hasApiOwner || hasTiksta || hasSmmRaja || hasSmmTake || hasQuickMedia) &&
+                  ([hasSmmcost, hasJbsmmpanel, hasSmmgen, hasWorldofsmm, hasG1618, hasOldSmm, hasApiOwner, hasTiksta, hasSmmRaja, hasSmmTake, hasQuickMedia].filter(Boolean).length > 1) && (
                     <div className="flex items-center justify-between p-2 bg-purple-50 rounded-lg">
                       <span className="text-sm font-medium text-gray-700">Multiple panels active</span>
-                      <span className="text-xs text-gray-500">SMM Raja &gt; SMM Take &gt; Tiksta &gt; ApiOwner &gt; OldSMM &gt; G1618 &gt; WorldOfSMM priority</span>
+                      <span className="text-xs text-gray-500">SMM Raja &gt; SMM Take &gt; QuickMedia &gt; Tiksta &gt; ApiOwner &gt; OldSMM &gt; G1618 &gt; WorldOfSMM priority</span>
                     </div>
                   )}
-                {!hasSmmcost && !hasJbsmmpanel && !hasSmmgen && !hasWorldofsmm && !hasG1618 && !hasOldSmm && !hasApiOwner && !hasTiksta && !hasSmmRaja && !hasSmmTake && (
+                {!hasSmmcost && !hasJbsmmpanel && !hasSmmgen && !hasWorldofsmm && !hasG1618 && !hasOldSmm && !hasApiOwner && !hasTiksta && !hasSmmRaja && !hasSmmTake && !hasQuickMedia && (
                   <div className="flex items-center gap-2 p-2 bg-red-50 rounded-lg">
                     <AlertCircle className="w-4 h-4 text-red-500" />
                     <span className="text-sm text-red-600 italic font-medium">order not placed</span>
