@@ -77,7 +77,7 @@ const DashboardOrders = React.memo(({ orders, services }) => {
           const service = services?.find(s => s.id === order.service_id) || order.services;
           const isPackageOrder = !!order.promotion_package_id;
           const isCombo = !!(order.is_combo || order.combo_id || order.combo_name);
-          const platformName = order.platform || order.services?.platform || service?.platform || '';
+          const platformName = order.platform || order.promotion_packages?.platform || order.services?.platform || service?.platform || '';
           
           let serviceName = order.service_name;
           if (!serviceName) {
@@ -86,7 +86,7 @@ const DashboardOrders = React.memo(({ orders, services }) => {
             } else if (order.combo_name) {
               serviceName = order.combo_name;
             } else {
-              serviceName = service?.name || 'SMM Service';
+              serviceName = order.promotion_packages?.name || service?.name || 'SMM Service';
             }
           }
 

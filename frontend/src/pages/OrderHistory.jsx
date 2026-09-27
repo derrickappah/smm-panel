@@ -93,6 +93,7 @@ const OrderHistory = ({ user, onLogout }) => {
                         : (order.id ? order.id.slice(0, 8) : 'N/A');
 
         const isComboOrder = !!(order.is_combo || order.combo_id || order.combo_name);
+        const matchedService = (servicesRes?.data || []).find(s => s.id === order.service_id);
         let serviceDisplayName = order.service_name;
         if (!serviceDisplayName) {
           if (order.combo_name && order.combo_item_name) {
@@ -100,11 +101,11 @@ const OrderHistory = ({ user, onLogout }) => {
           } else if (order.combo_name) {
             serviceDisplayName = order.combo_name;
           } else {
-            serviceDisplayName = order.promotion_packages?.name || order.services?.name || 'SMM Service';
+            serviceDisplayName = order.promotion_packages?.name || order.services?.name || matchedService?.name || 'SMM Service';
           }
         }
 
-        const platform = order.promotion_packages?.platform || order.services?.platform || 'General';
+        const platform = order.promotion_packages?.platform || order.services?.platform || matchedService?.platform || 'General';
 
         normalizedOrders.push({
           id: order.id,
@@ -443,7 +444,7 @@ const OrderHistory = ({ user, onLogout }) => {
                     {/* Orders List */}
                     <div className="divide-y divide-gray-200">
                       {paginatedOrders.map((order) => {
-                        const serviceName = order.service_name || order.services?.name || 'Service';
+                        const serviceName = order.service_name || order.promotion_packages?.name || order.services?.name || 'Service';
                         const isCombo = !!order.is_combo;
 
                         return (
