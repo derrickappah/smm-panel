@@ -18,6 +18,13 @@ export default async function handler(req, res) {
 
         const supabase = getServiceRoleClient();
 
+        // Safely parse body if string
+        let body = req.body;
+        if (typeof body === 'string') {
+            try { body = JSON.parse(body); } catch (_) {}
+        }
+        body = body || {};
+
         // GET: List all dynamic providers
         if (req.method === 'GET') {
             const { data, error } = await supabase
@@ -32,7 +39,7 @@ export default async function handler(req, res) {
 
         // POST: Add new dynamic provider
         if (req.method === 'POST') {
-            const { name, api_url, api_key, priority, skipTest } = req.body;
+            const { name, api_url, api_key, priority, skipTest } = body;
 
             if (!name || typeof name !== 'string' || !name.trim()) {
                 return res.status(400).json({ error: 'Provider name is required' });
@@ -106,8 +113,9 @@ export default async function handler(req, res) {
 
         // PUT: Update dynamic provider
         if (req.method === 'PUT') {
-            const { id, name, api_url, api_key, status, priority } = req.body;
-            if (!id) return res.status(400).json({ error: 'Provider ID is required' });
+            const { id, name, api_url, api_key, status, priority } = body;
+            const targetId = id || req.query?.id;
+            if (!targetId) return res.status(400).json({ error: 'Provider ID is required' });
 
             const updates = { updated_at: new Date().toISOString() };
             if (name) updates.name = name.trim();
@@ -119,9 +127,9 @@ export default async function handler(req, res) {
             const { data: updatedProvider, error: updateError } = await supabase
                 .from('smm_providers')
                 .update(updates)
-                .eq('id', id)
+                .eq('id', targetId)
                 .select()
-                .single();
+                .maybeSingle();
 
             if (updateError) throw updateError;
 
@@ -131,36 +139,24 @@ export default async function handler(req, res) {
 
         // DELETE: Delete dynamic provider
         if (req.method === 'DELETE') {
-            const { id } = req.body || req.query;
-            if (!id) return res.status(400).json({ error: 'Provider ID is required' });
+            const targetId = req.query?.id || body?.id;
+            if (!targetId) return res.status(400).json({ error: 'Provider ID is required' });
 
-            const { data: provider } = await supabase
+            const { data: provider, error: findError } = await supabase
                 .from('smm_providers')
                 .select('slug, name')
-                .eq('id', id)
-                .single();
+                .eq('id', targetId)
+                .maybeSingle();
 
+            if (findError) throw findError;
             if (!provider) {
                 return res.status(404).json({ error: 'Provider not found' });
-            }
-
-            // Check if there are active orders associated with this dynamic provider
-            const { count: orderCount } = await supabase
-                .from('orders')
-                .select('id', { count: 'exact', head: true })
-                .eq('dynamic_provider', provider.slug)
-                .in('status', ['pending', 'processing', 'in progress']);
-
-            if (orderCount && orderCount > 0) {
-                return res.status(400).json({
-                    error: `Cannot delete provider '${provider.name}': There are ${orderCount} pending/processing orders associated with it. Please complete or refund them first, or disable the provider instead.`
-                });
             }
 
             const { error: deleteError } = await supabase
                 .from('smm_providers')
                 .delete()
-                .eq('id', id);
+                .eq('id', targetId);
 
             if (deleteError) throw deleteError;
 

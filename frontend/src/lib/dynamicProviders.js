@@ -95,7 +95,8 @@ export async function updateDynamicProvider(id, updateData) {
 export async function deleteDynamicProvider(id) {
     try {
         const headers = await getAuthHeaders();
-        const response = await fetch(API_BASE, {
+        const url = `${API_BASE}?id=${encodeURIComponent(id)}`;
+        const response = await fetch(url, {
             method: 'DELETE',
             headers,
             body: JSON.stringify({ id })

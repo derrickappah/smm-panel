@@ -106,8 +106,8 @@ export function formatUserErrorMessage(error, fallback = 'An unexpected error oc
   }
 
   // 9. If the message is reasonable, clean, and user-facing, pass it through safely
-  // (Cap length to 150 chars to prevent massive dumps)
-  if (rawMessage.length > 150) {
+  // (Cap length to 300 chars to prevent massive dumps)
+  if (rawMessage.length > 300) {
     return fallback;
   }
 
