@@ -37,7 +37,8 @@ const PaymentCallback = ({ onUpdateUser }) => {
           searchParams.get('external_ref') ||
           tokenParam ||
           orderIdParam;
-        const paymentMethod = searchParams.get('method') || (tokenParam || orderIdParam ? 'expresspay' : 'korapay');
+        const paymentMethod = searchParams.get('method') || 
+          (tokenParam || orderIdParam ? 'expresspay' : 'korapay');
 
         // Validate reference format and length
         const isValidReference = (ref) => {
