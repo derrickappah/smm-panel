@@ -132,7 +132,7 @@ export default async function handler(req, res) {
       origin = `https://${origin}`;
     }
 
-    const redirectUrl = `${origin}/payment/callback?method=expresspay`;
+    const redirectUrl = `${origin}/payment/callback`;
     const postUrl = `${origin}/api/expresspay-callback`;
 
     // 8. Prepare expressPay Submit API payload (application/x-www-form-urlencoded)

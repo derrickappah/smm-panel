@@ -26,19 +26,55 @@ const PaymentCallback = ({ onUpdateUser }) => {
 
     const verifyPayment = async () => {
       try {
-        // Get reference from URL params (Korapay may use different param names)
-        const tokenParam = searchParams.get('token');
-        const orderIdParam = searchParams.get('order-id') || searchParams.get('order_id');
-        const reference = searchParams.get('reference') ||
-          searchParams.get('ref') ||
-          searchParams.get('trxref') ||
-          searchParams.get('reference_id') ||
-          searchParams.get('externalref') ||
-          searchParams.get('external_ref') ||
+        // Clean and normalize the query string.
+        // Some gateways (like expressPay) append "?token=...&order-id=..." to a redirect-url
+        // that already contains "?", creating malformed double question marks: "?method=expresspay?token=..."
+        const rawSearch = window.location.search || '';
+        const normalizedSearch = rawSearch ? rawSearch.charAt(0) + rawSearch.slice(1).replace(/\?/g, '&') : '';
+        const params = new URLSearchParams(normalizedSearch);
+
+        // Also check hash params in case of hash routing or hash query strings
+        const hashSearch = window.location.hash.includes('?')
+          ? window.location.hash.substring(window.location.hash.indexOf('?'))
+          : '';
+        const normalizedHashSearch = hashSearch ? hashSearch.charAt(0) + hashSearch.slice(1).replace(/\?/g, '&') : '';
+        const hashParams = new URLSearchParams(normalizedHashSearch || window.location.hash.substring(1));
+
+        const getParam = (key) => params.get(key) || hashParams.get(key) || searchParams.get(key);
+
+        const rawMethod = (getParam('method') || '').toLowerCase().trim();
+        const tokenParam = getParam('token');
+        const orderIdParam = getParam('order-id') || getParam('order_id');
+
+        // Extract reference
+        const reference = getParam('reference') ||
+          getParam('ref') ||
+          getParam('trxref') ||
+          getParam('reference_id') ||
+          getParam('externalref') ||
+          getParam('external_ref') ||
           tokenParam ||
           orderIdParam;
-        const paymentMethod = searchParams.get('method') || 
-          (tokenParam || orderIdParam ? 'expresspay' : 'korapay');
+
+        // Determine payment method robustly
+        let paymentMethod = 'korapay';
+        if (
+          rawMethod.includes('expresspay') ||
+          Boolean(tokenParam) ||
+          (orderIdParam && (orderIdParam.startsWith('EXP_') || orderIdParam.toLowerCase().includes('exp')))
+        ) {
+          paymentMethod = 'expresspay';
+        } else if (rawMethod.includes('moolre_web') || (reference && reference.startsWith('MOOLRE_WEB_'))) {
+          paymentMethod = 'moolre_web';
+        } else if (rawMethod.includes('moolre') || (reference && reference.startsWith('MOOLRE_'))) {
+          paymentMethod = 'moolre';
+        } else if (rawMethod.includes('paystack') || getParam('trxref')) {
+          paymentMethod = 'paystack';
+        } else if (rawMethod.includes('korapay')) {
+          paymentMethod = 'korapay';
+        } else if (rawMethod) {
+          paymentMethod = rawMethod;
+        }
 
         // Validate reference format and length
         const isValidReference = (ref) => {
@@ -294,8 +330,8 @@ const PaymentCallback = ({ onUpdateUser }) => {
               'Authorization': authToken
             },
             body: JSON.stringify({
-              token: tokenParam || reference,
-              order_id: orderIdParam
+              token: tokenParam || (reference && reference.includes('.') ? reference : null),
+              order_id: orderIdParam || (reference && reference.startsWith('EXP_') ? reference : null)
             })
           });
 

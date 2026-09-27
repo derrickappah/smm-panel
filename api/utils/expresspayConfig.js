@@ -48,7 +48,7 @@ export async function getExpressPayConfig(supabaseClient = null) {
       isEnabled,
       minDeposit: isNaN(minDeposit) ? 1 : minDeposit,
       submitUrl: `${baseUrl}/api/submit.php`,
-      checkoutUrl: `${baseUrl}/payment?token=`,
+      checkoutUrl: `${baseUrl}/api/checkout.php?token=`,
       queryUrl: `${baseUrl}/api/query.php`
     };
   } catch (err) {
@@ -63,7 +63,7 @@ export async function getExpressPayConfig(supabaseClient = null) {
       isEnabled: true,
       minDeposit: 1,
       submitUrl: `${baseUrl}/api/submit.php`,
-      checkoutUrl: `${baseUrl}/payment?token=`,
+      checkoutUrl: `${baseUrl}/api/checkout.php?token=`,
       queryUrl: `${baseUrl}/api/query.php`
     };
   }
