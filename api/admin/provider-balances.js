@@ -298,7 +298,7 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: 'Unauthorized: Admin access required' });
     }
 
-    const isRefresh = req.query.refresh === 'true' || req.body?.refresh === true;
+    const isRefresh = req.query?.refresh === 'true' || req.body?.refresh === true;
 
     // Check summary cache if not forcing refresh
     if (!isRefresh) {

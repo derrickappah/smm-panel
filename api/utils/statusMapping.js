@@ -325,3 +325,23 @@ export const mapQuickMediaStatus = (quickmediaStatus) => {
     return null;
 };
 
+/**
+ * Generic SMM Status Mapper for dynamic providers
+ * @param {string} status - Raw status from provider API
+ * @returns {string|null} Normalized status
+ */
+export const mapGenericStatus = (status) => {
+    if (!status) return null;
+    const statusLower = String(status).trim().toLowerCase();
+
+    if (statusLower === 'pending' || statusLower.includes('pending')) return 'pending';
+    if (statusLower === 'in progress' || statusLower.includes('in progress') || statusLower.includes('inprogress')) return 'in progress';
+    if (statusLower === 'completed' || statusLower.includes('completed') || statusLower === 'complete') return 'completed';
+    if (statusLower === 'partial' || statusLower.includes('partial')) return 'partial';
+    if (statusLower === 'processing' || statusLower.includes('processing')) return 'processing';
+    if (statusLower === 'canceled' || statusLower === 'cancelled' || statusLower.includes('cancel')) return 'canceled';
+    if (statusLower === 'refunds' || statusLower === 'refunded' || statusLower.includes('refund')) return 'refunded';
+
+    return null;
+};
+

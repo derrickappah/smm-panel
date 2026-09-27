@@ -1,6 +1,5 @@
 import { getCached, setCached, deleteCached } from './redisClient.js';
 import { getServiceRoleClient } from './auth.js';
-import { mapGenericStatus } from './statusMapping.js';
 
 const REQUEST_TIMEOUT = 30000;
 const PROVIDERS_CACHE_KEY = 'smm:dynamic_providers:active';
