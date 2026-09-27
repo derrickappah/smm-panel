@@ -79,7 +79,7 @@ export default async function handler(req, res) {
     }
 
     // Get request body
-    const { service_id, package_id, link, quantity, total_cost, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, tiksta_order_id, smmraja_order_id, smmtake_order_id, quickmedia_order_id, comments } = req.body;
+    const { service_id, package_id, link, quantity, total_cost, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, tiksta_order_id, smmraja_order_id, smmtake_order_id, quickmedia_order_id, dynamic_provider, dynamic_order_id, comments } = req.body;
 
     // Validate required fields
     if (!link || typeof link !== 'string' || link.trim() === '') {
@@ -553,6 +553,19 @@ export default async function handler(req, res) {
       });
     }
 
+    // Update additional provider fields that may not be handled by the older RPC
+    const extraUpdates = {};
+    if (dynamic_provider) extraUpdates.dynamic_provider = String(dynamic_provider);
+    if (dynamic_order_id) extraUpdates.dynamic_order_id = String(dynamic_order_id);
+    if (tikstaOrderIdString) extraUpdates.tiksta_order_id = tikstaOrderIdString;
+    if (smmrajaOrderIdString) extraUpdates.smmraja_order_id = smmrajaOrderIdString;
+    if (smmtakeOrderIdString) extraUpdates.smmtake_order_id = smmtakeOrderIdString;
+    if (quickmediaOrderIdString) extraUpdates.quickmedia_order_id = quickmediaOrderIdString;
+
+    if (Object.keys(extraUpdates).length > 0) {
+      await supabase.from('orders').update(extraUpdates).eq('id', orderResult.order_id);
+    }
+
     // Get the created order details
     const { data: orderData, error: orderError } = await supabase
       .from('orders')
@@ -588,6 +601,8 @@ export default async function handler(req, res) {
         smmraja_order_id: smmrajaOrderIdString,
         smmtake_order_id: smmtakeOrderIdString,
         quickmedia_order_id: quickmediaOrderIdString,
+        dynamic_provider: dynamic_provider || null,
+        dynamic_order_id: dynamic_order_id || null,
         comments: commentsString
       },
       req

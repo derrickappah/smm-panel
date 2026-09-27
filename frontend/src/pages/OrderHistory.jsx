@@ -44,7 +44,7 @@ const OrderHistory = ({ user, onLogout }) => {
       const [ordersRes, comboOrdersRes, servicesRes] = await Promise.all([
         supabase
           .from('orders')
-          .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, tiksta_order_id, smmraja_order_id, smmtake_order_id, quickmedia_order_id, component_provider_order_ids, combo_id, combo_name, combo_item_name, service_name, is_combo, created_at, completed_at, refund_status, total_cost, last_status_check, is_reward, promotion_packages(name, platform, service_type, is_combo), services(id, name, platform, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id, tiksta_service_id, smmraja_service_id, smmtake_service_id, quickmedia_service_id, is_combo)')
+          .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, tiksta_order_id, smmraja_order_id, smmtake_order_id, quickmedia_order_id, dynamic_provider, dynamic_order_id, component_provider_order_ids, combo_id, combo_name, combo_item_name, service_name, is_combo, created_at, completed_at, refund_status, total_cost, last_status_check, is_reward, promotion_packages(name, platform, service_type, is_combo), services(id, name, platform, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id, tiksta_service_id, smmraja_service_id, smmtake_service_id, quickmedia_service_id, is_combo)')
           .eq('user_id', authUser.id)
           .order('created_at', { ascending: false }),
         supabase
@@ -66,7 +66,9 @@ const OrderHistory = ({ user, onLogout }) => {
       // 1. Process orders from public.orders (each split order is its own independent row)
       rawRegularOrders.forEach(order => {
         const isInternalUuid = order.smmgen_order_id === order.id;
-        const displayId = order.smmraja_order_id && !String(order.smmraja_order_id).toLowerCase().includes('not placed')
+        const displayId = order.dynamic_order_id && !String(order.dynamic_order_id).toLowerCase().includes('not placed')
+          ? order.dynamic_order_id
+          : order.smmraja_order_id && !String(order.smmraja_order_id).toLowerCase().includes('not placed')
           ? order.smmraja_order_id
           : order.smmtake_order_id && !String(order.smmtake_order_id).toLowerCase().includes('not placed')
             ? order.smmtake_order_id
@@ -129,6 +131,8 @@ const OrderHistory = ({ user, onLogout }) => {
           smmraja_order_id: order.smmraja_order_id,
           smmtake_order_id: order.smmtake_order_id,
           quickmedia_order_id: order.quickmedia_order_id,
+          dynamic_provider: order.dynamic_provider,
+          dynamic_order_id: order.dynamic_order_id,
           is_reward: order.is_reward,
           is_combo: isComboOrder,
           combo_id: order.combo_id,

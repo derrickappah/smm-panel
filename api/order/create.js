@@ -1,6 +1,7 @@
 import { verifyAuth, getServiceRoleClient } from '../utils/auth.js';
 import { placeProviderOrder, extractOrderId } from '../utils/providers.js';
 import { getConfig } from '../utils/config.js';
+import { getActiveDynamicProviders } from '../utils/dynamicProviderClient.js';
 import comboHandler from './place-combo-order.js';
 import {
     cleanUrl,
@@ -12,6 +13,49 @@ import {
 } from '../utils/orderValidation.js';
 import crypto from 'crypto';
 import { setCorsHeaders } from '../utils/corsHeaders.js';
+
+function resolveItemProvider(item, activeDynamicProviders = []) {
+    if (!item) return { provider: null, provider_service_id: null };
+
+    // 1. Check dynamic providers with priority < 100 (higher priority)
+    if (item.custom_provider_service_ids && typeof item.custom_provider_service_ids === 'object') {
+        for (const dp of activeDynamicProviders) {
+            if (dp.priority < 100) {
+                const sid = item.custom_provider_service_ids[dp.slug];
+                if (sid && String(sid).trim() !== '') {
+                    return { provider: dp.slug, provider_service_id: String(sid).trim() };
+                }
+            }
+        }
+    }
+
+    // 2. Built-in providers (default priority ~ 100)
+    if (item.smmcost_service_id) return { provider: 'smmcost', provider_service_id: item.smmcost_service_id };
+    if (item.jbsmmpanel_service_id) return { provider: 'jbsmmpanel', provider_service_id: item.jbsmmpanel_service_id };
+    if (item.smmgen_service_id) return { provider: 'smmgen', provider_service_id: item.smmgen_service_id };
+    if (item.worldofsmm_service_id) return { provider: 'worldofsmm', provider_service_id: item.worldofsmm_service_id };
+    if (item.g1618_service_id) return { provider: 'g1618', provider_service_id: item.g1618_service_id };
+    if (item.oldsmm_service_id) return { provider: 'oldsmm', provider_service_id: item.oldsmm_service_id };
+    if (item.apiowner_service_id) return { provider: 'apiowner', provider_service_id: item.apiowner_service_id };
+    if (item.tiksta_service_id) return { provider: 'tiksta', provider_service_id: item.tiksta_service_id };
+    if (item.smmraja_service_id) return { provider: 'smmraja', provider_service_id: item.smmraja_service_id };
+    if (item.smmtake_service_id) return { provider: 'smmtake', provider_service_id: item.smmtake_service_id };
+    if (item.quickmedia_service_id) return { provider: 'quickmedia', provider_service_id: item.quickmedia_service_id };
+
+    // 3. Dynamic providers with priority >= 100
+    if (item.custom_provider_service_ids && typeof item.custom_provider_service_ids === 'object') {
+        for (const dp of activeDynamicProviders) {
+            if (dp.priority >= 100) {
+                const sid = item.custom_provider_service_ids[dp.slug];
+                if (sid && String(sid).trim() !== '') {
+                    return { provider: dp.slug, provider_service_id: String(sid).trim() };
+                }
+            }
+        }
+    }
+
+    return { provider: null, provider_service_id: null };
+}
 
 export default async function handler(req, res) {
     setCorsHeaders(req, res);
@@ -74,6 +118,8 @@ export default async function handler(req, res) {
         let calculatedTotalCost = 0;
 
         // ── Resolve service / package ─────────────────────────────────────────
+        const activeDynamicProviders = await getActiveDynamicProviders().catch(() => []);
+
         let provider = null;
         let provider_service_id = null;
         let is_combo = false;
@@ -135,93 +181,26 @@ export default async function handler(req, res) {
                     const componentIds = service.combo_service_ids.map(item => typeof item === 'object' && item !== null ? item.id : item);
                     const { data: compServices, error: compErr } = await supabase
                         .from('services')
-                        .select('id, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id, tiksta_service_id, smmraja_service_id, smmtake_service_id, quickmedia_service_id')
+                        .select('id, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id, tiksta_service_id, smmraja_service_id, smmtake_service_id, quickmedia_service_id, custom_provider_service_ids')
                         .in('id', componentIds);
 
                     if (!compErr && compServices) {
                         const orderedServices = componentIds.map(id => compServices.find(s => s.id === id)).filter(Boolean);
                         for (const s of orderedServices) {
-                            let compProvider = null;
-                            let compProviderId = null;
-                            if (s.smmgen_service_id) {
-                                compProvider = 'smmgen';
-                                compProviderId = s.smmgen_service_id;
-                            } else if (s.smmcost_service_id) {
-                                compProvider = 'smmcost';
-                                compProviderId = s.smmcost_service_id;
-                            } else if (s.jbsmmpanel_service_id) {
-                                compProvider = 'jbsmmpanel';
-                                compProviderId = s.jbsmmpanel_service_id;
-                            } else if (s.worldofsmm_service_id) {
-                                compProvider = 'worldofsmm';
-                                compProviderId = s.worldofsmm_service_id;
-                            } else if (s.g1618_service_id) {
-                                compProvider = 'g1618';
-                                compProviderId = s.g1618_service_id;
-                            } else if (s.oldsmm_service_id) {
-                                compProvider = 'oldsmm';
-                                compProviderId = s.oldsmm_service_id;
-                            } else if (s.apiowner_service_id) {
-                                compProvider = 'apiowner';
-                                compProviderId = s.apiowner_service_id;
-                            } else if (s.tiksta_service_id) {
-                                compProvider = 'tiksta';
-                                compProviderId = s.tiksta_service_id;
-                            } else if (s.smmraja_service_id) {
-                                compProvider = 'smmraja';
-                                compProviderId = s.smmraja_service_id;
-                            } else if (s.smmtake_service_id) {
-                                compProvider = 'smmtake';
-                                compProviderId = s.smmtake_service_id;
-                            } else if (s.quickmedia_service_id) {
-                                compProvider = 'quickmedia';
-                                compProviderId = s.quickmedia_service_id;
-                            }
-
-                            if (compProvider && compProviderId) {
+                            const resolved = resolveItemProvider(s, activeDynamicProviders);
+                            if (resolved.provider && resolved.provider_service_id) {
                                 combo_components.push({
-                                    provider: compProvider,
-                                    service_id: String(compProviderId)
+                                    provider: resolved.provider,
+                                    service_id: String(resolved.provider_service_id)
                                 });
                             }
                         }
                     }
                 }
             } else {
-                if (service.smmcost_service_id) {
-                    provider = 'smmcost';
-                    provider_service_id = service.smmcost_service_id;
-                } else if (service.jbsmmpanel_service_id) {
-                    provider = 'jbsmmpanel';
-                    provider_service_id = service.jbsmmpanel_service_id;
-                } else if (service.smmgen_service_id) {
-                    provider = 'smmgen';
-                    provider_service_id = service.smmgen_service_id;
-                } else if (service.worldofsmm_service_id) {
-                    provider = 'worldofsmm';
-                    provider_service_id = service.worldofsmm_service_id;
-                } else if (service.g1618_service_id) {
-                    provider = 'g1618';
-                    provider_service_id = service.g1618_service_id;
-                } else if (service.oldsmm_service_id) {
-                    provider = 'oldsmm';
-                    provider_service_id = service.oldsmm_service_id;
-                } else if (service.apiowner_service_id) {
-                    provider = 'apiowner';
-                    provider_service_id = service.apiowner_service_id;
-                } else if (service.tiksta_service_id) {
-                    provider = 'tiksta';
-                    provider_service_id = service.tiksta_service_id;
-                } else if (service.smmraja_service_id) {
-                    provider = 'smmraja';
-                    provider_service_id = service.smmraja_service_id;
-                } else if (service.smmtake_service_id) {
-                    provider = 'smmtake';
-                    provider_service_id = service.smmtake_service_id;
-                } else if (service.quickmedia_service_id) {
-                    provider = 'quickmedia';
-                    provider_service_id = service.quickmedia_service_id;
-                }
+                const resolved = resolveItemProvider(service, activeDynamicProviders);
+                provider = resolved.provider;
+                provider_service_id = resolved.provider_service_id;
 
                 if (provider && provider_service_id) {
                     combo_components = [{ provider, service_id: provider_service_id }];
@@ -270,40 +249,9 @@ export default async function handler(req, res) {
                 return comboHandler(req, res);
             }
 
-            if (pkg.smmcost_service_id) {
-                provider = 'smmcost';
-                provider_service_id = pkg.smmcost_service_id;
-            } else if (pkg.jbsmmpanel_service_id) {
-                provider = 'jbsmmpanel';
-                provider_service_id = pkg.jbsmmpanel_service_id;
-            } else if (pkg.smmgen_service_id) {
-                provider = 'smmgen';
-                provider_service_id = pkg.smmgen_service_id;
-            } else if (pkg.worldofsmm_service_id) {
-                provider = 'worldofsmm';
-                provider_service_id = pkg.worldofsmm_service_id;
-            } else if (pkg.g1618_service_id) {
-                provider = 'g1618';
-                provider_service_id = pkg.g1618_service_id;
-            } else if (pkg.oldsmm_service_id) {
-                provider = 'oldsmm';
-                provider_service_id = pkg.oldsmm_service_id;
-            } else if (pkg.apiowner_service_id) {
-                provider = 'apiowner';
-                provider_service_id = pkg.apiowner_service_id;
-            } else if (pkg.tiksta_service_id) {
-                provider = 'tiksta';
-                provider_service_id = pkg.tiksta_service_id;
-            } else if (pkg.smmraja_service_id) {
-                provider = 'smmraja';
-                provider_service_id = pkg.smmraja_service_id;
-            } else if (pkg.smmtake_service_id) {
-                provider = 'smmtake';
-                provider_service_id = pkg.smmtake_service_id;
-            } else if (pkg.quickmedia_service_id) {
-                provider = 'quickmedia';
-                provider_service_id = pkg.quickmedia_service_id;
-            }
+            const resolved = resolveItemProvider(pkg, activeDynamicProviders);
+            provider = resolved.provider;
+            provider_service_id = resolved.provider_service_id;
 
             if (provider && provider_service_id) {
                 combo_components = [{ provider, service_id: provider_service_id }];
@@ -453,17 +401,21 @@ export default async function handler(req, res) {
                 if (resItem.status === 'success' && resItem.provider_order_id) {
                     const p = resItem.provider;
                     const pid = resItem.provider_order_id;
-                    if (p === 'smmgen')     updateData.smmgen_order_id     = pid;
-                    if (p === 'smmcost')    updateData.smmcost_order_id   = pid;
-                    if (p === 'jbsmmpanel') updateData.jbsmmpanel_order_id = pid;
-                    if (p === 'worldofsmm') updateData.worldofsmm_order_id = pid;
-                    if (p === 'g1618')      updateData.g1618_order_id      = pid;
-                    if (p === 'oldsmm')     updateData.oldsmm_order_id     = pid;
-                    if (p === 'apiowner')   updateData.apiowner_order_id   = pid;
-                    if (p === 'tiksta')     updateData.tiksta_order_id     = pid;
-                    if (p === 'smmraja')    updateData.smmraja_order_id    = pid;
-                    if (p === 'smmtake')    updateData.smmtake_order_id    = pid;
-                    if (p === 'quickmedia') updateData.quickmedia_order_id = pid;
+                    if (p === 'smmgen')          updateData.smmgen_order_id     = pid;
+                    else if (p === 'smmcost')    updateData.smmcost_order_id   = pid;
+                    else if (p === 'jbsmmpanel') updateData.jbsmmpanel_order_id = pid;
+                    else if (p === 'worldofsmm') updateData.worldofsmm_order_id = pid;
+                    else if (p === 'g1618')      updateData.g1618_order_id      = pid;
+                    else if (p === 'oldsmm')     updateData.oldsmm_order_id     = pid;
+                    else if (p === 'apiowner')   updateData.apiowner_order_id   = pid;
+                    else if (p === 'tiksta')     updateData.tiksta_order_id     = pid;
+                    else if (p === 'smmraja')    updateData.smmraja_order_id    = pid;
+                    else if (p === 'smmtake')    updateData.smmtake_order_id    = pid;
+                    else if (p === 'quickmedia') updateData.quickmedia_order_id = pid;
+                    else {
+                        updateData.dynamic_provider = p;
+                        updateData.dynamic_order_id = pid;
+                    }
                 }
             }
 
@@ -481,7 +433,7 @@ export default async function handler(req, res) {
 
             // Update transaction description with provider order ID
             try {
-                const primaryProviderOrderId = updateData.quickmedia_order_id || updateData.smmtake_order_id || updateData.smmraja_order_id || updateData.tiksta_order_id || updateData.apiowner_order_id || updateData.oldsmm_order_id || updateData.smmgen_order_id || updateData.smmcost_order_id || updateData.jbsmmpanel_order_id || updateData.worldofsmm_order_id || updateData.g1618_order_id;
+                const primaryProviderOrderId = updateData.quickmedia_order_id || updateData.smmtake_order_id || updateData.smmraja_order_id || updateData.tiksta_order_id || updateData.apiowner_order_id || updateData.oldsmm_order_id || updateData.smmgen_order_id || updateData.smmcost_order_id || updateData.jbsmmpanel_order_id || updateData.worldofsmm_order_id || updateData.g1618_order_id || updateData.dynamic_order_id;
                 if (primaryProviderOrderId) {
                     await supabase.from('transactions').update({
                         description: `Order #${primaryProviderOrderId} (${serviceItemName})`

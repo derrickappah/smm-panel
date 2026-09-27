@@ -21,6 +21,7 @@ import {
     mapSmmTakeStatus,
     mapQuickMediaStatus
 } from './utils/statusMapping.js';
+import { getDynamicProviderBySlug } from './utils/dynamicProviderClient.js';
 import { setCorsHeaders } from './utils/corsHeaders.js';
 import { calculatePackageComboRefund } from './utils/comboRefundHelper.js';
 
@@ -198,6 +199,15 @@ export default async function handler(req, res) {
             smmtake: orders.filter(o => o.smmtake_order_id && o.smmtake_order_id !== "order not placed at smmtake"),
             quickmedia: orders.filter(o => o.quickmedia_order_id && o.quickmedia_order_id !== "order not placed at quickmedia")
         };
+
+        // Group dynamic provider orders
+        const dynamicOrders = orders.filter(o => o.dynamic_provider && o.dynamic_order_id && String(o.dynamic_order_id).trim() !== '' && !String(o.dynamic_order_id).toLowerCase().startsWith('order not placed'));
+        const dynamicGroups = {};
+        for (const o of dynamicOrders) {
+            const dpSlug = String(o.dynamic_provider).toLowerCase();
+            if (!dynamicGroups[dpSlug]) dynamicGroups[dpSlug] = [];
+            dynamicGroups[dpSlug].push(o);
+        }
 
         const results = {
             checked: 0,
@@ -394,6 +404,33 @@ export default async function handler(req, res) {
             getConfig('QUICKMEDIA_API_KEY')
         ]);
 
+        // Dynamic provider status check promises
+        const dynamicPromises = Object.entries(dynamicGroups).map(async ([slug, dOrders]) => {
+            try {
+                const dynamicProvider = await getDynamicProviderBySlug(slug);
+                if (dynamicProvider && dynamicProvider.status === 'active') {
+                    await processProviderBatch(
+                        dynamicProvider.name,
+                        dOrders,
+                        dynamicProvider.api_url,
+                        dynamicProvider.api_key,
+                        mapSMMCostStatus,
+                        'dynamic_order_id'
+                    );
+                } else {
+                    console.warn(`[StatusCheck] Dynamic provider ${slug} not found or inactive`);
+                    for (const order of dOrders) {
+                        results.errors.push({ id: order.id, provider: slug, error: 'Dynamic provider inactive or not found' });
+                    }
+                }
+            } catch (dpErr) {
+                console.error(`[StatusCheck] Dynamic provider ${slug} batch error:`, dpErr);
+                for (const order of dOrders) {
+                    results.errors.push({ id: order.id, provider: slug, error: dpErr.message });
+                }
+            }
+        });
+
         // 5-11. Process all providers in parallel batches
         await Promise.all([
             processProviderBatch('smmgen', groups.smmgen, smmgenUrl, smmgenKey, mapSMMGenStatus, 'smmgen_order_id'),
@@ -406,7 +443,8 @@ export default async function handler(req, res) {
             processProviderBatch('tiksta', groups.tiksta, tikstaUrl, tikstaKey, mapTikstaStatus, 'tiksta_order_id'),
             processProviderBatch('smmraja', groups.smmraja, smmrajaUrl, smmrajaKey, mapSmmRajaStatus, 'smmraja_order_id'),
             processProviderBatch('smmtake', groups.smmtake, smmtakeUrl, smmtakeKey, mapSmmTakeStatus, 'smmtake_order_id'),
-            processProviderBatch('quickmedia', groups.quickmedia, quickmediaUrl, quickmediaKey, mapQuickMediaStatus, 'quickmedia_order_id')
+            processProviderBatch('quickmedia', groups.quickmedia, quickmediaUrl, quickmediaKey, mapQuickMediaStatus, 'quickmedia_order_id'),
+            ...dynamicPromises
         ]);
 
         return res.status(200).json({ success: true, ...results });

@@ -9,8 +9,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, RefreshCw, Edit, Trash2, Power, PowerOff, Layers, CheckCircle, GripVertical, Video, UploadCloud, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { getDynamicProviders } from '@/lib/dynamicProviders';
 import ServiceVideoGuideCard from '@/components/dashboard/ServiceVideoGuideCard';
 import {
   DndContext,
@@ -173,6 +174,9 @@ const SortableServiceItem = memo(({ service, editingService, onEdit, onToggle, o
                   {service.quickmedia_service_id && (
                     <span>QuickMedia ID: {service.quickmedia_service_id}</span>
                   )}
+                  {service.custom_provider_service_ids && typeof service.custom_provider_service_ids === 'object' && Object.entries(service.custom_provider_service_ids).map(([slug, sid]) => sid ? (
+                    <span key={slug} className="capitalize">{slug} ID: {sid}</span>
+                  ) : null)}
                 </div>
               )}
             </div>
@@ -224,6 +228,15 @@ const AdminServices = memo(() => {
   const deleteService = useDeleteService();
   const reorderServices = useReorderServices();
 
+  const { data: dynamicProviders = [] } = useQuery({
+    queryKey: ['admin', 'dynamic-providers-active'],
+    queryFn: async () => {
+      const list = await getDynamicProviders();
+      return (list || []).filter(p => p.status === 'active');
+    },
+    staleTime: 60000
+  });
+
   const [serviceSearch, setServiceSearch] = useState('');
   const [editingService, setEditingService] = useState(null);
   const [servicesOrder, setServicesOrder] = useState([]);
@@ -263,6 +276,7 @@ const AdminServices = memo(() => {
     smmraja_service_id: '',
     smmtake_service_id: '',
     quickmedia_service_id: '',
+    custom_provider_service_ids: {},
     is_combo: false,
     combo_service_ids: [],
     combo_smmgen_service_ids: [],
@@ -414,6 +428,7 @@ const AdminServices = memo(() => {
         smmraja_service_id: serviceForm.smmraja_service_id || null,
         smmtake_service_id: serviceForm.smmtake_service_id || null,
         quickmedia_service_id: serviceForm.quickmedia_service_id || null,
+        custom_provider_service_ids: serviceForm.custom_provider_service_ids || {},
         is_combo: serviceForm.is_combo || false,
         combo_service_ids: serviceForm.is_combo && serviceForm.combo_service_ids.length > 0
           ? serviceForm.combo_service_ids
@@ -446,6 +461,7 @@ const AdminServices = memo(() => {
         smmraja_service_id: '',
         smmtake_service_id: '',
         quickmedia_service_id: '',
+        custom_provider_service_ids: {},
         is_combo: false,
         combo_service_ids: [],
         combo_smmgen_service_ids: [],
@@ -870,6 +886,26 @@ const AdminServices = memo(() => {
               />
               <p className="text-xs text-gray-500 mt-1">Enter the QuickMedia API service ID for integration</p>
             </div>
+            {dynamicProviders.map(dp => (
+              <div key={dp.id}>
+                <Label>{dp.name} Service ID</Label>
+                <Input
+                  placeholder={`${dp.name} API service ID (optional)`}
+                  value={serviceForm.custom_provider_service_ids?.[dp.slug] || ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setServiceForm(prev => ({
+                      ...prev,
+                      custom_provider_service_ids: {
+                        ...(prev.custom_provider_service_ids || {}),
+                        [dp.slug]: val
+                      }
+                    }));
+                  }}
+                />
+                <p className="text-xs text-gray-500 mt-1">Enter the {dp.name} API service ID for integration</p>
+              </div>
+            ))}
           </div>
 
           {/* Combo Service Options */}
@@ -1171,6 +1207,9 @@ const AdminServices = memo(() => {
                           {service.quickmedia_service_id && (
                             <span>QuickMedia ID: {service.quickmedia_service_id}</span>
                           )}
+                          {service.custom_provider_service_ids && typeof service.custom_provider_service_ids === 'object' && Object.entries(service.custom_provider_service_ids).map(([slug, sid]) => sid ? (
+                            <span key={slug} className="capitalize">{slug} ID: {sid}</span>
+                          ) : null)}
                         </div>
                       )}
                     </div>

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Video, UploadCloud, Trash2, Play, CheckCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { getDynamicProviders } from '@/lib/dynamicProviders';
 import { toast } from 'sonner';
 import ServiceVideoGuideCard from '@/components/dashboard/ServiceVideoGuideCard';
 
@@ -48,6 +49,7 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
     smmraja_service_id: service.smmraja_service_id || '',
     smmtake_service_id: service.smmtake_service_id || '',
     quickmedia_service_id: service.quickmedia_service_id || '',
+    custom_provider_service_ids: service.custom_provider_service_ids || {},
     url_type: service.url_type || '',          // 'post' | 'profile' | '' (no validation)
     is_combo: service.is_combo || false,
     combo_service_ids: normalizeComboServices(service.combo_service_ids),
@@ -55,6 +57,13 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
     seller_only: service.seller_only || false,
     enabled: service.enabled === true // Explicitly check for true, default to false if null/undefined
   });
+
+  const [dynamicProviders, setDynamicProviders] = useState([]);
+  useEffect(() => {
+    getDynamicProviders().then(list => {
+      if (Array.isArray(list)) setDynamicProviders(list.filter(p => p.status === 'active'));
+    }).catch(err => console.warn('Failed to load dynamic providers for service edit:', err));
+  }, []);
 
   const handleVideoFileUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -487,6 +496,26 @@ const ServiceEditForm = ({ service, onSave, onCancel, services = [] }) => {
           />
           <p className="text-xs text-gray-500 mt-1">Enter the QuickMedia API service ID for integration</p>
         </div>
+        {dynamicProviders.map(dp => (
+          <div key={dp.id}>
+            <Label>{dp.name} Service ID</Label>
+            <Input
+              placeholder={`${dp.name} API service ID (optional)`}
+              value={formData.custom_provider_service_ids?.[dp.slug] || ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                setFormData(prev => ({
+                  ...prev,
+                  custom_provider_service_ids: {
+                    ...(prev.custom_provider_service_ids || {}),
+                    [dp.slug]: val
+                  }
+                }));
+              }}
+            />
+            <p className="text-xs text-gray-500 mt-1">Enter the {dp.name} API service ID for integration</p>
+          </div>
+        ))}
       </div>
 
       {/* URL Type Validation */}

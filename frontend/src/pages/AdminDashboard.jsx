@@ -48,6 +48,7 @@ const AdminTiksta = lazy(() => import('@/pages/admin/AdminTiksta'));
 const AdminSmmRaja = lazy(() => import('@/pages/admin/AdminSmmRaja'));
 const AdminSmmTake = lazy(() => import('@/pages/admin/AdminSmmTake'));
 const AdminQuickMedia = lazy(() => import('@/pages/admin/AdminQuickMedia'));
+const AdminProviders = lazy(() => import('@/pages/admin/AdminProviders'));
 const AdminMoolre = lazy(() => import('@/pages/admin/AdminMoolre'));
 const AdminFAQ = lazy(() => import('@/pages/admin/AdminFAQ'));
 const AdminTerms = lazy(() => import('@/pages/admin/AdminTerms'));
@@ -125,6 +126,8 @@ const AdminDashboard = memo(({ user, onLogout }) => {
         'smmraja': 'smmraja',
         'smmtake': 'smmtake',
         'quickmedia': 'quickmedia',
+        'providers': 'providers',
+        'smm-providers': 'providers',
         'moolre': 'moolre',
         'faq': 'faq',
         'terms': 'terms',
@@ -382,6 +385,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     smmraja: 'SMM Raja Integration',
     smmtake: 'SMM Take Integration',
     quickmedia: 'The Quick Media Soft Integration',
+    providers: 'Custom SMM Providers',
     moolre: 'Moolre Transactions',
     rewards: 'Reward Claims',
     'rewards-settings': 'Reward Settings',
@@ -417,6 +421,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     { id: 'updates', label: 'Updates', icon: Bell },
     { id: 'video-tutorials', label: 'Video Tutorials', icon: Video },
     { id: 'notifications', label: 'Service Notifications', icon: Bell },
+    { id: 'providers', label: 'Custom Providers', icon: Server, badge: 'New' },
     { id: 'smmcost', label: 'SMMCost', icon: Server },
     { id: 'smmgen', label: 'SMMGen', icon: Server },
     { id: 'jbsmmpanel', label: 'JB SMM Panel', icon: Server },
@@ -956,6 +961,13 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                 <TabsContent value="quickmedia" className="lg:mt-0">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminQuickMedia />
+                  </Suspense>
+                </TabsContent>
+
+                {/* Custom SMM Providers Section */}
+                <TabsContent value="providers" className="lg:mt-0 w-full max-w-full">
+                  <Suspense fallback={<ComponentLoader />}>
+                    <AdminProviders />
                   </Suspense>
                 </TabsContent>
 

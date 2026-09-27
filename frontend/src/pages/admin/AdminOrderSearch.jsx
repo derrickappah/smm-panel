@@ -33,7 +33,8 @@ const buildSearchConditions = (trimmedSearch, searchMode = 'all') => {
     `tiksta_order_id.ilike.${searchPattern}`,
     `smmraja_order_id.ilike.${searchPattern}`,
     `smmtake_order_id.ilike.${searchPattern}`,
-    `quickmedia_order_id.ilike.${searchPattern}`
+    `quickmedia_order_id.ilike.${searchPattern}`,
+    `dynamic_order_id.ilike.${searchPattern}`
   ];
 
   if (searchMode === 'all' || searchMode === 'link') {
@@ -98,7 +99,7 @@ const executeInstantOrderSearch = async ({ searchTerm, searchMode = 'all', statu
     .select(`
       id, user_id, service_id, promotion_package_id, link, quantity, total_cost, 
       status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, 
-      g1618_order_id, oldsmm_order_id, apiowner_order_id, tiksta_order_id, smmraja_order_id, smmtake_order_id, quickmedia_order_id, component_provider_order_ids, 
+      g1618_order_id, oldsmm_order_id, apiowner_order_id, tiksta_order_id, smmraja_order_id, smmtake_order_id, quickmedia_order_id, dynamic_provider, dynamic_order_id, component_provider_order_ids, 
       created_at, completed_at, refund_status, last_status_check, is_reward,
       services(name, platform, service_type, is_combo), 
       promotion_packages(name, platform, service_type, is_combo), 
@@ -192,7 +193,7 @@ const executeInstantOrderSearch = async ({ searchTerm, searchMode = 'all', statu
         .select(`
           id, user_id, service_id, promotion_package_id, link, quantity, total_cost, 
           status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, 
-          g1618_order_id, oldsmm_order_id, apiowner_order_id, tiksta_order_id, smmraja_order_id, smmtake_order_id, quickmedia_order_id, component_provider_order_ids, 
+          g1618_order_id, oldsmm_order_id, apiowner_order_id, tiksta_order_id, smmraja_order_id, smmtake_order_id, quickmedia_order_id, dynamic_provider, dynamic_order_id, component_provider_order_ids, 
           created_at, completed_at, refund_status, last_status_check, is_reward,
           services(name, platform, service_type, is_combo), 
           promotion_packages(name, platform, service_type, is_combo), 
@@ -333,6 +334,7 @@ const AdminOrderSearch = memo(({ refreshing = false }) => {
     const isSmmRaja = String(order.smmraja_order_id || '').toLowerCase().includes(clean);
     const isSmmTake = String(order.smmtake_order_id || '').toLowerCase().includes(clean);
     const isQuickMedia = String(order.quickmedia_order_id || '').toLowerCase().includes(clean);
+    const isDynamic = String(order.dynamic_order_id || '').toLowerCase().includes(clean);
 
     if (isExactUuid) return <span className="bg-indigo-600 text-white text-[10px] px-2 py-0.5 rounded font-mono font-bold">MATCH: SYSTEM UUID</span>;
     if (isJb) return <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded font-mono font-bold">MATCH: JB PANEL ID ({order.jbsmmpanel_order_id})</span>;
@@ -346,6 +348,7 @@ const AdminOrderSearch = memo(({ refreshing = false }) => {
     if (isSmmRaja) return <span className="bg-amber-600 text-white text-[10px] px-2 py-0.5 rounded font-mono font-bold">MATCH: SMMRAJA ID</span>;
     if (isSmmTake) return <span className="bg-emerald-600 text-white text-[10px] px-2 py-0.5 rounded font-mono font-bold">MATCH: SMMTAKE ID</span>;
     if (isQuickMedia) return <span className="bg-violet-600 text-white text-[10px] px-2 py-0.5 rounded font-mono font-bold">MATCH: QUICKMEDIA ID</span>;
+    if (isDynamic) return <span className="bg-indigo-600 text-white text-[10px] px-2 py-0.5 rounded font-mono font-bold">MATCH: {String(order.dynamic_provider || 'PROVIDER').toUpperCase()} ID ({order.dynamic_order_id})</span>;
 
     if (order.profiles?.email?.toLowerCase().includes(clean)) return <span className="bg-gray-700 text-white text-[10px] px-2 py-0.5 rounded font-mono">MATCH: USER EMAIL</span>;
     if (order.link?.toLowerCase().includes(clean)) return <span className="bg-gray-700 text-white text-[10px] px-2 py-0.5 rounded font-mono">MATCH: LINK/URL</span>;
@@ -677,7 +680,13 @@ const AdminOrderSearch = memo(({ refreshing = false }) => {
                             <span className="font-bold text-violet-800 truncate max-w-[140px]">{order.quickmedia_order_id}</span>
                           </div>
                         )}
-                        {!order.jbsmmpanel_order_id && !order.smmgen_order_id && !order.smmcost_order_id && !order.apiowner_order_id && !order.tiksta_order_id && !order.smmraja_order_id && !order.smmtake_order_id && !order.quickmedia_order_id && (
+                        {order.dynamic_order_id && (
+                          <div className="flex items-center justify-between bg-indigo-50 px-2 py-1 rounded border border-indigo-200">
+                            <span className="text-indigo-900 font-semibold">{order.dynamic_provider || 'Dynamic'}:</span>
+                            <span className="font-bold text-indigo-800 truncate max-w-[140px]">{order.dynamic_order_id}</span>
+                          </div>
+                        )}
+                        {!order.jbsmmpanel_order_id && !order.smmgen_order_id && !order.smmcost_order_id && !order.apiowner_order_id && !order.tiksta_order_id && !order.smmraja_order_id && !order.smmtake_order_id && !order.quickmedia_order_id && !order.dynamic_order_id && (
                           <span className="text-gray-400 italic">No provider ID</span>
                         )}
                       </div>

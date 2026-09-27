@@ -48,8 +48,14 @@ export async function placeProviderOrder(provider, params) {
             return await placeSmmTakeOrder(service, link, quantity, comments);
         case 'quickmedia':
             return await placeQuickMediaOrder(service, link, quantity, comments);
-        default:
+        default: {
+            const { getDynamicProviderBySlug, placeDynamicOrder } = await import('./dynamicProviderClient.js');
+            const dynamicProvider = await getDynamicProviderBySlug(provider.toLowerCase());
+            if (dynamicProvider && dynamicProvider.status === 'active') {
+                return await placeDynamicOrder(dynamicProvider, params);
+            }
             throw new Error(`Unsupported provider: ${provider}`);
+        }
     }
 }
 
@@ -150,8 +156,15 @@ export async function fetchProviderOrderStatus(provider, providerOrderId) {
         case 'quickmedia':
             statusResult = await fetchQuickMediaStatus(providerOrderId);
             break;
-        default:
+        default: {
+            const { getDynamicProviderBySlug, fetchDynamicStatus } = await import('./dynamicProviderClient.js');
+            const dynamicProvider = await getDynamicProviderBySlug(provider.toLowerCase());
+            if (dynamicProvider && dynamicProvider.status === 'active') {
+                statusResult = await fetchDynamicStatus(dynamicProvider, providerOrderId);
+                break;
+            }
             throw new Error(`Unsupported status check provider: ${provider}`);
+        }
     }
 
     if (statusResult) {

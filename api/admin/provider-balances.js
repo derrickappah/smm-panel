@@ -2,6 +2,7 @@ import { getCached, setCached } from '../utils/redisClient.js';
 import { setCorsHeaders } from '../utils/corsHeaders.js';
 import { verifyAdmin, getServiceRoleClient } from '../utils/auth.js';
 import { getConfig } from '../utils/config.js';
+import { getActiveDynamicProviders, fetchDynamicBalance } from '../utils/dynamicProviderClient.js';
 
 const REQUEST_TIMEOUT = 12000; // 12 seconds per provider
 const SUMMARY_CACHE_KEY = 'admin:provider_balances:summary';
@@ -223,6 +224,66 @@ async function fetchSingleProviderBalance(provider, forceRefresh = false) {
   }
 }
 
+/**
+ * Fetch a single dynamic provider's live balance
+ */
+async function fetchSingleDynamicProviderBalance(dp, forceRefresh = false) {
+  const cacheKey = `smm:provider:${dp.slug}:balance`;
+
+  if (!forceRefresh) {
+    const cached = await getCached(cacheKey);
+    if (cached && typeof cached.balance !== 'undefined') {
+      const balanceNum = parseFloat(cached.balance) || 0;
+      return {
+        id: dp.slug,
+        name: dp.name,
+        tab: 'providers',
+        isDynamic: true,
+        priority: dp.priority,
+        balance: balanceNum,
+        currency: cached.currency || 'USD',
+        status: 'connected',
+        error: null,
+        fromCache: true
+      };
+    }
+  }
+
+  try {
+    const res = await fetchDynamicBalance(dp);
+    const balanceNum = parseFloat(res.balance) || 0;
+    const currency = res.currency || 'USD';
+
+    await setCached(cacheKey, { balance: balanceNum, currency }, 180);
+
+    return {
+      id: dp.slug,
+      name: dp.name,
+      tab: 'providers',
+      isDynamic: true,
+      priority: dp.priority,
+      balance: balanceNum,
+      currency,
+      status: 'connected',
+      error: null,
+      fromCache: false
+    };
+  } catch (err) {
+    return {
+      id: dp.slug,
+      name: dp.name,
+      tab: 'providers',
+      isDynamic: true,
+      priority: dp.priority,
+      balance: null,
+      currency: 'USD',
+      status: 'error',
+      error: err.name === 'AbortError' ? 'Timeout' : err.message || 'Failed to fetch',
+      fromCache: false
+    };
+  }
+}
+
 export default async function handler(req, res) {
   setCorsHeaders(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -267,10 +328,16 @@ export default async function handler(req, res) {
       console.warn('[ProviderBalances] Could not load exchange rate, using default 15.0:', e.message);
     }
 
-    // Query all 9 providers concurrently
-    const results = await Promise.all(
-      PROVIDERS.map(p => fetchSingleProviderBalance(p, isRefresh))
-    );
+    // Query active dynamic providers
+    const activeDynamicProviders = await getActiveDynamicProviders().catch(() => []);
+
+    // Query all built-in and dynamic providers concurrently
+    const [builtinResults, dynamicResults] = await Promise.all([
+      Promise.all(PROVIDERS.map(p => fetchSingleProviderBalance(p, isRefresh))),
+      Promise.all(activeDynamicProviders.map(dp => fetchSingleDynamicProviderBalance(dp, isRefresh)))
+    ]);
+
+    const results = [...builtinResults, ...dynamicResults];
 
     let totalUSD = 0;
     let activeCount = 0;
@@ -313,7 +380,7 @@ export default async function handler(req, res) {
         activeCount,
         lowBalanceCount,
         errorCount,
-        totalProviders: PROVIDERS.length
+        totalProviders: PROVIDERS.length + activeDynamicProviders.length
       },
       providers: enrichedProviders,
       updatedAt: new Date().toISOString()

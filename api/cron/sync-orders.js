@@ -24,6 +24,7 @@ import {
     mapSmmTakeStatus,
     mapQuickMediaStatus
 } from '../utils/statusMapping.js';
+import { getActiveDynamicProviders } from '../utils/dynamicProviderClient.js';
 import { setCorsHeaders } from '../utils/corsHeaders.js';
 
 /**
@@ -148,7 +149,7 @@ export default async function handler(req, res) {
         // 1. Fetch all unfinalized orders
         const { data: orders, error: fetchError } = await supabase
             .from('orders')
-            .select('id, status, oldsmm_order_id, apiowner_order_id, tiksta_order_id, smmraja_order_id, smmtake_order_id, quickmedia_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, smmgen_order_id, quantity, total_cost, completed_at, created_at')
+            .select('id, status, oldsmm_order_id, apiowner_order_id, tiksta_order_id, smmraja_order_id, smmtake_order_id, quickmedia_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, smmgen_order_id, dynamic_provider, dynamic_order_id, quantity, total_cost, completed_at, created_at')
             .in('status', ['pending', 'processing', 'in progress'])
             .order('created_at', { ascending: false });
 
@@ -182,6 +183,15 @@ export default async function handler(req, res) {
             g1618: orders.filter(o => o.g1618_order_id && String(o.g1618_order_id).trim() !== '' && !String(o.g1618_order_id).toLowerCase().startsWith('order not placed')),
             smmgen: orders.filter(o => o.smmgen_order_id && String(o.smmgen_order_id).trim() !== '' && o.smmgen_order_id !== o.id && !String(o.smmgen_order_id).toLowerCase().startsWith('order not placed'))
         };
+
+        // Group dynamic provider orders
+        const dynamicOrders = orders.filter(o => o.dynamic_provider && o.dynamic_order_id && String(o.dynamic_order_id).trim() !== '' && !String(o.dynamic_order_id).toLowerCase().startsWith('order not placed'));
+        const dynamicGroups = {};
+        for (const o of dynamicOrders) {
+            const dpSlug = String(o.dynamic_provider).toLowerCase();
+            if (!dynamicGroups[dpSlug]) dynamicGroups[dpSlug] = [];
+            dynamicGroups[dpSlug].push(o);
+        }
 
         // 3. Resolve active provider credentials dynamically
         const [
@@ -338,6 +348,11 @@ export default async function handler(req, res) {
             }
         };
 
+        const activeDynamicProviders = await getActiveDynamicProviders().catch(() => []);
+        const dynamicPromises = activeDynamicProviders
+            .filter(dp => dynamicGroups[dp.slug]?.length > 0)
+            .map(dp => processBatch(dp.name, dynamicGroups[dp.slug], dp.api_url, dp.api_key, mapSMMCostStatus, 'dynamic_order_id'));
+
         // Run all providers concurrently
         await Promise.all([
             processBatch('oldsmm', groups.oldsmm, oldsmmUrl, oldsmmKey, mapOldSMMStatus, 'oldsmm_order_id'),
@@ -350,7 +365,8 @@ export default async function handler(req, res) {
             processBatch('jbsmmpanel', groups.jbsmmpanel, jbsmmpanelUrl, jbsmmpanelKey, mapJBSMMPanelStatus, 'jbsmmpanel_order_id'),
             processBatch('worldofsmm', groups.worldofsmm, worldofsmmUrl, worldofsmmKey, mapWorldOfSMMStatus, 'worldofsmm_order_id'),
             processBatch('g1618', groups.g1618, g1618Url, g1618Key, mapG1618Status, 'g1618_order_id'),
-            processBatch('smmgen', groups.smmgen, smmgenUrl, smmgenKey, mapSMMGenStatus, 'smmgen_order_id')
+            processBatch('smmgen', groups.smmgen, smmgenUrl, smmgenKey, mapSMMGenStatus, 'smmgen_order_id'),
+            ...dynamicPromises
         ]);
 
         summary.duration_ms = Date.now() - startTime;

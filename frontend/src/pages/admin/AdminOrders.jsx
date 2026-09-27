@@ -86,7 +86,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
       console.log('[AdminOrders] Fetching pending orders for status check...');
       const { data, error } = await supabase
         .from('orders')
-        .select('id, user_id, service_id, promotion_package_id, link, quantity, total_cost, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, tiksta_order_id, smmraja_order_id, smmtake_order_id, quickmedia_order_id, component_provider_order_ids, created_at, completed_at, refund_status, last_status_check, is_reward, services(name, platform, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id, tiksta_service_id, smmraja_service_id, smmtake_service_id, quickmedia_service_id, is_combo), promotion_packages(name, platform, service_type, smmgen_service_id, oldsmm_service_id, apiowner_service_id, tiksta_service_id, smmraja_service_id, smmtake_service_id, quickmedia_service_id, is_combo), profiles(name, email, phone_number)')
+        .select('id, user_id, service_id, promotion_package_id, link, quantity, total_cost, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, tiksta_order_id, smmraja_order_id, smmtake_order_id, quickmedia_order_id, dynamic_provider, dynamic_order_id, component_provider_order_ids, created_at, completed_at, refund_status, last_status_check, is_reward, services(name, platform, service_type, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id, tiksta_service_id, smmraja_service_id, smmtake_service_id, quickmedia_service_id, is_combo), promotion_packages(name, platform, service_type, smmgen_service_id, oldsmm_service_id, apiowner_service_id, tiksta_service_id, smmraja_service_id, smmtake_service_id, quickmedia_service_id, is_combo), profiles(name, email, phone_number)')
         .in('status', ['pending', 'processing', 'in progress'])
         .not('status', 'eq', 'completed')
         .not('status', 'eq', 'refunded')
@@ -503,7 +503,8 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
             const serviceHasSmmtake = order.services?.smmtake_service_id;
             const serviceHasQuickmedia = order.services?.quickmedia_service_id;
 
-            // Prioritize: SMM Raja > SMM Take > QuickMedia > Tiksta > ApiOwner > OldSMM > G1618 > WorldOfSMM > SMMCost > JB SMM Panel > SMMGen
+            // Prioritize: Dynamic Provider > SMM Raja > SMM Take > QuickMedia > Tiksta > ApiOwner > OldSMM > G1618 > WorldOfSMM > SMMCost > JB SMM Panel > SMMGen
+            const hasDynamic = order.dynamic_order_id && !String(order.dynamic_order_id).toLowerCase().includes("not placed");
             const hasSmmraja = order.smmraja_order_id && order.smmraja_order_id !== "order not placed at smmraja";
             const hasSmmtake = order.smmtake_order_id && order.smmtake_order_id !== "order not placed at smmtake";
             const hasQuickmedia = order.quickmedia_order_id && order.quickmedia_order_id !== "order not placed at quickmedia";
@@ -516,7 +517,14 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
             const hasJbsmmpanel = order.jbsmmpanel_order_id && String(order.jbsmmpanel_order_id).toLowerCase() !== "order not placed at jbsmmpanel";
             const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
 
-            if (hasSmmraja) {
+            if (hasDynamic) {
+              return (
+                <div>
+                  <p className="font-medium text-gray-900 text-sm">{order.dynamic_order_id}</p>
+                  <p className="text-[10px] text-indigo-600 font-semibold uppercase">{order.dynamic_provider || 'Dynamic'}</p>
+                </div>
+              );
+            } else if (hasSmmraja) {
               return <p className="font-medium text-gray-900 text-sm">{order.smmraja_order_id}</p>;
             } else if (hasSmmtake) {
               return <p className="font-medium text-gray-900 text-sm">{order.smmtake_order_id}</p>;
@@ -605,7 +613,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                   <p className="text-xs text-blue-600 italic font-medium">Processed Reward</p>
                 </div>
               );
-            } else if (order.smmcost_order_id === null && order.jbsmmpanel_order_id === null && order.smmgen_order_id === null && order.worldofsmm_order_id === null && order.g1618_order_id === null && order.oldsmm_order_id === null && order.apiowner_order_id === null && order.tiksta_order_id === null && order.smmraja_order_id === null && order.smmtake_order_id === null && order.quickmedia_order_id === null) {
+            } else if (order.smmcost_order_id === null && order.jbsmmpanel_order_id === null && order.smmgen_order_id === null && order.worldofsmm_order_id === null && order.g1618_order_id === null && order.oldsmm_order_id === null && order.apiowner_order_id === null && order.tiksta_order_id === null && order.smmraja_order_id === null && order.smmtake_order_id === null && order.quickmedia_order_id === null && order.dynamic_order_id === null) {
               // No order IDs at all
               return (
                 <div className="flex items-center gap-1">
@@ -912,7 +920,8 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               const serviceHasSmmtake = order.services?.smmtake_service_id;
               const serviceHasQuickmedia = order.services?.quickmedia_service_id;
 
-              // Prioritize: SMM Raja > SMM Take > QuickMedia > Tiksta > ApiOwner > OldSMM > G1618 > WorldOfSMM > SMMCost > JB SMM Panel > SMMGen
+              // Prioritize: Dynamic Provider > SMM Raja > SMM Take > QuickMedia > Tiksta > ApiOwner > OldSMM > G1618 > WorldOfSMM > SMMCost > JB SMM Panel > SMMGen
+              const hasDynamic = order.dynamic_order_id && !String(order.dynamic_order_id).toLowerCase().includes("not placed");
               const hasSmmraja = order.smmraja_order_id && order.smmraja_order_id !== "order not placed at smmraja";
               const hasSmmtake = order.smmtake_order_id && order.smmtake_order_id !== "order not placed at smmtake";
               const hasQuickmedia = order.quickmedia_order_id && order.quickmedia_order_id !== "order not placed at quickmedia";
@@ -925,7 +934,13 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               const hasJbsmmpanel = order.jbsmmpanel_order_id && String(order.jbsmmpanel_order_id).toLowerCase() !== "order not placed at jbsmmpanel";
               const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
 
-              if (hasSmmraja) {
+              if (hasDynamic) {
+                return (
+                  <p className="font-semibold text-gray-900 text-base">
+                    Order No: {order.dynamic_order_id} <span className="text-xs text-indigo-600 font-normal">({order.dynamic_provider || 'Dynamic'})</span>
+                  </p>
+                );
+              } else if (hasSmmraja) {
                 return <p className="font-semibold text-gray-900 text-base">Order No: {order.smmraja_order_id}</p>;
               } else if (hasSmmtake) {
                 return <p className="font-semibold text-gray-900 text-base">Order No: {order.smmtake_order_id}</p>;
@@ -1091,7 +1106,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                     <p className="text-xs text-blue-600 italic font-medium">Processed Reward</p>
                   </div>
                 );
-              } else if (order.smmcost_order_id === null && order.jbsmmpanel_order_id === null && order.smmgen_order_id === null && order.worldofsmm_order_id === null && order.g1618_order_id === null && order.oldsmm_order_id === null && order.apiowner_order_id === null && order.tiksta_order_id === null && order.smmraja_order_id === null && order.smmtake_order_id === null && order.quickmedia_order_id === null) {
+              } else if (order.smmcost_order_id === null && order.jbsmmpanel_order_id === null && order.smmgen_order_id === null && order.worldofsmm_order_id === null && order.g1618_order_id === null && order.oldsmm_order_id === null && order.apiowner_order_id === null && order.tiksta_order_id === null && order.smmraja_order_id === null && order.smmtake_order_id === null && order.quickmedia_order_id === null && order.dynamic_order_id === null) {
                 return (
                   <div className="flex items-center gap-1 mt-1">
                     <AlertCircle className="w-4 h-4 text-orange-500" />
@@ -1108,6 +1123,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               }
             })()}
             {(() => {
+              const hasDynamic = order.dynamic_order_id && !String(order.dynamic_order_id).toLowerCase().includes("not placed");
               const hasSmmraja = order.smmraja_order_id && String(order.smmraja_order_id).toLowerCase() !== "order not placed at smmraja";
               const hasSmmtake = order.smmtake_order_id && String(order.smmtake_order_id).toLowerCase() !== "order not placed at smmtake";
               const hasQuickmedia = order.quickmedia_order_id && String(order.quickmedia_order_id).toLowerCase() !== "order not placed at quickmedia";
@@ -1121,6 +1137,7 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
               const hasSmmgen = order.smmgen_order_id && order.smmgen_order_id !== "order not placed at smm gen";
 
               const panelIds = [];
+              if (hasDynamic) panelIds.push(`${order.dynamic_provider || 'Dynamic'}: ${order.dynamic_order_id}`);
               if (hasSmmraja) panelIds.push(`SMM Raja: ${order.smmraja_order_id}`);
               if (hasSmmtake) panelIds.push(`SMM Take: ${order.smmtake_order_id}`);
               if (hasQuickmedia) panelIds.push(`QuickMedia: ${order.quickmedia_order_id}`);
@@ -1290,6 +1307,16 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                       <span className="text-xs text-gray-400 italic">None</span>
                     )}
                   </div>
+                  {order.dynamic_order_id && (
+                    <div className="flex items-center gap-1.5 min-w-[120px]">
+                      <span className="text-xs text-gray-500 w-12 truncate" title={order.dynamic_provider || 'Dynamic'}>{(order.dynamic_provider || 'Dynamic').slice(0, 7)}:</span>
+                      {String(order.dynamic_order_id).toLowerCase().includes("not placed") ? (
+                        <span className="text-xs text-red-500 font-medium whitespace-normal">Not Placed</span>
+                      ) : (
+                        <span className="text-xs font-mono bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-100">{order.dynamic_order_id}</span>
+                      )}
+                    </div>
+                  )}
                   <div className="flex items-center gap-1.5 min-w-[120px]">
                     <span className="text-xs text-gray-500 w-12">ApiOwner:</span>
                     {order.apiowner_order_id ? (
@@ -1410,6 +1437,16 @@ const AdminOrders = memo(({ onRefresh, refreshing = false }) => {
                       <span className="text-xs text-gray-400 italic">None</span>
                     )}
                   </div>
+                  {order.dynamic_order_id && (
+                    <div className="flex items-center gap-1.5 min-w-[120px]">
+                      <span className="text-xs text-gray-500 w-12 truncate" title={order.dynamic_provider || 'Dynamic'}>{(order.dynamic_provider || 'Dynamic').slice(0, 7)}:</span>
+                      {String(order.dynamic_order_id).toLowerCase().includes("not placed") ? (
+                        <span className="text-xs text-red-500 font-medium whitespace-normal">Not Placed</span>
+                      ) : (
+                        <span className="text-xs font-mono bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-100">{order.dynamic_order_id}</span>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
               {order.provider_error_details && (

@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, RefreshCw, Edit, Trash2, Power, PowerOff, Tag } from 'lucide-react';
 import { toast } from 'sonner';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { getDynamicProviders } from '@/lib/dynamicProviders';
 
 const normalizeComboPackages = (comboPackageIds) => {
   if (!Array.isArray(comboPackageIds)) return [];
@@ -30,6 +31,15 @@ const AdminPromotionPackages = memo(() => {
   const updatePackage = useUpdatePromotionPackage();
   const deletePackage = useDeletePromotionPackage();
 
+  const { data: dynamicProviders = [] } = useQuery({
+    queryKey: ['admin', 'dynamic-providers-active'],
+    queryFn: async () => {
+      const list = await getDynamicProviders();
+      return (list || []).filter(p => p.status === 'active');
+    },
+    staleTime: 60000
+  });
+
   const [packageSearch, setPackageSearch] = useState('');
   const [editingPackage, setEditingPackage] = useState(null);
   const [packageForm, setPackageForm] = useState({
@@ -50,6 +60,7 @@ const AdminPromotionPackages = memo(() => {
     smmraja_service_id: '',
     smmtake_service_id: '',
     quickmedia_service_id: '',
+    custom_provider_service_ids: {},
     url_type: '',
     enabled: true,
     display_order: '0',
@@ -91,6 +102,7 @@ const AdminPromotionPackages = memo(() => {
         smmraja_service_id: packageForm.smmraja_service_id || null,
         smmtake_service_id: packageForm.smmtake_service_id || null,
         quickmedia_service_id: packageForm.quickmedia_service_id || null,
+        custom_provider_service_ids: packageForm.custom_provider_service_ids || {},
         url_type: packageForm.url_type || null,
         enabled: Boolean(packageForm.enabled !== false),
         display_order: parseInt(packageForm.display_order) || 0,
@@ -121,6 +133,7 @@ const AdminPromotionPackages = memo(() => {
         smmraja_service_id: '',
         smmtake_service_id: '',
         quickmedia_service_id: '',
+        custom_provider_service_ids: {},
         url_type: '',
         enabled: true,
         display_order: '0',
@@ -489,6 +502,22 @@ const AdminPromotionPackages = memo(() => {
                 onChange={(e) => setPackageForm({ ...packageForm, quickmedia_service_id: e.target.value })}
               />
             </div>
+            {dynamicProviders.map(provider => (
+              <div key={provider.slug}>
+                <Label>{provider.name} ID</Label>
+                <Input
+                  placeholder={`${provider.name} ID`}
+                  value={packageForm.custom_provider_service_ids?.[provider.slug] || ''}
+                  onChange={(e) => setPackageForm({
+                    ...packageForm,
+                    custom_provider_service_ids: {
+                      ...(packageForm.custom_provider_service_ids || {}),
+                      [provider.slug]: e.target.value
+                    }
+                  })}
+                />
+              </div>
+            ))}
           </div>
 
           {/* Combo Package Options */}
@@ -689,6 +718,7 @@ const AdminPromotionPackages = memo(() => {
                   <PackageEditForm
                     pkg={pkg}
                     packages={packages}
+                    dynamicProviders={dynamicProviders}
                     onSave={(updates) => handleUpdatePackage(pkg.id, updates)}
                     onCancel={() => setEditingPackage(null)}
                   />
@@ -735,6 +765,12 @@ const AdminPromotionPackages = memo(() => {
                         {pkg.smmraja_service_id && <p><span className="font-medium">SMM Raja ID:</span> {pkg.smmraja_service_id}</p>}
                         {pkg.smmtake_service_id && <p><span className="font-medium">SMM Take ID:</span> {pkg.smmtake_service_id}</p>}
                         {pkg.quickmedia_service_id && <p><span className="font-medium">QuickMedia ID:</span> {pkg.quickmedia_service_id}</p>}
+                        {pkg.custom_provider_service_ids && Object.entries(pkg.custom_provider_service_ids).map(([slug, id]) => {
+                          if (!id) return null;
+                          const prov = dynamicProviders.find(p => p.slug === slug);
+                          const name = prov ? prov.name : slug;
+                          return <p key={slug}><span className="font-medium">{name} ID:</span> {id}</p>;
+                        })}
                         {pkg.url_type && (
                           <p>
                             <span className="font-medium">URL Type:</span>{' '}
@@ -789,7 +825,7 @@ const AdminPromotionPackages = memo(() => {
 });
 
 // Package Edit Form Component
-const PackageEditForm = ({ pkg, onSave, onCancel, packages = [] }) => {
+const PackageEditForm = ({ pkg, onSave, onCancel, packages = [], dynamicProviders = [] }) => {
   const [formData, setFormData] = useState({
     name: pkg.name,
     platform: pkg.platform,
@@ -808,6 +844,7 @@ const PackageEditForm = ({ pkg, onSave, onCancel, packages = [] }) => {
     smmraja_service_id: pkg.smmraja_service_id || '',
     smmtake_service_id: pkg.smmtake_service_id || '',
     quickmedia_service_id: pkg.quickmedia_service_id || '',
+    custom_provider_service_ids: pkg.custom_provider_service_ids || {},
     url_type: pkg.url_type || '',
     enabled: pkg.enabled === true,
     display_order: pkg.display_order || 0,
@@ -836,6 +873,7 @@ const PackageEditForm = ({ pkg, onSave, onCancel, packages = [] }) => {
       smmraja_service_id: formData.smmraja_service_id || null,
       smmtake_service_id: formData.smmtake_service_id || null,
       quickmedia_service_id: formData.quickmedia_service_id || null,
+      custom_provider_service_ids: formData.custom_provider_service_ids || {},
       url_type: formData.url_type || null,
       enabled: Boolean(formData.enabled !== false),
       display_order: parseInt(formData.display_order) || 0,
@@ -1048,6 +1086,22 @@ const PackageEditForm = ({ pkg, onSave, onCancel, packages = [] }) => {
             onChange={(e) => setFormData({ ...formData, quickmedia_service_id: e.target.value })}
           />
         </div>
+        {dynamicProviders.map(provider => (
+          <div key={provider.slug}>
+            <Label className="text-xs">{provider.name} ID</Label>
+            <Input
+              className="h-8 text-xs"
+              value={formData.custom_provider_service_ids?.[provider.slug] || ''}
+              onChange={(e) => setFormData({
+                ...formData,
+                custom_provider_service_ids: {
+                  ...(formData.custom_provider_service_ids || {}),
+                  [provider.slug]: e.target.value
+                }
+              })}
+            />
+          </div>
+        ))}
       </div>
 
       {/* Combo Package Options */}
