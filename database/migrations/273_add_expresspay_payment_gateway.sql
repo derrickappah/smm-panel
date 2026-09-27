@@ -23,7 +23,7 @@ VALUES
   ('payment_method_expresspay_enabled', 'true', 'Enable/disable expressPay payment method'),
   ('payment_method_expresspay_min_deposit', '1', 'Minimum deposit amount for expressPay payment method'),
   ('expresspay_merchant_id', '332604139135', 'expressPay Ghana Merchant ID'),
-  ('expresspay_api_key', 'yMKBvZToq1Qkv4Vx7jFqs-Qs84utOyvl5zmfrhO27q-T2pi8YTuGAKdS9TcKFDK-VEbuTviKFqzMF3qtQ4O', 'expressPay Ghana Security API Key'),
+  ('expresspay_api_key', 'yMKBvZToq1Qkv4Vx7jFqs-Qs84utOyvI5zmfrhO27q-T2pi8YTuGAKdS9TcKFDK-VEbuTviKFqzMF3qtQ4O', 'expressPay Ghana Security API Key'),
   ('expresspay_mode', 'sandbox', 'expressPay Ghana environment mode (sandbox or live)')
 ON CONFLICT (key) DO UPDATE 
 SET value = EXCLUDED.value,
