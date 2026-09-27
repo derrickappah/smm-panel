@@ -60,131 +60,169 @@ export default async function handler(req, res) {
     }
 
     // 3. Concurrency Lock via Redis (if available)
+    let lockAcquired = false;
+    const lockKey = `smm:lock:expresspay:${transaction.id}`;
+
     if (redis) {
-      const lockKey = `smm:lock:expresspay:${transaction.id}`;
-      const acquired = await redis.set(lockKey, 'locked', { nx: true, ex: 20 });
-      if (!acquired) {
-        return res.status(409).json({
-          error: 'Verification is currently in progress. Please wait a moment.'
+      lockAcquired = await redis.set(lockKey, 'locked', { nx: true, ex: 15 });
+      if (!lockAcquired) {
+        // Another verification or webhook call is actively running.
+        // Wait 1.5s to see if the concurrent process finishes approving it.
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+
+        const { data: latestTx } = await supabase
+          .from('transactions')
+          .select('id, status, amount, user_id')
+          .eq('id', transaction.id)
+          .maybeSingle();
+
+        if (latestTx && (latestTx.status === 'approved' || latestTx.status === 'completed')) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('balance')
+            .eq('id', latestTx.user_id)
+            .maybeSingle();
+
+          return res.status(200).json({
+            success: true,
+            status: 'approved',
+            message: 'Payment approved and balance credited successfully!',
+            transaction_id: latestTx.id,
+            amount: latestTx.amount,
+            balance: profile?.balance || null
+          });
+        }
+
+        // Return status 200 with pending so frontend cleanly retries without failing
+        return res.status(200).json({
+          success: false,
+          status: 'pending',
+          message: 'Verification is currently in progress. Please wait a moment...'
         });
       }
     }
 
-    // 4. Query expressPay Query API
-    const config = await getExpressPayConfig(supabase);
-    const verifyToken = token || transaction.expresspay_token;
-
-    if (!verifyToken) {
-      return res.status(400).json({ error: 'expressPay transaction token is missing' });
-    }
-
-    const queryParams = new URLSearchParams();
-    queryParams.append('merchant-id', config.merchantId);
-    queryParams.append('api-key', config.apiKey);
-    queryParams.append('token', verifyToken);
-
-    console.log('[expressPay Verify] Querying expressPay:', {
-      url: config.queryUrl,
-      token: verifyToken
-    });
-
-    const expressPayRes = await fetch(config.queryUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: queryParams.toString()
-    });
-
-    const queryText = await expressPayRes.text();
-    let queryData;
     try {
-      queryData = JSON.parse(queryText);
-    } catch (parseErr) {
-      console.error('[expressPay Verify] Invalid JSON from Query API:', queryText);
-      return res.status(502).json({ error: 'Failed to parse response from expressPay Query API' });
-    }
+      // 4. Query expressPay Query API
+      const config = await getExpressPayConfig(supabase);
+      const verifyToken = token || transaction.expresspay_token;
 
-    console.log('[expressPay Verify] expressPay Query API response:', queryData);
-
-    const result = parseInt(queryData.result, 10);
-    const resultText = queryData['result-text'] || queryData.result_text || 'Unknown';
-    const providerTxId = queryData['transaction-id'] || queryData.transaction_id || `EXP_TX_${verifyToken}`;
-
-    // Result codes:
-    // 1 = Approved
-    // 2 = Declined
-    // 3 = Error in transaction data or system error
-    // 4 = Pending
-    if (result === 1) {
-      // 5. Approve transaction & credit user balance atomically
-      const { data: approvalResult, error: rpcError } = await supabase.rpc(
-        'approve_deposit_transaction_universal_v2',
-        {
-          p_transaction_id: transaction.id,
-          p_payment_method: 'expresspay',
-          p_payment_status: 'Approved',
-          p_payment_reference: verifyToken,
-          p_actual_amount: transaction.amount,
-          p_provider_event_id: providerTxId,
-          p_admin_id: null
-        }
-      );
-
-      if (rpcError) {
-        console.error('[expressPay Verify] RPC Approval error:', rpcError);
-        return res.status(500).json({ error: 'Failed to credit account: ' + rpcError.message });
+      if (!verifyToken) {
+        return res.status(400).json({ error: 'expressPay transaction token is missing' });
       }
 
-      await logUserAction({
-        userId: transaction.user_id,
-        action: 'EXPRESSPAY_DEPOSIT_VERIFIED',
-        details: {
-          transaction_id: transaction.id,
-          order_id: transaction.expresspay_order_id,
-          amount: transaction.amount,
-          token: verifyToken,
-          provider_tx_id: providerTxId
+      const queryParams = new URLSearchParams();
+      queryParams.append('merchant-id', config.merchantId);
+      queryParams.append('api-key', config.apiKey);
+      queryParams.append('token', verifyToken);
+
+      console.log('[expressPay Verify] Querying expressPay:', {
+        url: config.queryUrl,
+        token: verifyToken
+      });
+
+      const expressPayRes = await fetch(config.queryUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: queryParams.toString()
+      });
+
+      const queryText = await expressPayRes.text();
+      let queryData;
+      try {
+        queryData = JSON.parse(queryText);
+      } catch (parseErr) {
+        console.error('[expressPay Verify] Invalid JSON from Query API:', queryText);
+        return res.status(502).json({ error: 'Failed to parse response from expressPay Query API' });
+      }
+
+      console.log('[expressPay Verify] expressPay Query API response:', queryData);
+
+      const result = parseInt(queryData.result, 10);
+      const resultText = queryData['result-text'] || queryData.result_text || 'Unknown';
+      const providerTxId = queryData['transaction-id'] || queryData.transaction_id || `EXP_TX_${verifyToken}`;
+
+      // Result codes:
+      // 1 = Approved
+      // 2 = Declined
+      // 3 = Error in transaction data or system error
+      // 4 = Pending
+      if (result === 1) {
+        // 5. Approve transaction & credit user balance atomically
+        const { data: approvalResult, error: rpcError } = await supabase.rpc(
+          'approve_deposit_transaction_universal_v2',
+          {
+            p_transaction_id: transaction.id,
+            p_payment_method: 'expresspay',
+            p_payment_status: 'Approved',
+            p_payment_reference: verifyToken,
+            p_actual_amount: transaction.amount,
+            p_provider_event_id: providerTxId,
+            p_admin_id: null
+          }
+        );
+
+        if (rpcError) {
+          console.error('[expressPay Verify] RPC Approval error:', rpcError);
+          return res.status(500).json({ error: 'Failed to credit account: ' + rpcError.message });
         }
-      });
 
-      return res.status(200).json({
-        success: true,
-        status: 'approved',
-        message: 'Payment approved and balance credited successfully!',
-        transaction_id: transaction.id,
-        amount: transaction.amount,
-        details: approvalResult
-      });
-    } else if (result === 4) {
-      // Pending
-      await supabase
-        .from('transactions')
-        .update({
-          expresspay_status: 'Pending'
-        })
-        .eq('id', transaction.id);
+        await logUserAction({
+          userId: transaction.user_id,
+          action: 'EXPRESSPAY_DEPOSIT_VERIFIED',
+          details: {
+            transaction_id: transaction.id,
+            order_id: transaction.expresspay_order_id,
+            amount: transaction.amount,
+            token: verifyToken,
+            provider_tx_id: providerTxId
+          }
+        });
 
-      return res.status(200).json({
-        success: false,
-        status: 'pending',
-        message: 'Your payment is currently pending confirmation from your mobile network. Balance will be updated automatically once processed.'
-      });
-    } else {
-      // Declined / Error
-      await supabase
-        .from('transactions')
-        .update({
+        return res.status(200).json({
+          success: true,
+          status: 'approved',
+          message: 'Payment approved and balance credited successfully!',
+          transaction_id: transaction.id,
+          amount: transaction.amount,
+          details: approvalResult
+        });
+      } else if (result === 4) {
+        // Pending
+        await supabase
+          .from('transactions')
+          .update({
+            expresspay_status: 'Pending'
+          })
+          .eq('id', transaction.id);
+
+        return res.status(200).json({
+          success: false,
+          status: 'pending',
+          message: 'Your payment is currently pending confirmation from your mobile network. Balance will be updated automatically once processed.'
+        });
+      } else {
+        // Declined / Error
+        await supabase
+          .from('transactions')
+          .update({
+            status: 'failed',
+            expresspay_status: `Declined: ${resultText}`
+          })
+          .eq('id', transaction.id);
+
+        return res.status(200).json({
+          success: false,
           status: 'failed',
-          expresspay_status: `Declined: ${resultText}`
-        })
-        .eq('id', transaction.id);
-
-      return res.status(200).json({
-        success: false,
-        status: 'failed',
-        message: `Payment not approved: ${resultText}`
-      });
+          message: `Payment not approved: ${resultText}`
+        });
+      }
+    } finally {
+      if (redis && lockAcquired) {
+        await redis.del(lockKey).catch(() => {});
+      }
     }
   } catch (error) {
     console.error('[expressPay Verify] Internal Server Error:', error);

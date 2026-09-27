@@ -337,6 +337,21 @@ const PaymentCallback = ({ onUpdateUser }) => {
 
           const verifyData = await verifyResponse.json();
 
+          // If the server returns 409 (concurrency lock in progress) or status is 'pending', wait and retry
+          if (verifyResponse.status === 409 || verifyData?.status === 'pending') {
+            retryCountRef.current += 1;
+            if (retryCountRef.current >= MAX_RETRIES) {
+              setStatus('success');
+              setMessage('Your payment is being confirmed. Your balance will update automatically.');
+              setTimeout(() => navigate('/dashboard'), 4000);
+              return;
+            }
+            setStatus('verifying');
+            setMessage(`Verifying payment... (${retryCountRef.current}/${MAX_RETRIES})`);
+            setTimeout(() => verifyPayment(), 2500);
+            return;
+          }
+
           if (!verifyResponse.ok) {
             throw new Error(verifyData.error || 'expressPay verification failed');
           }
@@ -363,17 +378,6 @@ const PaymentCallback = ({ onUpdateUser }) => {
             });
 
             setTimeout(() => navigate('/dashboard'), 3000);
-          } else if (verifyData.status === 'pending') {
-            retryCountRef.current += 1;
-            if (retryCountRef.current >= MAX_RETRIES) {
-              setStatus('success');
-              setMessage('Your payment is pending confirmation by your mobile network. Your balance will be credited as soon as completed.');
-              setTimeout(() => navigate('/dashboard'), 5000);
-              return;
-            }
-            setStatus('verifying');
-            setMessage(`Waiting for confirmation... (${retryCountRef.current}/${MAX_RETRIES})`);
-            setTimeout(() => verifyPayment(), 5000);
           } else {
             setStatus('failed');
             setMessage(verifyData.message || 'Payment not approved or was declined.');

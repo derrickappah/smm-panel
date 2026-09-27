@@ -70,18 +70,20 @@ export default async function handler(req, res) {
     }
 
     // 4. Redis Concurrency Lock (25s)
+    let lockAcquired = false;
+    const lockKey = `smm:lock:expresspay:${transaction.id}`;
     if (redis) {
-      const lockKey = `smm:lock:expresspay:${transaction.id}`;
-      const acquired = await redis.set(lockKey, 'locked', { nx: true, ex: 25 });
-      if (!acquired) {
+      lockAcquired = await redis.set(lockKey, 'locked', { nx: true, ex: 25 });
+      if (!lockAcquired) {
         console.log('[expressPay Callback] Concurrent operation in progress, returning 200');
         return res.status(200).json({ status: 'locked', message: 'Processing in progress' });
       }
     }
 
-    // 5. Query expressPay Query API to verify final status
-    const config = await getExpressPayConfig(supabase);
-    const queryToken = token || transaction.expresspay_token;
+    try {
+      // 5. Query expressPay Query API to verify final status
+      const config = await getExpressPayConfig(supabase);
+      const queryToken = token || transaction.expresspay_token;
 
     if (!queryToken) {
       console.error('[expressPay Callback] Missing query token for transaction:', transaction.id);
@@ -174,5 +176,9 @@ export default async function handler(req, res) {
     console.error('[expressPay Callback] Error handling callback:', error);
     // Always return HTTP 200 to satisfy expressPay requirements
     return res.status(200).json({ status: 'error', message: error.message });
+  } finally {
+    if (redis && lockAcquired && transaction?.id) {
+      await redis.del(`smm:lock:expresspay:${transaction.id}`).catch(() => {});
+    }
   }
 }
