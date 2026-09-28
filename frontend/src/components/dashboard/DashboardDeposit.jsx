@@ -201,13 +201,13 @@ const DashboardDeposit = React.memo(({
         )}
       </div>
 
-      {enabledMethods.length > 1 && depositMethod !== null && (
+      {enabledMethods.length >= 1 && depositMethod !== null && (
         <div className="flex flex-nowrap overflow-x-auto scrollbar-hide gap-2 mb-6 p-1 bg-gray-100 rounded-lg">
           {paymentMethodSettings.expresspay_enabled && (
             <button
               type="button"
               onClick={() => setDepositMethod('expresspay')}
-              className={`flex-shrink-0 sm:flex-1 whitespace-nowrap py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'expresspay'
+              className={`${enabledMethods.length <= 2 ? 'flex-1' : 'flex-shrink-0 sm:flex-1'} whitespace-nowrap py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'expresspay'
                 ? 'bg-white text-indigo-600 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
@@ -219,7 +219,7 @@ const DashboardDeposit = React.memo(({
             <button
               type="button"
               onClick={() => setDepositMethod('moolre_web')}
-              className={`flex-shrink-0 sm:flex-1 whitespace-nowrap py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'moolre_web'
+              className={`${enabledMethods.length <= 2 ? 'flex-1' : 'flex-shrink-0 sm:flex-1'} whitespace-nowrap py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'moolre_web'
                 ? 'bg-white text-indigo-600 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
@@ -231,7 +231,7 @@ const DashboardDeposit = React.memo(({
             <button
               type="button"
               onClick={() => setDepositMethod('paystack')}
-              className={`flex-shrink-0 sm:flex-1 whitespace-nowrap py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'paystack'
+              className={`${enabledMethods.length <= 2 ? 'flex-1' : 'flex-shrink-0 sm:flex-1'} whitespace-nowrap py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'paystack'
                 ? 'bg-white text-indigo-600 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
@@ -243,7 +243,7 @@ const DashboardDeposit = React.memo(({
             <button
               type="button"
               onClick={() => setDepositMethod('manual')}
-              className={`flex-shrink-0 sm:flex-1 whitespace-nowrap py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'manual'
+              className={`${enabledMethods.length <= 2 ? 'flex-1' : 'flex-shrink-0 sm:flex-1'} whitespace-nowrap py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'manual'
                 ? 'bg-white text-indigo-600 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
@@ -255,7 +255,7 @@ const DashboardDeposit = React.memo(({
             <button
               type="button"
               onClick={() => setDepositMethod('hubtel')}
-              className={`flex-shrink-0 sm:flex-1 whitespace-nowrap py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'hubtel'
+              className={`${enabledMethods.length <= 2 ? 'flex-1' : 'flex-shrink-0 sm:flex-1'} whitespace-nowrap py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'hubtel'
                 ? 'bg-white text-indigo-600 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
@@ -267,7 +267,7 @@ const DashboardDeposit = React.memo(({
             <button
               type="button"
               onClick={() => setDepositMethod('korapay')}
-              className={`flex-shrink-0 sm:flex-1 whitespace-nowrap py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'korapay'
+              className={`${enabledMethods.length <= 2 ? 'flex-1' : 'flex-shrink-0 sm:flex-1'} whitespace-nowrap py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'korapay'
                 ? 'bg-white text-indigo-600 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
@@ -279,7 +279,7 @@ const DashboardDeposit = React.memo(({
             <button
               type="button"
               onClick={() => setDepositMethod('moolre')}
-              className={`flex-shrink-0 sm:flex-1 whitespace-nowrap py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'moolre'
+              className={`${enabledMethods.length <= 2 ? 'flex-1' : 'flex-shrink-0 sm:flex-1'} whitespace-nowrap py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'moolre'
                 ? 'bg-white text-indigo-600 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
