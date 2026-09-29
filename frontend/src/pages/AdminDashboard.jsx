@@ -10,7 +10,7 @@ import {
   MessageSquare, UserPlus, RefreshCw, BarChart3, Menu, X, LayoutDashboard, Tag,
   ChevronLeft, ChevronRight, FileText, Server, HelpCircle, CreditCard, Scale, Bell, Video,
   Gift, Settings, Layers, Search, Download, ShieldAlert, ShieldCheck, Sliders, Clock,
-  TrendingUp
+  TrendingUp, Activity
 } from 'lucide-react';
 import { useReferralStats } from '@/hooks/useAdminReferrals';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -58,6 +58,7 @@ const AdminServiceNotifications = lazy(() => import('@/pages/admin/AdminServiceN
 const AdminRateCatcher = lazy(() => import('@/pages/admin/AdminRateCatcher'));
 const AdminAudit = lazy(() => import('@/pages/admin/AdminAudit'));
 const AdminEnvSettings = lazy(() => import('@/pages/admin/AdminEnvSettings'));
+const AdminMonitoringDashboard = lazy(() => import('@/pages/admin/AdminMonitoringDashboard'));
 import AdminRewards from '@/pages/admin/AdminRewards';
 import AdminRewardSettings from '@/pages/admin/AdminRewardSettings';
 
@@ -140,7 +141,9 @@ const AdminDashboard = memo(({ user, onLogout }) => {
         'audit': 'audit',
         'env-settings': 'env-settings',
         'system-config': 'env-settings',
-        'environment': 'env-settings'
+        'environment': 'env-settings',
+        'monitoring': 'monitoring',
+        'system-monitor': 'monitoring'
       };
       return sectionMap[section] || 'dashboard';
     }
@@ -391,7 +394,8 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     'rewards-settings': 'Reward Settings',
     'rate-catcher': 'Rate Catcher',
     'audit': 'Security & Balance Audit',
-    'env-settings': 'System Config (Env)'
+    'env-settings': 'System Config (Env)',
+    monitoring: 'Production Health & System Monitor'
   };
 
   // Navigation items configuration
@@ -439,6 +443,7 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     { id: 'rate-catcher', label: 'Rate Catcher', icon: Scale },
     { id: 'audit', label: 'Security & Audit', icon: ShieldCheck },
     { id: 'env-settings', label: 'System Config (Env)', icon: Sliders },
+    { id: 'monitoring', label: 'System Monitor', icon: Activity, badge: 'Live' },
   ];
 
   // Show skeleton loader while initial data is loading
@@ -1052,6 +1057,13 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                 <TabsContent value="env-settings" className="lg:mt-0 w-full max-w-full">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminEnvSettings />
+                  </Suspense>
+                </TabsContent>
+
+                {/* Production Health & System Monitor Section */}
+                <TabsContent value="monitoring" className="lg:mt-0 w-full max-w-full">
+                  <Suspense fallback={<ComponentLoader />}>
+                    <AdminMonitoringDashboard user={user} onLogout={onLogout} />
                   </Suspense>
                 </TabsContent>
               </div>
