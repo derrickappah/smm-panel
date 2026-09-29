@@ -1,6 +1,7 @@
 import { getServiceRoleClient } from '../../utils/auth.js';
 import { logUserAction, logSecurityEvent } from '../../utils/activityLogger.js';
 import { redis } from '../../utils/redisClient.js';
+import { getOrCreateRequestId, recordIncident, logStructured } from '../../utils/monitoring.js';
 
 /**
  * Hubtel Online Checkout Callback (Webhook)
@@ -13,13 +14,15 @@ import { redis } from '../../utils/redisClient.js';
  * Documentation: https://developers.hubtel.com/docs/callback-handling
  */
 export default async function handler(req, res) {
+    const requestId = getOrCreateRequestId(req, res);
+
     // Only allow POST requests
     if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method not allowed' });
+        return res.status(405).json({ error: 'Method not allowed', request_id: requestId });
     }
 
     // Log the raw notification
-    console.log('Hubtel Callback received:', JSON.stringify(req.body, null, 2));
+    logStructured('INFO', 'payments', 'hubtel_callback_received', { request_id: requestId });
 
     try {
         const payload = req.body || {};
@@ -217,16 +220,44 @@ export default async function handler(req, res) {
 
         if (rpcError) {
             console.error('[HUBTEL CALLBACK] Database function error:', rpcError);
-            return res.status(500).json({ error: 'Failed to approve transaction', details: rpcError.message });
+            recordIncident({
+                severity: 'CRITICAL',
+                type: 'PAYMENT_CREDIT_FAILURE',
+                component: 'Payments',
+                lastError: `Payment confirmed by Hubtel (GHS ${creditAmount}) but balance credit RPC failed: ${rpcError.message}`,
+                metadata: {
+                    clientReference,
+                    transaction_id: transaction.id,
+                    user_id: transaction.user_id,
+                    amount: creditAmount,
+                    error: rpcError.message,
+                    request_id: requestId
+                }
+            }).catch(() => {});
+            return res.status(500).json({ error: 'Failed to approve transaction', details: rpcError.message, request_id: requestId });
         }
 
         const approvalResult = result && result.length > 0 ? result[0] : null;
 
         if (!approvalResult || !approvalResult.success) {
             if (approvalResult?.message?.includes('already approved')) {
-                return res.status(200).json({ success: true, message: 'Already approved' });
+                return res.status(200).json({ success: true, message: 'Already approved', request_id: requestId });
             }
-            return res.status(400).json({ error: approvalResult?.message || 'Transaction approval failed' });
+            recordIncident({
+                severity: 'CRITICAL',
+                type: 'PAYMENT_CREDIT_FAILURE',
+                component: 'Payments',
+                lastError: `Payment confirmed by Hubtel (GHS ${creditAmount}) but approval returned failure: ${approvalResult?.message}`,
+                metadata: {
+                    clientReference,
+                    transaction_id: transaction.id,
+                    user_id: transaction.user_id,
+                    amount: creditAmount,
+                    message: approvalResult?.message,
+                    request_id: requestId
+                }
+            }).catch(() => {});
+            return res.status(400).json({ error: approvalResult?.message || 'Transaction approval failed', request_id: requestId });
         }
 
         await logUserAction({

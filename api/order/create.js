@@ -13,6 +13,7 @@ import {
 } from '../utils/orderValidation.js';
 import crypto from 'crypto';
 import { setCorsHeaders } from '../utils/corsHeaders.js';
+import { getOrCreateRequestId, logStructured, recordIncident } from '../utils/monitoring.js';
 
 function resolveItemProvider(item, activeDynamicProviders = []) {
     if (!item) return { provider: null, provider_service_id: null };
@@ -59,6 +60,7 @@ function resolveItemProvider(item, activeDynamicProviders = []) {
 
 export default async function handler(req, res) {
     setCorsHeaders(req, res);
+    const requestId = getOrCreateRequestId(req, res);
 
     if (req.method === 'OPTIONS') return res.status(200).end();
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });

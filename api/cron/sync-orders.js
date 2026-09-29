@@ -26,6 +26,7 @@ import {
 } from '../utils/statusMapping.js';
 import { getActiveDynamicProviders } from '../utils/dynamicProviderClient.js';
 import { setCorsHeaders } from '../utils/corsHeaders.js';
+import { getOrCreateRequestId, logStructured, recordIncident } from '../utils/monitoring.js';
 
 /**
  * Handle automatic refund for an order using atomic RPC
@@ -127,6 +128,7 @@ async function verifyCronAuth(req) {
 
 export default async function handler(req, res) {
     setCorsHeaders(req, res);
+    const requestId = getOrCreateRequestId(req, res);
 
     if (req.method === 'OPTIONS') return res.status(200).end();
     if (req.method !== 'GET' && req.method !== 'POST') {
@@ -136,8 +138,8 @@ export default async function handler(req, res) {
     // Authenticate cron caller
     const isAuthorized = await verifyCronAuth(req);
     if (!isAuthorized) {
-        console.warn('[CronSync] Unauthorized cron invocation attempt');
-        return res.status(401).json({ error: 'Unauthorized: Invalid or missing cron credentials' });
+        logStructured('WARN', 'cron', 'unauthorized_invocation_attempt', { request_id: requestId });
+        return res.status(401).json({ error: 'Unauthorized: Invalid or missing cron credentials', request_id: requestId });
     }
 
     const startTime = Date.now();
@@ -372,17 +374,75 @@ export default async function handler(req, res) {
         summary.duration_ms = Date.now() - startTime;
         console.log(`[CronSync] Completed sync in ${summary.duration_ms}ms: Checked ${summary.checked}, Completed ${summary.completed}, Refunded ${summary.refunded}, Partial ${summary.partial}, InProgress ${summary.in_progress}`);
 
+        // Record successful cron job telemetry
+        await supabase.rpc('record_cron_job_run', {
+            p_job_name: 'sync-orders',
+            p_status: 'SUCCESS',
+            p_duration_ms: summary.duration_ms,
+            p_details: summary,
+            p_error_message: null
+        }).catch(err => console.warn('[CronSync] Failed to record cron run telemetry:', err.message));
+
+        // Detect provider outage/burst failures (> 5 provider errors or failure burst)
+        if (summary.errors && summary.errors.length > 5) {
+            recordIncident({
+                severity: 'WARNING',
+                type: 'PROVIDER_SYNC_ERRORS',
+                component: 'Cron Jobs',
+                lastError: `Multiple provider communication failures during sync (${summary.errors.length} errors)`,
+                metadata: {
+                    error_count: summary.errors.length,
+                    errors: summary.errors.slice(0, 5),
+                    checked: summary.checked,
+                    duration_ms: summary.duration_ms
+                }
+            }).catch(() => {});
+        }
+
+        // Periodic automated data retention cleanup (runs ~5% of cron executions = roughly once every 100m)
+        if (Math.random() < 0.05) {
+            supabase.rpc('clean_old_monitoring_data', { p_retention_days: 14 })
+                .then(cleanRes => console.log('[CronSync] Automated 14-day telemetry retention cleanup result:', cleanRes?.data))
+                .catch(cleanErr => console.warn('[CronSync] Retention cleanup notice:', cleanErr.message));
+        }
+
         return res.status(200).json({
             success: true,
-            summary
+            summary,
+            request_id: requestId
         });
 
     } catch (err) {
+        const durationMs = Date.now() - startTime;
         console.error('[CronSync] Fatal cron error:', err);
+
+        // Record failed cron job telemetry
+        await supabase.rpc('record_cron_job_run', {
+            p_job_name: 'sync-orders',
+            p_status: 'FAILED',
+            p_duration_ms: durationMs,
+            p_details: { error: err.message },
+            p_error_message: err.message
+        }).catch(() => {});
+
+        // Record Critical Incident
+        recordIncident({
+            severity: 'CRITICAL',
+            type: 'CRON_EXECUTION_FAILURE',
+            component: 'Cron Jobs',
+            lastError: err.message,
+            metadata: {
+                job_name: 'sync-orders',
+                duration_ms: durationMs,
+                request_id: requestId
+            }
+        }).catch(() => {});
+
         return res.status(500).json({
             error: 'Internal server error during order sync',
             message: err.message,
-            duration_ms: Date.now() - startTime
+            duration_ms: durationMs,
+            request_id: requestId
         });
     }
 }

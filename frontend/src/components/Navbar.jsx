@@ -7,7 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Home, Package, History, Shield, LogOut, Menu, X, User, HelpCircle, Receipt, FileText, MessageCircleQuestion, Gift, MoreHorizontal } from 'lucide-react';
+import { Home, Package, History, Shield, LogOut, Menu, X, User, HelpCircle, Receipt, FileText, MessageCircleQuestion, Gift, MoreHorizontal, Activity } from 'lucide-react';
 // import AnnouncementBar from './AnnouncementBar';
 
 const Navbar = ({ user, onLogout }) => {
@@ -31,8 +31,10 @@ const Navbar = ({ user, onLogout }) => {
 
   if (user?.role === 'admin') {
     visibleNavItems.push({ path: '/admin', label: 'Admin', icon: Shield });
+    droppedNavItems.push({ path: '/admin/monitoring', label: 'Monitoring', icon: Activity });
     // Also push to allNavItems for mobile menu
     allNavItems.push({ path: '/admin', label: 'Admin', icon: Shield });
+    allNavItems.push({ path: '/admin/monitoring', label: 'Monitoring', icon: Activity });
   }
 
   const handleNavClick = (path) => {

@@ -43,6 +43,7 @@ const PricingPage = lazy(() => import("@/pages/PricingPage"));
 const TermsPage = lazy(() => import("@/pages/TermsPage"));
 const FAQPage = lazy(() => import("@/pages/FAQPage"));
 const DevDashboard = lazy(() => import("@/pages/admin/DevDashboard"));
+const AdminMonitoringDashboard = lazy(() => import("@/pages/admin/AdminMonitoringDashboard"));
 const HubtelSuccess = lazy(() => import("@/pages/payment/Success"));
 const HubtelCancelled = lazy(() => import("@/pages/payment/Cancelled"));
 import RewardPage from "@/pages/RewardPage";
@@ -322,6 +323,22 @@ function App() {
                         <Navigate to="/auth" replace />
                       )
                     }
+                  />
+                  <Route
+                    path="/admin/monitoring"
+                    element={
+                      user?.role === 'admin' ? (
+                        <AdminMonitoringDashboard user={user} onLogout={logout} />
+                      ) : user ? (
+                        <Navigate to="/dashboard" replace />
+                      ) : (
+                        <Navigate to="/auth" replace />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/admin/system-monitor"
+                    element={<Navigate to="/admin/monitoring" replace />}
                   />
 
                   {/* Catch-all route */}

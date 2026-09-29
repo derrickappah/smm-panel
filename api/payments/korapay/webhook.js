@@ -1,25 +1,19 @@
 import { getServiceRoleClient } from '../../utils/auth.js';
 import { logUserAction } from '../../utils/activityLogger.js';
 import { redis } from '../../utils/redisClient.js';
+import { getOrCreateRequestId, recordIncident, logStructured } from '../../utils/monitoring.js';
 import crypto from 'crypto';
 import getRawBody from 'raw-body';
 export const config = { api: { bodyParser: false } };
-/**
- * KoraPay Webhook (notification_url)
- *
- * Receives charge.success events from KoraPay and updates the
- * transaction status + user balance atomically.
- *
- * KoraPay sends an HMAC-SHA256 signature in the
- * 'x-korapay-signature' header, computed over the raw request body
- * using your KORAPAY_SECRET_KEY.
- */
+
 export default async function handler(req, res) {
+    const requestId = getOrCreateRequestId(req, res);
+
     if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method not allowed' });
+        return res.status(405).json({ error: 'Method not allowed', request_id: requestId });
     }
 
-    console.log('KoraPay Webhook received:', JSON.stringify(req.body, null, 2));
+    logStructured('INFO', 'payments', 'korapay_webhook_received', { request_id: requestId });
 
     try {
         // 1. Verify HMAC signature
@@ -164,16 +158,44 @@ export default async function handler(req, res) {
 
         if (rpcError) {
             console.error('[KORAPAY WEBHOOK] Database function error:', rpcError);
-            return res.status(500).json({ error: 'Failed to approve transaction', details: rpcError.message });
+            recordIncident({
+                severity: 'CRITICAL',
+                type: 'PAYMENT_CREDIT_FAILURE',
+                component: 'Payments',
+                lastError: `Payment confirmed by KoraPay (GHS ${creditAmount}) but balance credit RPC failed: ${rpcError.message}`,
+                metadata: {
+                    reference,
+                    transaction_id: transaction.id,
+                    user_id: transaction.user_id,
+                    amount: creditAmount,
+                    error: rpcError.message,
+                    request_id: requestId
+                }
+            }).catch(() => {});
+            return res.status(500).json({ error: 'Failed to approve transaction', details: rpcError.message, request_id: requestId });
         }
 
         const approvalResult = result && result.length > 0 ? result[0] : null;
 
         if (!approvalResult || !approvalResult.success) {
             if (approvalResult?.message?.includes('already approved')) {
-                return res.status(200).json({ success: true, message: 'Already approved' });
+                return res.status(200).json({ success: true, message: 'Already approved', request_id: requestId });
             }
-            return res.status(400).json({ error: approvalResult?.message || 'Transaction approval failed' });
+            recordIncident({
+                severity: 'CRITICAL',
+                type: 'PAYMENT_CREDIT_FAILURE',
+                component: 'Payments',
+                lastError: `Payment confirmed by KoraPay (GHS ${creditAmount}) but approval returned failure: ${approvalResult?.message}`,
+                metadata: {
+                    reference,
+                    transaction_id: transaction.id,
+                    user_id: transaction.user_id,
+                    amount: creditAmount,
+                    message: approvalResult?.message,
+                    request_id: requestId
+                }
+            }).catch(() => {});
+            return res.status(400).json({ error: approvalResult?.message || 'Transaction approval failed', request_id: requestId });
         }
 
         await logUserAction({

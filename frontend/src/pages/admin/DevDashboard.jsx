@@ -228,6 +228,14 @@ const DevDashboard = ({ user }) => {
                     <Button
                         variant="outline"
                         size="sm"
+                        onClick={() => window.location.href = '/admin/monitoring'}
+                        className="bg-emerald-950/40 border-emerald-500/40 text-emerald-400 hover:bg-emerald-900/50 text-xs"
+                    >
+                        <Activity className="w-3 h-3 mr-2 text-emerald-400" /> PRODUCTION_MONITOR
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => refetch()}
                         className="bg-transparent border-gray-800 hover:bg-gray-900 text-xs"
                     >

@@ -15,6 +15,21 @@ class ErrorBoundary extends React.Component {
   componentDidCatch(error, errorInfo) {
     console.error('[ErrorBoundary caught error]:', error, errorInfo);
     this.setState({ errorInfo });
+
+    // Asynchronously report to production monitoring
+    try {
+      fetch('/api/monitoring/client-errors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: error?.message || 'React render error',
+          stack: error?.stack || null,
+          componentStack: errorInfo?.componentStack || null,
+          url: typeof window !== 'undefined' ? window.location.href : '',
+          type: 'react_error_boundary'
+        })
+      }).catch(() => {});
+    } catch { }
   }
 
   handleReset = () => {
