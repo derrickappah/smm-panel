@@ -601,19 +601,122 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
     }
   }, [onRefresh, queryClient, refetch]);
 
+  const handleVerifyHubtelDeposit = useCallback(async (deposit, manualRef = null) => {
+    setVerifyingDeposit(deposit.id);
+    try {
+      let { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token || (session.expires_at && Date.now() / 1000 >= session.expires_at - 60)) {
+        const { data: refreshData, error: refreshErr } = await supabase.auth.refreshSession();
+        if (!refreshErr && refreshData?.session) {
+          session = refreshData.session;
+        }
+      }
+
+      if (!session?.access_token) {
+        throw new Error('No session token available. Please log in again.');
+      }
+
+      const clientRefToUse = manualRef || deposit.client_reference;
+
+      const response = await fetch('/api/manual-verify-hubtel-deposit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          transactionId: deposit.id,
+          ...(clientRefToUse && { clientReference: clientRefToUse })
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          toast.error('Your admin session has expired. Please log in again.');
+          return;
+        }
+
+        // If error indicates missing Hubtel reference and we don't have one, show manual ref dialog
+        if (data.error && data.error.includes('No Hubtel reference') && !manualRef) {
+          setManualRefDialog({
+            open: true,
+            deposit,
+            error: data.error,
+            paymentMethod: 'hubtel'
+          });
+          setVerifyingDeposit(null);
+          return;
+        }
+        throw new Error(data.error || 'Failed to verify Hubtel deposit');
+      }
+
+      if (data.updateResult?.newStatus === 'approved' || data.status === 'approved') {
+        toast.success('Hubtel deposit verified and approved successfully');
+      } else if (data.updateResult?.newStatus === 'rejected' || data.status === 'rejected') {
+        toast.warning('Hubtel deposit verified and rejected (payment failed)');
+      } else {
+        toast.info(data.message || `Hubtel status updated: ${data.hubtelStatus}`);
+      }
+
+      // Close dialog if open
+      if (manualRefDialog.open && manualRefDialog.paymentMethod === 'hubtel') {
+        setManualRefDialog({ open: false, deposit: null, error: null, paymentMethod: null });
+        setManualReference('');
+      }
+
+      // Optimistically update transaction in cache
+      queryClient.setQueryData(['admin', 'deposits'], (oldData) => {
+        if (!oldData?.pages) return oldData;
+
+        return {
+          ...oldData,
+          pages: oldData.pages.map(page => ({
+            ...page,
+            data: page.data?.map(tx =>
+              tx.id === deposit.id
+                ? {
+                  ...tx,
+                  status: data.updateResult?.newStatus || data.status || tx.status,
+                  client_reference: data.reference || tx.client_reference
+                }
+                : tx
+            ) || []
+          }))
+        };
+      });
+
+      // Invalidate and refetch
+      queryClient.invalidateQueries({ queryKey: ['admin', 'deposits'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
+      refetch();
+      if (onRefresh) onRefresh();
+    } catch (error) {
+      console.error('Failed to verify Hubtel deposit:', error);
+      toast.error(error.message || 'Failed to verify Hubtel deposit');
+    } finally {
+      setVerifyingDeposit(null);
+    }
+  }, [onRefresh, manualRefDialog.open, queryClient, refetch]);
+
   const handleManualReferenceSubmit = useCallback(async () => {
     if (!manualRefDialog.deposit || !manualReference.trim()) {
       const isMoolreMethod = manualRefDialog.paymentMethod === 'moolre' || manualRefDialog.paymentMethod === 'moolre_expired';
-      const methodName = isMoolreMethod ? 'Moolre' :
+      const isHubtelMethod = manualRefDialog.paymentMethod === 'hubtel';
+      const methodName = isHubtelMethod ? 'Hubtel' : isMoolreMethod ? 'Moolre' :
         manualRefDialog.paymentMethod === 'moolre_web' ? 'Moolre Web' : 'Paystack';
-      const fieldName = (isMoolreMethod || manualRefDialog.paymentMethod === 'moolre_web')
+      const fieldName = isHubtelMethod ? 'Client Reference' :
+        (isMoolreMethod || manualRefDialog.paymentMethod === 'moolre_web')
         ? 'Moolre ID' : 'reference';
       toast.error(`Please enter a ${methodName} ${fieldName}`);
       return;
     }
 
     const paymentMethod = manualRefDialog.paymentMethod || 'paystack';
-    if (paymentMethod === 'moolre_expired') {
+    if (paymentMethod === 'hubtel') {
+      await handleVerifyHubtelDeposit(manualRefDialog.deposit, manualReference.trim());
+    } else if (paymentMethod === 'moolre_expired') {
       await handleVerifyExpiredMoolreDeposit(manualRefDialog.deposit, manualReference.trim());
     } else if (paymentMethod === 'moolre') {
       await handleVerifyMoolreDeposit(manualRefDialog.deposit, manualReference.trim());
@@ -622,7 +725,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
     } else {
       await handleVerifyPaystackDeposit(manualRefDialog.deposit, manualReference.trim());
     }
-  }, [manualRefDialog.deposit, manualRefDialog.paymentMethod, manualReference, handleVerifyPaystackDeposit, handleVerifyMoolreDeposit, handleVerifyMoolreWebDeposit, handleVerifyExpiredMoolreDeposit]);
+  }, [manualRefDialog.deposit, manualRefDialog.paymentMethod, manualReference, handleVerifyHubtelDeposit, handleVerifyPaystackDeposit, handleVerifyMoolreDeposit, handleVerifyMoolreWebDeposit, handleVerifyExpiredMoolreDeposit]);
 
   const handleBanUserClick = useCallback((deposit) => {
     setBanUserDialog({
@@ -749,6 +852,12 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
           {deposit.paystack_reference && (
             <p className="text-xs text-gray-500 mt-1">Ref: {deposit.paystack_reference}</p>
           )}
+          {deposit.client_reference && (
+            <p className="text-xs text-gray-500 mt-1">Ref: {deposit.client_reference}</p>
+          )}
+          {deposit.checkout_id && !deposit.client_reference && (
+            <p className="text-xs text-gray-500 mt-1">Checkout: {deposit.checkout_id}</p>
+          )}
           {deposit.korapay_reference && (
             <p className="text-xs text-gray-500 mt-1">Ref: {deposit.korapay_reference}</p>
           )}
@@ -792,6 +901,17 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
                   className="text-xs min-h-[36px] border-blue-500 text-blue-600 hover:bg-blue-50"
                 >
                   {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with Paystack'}
+                </Button>
+              )}
+              {isHubtel && (
+                <Button
+                  onClick={() => handleVerifyHubtelDeposit(deposit)}
+                  disabled={verifyingDeposit === deposit.id}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs min-h-[36px] border-orange-500 text-orange-600 hover:bg-orange-50"
+                >
+                  {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with Hubtel'}
                 </Button>
               )}
               {isMoolre && (
@@ -852,6 +972,17 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
             </div>
           ) : deposit.status === 'expired' ? (
             <div className="flex flex-col gap-2">
+              {isHubtel && (
+                <Button
+                  onClick={() => handleVerifyHubtelDeposit(deposit)}
+                  disabled={verifyingDeposit === deposit.id || approvingDeposit === deposit.id}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs min-h-[36px] border-orange-500 text-orange-600 hover:bg-orange-50"
+                >
+                  {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with Hubtel'}
+                </Button>
+              )}
               {(isMoolre || isMoolreWeb) && (
                 <Button
                   onClick={() => handleVerifyExpiredMoolreDeposit(deposit)}
@@ -908,7 +1039,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
         </div>
       </div>
     );
-  }, [handleApproveDeposit, handleRejectDeposit, handleApproveManualDeposit, handleVerifyPaystackDeposit, handleVerifyMoolreDeposit, handleVerifyMoolreWebDeposit, handleVerifyExpiredMoolreDeposit, handleVerifyExpressPayDeposit, handleBanUserClick, approvingDeposit, verifyingDeposit, formatPaymentMethod, getPaymentMethodColors]);
+  }, [handleApproveDeposit, handleRejectDeposit, handleApproveManualDeposit, handleVerifyPaystackDeposit, handleVerifyHubtelDeposit, handleVerifyMoolreDeposit, handleVerifyMoolreWebDeposit, handleVerifyExpiredMoolreDeposit, handleVerifyExpressPayDeposit, handleBanUserClick, approvingDeposit, verifyingDeposit, formatPaymentMethod, getPaymentMethodColors]);
 
   const renderMobileCard = useCallback((deposit, index) => {
     const depositMethod = deposit.deposit_method || deposit.payment_method;
@@ -959,6 +1090,12 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
             {deposit.paystack_reference && (
               <p className="text-xs text-gray-500 mt-1">Ref: {deposit.paystack_reference}</p>
             )}
+            {deposit.client_reference && (
+              <p className="text-xs text-gray-500 mt-1">Ref: {deposit.client_reference}</p>
+            )}
+            {deposit.checkout_id && !deposit.client_reference && (
+              <p className="text-xs text-gray-500 mt-1">Checkout: {deposit.checkout_id}</p>
+            )}
             {deposit.korapay_reference && (
               <p className="text-xs text-gray-500 mt-1">Ref: {deposit.korapay_reference}</p>
             )}
@@ -1002,6 +1139,17 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
                 className="w-full border-blue-500 text-blue-600 hover:bg-blue-50 min-h-[44px]"
               >
                 {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with Paystack'}
+              </Button>
+            )}
+            {isHubtel && (
+              <Button
+                onClick={() => handleVerifyHubtelDeposit(deposit)}
+                disabled={verifyingDeposit === deposit.id}
+                variant="outline"
+                size="sm"
+                className="w-full border-orange-500 text-orange-600 hover:bg-orange-50 min-h-[44px]"
+              >
+                {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with Hubtel'}
               </Button>
             )}
             {isMoolre && (
@@ -1063,6 +1211,17 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
         )}
         {deposit.status === 'expired' && (
           <div className="pt-3 border-t border-gray-200 space-y-2">
+            {isHubtel && (
+              <Button
+                onClick={() => handleVerifyHubtelDeposit(deposit)}
+                disabled={verifyingDeposit === deposit.id || approvingDeposit === deposit.id}
+                variant="outline"
+                size="sm"
+                className="w-full border-orange-500 text-orange-600 hover:bg-orange-50 min-h-[44px]"
+              >
+                {verifyingDeposit === deposit.id ? 'Verifying...' : 'Verify with Hubtel'}
+              </Button>
+            )}
             {(isMoolre || isMoolreWeb) && (
               <Button
                 onClick={() => handleVerifyExpiredMoolreDeposit(deposit)}
@@ -1111,7 +1270,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
         )}
       </div>
     );
-  }, [handleApproveDeposit, handleRejectDeposit, handleApproveManualDeposit, handleVerifyPaystackDeposit, handleVerifyMoolreDeposit, handleVerifyMoolreWebDeposit, handleVerifyExpiredMoolreDeposit, handleVerifyExpressPayDeposit, handleBanUserClick, approvingDeposit, verifyingDeposit, formatPaymentMethod, getPaymentMethodColors]);
+  }, [handleApproveDeposit, handleRejectDeposit, handleApproveManualDeposit, handleVerifyPaystackDeposit, handleVerifyHubtelDeposit, handleVerifyMoolreDeposit, handleVerifyMoolreWebDeposit, handleVerifyExpiredMoolreDeposit, handleVerifyExpressPayDeposit, handleBanUserClick, approvingDeposit, verifyingDeposit, formatPaymentMethod, getPaymentMethodColors]);
 
   if (isLoading) {
     return (
@@ -1271,6 +1430,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
               <AlertCircle className="w-5 h-5 text-yellow-600" />
               Manual {(() => {
                 const method = manualRefDialog.paymentMethod || 'paystack';
+                if (method === 'hubtel') return 'Hubtel';
                 if (method === 'moolre' || method === 'moolre_expired') return 'Moolre';
                 if (method === 'moolre_web') return 'Moolre Web';
                 return 'Paystack';
@@ -1279,12 +1439,14 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
             <DialogDescription>
               The system couldn't automatically find the {(() => {
                 const method = manualRefDialog.paymentMethod || 'paystack';
+                if (method === 'hubtel') return 'Hubtel';
                 if (method === 'moolre' || method === 'moolre_expired') return 'Moolre';
                 if (method === 'moolre_web') return 'Moolre Web';
                 return 'Paystack';
               })()} reference for this transaction.
               Please enter the {(() => {
                 const method = manualRefDialog.paymentMethod || 'paystack';
+                if (method === 'hubtel') return 'Hubtel';
                 if (method === 'moolre' || method === 'moolre_expired') return 'Moolre';
                 if (method === 'moolre_web') return 'Moolre Web';
                 return 'Paystack';
@@ -1304,6 +1466,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
                 <label htmlFor="manual-ref" className="text-sm font-medium">
                   {(() => {
                     const method = manualRefDialog.paymentMethod || 'paystack';
+                    if (method === 'hubtel') return 'Hubtel Client Reference';
                     if (method === 'moolre' || method === 'moolre_expired') return 'Moolre ID';
                     if (method === 'moolre_web') return 'Moolre Web Reference';
                     return 'Paystack Reference';
@@ -1313,6 +1476,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
                   id="manual-ref"
                   placeholder={(() => {
                     const method = manualRefDialog.paymentMethod || 'paystack';
+                    if (method === 'hubtel') return 'e.g., client_reference (e.g. UUID)';
                     if (method === 'moolre' || method === 'moolre_expired' || method === 'moolre_web') return 'e.g., MOOLRE_WEB_abc123_1234567890';
                     return 'e.g., ref_abc123xyz';
                   })()}
@@ -1329,6 +1493,7 @@ const AdminDeposits = memo(({ onRefresh, refreshing = false }) => {
                 <p className="text-xs text-gray-500">
                   Enter the {(() => {
                     const method = manualRefDialog.paymentMethod || 'paystack';
+                    if (method === 'hubtel') return 'Hubtel';
                     if (method === 'moolre' || method === 'moolre_expired') return 'Moolre';
                     if (method === 'moolre_web') return 'Moolre Web';
                     return 'Paystack';
