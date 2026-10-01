@@ -44,7 +44,7 @@ const OrderHistory = ({ user, onLogout }) => {
       const [ordersRes, comboOrdersRes, servicesRes] = await Promise.all([
         supabase
           .from('orders')
-          .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, tiksta_order_id, smmraja_order_id, smmtake_order_id, quickmedia_order_id, dynamic_provider, dynamic_order_id, component_provider_order_ids, combo_id, combo_name, combo_item_name, service_name, is_combo, created_at, completed_at, refund_status, total_cost, last_status_check, is_reward, promotion_packages(name, platform, service_type, is_combo), services(id, name, platform, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id, tiksta_service_id, smmraja_service_id, smmtake_service_id, quickmedia_service_id, is_combo)')
+          .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, tiksta_order_id, smmraja_order_id, smmtake_order_id, quickmedia_order_id, dynamic_provider, dynamic_order_id, component_provider_order_ids, combo_id, combo_name, combo_item_name, service_name, is_combo, created_at, completed_at, refund_status, total_cost, last_status_check, is_reward, promotion_packages(name, platform, service_type, is_combo), services(id, name, platform, smmgen_service_id, smmcost_service_id, jbsmmpanel_service_id, worldofsmm_service_id, g1618_service_id, oldsmm_service_id, apiowner_service_id, tiksta_service_id, smmraja_service_id, smmtake_service_id, quickmedia_service_id, is_combo), order_refunds(amount, type, remains)')
           .eq('user_id', authUser.id)
           .order('created_at', { ascending: false }),
         supabase
@@ -65,6 +65,8 @@ const OrderHistory = ({ user, onLogout }) => {
 
       // 1. Process orders from public.orders (each split order is its own independent row)
       rawRegularOrders.forEach(order => {
+        const refundRecord = Array.isArray(order.order_refunds) ? order.order_refunds[0] : order.order_refunds;
+        const refundAmount = refundRecord?.amount != null ? parseFloat(refundRecord.amount) : null;
         const isInternalUuid = order.smmgen_order_id === order.id;
         const displayId = order.dynamic_order_id && !String(order.dynamic_order_id).toLowerCase().includes('not placed')
           ? order.dynamic_order_id
@@ -119,6 +121,7 @@ const OrderHistory = ({ user, onLogout }) => {
           link: order.link,
           quantity: order.quantity,
           total_cost: parseFloat(order.total_cost || 0),
+          refund_amount: refundAmount,
           status: order.status,
           created_at: order.created_at,
           smmgen_order_id: order.smmgen_order_id,
@@ -263,6 +266,20 @@ const OrderHistory = ({ user, onLogout }) => {
     }
   };
 
+  const getStatusLabel = (order) => {
+    const statusLower = String(order?.status || '').toLowerCase();
+    if (statusLower === 'partial') {
+      if (order.refund_amount != null && order.refund_amount > 0) {
+        return `Part Refunded ₵${Number(order.refund_amount).toFixed(2)}`;
+      }
+      return 'Part Refunded';
+    }
+    if (statusLower === 'submission_failed') {
+      return 'Placement Failed';
+    }
+    return order.status;
+  };
+
   // Check and update order status (supports single & split combo orders)
   const checkOrderStatus = useCallback(async (order) => {
     if (checkingStatus[order.id]) return;
@@ -404,7 +421,7 @@ const OrderHistory = ({ user, onLogout }) => {
                   <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="in progress">In Progress</SelectItem>
                   <SelectItem value="processing">Processing</SelectItem>
-                  <SelectItem value="partial">Partial</SelectItem>
+                  <SelectItem value="partial">Part Refunded</SelectItem>
                   <SelectItem value="completed">Completed</SelectItem>
                   <SelectItem value="canceled">Canceled</SelectItem>
                   <SelectItem value="refunds">Refunds</SelectItem>
@@ -507,7 +524,7 @@ const OrderHistory = ({ user, onLogout }) => {
                               <div className="flex items-center justify-center gap-1.5">
                                 {getStatusIcon(order.status)}
                                 <span className={`text-xs px-2.5 py-1 rounded border font-medium capitalize whitespace-nowrap ${getStatusColor(order.status)}`}>
-                                  {order.status}
+                                  {getStatusLabel(order)}
                                 </span>
                               </div>
 

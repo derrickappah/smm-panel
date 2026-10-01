@@ -93,7 +93,7 @@ const fetchRecentOrders = async () => {
     const [ordersRes, comboRes] = await Promise.all([
       supabase
         .from('orders')
-        .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, tiksta_order_id, smmraja_order_id, smmtake_order_id, quickmedia_order_id, component_provider_order_ids, created_at, completed_at, refund_status, total_cost, last_status_check, is_reward, promotion_packages(name, platform, service_type, is_combo), services(id, name, platform, is_combo)', { count: 'exact' })
+        .select('id, user_id, service_id, promotion_package_id, link, quantity, status, smmgen_order_id, smmcost_order_id, jbsmmpanel_order_id, worldofsmm_order_id, g1618_order_id, oldsmm_order_id, apiowner_order_id, tiksta_order_id, smmraja_order_id, smmtake_order_id, quickmedia_order_id, component_provider_order_ids, created_at, completed_at, refund_status, total_cost, last_status_check, is_reward, promotion_packages(name, platform, service_type, is_combo), services(id, name, platform, is_combo), order_refunds(amount, type, remains)', { count: 'exact' })
         .eq('user_id', authUser.id)
         .order('created_at', { ascending: false })
         .limit(5),
@@ -109,6 +109,8 @@ const fetchRecentOrders = async () => {
 
     // Process regular orders
     (ordersRes.data || []).forEach(order => {
+      const refundRecord = Array.isArray(order.order_refunds) ? order.order_refunds[0] : order.order_refunds;
+      const refundAmount = refundRecord?.amount != null ? parseFloat(refundRecord.amount) : null;
       const components = order.component_provider_order_ids;
       const serviceName = order.promotion_packages?.name || order.services?.name || 'Service';
       const platform = order.promotion_packages?.platform || order.services?.platform || '';
@@ -130,6 +132,7 @@ const fetchRecentOrders = async () => {
           link: order.link,
           quantity: order.quantity,
           total_cost: parseFloat(order.total_cost || 0),
+          refund_amount: refundAmount,
           status: order.status,
           created_at: order.created_at,
           is_combo: true,
@@ -170,6 +173,7 @@ const fetchRecentOrders = async () => {
           link: order.link,
           quantity: order.quantity,
           total_cost: parseFloat(order.total_cost || 0),
+          refund_amount: refundAmount,
           status: order.status,
           created_at: order.created_at,
           is_combo: false,

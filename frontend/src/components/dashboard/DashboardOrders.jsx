@@ -53,6 +53,20 @@ const DashboardOrders = React.memo(({ orders, services }) => {
     }
   };
 
+  const getStatusLabel = (order) => {
+    const statusLower = String(order?.status || '').toLowerCase();
+    if (statusLower === 'partial') {
+      if (order.refund_amount != null && order.refund_amount > 0) {
+        return `Part Refunded ₵${Number(order.refund_amount).toFixed(2)}`;
+      }
+      return 'Part Refunded';
+    }
+    if (statusLower === 'submission_failed') {
+      return 'Failed';
+    }
+    return order.status;
+  };
+
   const displayOrders = (orders || []).slice(0, 1);
 
   if (!displayOrders || displayOrders.length === 0) {
@@ -136,7 +150,7 @@ const DashboardOrders = React.memo(({ orders, services }) => {
                 
                 <span className={`text-[10px] font-medium px-2 py-0.5 rounded border whitespace-nowrap capitalize flex items-center gap-1 ${getStatusStyles(order.status)}`}>
                   {getStatusIcon(order.status)}
-                  {order.status === 'submission_failed' ? 'Failed' : order.status}
+                  {getStatusLabel(order)}
                 </span>
               </div>
             </div>
