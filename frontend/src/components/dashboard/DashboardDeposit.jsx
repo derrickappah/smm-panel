@@ -933,9 +933,6 @@ const DashboardDeposit = React.memo(({
           </Button>
           <div className="flex flex-wrap items-center justify-center gap-1.5 pt-2">
             <span className="text-xs text-gray-500 font-medium mr-1">Accepted:</span>
-            <span className="text-[11px] bg-yellow-100 text-yellow-800 font-semibold px-2 py-0.5 rounded">MTN Mobile Money</span>
-            <span className="text-[11px] bg-red-100 text-red-800 font-semibold px-2 py-0.5 rounded">Telecel Cash</span>
-            <span className="text-[11px] bg-blue-100 text-blue-800 font-semibold px-2 py-0.5 rounded">AT Money</span>
             <span className="text-[11px] bg-purple-100 text-purple-800 font-semibold px-2 py-0.5 rounded">Visa / Mastercard</span>
           </div>
           <p className="text-xs sm:text-sm text-gray-600 text-center">
