@@ -7,44 +7,6 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 
-const METHOD_STYLES = {
-  expresspay: {
-    active: 'bg-blue-600 text-white shadow-md border-blue-600',
-    inactive: 'bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-900 border-blue-200/80',
-    ring: 'focus:ring-blue-500'
-  },
-  moolre_web: {
-    active: 'bg-amber-500 text-white shadow-md border-amber-500',
-    inactive: 'bg-amber-50 text-amber-800 hover:bg-amber-100 hover:text-amber-950 border-amber-200/80',
-    ring: 'focus:ring-amber-500'
-  },
-  hubtel: {
-    active: 'bg-orange-600 text-white shadow-md border-orange-600',
-    inactive: 'bg-orange-50 text-orange-700 hover:bg-orange-100 hover:text-orange-900 border-orange-200/80',
-    ring: 'focus:ring-orange-500'
-  },
-  paystack: {
-    active: 'bg-teal-600 text-white shadow-md border-teal-600',
-    inactive: 'bg-teal-50 text-teal-700 hover:bg-teal-100 hover:text-teal-900 border-teal-200/80',
-    ring: 'focus:ring-teal-500'
-  },
-  manual: {
-    active: 'bg-emerald-600 text-white shadow-md border-emerald-600',
-    inactive: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-900 border-emerald-200/80',
-    ring: 'focus:ring-emerald-500'
-  },
-  korapay: {
-    active: 'bg-purple-600 text-white shadow-md border-purple-600',
-    inactive: 'bg-purple-50 text-purple-700 hover:bg-purple-100 hover:text-purple-900 border-purple-200/80',
-    ring: 'focus:ring-purple-500'
-  },
-  moolre: {
-    active: 'bg-rose-600 text-white shadow-md border-rose-600',
-    inactive: 'bg-rose-50 text-rose-700 hover:bg-rose-100 hover:text-rose-900 border-rose-200/80',
-    ring: 'focus:ring-rose-500'
-  }
-};
-
 const DashboardDeposit = React.memo(({
   depositMethod,
   setDepositMethod,
@@ -215,13 +177,12 @@ const DashboardDeposit = React.memo(({
   }, []);
 
   const getMethodTabClass = useCallback((method) => {
-    const style = METHOD_STYLES[method] || {
-      active: 'bg-indigo-600 text-white shadow-md border-indigo-600',
-      inactive: 'bg-gray-50 text-gray-700 hover:bg-gray-100 border-gray-200',
-      ring: 'focus:ring-indigo-500'
-    };
     const isSelected = depositMethod === method;
-    return `flex-1 min-w-[75px] py-2 px-1.5 sm:px-3 rounded-md text-xs sm:text-sm font-semibold border transition-all duration-200 focus:outline-none focus:ring-2 ${style.ring} focus:ring-offset-2 text-center leading-tight flex items-center justify-center flex-wrap gap-x-1 ${isSelected ? style.active : style.inactive}`;
+    return `flex-1 min-w-[75px] py-2 px-1.5 sm:px-3 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 text-center leading-tight flex items-center justify-center flex-wrap gap-x-1 ${
+      isSelected
+        ? 'morfhysm text-gray-900 font-semibold'
+        : 'text-gray-500 hover:text-gray-900 hover:bg-white/60'
+    }`;
   }, [depositMethod]);
 
   return (
@@ -266,8 +227,13 @@ const DashboardDeposit = React.memo(({
               type="button"
               onClick={() => setDepositMethod('moolre_web')}
               className={getMethodTabClass('moolre_web')}
+              title="MoMo (MTN / AirtelTigo / Telecel)"
             >
-              <span>MoMo</span>
+              <img
+                src="/icons/momo-banner.png"
+                alt="MoMo"
+                className="h-5 sm:h-6 max-w-full object-contain mix-blend-multiply"
+              />
             </button>
           )}
           {paymentMethodSettings.paystack_enabled && (
