@@ -1,4 +1,4 @@
-import React, { memo, useState, useEffect, useCallback } from 'react';
+import React, { memo, useState, useEffect, useCallback, useMemo } from 'react';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
@@ -10,10 +10,108 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
-import { RefreshCw, Save, CreditCard, Banknote, Smartphone, Globe, MessageCircle, ShieldCheck, Send, CheckCircle2, Clock, XCircle, Plus, Key } from 'lucide-react';
+import { RefreshCw, Save, CreditCard, Banknote, Smartphone, Globe, MessageCircle, ShieldCheck, Send, CheckCircle2, Clock, XCircle, Plus, Key, GripVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import { logUserActivity } from '@/lib/activityLogger';
-import { usePaymentMethods } from '@/hooks/usePaymentMethods';
+import { usePaymentMethods, DEFAULT_PAYMENT_ORDER } from '@/hooks/usePaymentMethods';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  rectSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+const SortablePaymentMethodCard = ({ method, handleTogglePaymentMethod, isTogglePending, handleUpdateMinDeposit }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: method.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+    zIndex: isDragging ? 20 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <Card className={`group transition-all duration-300 hover:shadow-lg border-2 h-full ${method.enabled ? 'border-primary/10' : 'border-gray-100 bg-gray-50/50'} ${isDragging ? 'ring-2 ring-primary shadow-xl cursor-grabbing' : ''}`}>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              {...attributes}
+              {...listeners}
+              className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-700 p-1 -ml-1 rounded transition-colors touch-none"
+              aria-label={`Drag to reorder ${method.name}`}
+            >
+              <GripVertical className="w-5 h-5" />
+            </button>
+            <div className={`p-2 rounded-lg ${method.color} transition-colors group-hover:scale-110 duration-300`}>
+              <method.icon className="w-5 h-5" />
+            </div>
+          </div>
+          <Switch
+            checked={method.enabled}
+            onCheckedChange={(checked) => handleTogglePaymentMethod(method.id, checked)}
+            disabled={isTogglePending}
+            aria-label={`Toggle ${method.name}`}
+          />
+        </CardHeader>
+        <CardContent>
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <CardTitle className="text-lg font-semibold">{method.name}</CardTitle>
+              <CardDescription className="text-xs mt-1">
+                {method.description}
+              </CardDescription>
+            </div>
+            <Badge variant={method.enabled ? "default" : "secondary"} className={method.enabled ? "bg-green-500 hover:bg-green-600" : "bg-gray-200 text-gray-500"}>
+              {method.enabled ? 'Active' : 'Inactive'}
+            </Badge>
+          </div>
+
+          <div className="space-y-2 pt-2 border-t">
+            <div className="flex items-center justify-between">
+              <Label htmlFor={`${method.id}-min`} className="text-sm font-medium text-gray-600">
+                Min Deposit (₵)
+              </Label>
+              <Input
+                id={`${method.id}-min`}
+                type="number"
+                step="0.01"
+                min="0.01"
+                defaultValue={method.min}
+                onBlur={(e) => {
+                  const val = parseFloat(e.target.value);
+                  if (!isNaN(val) && val > 0 && val !== method.min) {
+                    handleUpdateMinDeposit(method.id, val);
+                  }
+                }}
+                className="w-24 h-8 text-right font-mono text-sm"
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
 
 const AdminSettings = memo(() => {
   const queryClient = useQueryClient();
@@ -27,6 +125,7 @@ const AdminSettings = memo(() => {
     requireOtp: remoteRequireOtp,
     requirePhoneVerification: remoteRequirePhoneVerification,
     moolreSenderId: remoteMoolreSenderId,
+    paymentMethodsOrder: remotePaymentOrder,
     isLoading,
     refetch
   } = usePaymentMethods();
@@ -41,6 +140,19 @@ const AdminSettings = memo(() => {
   const [requirePhoneVerification, setRequirePhoneVerification] = useState(remoteRequirePhoneVerification);
   const [moolreVasKey, setMoolreVasKey] = useState('');
   const [moolreSenderId, setMoolreSenderId] = useState(remoteMoolreSenderId || 'Boostupgh');
+  const [paymentMethodsOrder, setPaymentMethodsOrder] = useState(remotePaymentOrder || DEFAULT_PAYMENT_ORDER);
+
+  // DnD sensors for payment method cards reordering
+  const paymentOrderSensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   // Hubtel & Provider Routing State
   const [hubtelClientId, setHubtelClientId] = useState('');
@@ -153,10 +265,13 @@ const AdminSettings = memo(() => {
       setRequireOtp(remoteRequireOtp);
       setRequirePhoneVerification(remoteRequirePhoneVerification);
       setMoolreSenderId(remoteMoolreSenderId || 'Boostupgh');
+      if (remotePaymentOrder && remotePaymentOrder.length > 0) {
+        setPaymentMethodsOrder(remotePaymentOrder);
+      }
     }
     fetchMoolreSettingsAndData();
     fetchExpressPaySettings();
-  }, [remotePaymentSettings, remoteMinDepositSettings, remoteManualDepositDetails, remoteWhatsappNumber, remoteSupportPhoneNumber, remoteRequireCaptcha, remoteRequireOtp, remoteRequirePhoneVerification, remoteMoolreSenderId, isLoading, fetchMoolreSettingsAndData, fetchExpressPaySettings]);
+  }, [remotePaymentSettings, remoteMinDepositSettings, remoteManualDepositDetails, remoteWhatsappNumber, remoteSupportPhoneNumber, remoteRequireCaptcha, remoteRequireOtp, remoteRequirePhoneVerification, remoteMoolreSenderId, remotePaymentOrder, isLoading, fetchMoolreSettingsAndData, fetchExpressPaySettings]);
 
   const handleSaveMoolreSettings = async () => {
     setSavingMoolreConfig(true);
@@ -560,6 +675,81 @@ const AdminSettings = memo(() => {
     updateMinDeposit.mutate({ method, minAmount: value });
   }, [updateMinDeposit]);
 
+  const updatePaymentOrderMutation = useMutation({
+    mutationFn: async (newOrder) => {
+      const { error } = await supabase
+        .from('app_settings')
+        .upsert({
+          key: 'payment_methods_order',
+          value: JSON.stringify(newOrder),
+          description: 'Display order of payment methods on user dashboard'
+        }, {
+          onConflict: 'key'
+        });
+
+      if (error) throw error;
+      return newOrder;
+    },
+    onSuccess: async (newOrder) => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'payment-settings'] });
+      queryClient.invalidateQueries({ queryKey: ['payment-settings'] });
+
+      // Broadcast update across tabs and realtime clients
+      try {
+        if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+          const bc = new BroadcastChannel('payment_settings_sync');
+          bc.postMessage({ type: 'payment_settings_changed', timestamp: Date.now() });
+          bc.close();
+        }
+        supabase.channel('payment-settings-realtime').send({
+          type: 'broadcast',
+          event: 'payment_settings_changed',
+          payload: { timestamp: Date.now() }
+        });
+      } catch (e) {
+        // Broadcast best effort
+      }
+
+      // Log settings change
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await logUserActivity({
+            action_type: 'settings_changed',
+            entity_type: 'settings',
+            description: 'Payment methods display order updated',
+            metadata: {
+              new_order: newOrder
+            },
+            severity: 'info'
+          });
+        }
+      } catch (error) {
+        console.warn('Failed to log settings change:', error);
+      }
+
+      toast.success('Payment methods display order updated');
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to update payment methods order');
+    }
+  });
+
+  const handlePaymentOrderDragEnd = useCallback((event) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setPaymentMethodsOrder((prevOrder) => {
+        const currentOrder = prevOrder && prevOrder.length > 0 ? prevOrder : DEFAULT_PAYMENT_ORDER;
+        const oldIndex = currentOrder.indexOf(active.id);
+        const newIndex = currentOrder.indexOf(over.id);
+        if (oldIndex === -1 || newIndex === -1) return prevOrder;
+        const newOrder = arrayMove(currentOrder, oldIndex, newIndex);
+        updatePaymentOrderMutation.mutate(newOrder);
+        return newOrder;
+      });
+    }
+  }, [updatePaymentOrderMutation]);
+
   const updateManualDepositDetails = useMutation({
     mutationFn: async ({ phoneNumber, accountName, instructions }) => {
       if (!phoneNumber || !phoneNumber.trim()) {
@@ -812,7 +1002,34 @@ const AdminSettings = memo(() => {
     );
   }
 
-  const paymentMethods = [
+  const paymentMethods = useMemo(() => [
+    {
+      id: 'expresspay',
+      name: 'expressPay Ghana',
+      description: 'expressPay Ghana Mobile Money & Cards',
+      icon: CreditCard,
+      color: 'bg-emerald-100 text-emerald-600',
+      enabled: paymentMethodSettings.expresspay_enabled,
+      min: minDepositSettings.expresspay_min
+    },
+    {
+      id: 'moolre_web',
+      name: 'Moolre Web',
+      description: 'Moolre Web Portal payment',
+      icon: Globe,
+      color: 'bg-indigo-100 text-indigo-600',
+      enabled: paymentMethodSettings.moolre_web_enabled,
+      min: minDepositSettings.moolre_web_min
+    },
+    {
+      id: 'hubtel',
+      name: 'Hubtel',
+      description: 'Hubtel payment gateway',
+      icon: CreditCard,
+      color: 'bg-red-100 text-red-600',
+      enabled: paymentMethodSettings.hubtel_enabled,
+      min: minDepositSettings.hubtel_min
+    },
     {
       id: 'paystack',
       name: 'Paystack',
@@ -832,15 +1049,6 @@ const AdminSettings = memo(() => {
       min: minDepositSettings.manual_min
     },
     {
-      id: 'hubtel',
-      name: 'Hubtel',
-      description: 'Hubtel payment gateway',
-      icon: CreditCard,
-      color: 'bg-red-100 text-red-600',
-      enabled: paymentMethodSettings.hubtel_enabled,
-      min: minDepositSettings.hubtel_min
-    },
-    {
       id: 'korapay',
       name: 'Korapay (Nigeria)',
       description: 'Korapay payment gateway (Nigeria / NGN)',
@@ -857,33 +1065,26 @@ const AdminSettings = memo(() => {
       color: 'bg-purple-100 text-purple-600',
       enabled: paymentMethodSettings.moolre_enabled,
       min: minDepositSettings.moolre_min
-    },
-    {
-      id: 'moolre_web',
-      name: 'Moolre Web',
-      description: 'Moolre Web Portal payment',
-      icon: Globe,
-      color: 'bg-indigo-100 text-indigo-600',
-      enabled: paymentMethodSettings.moolre_web_enabled,
-      min: minDepositSettings.moolre_web_min
-    },
-    {
-      id: 'expresspay',
-      name: 'expressPay Ghana',
-      description: 'expressPay Ghana Mobile Money & Cards',
-      icon: CreditCard,
-      color: 'bg-emerald-100 text-emerald-600',
-      enabled: paymentMethodSettings.expresspay_enabled,
-      min: minDepositSettings.expresspay_min
     }
-  ];
+  ], [paymentMethodSettings, minDepositSettings]);
+
+  const sortedPaymentMethods = useMemo(() => {
+    const order = (paymentMethodsOrder && paymentMethodsOrder.length > 0) ? paymentMethodsOrder : DEFAULT_PAYMENT_ORDER;
+    const orderMap = new Map();
+    order.forEach((id, index) => orderMap.set(id, index));
+    return [...paymentMethods].sort((a, b) => {
+      const indexA = orderMap.has(a.id) ? orderMap.get(a.id) : 999;
+      const indexB = orderMap.has(b.id) ? orderMap.get(b.id) : 999;
+      return indexA - indexB;
+    });
+  }, [paymentMethods, paymentMethodsOrder]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">Payment Methods</h2>
-          <p className="text-muted-foreground mt-1">Configure available payment options and deposit limits.</p>
+          <p className="text-muted-foreground mt-1">Configure available payment options, deposit limits, and drag cards using the handle to set display order on user dashboard.</p>
         </div>
         <Button
           onClick={() => refetch()}
@@ -897,58 +1098,28 @@ const AdminSettings = memo(() => {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {paymentMethods.map((method) => (
-          <Card key={method.id} className={`group transition-all duration-300 hover:shadow-lg border-2 ${method.enabled ? 'border-primary/10' : 'border-gray-100 bg-gray-50/50'}`}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <div className={`p-2 rounded-lg ${method.color} transition-colors group-hover:scale-110 duration-300`}>
-                <method.icon className="w-5 h-5" />
-              </div>
-              <Switch
-                checked={method.enabled}
-                onCheckedChange={(checked) => handleTogglePaymentMethod(method.id, checked)}
-                disabled={togglePaymentMethod.isPending}
-                aria-label={`Toggle ${method.name}`}
+      <DndContext
+        sensors={paymentOrderSensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handlePaymentOrderDragEnd}
+      >
+        <SortableContext
+          items={sortedPaymentMethods.map((m) => m.id)}
+          strategy={rectSortingStrategy}
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {sortedPaymentMethods.map((method) => (
+              <SortablePaymentMethodCard
+                key={method.id}
+                method={method}
+                handleTogglePaymentMethod={handleTogglePaymentMethod}
+                isTogglePending={togglePaymentMethod.isPending}
+                handleUpdateMinDeposit={handleUpdateMinDeposit}
               />
-            </CardHeader>
-            <CardContent>
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <CardTitle className="text-lg font-semibold">{method.name}</CardTitle>
-                  <CardDescription className="text-xs mt-1">
-                    {method.description}
-                  </CardDescription>
-                </div>
-                <Badge variant={method.enabled ? "default" : "secondary"} className={method.enabled ? "bg-green-500 hover:bg-green-600" : "bg-gray-200 text-gray-500"}>
-                  {method.enabled ? 'Active' : 'Inactive'}
-                </Badge>
-              </div>
-
-              <div className="space-y-2 pt-2 border-t">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor={`${method.id}-min`} className="text-sm font-medium text-gray-600">
-                    Min Deposit (₵)
-                  </Label>
-                  <Input
-                    id={`${method.id}-min`}
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    defaultValue={method.min}
-                    onBlur={(e) => {
-                      const val = parseFloat(e.target.value);
-                      if (!isNaN(val) && val > 0 && val !== method.min) {
-                        handleUpdateMinDeposit(method.id, val);
-                      }
-                    }}
-                    className="w-24 h-8 text-right font-mono text-sm"
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+            ))}
+          </div>
+        </SortableContext>
+      </DndContext>
 
       <Separator className="my-8" />
 

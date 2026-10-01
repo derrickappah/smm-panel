@@ -46,7 +46,8 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
     setDepositMethod,
     paymentMethodSettings,
     minDepositSettings,
-    manualDepositDetails
+    manualDepositDetails,
+    paymentMethodsOrder
   } = usePaymentMethods();
   const [depositAmount, setDepositAmount] = useState('');
   const [moolrePhoneNumber, setMoolrePhoneNumber] = useState('');
@@ -3383,6 +3384,7 @@ const Dashboard = ({ user, onLogout, onUpdateUser }) => {
           {/* Add Funds */}
           <div id="deposit-section" className="w-full min-w-0">
             <DashboardDeposit
+              paymentMethodsOrder={paymentMethodsOrder}
               depositMethod={depositMethod}
               setDepositMethod={setDepositMethod}
               depositAmount={depositAmount}

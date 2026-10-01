@@ -5,6 +5,16 @@ import { queryClient as defaultQueryClient } from '@/lib/queryClient';
 
 export const PAYMENT_SETTINGS_QUERY_KEY = ['payment-settings'];
 
+export const DEFAULT_PAYMENT_ORDER = [
+  'expresspay',
+  'moolre_web',
+  'hubtel',
+  'paystack',
+  'manual',
+  'korapay',
+  'moolre'
+];
+
 // Centralized default values to avoid hardcoding in multiple places
 export const DEFAULT_PAYMENT_SETTINGS = {
   paymentMethodSettings: {
@@ -16,6 +26,7 @@ export const DEFAULT_PAYMENT_SETTINGS = {
     moolre_web_enabled: true, // Enable by default for immediate UI
     expresspay_enabled: true
   },
+  paymentMethodsOrder: DEFAULT_PAYMENT_ORDER,
   minDepositSettings: {
     paystack_min: 10,
     manual_min: 10,
@@ -36,7 +47,7 @@ export const DEFAULT_PAYMENT_SETTINGS = {
   requireOtp: false, // Default to false (Admins can toggle on/off)
   requirePhoneVerification: false, // Default to false (Admins can toggle on/off via Moolre SMS)
   moolreSenderId: 'Boostupgh',
-  depositMethod: 'moolre_web' // Default method
+  depositMethod: 'expresspay' // Default method
 };
 
 export const isPaymentMethodEnabled = (method, paymentMethodSettings) => {
@@ -51,15 +62,17 @@ export const isPaymentMethodEnabled = (method, paymentMethodSettings) => {
   return false;
 };
 
-export const getFirstEnabledPaymentMethod = (paymentMethodSettings) => {
+export const getFirstEnabledPaymentMethod = (paymentMethodSettings, paymentMethodsOrder = DEFAULT_PAYMENT_ORDER) => {
   if (!paymentMethodSettings) return null;
-  if (paymentMethodSettings.moolre_web_enabled) return 'moolre_web';
-  if (paymentMethodSettings.expresspay_enabled) return 'expresspay';
-  if (paymentMethodSettings.moolre_enabled) return 'moolre';
-  if (paymentMethodSettings.paystack_enabled) return 'paystack';
-  if (paymentMethodSettings.manual_enabled) return 'manual';
-  if (paymentMethodSettings.hubtel_enabled) return 'hubtel';
-  if (paymentMethodSettings.korapay_enabled) return 'korapay';
+  const order = Array.isArray(paymentMethodsOrder) && paymentMethodsOrder.length > 0
+    ? paymentMethodsOrder
+    : DEFAULT_PAYMENT_ORDER;
+
+  for (const method of order) {
+    if (isPaymentMethodEnabled(method, paymentMethodSettings)) {
+      return method;
+    }
+  }
   return null;
 };
 
@@ -76,6 +89,7 @@ export const fetchPaymentSettingsFn = async () => {
       'payment_method_moolre_enabled',
       'payment_method_moolre_web_enabled',
       'payment_method_expresspay_enabled',
+      'payment_methods_order',
       'payment_method_paystack_min_deposit',
       'payment_method_manual_min_deposit',
       'payment_method_hubtel_min_deposit',
@@ -139,6 +153,22 @@ export const fetchPaymentSettingsFn = async () => {
     expresspay_enabled: getEnabled('payment_method_expresspay_enabled', DEFAULT_PAYMENT_SETTINGS.paymentMethodSettings.expresspay_enabled)
   };
 
+  // Parse Payment Methods Order
+  let parsedOrder = DEFAULT_PAYMENT_ORDER;
+  if (rawSettings['payment_methods_order']) {
+    try {
+      const parsed = JSON.parse(rawSettings['payment_methods_order']);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const existing = new Set(parsed);
+        const missing = DEFAULT_PAYMENT_ORDER.filter(m => !existing.has(m));
+        parsedOrder = [...parsed, ...missing];
+      }
+    } catch {
+      parsedOrder = DEFAULT_PAYMENT_ORDER;
+    }
+  }
+  settings.paymentMethodsOrder = parsedOrder;
+
   // Parse Min Deposits
   settings.minDepositSettings = {
     paystack_min: getMin('payment_method_paystack_min_deposit', DEFAULT_PAYMENT_SETTINGS.minDepositSettings.paystack_min),
@@ -177,7 +207,7 @@ export const fetchPaymentSettingsFn = async () => {
   settings.fallbackSmsProvider = getString('fallback_sms_provider', 'moolre');
 
   // Determine Deposit Method
-  settings.depositMethod = getFirstEnabledPaymentMethod(settings.paymentMethodSettings);
+  settings.depositMethod = getFirstEnabledPaymentMethod(settings.paymentMethodSettings, parsedOrder);
 
   return settings;
 };
@@ -262,6 +292,7 @@ export const usePaymentMethods = () => {
   const [internalDepositMethod, setInternalDepositMethod] = useState(getInitialMethod);
 
   const currentSettings = data?.paymentMethodSettings || DEFAULT_PAYMENT_SETTINGS.paymentMethodSettings;
+  const paymentMethodsOrder = data?.paymentMethodsOrder || DEFAULT_PAYMENT_SETTINGS.paymentMethodsOrder;
 
   // Compute effective deposit method synchronously so that if the current selection
   // is turned off by admins, it immediately resolves to an enabled method (or null)
@@ -270,9 +301,9 @@ export const usePaymentMethods = () => {
     if (internalDepositMethod && isPaymentMethodEnabled(internalDepositMethod, currentSettings)) {
       return internalDepositMethod;
     }
-    // Otherwise fallback to first enabled method from settings
-    return getFirstEnabledPaymentMethod(currentSettings);
-  }, [internalDepositMethod, currentSettings]);
+    // Otherwise fallback to first enabled method from settings according to custom order
+    return getFirstEnabledPaymentMethod(currentSettings, paymentMethodsOrder);
+  }, [internalDepositMethod, currentSettings, paymentMethodsOrder]);
 
   // Synchronize internal state and localStorage whenever effective method changes
   useEffect(() => {
@@ -302,6 +333,7 @@ export const usePaymentMethods = () => {
     depositMethod: effectiveDepositMethod,
     setDepositMethod,
     paymentMethodSettings: currentSettings,
+    paymentMethodsOrder,
     minDepositSettings: data?.minDepositSettings || DEFAULT_PAYMENT_SETTINGS.minDepositSettings,
     manualDepositDetails: data?.manualDepositDetails || DEFAULT_PAYMENT_SETTINGS.manualDepositDetails,
     whatsappNumber: data?.whatsappNumber || DEFAULT_PAYMENT_SETTINGS.whatsappNumber,

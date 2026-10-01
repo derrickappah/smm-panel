@@ -1,5 +1,5 @@
 import React, { useMemo, useCallback, useState, useEffect } from 'react';
-import { usePaymentMethods } from '@/hooks/usePaymentMethods';
+import { usePaymentMethods, DEFAULT_PAYMENT_ORDER } from '@/hooks/usePaymentMethods';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,6 +13,7 @@ const DashboardDeposit = React.memo(({
   depositAmount,
   setDepositAmount,
   paymentMethodSettings,
+  paymentMethodsOrder,
   manualDepositForm,
   setManualDepositForm,
   uploadingProof,
@@ -43,19 +44,27 @@ const DashboardDeposit = React.memo(({
     instructions: ''
   }
 }) => {
-  const { whatsappNumber } = usePaymentMethods();
+  const { whatsappNumber, paymentMethodsOrder: hookOrder } = usePaymentMethods();
   const displayWhatsappNumber = whatsappNumber;
   const whatsappLink = `https://wa.me/233${displayWhatsappNumber.startsWith('0') ? displayWhatsappNumber.substring(1) : displayWhatsappNumber}`;
 
-  const enabledMethods = useMemo(() => [
-    paymentMethodSettings.expresspay_enabled && 'expresspay',
-    paymentMethodSettings.moolre_web_enabled && 'moolre_web',
-    paymentMethodSettings.paystack_enabled && 'paystack',
-    paymentMethodSettings.manual_enabled && 'manual',
-    paymentMethodSettings.hubtel_enabled && 'hubtel',
-    paymentMethodSettings.korapay_enabled && 'korapay',
-    paymentMethodSettings.moolre_enabled && 'moolre'
-  ].filter(Boolean), [paymentMethodSettings]);
+  const activeOrder = paymentMethodsOrder || hookOrder || DEFAULT_PAYMENT_ORDER;
+
+  const enabledMethods = useMemo(() => {
+    const isEnabled = (method) => {
+      switch (method) {
+        case 'expresspay': return !!paymentMethodSettings.expresspay_enabled;
+        case 'moolre_web': return !!paymentMethodSettings.moolre_web_enabled;
+        case 'paystack': return !!paymentMethodSettings.paystack_enabled;
+        case 'manual': return !!paymentMethodSettings.manual_enabled;
+        case 'hubtel': return !!paymentMethodSettings.hubtel_enabled;
+        case 'korapay': return !!paymentMethodSettings.korapay_enabled;
+        case 'moolre': return !!paymentMethodSettings.moolre_enabled;
+        default: return false;
+      }
+    };
+    return (activeOrder || []).filter(isEnabled);
+  }, [paymentMethodSettings, activeOrder]);
 
   const handleFileChange = useCallback((e) => {
     const file = e.target.files?.[0];
@@ -212,78 +221,102 @@ const DashboardDeposit = React.memo(({
 
       {enabledMethods.length >= 1 && depositMethod !== null && (
         <div className="flex flex-nowrap overflow-x-auto scrollbar-hide gap-1.5 sm:gap-2 mb-6 p-1 bg-gray-100 rounded-lg">
-          {paymentMethodSettings.expresspay_enabled && (
-            <button
-              type="button"
-              onClick={() => setDepositMethod('expresspay')}
-              className={getMethodTabClass('expresspay')}
-            >
-              <span>Credit</span>
-              <span>card</span>
-            </button>
-          )}
-          {paymentMethodSettings.moolre_web_enabled && (
-            <button
-              type="button"
-              onClick={() => setDepositMethod('moolre_web')}
-              className={getMethodTabClass('moolre_web')}
-              title="MoMo (MTN / AirtelTigo / Telecel)"
-            >
-              <img
-                src="/icons/momo-banner.png"
-                alt="MoMo"
-                className="h-5 sm:h-6 max-w-full object-contain mix-blend-multiply"
-              />
-            </button>
-          )}
-          {paymentMethodSettings.paystack_enabled && (
-            <button
-              type="button"
-              onClick={() => setDepositMethod('paystack')}
-              className={getMethodTabClass('paystack')}
-            >
-              <span>Paystack</span>
-            </button>
-          )}
-          {paymentMethodSettings.manual_enabled && (
-            <button
-              type="button"
-              onClick={() => setDepositMethod('manual')}
-              className={getMethodTabClass('manual')}
-            >
-              <span>Nigerian</span>
-              <span>Payment</span>
-            </button>
-          )}
-          {paymentMethodSettings.hubtel_enabled && (
-            <button
-              type="button"
-              onClick={() => setDepositMethod('hubtel')}
-              className={getMethodTabClass('hubtel')}
-            >
-              <span>Hubtel</span>
-              <span>/ MoMo</span>
-            </button>
-          )}
-          {paymentMethodSettings.korapay_enabled && (
-            <button
-              type="button"
-              onClick={() => setDepositMethod('korapay')}
-              className={getMethodTabClass('korapay')}
-            >
-              <span>Korapay</span>
-              <span>(Nigeria)</span>
-            </button>
-          )}
-          {paymentMethodSettings.moolre_enabled && (
-            <button
-              type="button"
-              onClick={() => setDepositMethod('moolre')}
-              className={getMethodTabClass('moolre')}
-            >
-              <span>Moolre</span>
-            </button>
-          )}
+          {enabledMethods.map((method) => {
+            if (method === 'expresspay') {
+              return (
+                <button
+                  key="expresspay"
+                  type="button"
+                  onClick={() => setDepositMethod('expresspay')}
+                  className={getMethodTabClass('expresspay')}
+                >
+                  <span>Credit</span>
+                  <span>card</span>
+                </button>
+              );
+            }
+            if (method === 'moolre_web') {
+              return (
+                <button
+                  key="moolre_web"
+                  type="button"
+                  onClick={() => setDepositMethod('moolre_web')}
+                  className={getMethodTabClass('moolre_web')}
+                  title="MoMo (MTN / AirtelTigo / Telecel)"
+                >
+                  <img
+                    src="/icons/momo-banner.png"
+                    alt="MoMo"
+                    className="h-5 sm:h-6 max-w-full object-contain mix-blend-multiply"
+                  />
+                </button>
+              );
+            }
+            if (method === 'paystack') {
+              return (
+                <button
+                  key="paystack"
+                  type="button"
+                  onClick={() => setDepositMethod('paystack')}
+                  className={getMethodTabClass('paystack')}
+                >
+                  <span>Paystack</span>
+                </button>
+              );
+            }
+            if (method === 'manual') {
+              return (
+                <button
+                  key="manual"
+                  type="button"
+                  onClick={() => setDepositMethod('manual')}
+                  className={getMethodTabClass('manual')}
+                >
+                  <span>Nigerian</span>
+                  <span>Payment</span>
+                </button>
+              );
+            }
+            if (method === 'hubtel') {
+              return (
+                <button
+                  key="hubtel"
+                  type="button"
+                  onClick={() => setDepositMethod('hubtel')}
+                  className={getMethodTabClass('hubtel')}
+                >
+                  <span>Hubtel</span>
+                  <span>/ MoMo</span>
+                </button>
+              );
+            }
+            if (method === 'korapay') {
+              return (
+                <button
+                  key="korapay"
+                  type="button"
+                  onClick={() => setDepositMethod('korapay')}
+                  className={getMethodTabClass('korapay')}
+                >
+                  <span>Korapay</span>
+                  <span>(Nigeria)</span>
+                </button>
+              );
+            }
+            if (method === 'moolre') {
+              return (
+                <button
+                  key="moolre"
+                  type="button"
+                  onClick={() => setDepositMethod('moolre')}
+                  className={getMethodTabClass('moolre')}
+                >
+                  <span>Moolre</span>
+                </button>
+              );
+            }
+            return null;
+          })}
         </div>
       )}
 
