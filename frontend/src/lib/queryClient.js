@@ -1,4 +1,4 @@
-import { QueryClient } from '@tanstack/react-query';
+import { QueryClient, defaultShouldDehydrateQuery } from '@tanstack/react-query';
 import { persistQueryClient } from '@tanstack/react-query-persist-client';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 
@@ -26,19 +26,55 @@ export const queryClient = new QueryClient({
 
 // Configure persistence to localStorage
 if (typeof window !== 'undefined') {
+  // Proactively purge legacy/corrupted cache before hydration
+  try {
+    const rawCache = window.localStorage.getItem('REACT_QUERY_OFFLINE_CACHE');
+    if (
+      rawCache &&
+      (rawCache.includes('"status":"pending"') ||
+        rawCache.includes('"promise":{') ||
+        rawCache.includes('"buster":"v2"') ||
+        rawCache.includes('"buster":"v1"'))
+    ) {
+      window.localStorage.removeItem('REACT_QUERY_OFFLINE_CACHE');
+    }
+  } catch {
+    // Ignore environments with restricted storage access
+  }
+
   const localStoragePersister = createSyncStoragePersister({
     storage: window.localStorage,
+    deserialize: (cachedString) => {
+      try {
+        const parsed = JSON.parse(cachedString);
+        if (parsed?.clientState?.queries && Array.isArray(parsed.clientState.queries)) {
+          // Strictly retain only completed queries with no dangling promise objects
+          parsed.clientState.queries = parsed.clientState.queries.filter(
+            (q) => q?.state?.status === 'success' && !q?.promise
+          );
+        }
+        return parsed;
+      } catch (e) {
+        console.warn('Failed to parse react-query offline cache, discarding:', e);
+        return undefined;
+      }
+    },
   });
 
   persistQueryClient({
     queryClient,
     persister: localStoragePersister,
     maxAge: 1000 * 60 * 60 * 24, // 24 hours
-    buster: 'v2', // Cache buster to invalidate old cache
+    buster: 'v3', // Cache buster bumped from v2 to v3 to invalidate poisoned cache
     dehydrateOptions: {
       shouldDehydrateQuery: (query) => {
-        // Exclude admin queries from persistence to prevent showing stale data on refresh
-        return !query.queryKey.includes('admin');
+        // MUST only dehydrate queries that succeeded.
+        // Never dehydrate pending queries, as JSON.stringify turns promises into {} which crashes hydration with 'e.then is not a function'
+        const isSuccess = defaultShouldDehydrateQuery(query);
+        const isNotAdmin = !query.queryKey.some(
+          (k) => typeof k === 'string' && k.toLowerCase().includes('admin')
+        );
+        return isSuccess && isNotAdmin;
       },
     },
   });
