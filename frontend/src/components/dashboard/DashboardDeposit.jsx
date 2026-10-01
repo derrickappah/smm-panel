@@ -202,89 +202,94 @@ const DashboardDeposit = React.memo(({
       </div>
 
       {enabledMethods.length >= 1 && depositMethod !== null && (
-        <div className="flex flex-nowrap overflow-x-auto scrollbar-hide gap-2 mb-6 p-1 bg-gray-100 rounded-lg">
+        <div className="flex flex-nowrap overflow-x-auto scrollbar-hide gap-1.5 sm:gap-2 mb-6 p-1 bg-gray-100 rounded-lg">
           {paymentMethodSettings.expresspay_enabled && (
             <button
               type="button"
               onClick={() => setDepositMethod('expresspay')}
-              className={`${enabledMethods.length <= 2 ? 'flex-1' : 'flex-shrink-0 sm:flex-1'} whitespace-nowrap py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'expresspay'
+              className={`flex-1 min-w-[75px] py-2 px-1.5 sm:px-3 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 text-center leading-tight flex items-center justify-center flex-wrap gap-x-1 ${depositMethod === 'expresspay'
                 ? 'bg-white text-indigo-600 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
             >
-              expressPay (MoMo/Card)
+              <span>Credit</span>
+              <span>card</span>
             </button>
           )}
           {paymentMethodSettings.moolre_web_enabled && (
             <button
               type="button"
               onClick={() => setDepositMethod('moolre_web')}
-              className={`${enabledMethods.length <= 2 ? 'flex-1' : 'flex-shrink-0 sm:flex-1'} whitespace-nowrap py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'moolre_web'
+              className={`flex-1 min-w-[75px] py-2 px-1.5 sm:px-3 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 text-center leading-tight flex items-center justify-center flex-wrap gap-x-1 ${depositMethod === 'moolre_web'
                 ? 'bg-white text-indigo-600 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
             >
-              Moolre MoMo
+              <span>Moolre</span>
+              <span>MoMo</span>
             </button>
           )}
           {paymentMethodSettings.paystack_enabled && (
             <button
               type="button"
               onClick={() => setDepositMethod('paystack')}
-              className={`${enabledMethods.length <= 2 ? 'flex-1' : 'flex-shrink-0 sm:flex-1'} whitespace-nowrap py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'paystack'
+              className={`flex-1 min-w-[75px] py-2 px-1.5 sm:px-3 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 text-center leading-tight flex items-center justify-center flex-wrap gap-x-1 ${depositMethod === 'paystack'
                 ? 'bg-white text-indigo-600 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
             >
-              Paystack
+              <span>Paystack</span>
             </button>
           )}
           {paymentMethodSettings.manual_enabled && (
             <button
               type="button"
               onClick={() => setDepositMethod('manual')}
-              className={`${enabledMethods.length <= 2 ? 'flex-1' : 'flex-shrink-0 sm:flex-1'} whitespace-nowrap py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'manual'
+              className={`flex-1 min-w-[75px] py-2 px-1.5 sm:px-3 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 text-center leading-tight flex items-center justify-center flex-wrap gap-x-1 ${depositMethod === 'manual'
                 ? 'bg-white text-indigo-600 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
             >
-              Nigerian Payment
+              <span>Nigerian</span>
+              <span>Payment</span>
             </button>
           )}
           {paymentMethodSettings.hubtel_enabled && (
             <button
               type="button"
               onClick={() => setDepositMethod('hubtel')}
-              className={`${enabledMethods.length <= 2 ? 'flex-1' : 'flex-shrink-0 sm:flex-1'} whitespace-nowrap py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'hubtel'
+              className={`flex-1 min-w-[75px] py-2 px-1.5 sm:px-3 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 text-center leading-tight flex items-center justify-center flex-wrap gap-x-1 ${depositMethod === 'hubtel'
                 ? 'bg-white text-indigo-600 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
             >
-              Hubtel/MoMo
+              <span>Hubtel</span>
+              <span>/ MoMo</span>
             </button>
           )}
           {paymentMethodSettings.korapay_enabled && (
             <button
               type="button"
               onClick={() => setDepositMethod('korapay')}
-              className={`${enabledMethods.length <= 2 ? 'flex-1' : 'flex-shrink-0 sm:flex-1'} whitespace-nowrap py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'korapay'
+              className={`flex-1 min-w-[75px] py-2 px-1.5 sm:px-3 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 text-center leading-tight flex items-center justify-center flex-wrap gap-x-1 ${depositMethod === 'korapay'
                 ? 'bg-white text-indigo-600 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
             >
-              Korapay (Nigeria)
+              <span>Korapay</span>
+              <span>(Nigeria)</span>
             </button>
           )}
           {paymentMethodSettings.moolre_enabled && (
             <button
               type="button"
               onClick={() => setDepositMethod('moolre')}
-              className={`${enabledMethods.length <= 2 ? 'flex-1' : 'flex-shrink-0 sm:flex-1'} whitespace-nowrap py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${depositMethod === 'moolre'
+              className={`flex-1 min-w-[75px] py-2 px-1.5 sm:px-3 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 text-center leading-tight flex items-center justify-center flex-wrap gap-x-1 ${depositMethod === 'moolre'
                 ? 'bg-white text-indigo-600 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
             >
-              Moolre
+              <span>Moolre</span>
             </button>
           )}
         </div>
@@ -899,7 +904,7 @@ const DashboardDeposit = React.memo(({
             disabled={loading || !depositAmount}
             className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? 'Processing...' : 'Pay with expressPay (MoMo / Card)'}
+            {loading ? 'Processing...' : 'Pay with Credit card'}
           </Button>
           <div className="flex flex-wrap items-center justify-center gap-1.5 pt-2">
             <span className="text-xs text-gray-500 font-medium mr-1">Accepted:</span>
