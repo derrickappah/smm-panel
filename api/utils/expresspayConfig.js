@@ -1,8 +1,8 @@
 import { getServiceRoleClient } from './auth.js';
 
-const FALLBACK_MERCHANT_ID = process.env.EXPRESSPAY_MERCHANT_ID || '332604139135';
-const FALLBACK_API_KEY = process.env.EXPRESSPAY_API_KEY || 'yMKBvZToq1Qkv4Vx7jFqs-Qs84utOyvI5zmfrhO27q-T2pi8YTuGAKdS9TcKFDK-VEbuTviKFqzMF3qtQ4O';
-const FALLBACK_MODE = (process.env.EXPRESSPAY_MODE || 'sandbox').toLowerCase().trim();
+const FALLBACK_MERCHANT_ID = process.env.EXPRESSPAY_MERCHANT_ID || '513907792936';
+const FALLBACK_API_KEY = process.env.EXPRESSPAY_API_KEY || 'JsFpZgcWt50KtHr5rXfvY-1jNHXNF9xp8t9sGVLgXT-YlYUb6hjS6Ogv4lccgiT-7luN8ciOkJrhud7I5gn';
+const FALLBACK_MODE = (process.env.EXPRESSPAY_MODE || 'live').toLowerCase().trim();
 
 /**
  * Get dynamic expressPay configuration.
