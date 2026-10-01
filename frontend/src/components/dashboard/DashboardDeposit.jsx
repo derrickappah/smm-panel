@@ -7,6 +7,44 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 
+const METHOD_STYLES = {
+  expresspay: {
+    active: 'bg-blue-600 text-white shadow-md border-blue-600',
+    inactive: 'bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-900 border-blue-200/80',
+    ring: 'focus:ring-blue-500'
+  },
+  moolre_web: {
+    active: 'bg-amber-500 text-white shadow-md border-amber-500',
+    inactive: 'bg-amber-50 text-amber-800 hover:bg-amber-100 hover:text-amber-950 border-amber-200/80',
+    ring: 'focus:ring-amber-500'
+  },
+  hubtel: {
+    active: 'bg-orange-600 text-white shadow-md border-orange-600',
+    inactive: 'bg-orange-50 text-orange-700 hover:bg-orange-100 hover:text-orange-900 border-orange-200/80',
+    ring: 'focus:ring-orange-500'
+  },
+  paystack: {
+    active: 'bg-teal-600 text-white shadow-md border-teal-600',
+    inactive: 'bg-teal-50 text-teal-700 hover:bg-teal-100 hover:text-teal-900 border-teal-200/80',
+    ring: 'focus:ring-teal-500'
+  },
+  manual: {
+    active: 'bg-emerald-600 text-white shadow-md border-emerald-600',
+    inactive: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-900 border-emerald-200/80',
+    ring: 'focus:ring-emerald-500'
+  },
+  korapay: {
+    active: 'bg-purple-600 text-white shadow-md border-purple-600',
+    inactive: 'bg-purple-50 text-purple-700 hover:bg-purple-100 hover:text-purple-900 border-purple-200/80',
+    ring: 'focus:ring-purple-500'
+  },
+  moolre: {
+    active: 'bg-rose-600 text-white shadow-md border-rose-600',
+    inactive: 'bg-rose-50 text-rose-700 hover:bg-rose-100 hover:text-rose-900 border-rose-200/80',
+    ring: 'focus:ring-rose-500'
+  }
+};
+
 const DashboardDeposit = React.memo(({
   depositMethod,
   setDepositMethod,
@@ -176,6 +214,16 @@ const DashboardDeposit = React.memo(({
     });
   }, []);
 
+  const getMethodTabClass = useCallback((method) => {
+    const style = METHOD_STYLES[method] || {
+      active: 'bg-indigo-600 text-white shadow-md border-indigo-600',
+      inactive: 'bg-gray-50 text-gray-700 hover:bg-gray-100 border-gray-200',
+      ring: 'focus:ring-indigo-500'
+    };
+    const isSelected = depositMethod === method;
+    return `flex-1 min-w-[75px] py-2 px-1.5 sm:px-3 rounded-md text-xs sm:text-sm font-semibold border transition-all duration-200 focus:outline-none focus:ring-2 ${style.ring} focus:ring-offset-2 text-center leading-tight flex items-center justify-center flex-wrap gap-x-1 ${isSelected ? style.active : style.inactive}`;
+  }, [depositMethod]);
+
   return (
     <div className="bg-white border-2 border-gray-300 rounded-lg p-6 sm:p-8 shadow-xl">
       <div className="flex items-center justify-between mb-6">
@@ -207,10 +255,7 @@ const DashboardDeposit = React.memo(({
             <button
               type="button"
               onClick={() => setDepositMethod('expresspay')}
-              className={`flex-1 min-w-[75px] py-2 px-1.5 sm:px-3 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 text-center leading-tight flex items-center justify-center flex-wrap gap-x-1 ${depositMethod === 'expresspay'
-                ? 'bg-white text-indigo-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                }`}
+              className={getMethodTabClass('expresspay')}
             >
               <span>Credit</span>
               <span>card</span>
@@ -220,12 +265,8 @@ const DashboardDeposit = React.memo(({
             <button
               type="button"
               onClick={() => setDepositMethod('moolre_web')}
-              className={`flex-1 min-w-[75px] py-2 px-1.5 sm:px-3 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 text-center leading-tight flex items-center justify-center flex-wrap gap-x-1 ${depositMethod === 'moolre_web'
-                ? 'bg-white text-indigo-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                }`}
+              className={getMethodTabClass('moolre_web')}
             >
-              <span>Moolre</span>
               <span>MoMo</span>
             </button>
           )}
@@ -233,10 +274,7 @@ const DashboardDeposit = React.memo(({
             <button
               type="button"
               onClick={() => setDepositMethod('paystack')}
-              className={`flex-1 min-w-[75px] py-2 px-1.5 sm:px-3 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 text-center leading-tight flex items-center justify-center flex-wrap gap-x-1 ${depositMethod === 'paystack'
-                ? 'bg-white text-indigo-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                }`}
+              className={getMethodTabClass('paystack')}
             >
               <span>Paystack</span>
             </button>
@@ -245,10 +283,7 @@ const DashboardDeposit = React.memo(({
             <button
               type="button"
               onClick={() => setDepositMethod('manual')}
-              className={`flex-1 min-w-[75px] py-2 px-1.5 sm:px-3 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 text-center leading-tight flex items-center justify-center flex-wrap gap-x-1 ${depositMethod === 'manual'
-                ? 'bg-white text-indigo-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                }`}
+              className={getMethodTabClass('manual')}
             >
               <span>Nigerian</span>
               <span>Payment</span>
@@ -258,10 +293,7 @@ const DashboardDeposit = React.memo(({
             <button
               type="button"
               onClick={() => setDepositMethod('hubtel')}
-              className={`flex-1 min-w-[75px] py-2 px-1.5 sm:px-3 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 text-center leading-tight flex items-center justify-center flex-wrap gap-x-1 ${depositMethod === 'hubtel'
-                ? 'bg-white text-indigo-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                }`}
+              className={getMethodTabClass('hubtel')}
             >
               <span>Hubtel</span>
               <span>/ MoMo</span>
@@ -271,10 +303,7 @@ const DashboardDeposit = React.memo(({
             <button
               type="button"
               onClick={() => setDepositMethod('korapay')}
-              className={`flex-1 min-w-[75px] py-2 px-1.5 sm:px-3 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 text-center leading-tight flex items-center justify-center flex-wrap gap-x-1 ${depositMethod === 'korapay'
-                ? 'bg-white text-indigo-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                }`}
+              className={getMethodTabClass('korapay')}
             >
               <span>Korapay</span>
               <span>(Nigeria)</span>
@@ -284,10 +313,7 @@ const DashboardDeposit = React.memo(({
             <button
               type="button"
               onClick={() => setDepositMethod('moolre')}
-              className={`flex-1 min-w-[75px] py-2 px-1.5 sm:px-3 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 text-center leading-tight flex items-center justify-center flex-wrap gap-x-1 ${depositMethod === 'moolre'
-                ? 'bg-white text-indigo-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                }`}
+              className={getMethodTabClass('moolre')}
             >
               <span>Moolre</span>
             </button>
@@ -830,10 +856,10 @@ const DashboardDeposit = React.memo(({
             disabled={loading || !depositAmount}
             className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? 'Processing...' : 'Pay with Moolre MoMo'}
+            {loading ? 'Processing...' : 'Pay with MoMo'}
           </Button>
           <p className="text-xs sm:text-sm text-gray-600 text-center">
-            Secure payment via Moolre MoMo. You will be redirected to complete your payment.
+            Secure payment via MoMo. You will be redirected to complete your payment.
           </p>
           <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
             <p className="text-xs sm:text-sm text-blue-800 text-center">
