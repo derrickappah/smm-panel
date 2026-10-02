@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect, lazy, Suspense, memo } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -150,8 +150,47 @@ const AdminDashboard = memo(({ user, onLogout }) => {
     return 'dashboard';
   }, [location.pathname]);
 
-  const [dateRangeStart, setDateRangeStart] = useState('');
-  const [dateRangeEnd, setDateRangeEnd] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Compute local today string (YYYY-MM-DD)
+  const todayStr = useMemo(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  }, []);
+
+  // Selected date from URL (?date=YYYY-MM-DD) or default to today
+  const selectedDate = searchParams.get('date') || todayStr;
+
+  // Convert selected date into local start-of-day and end-of-day ISO strings
+  const { dateRangeStart, dateRangeEnd } = useMemo(() => {
+    const parts = selectedDate.split('-');
+    if (parts.length === 3) {
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+      const startOfDay = new Date(year, month, day, 0, 0, 0, 0);
+      const endOfDay = new Date(year, month, day, 23, 59, 59, 999);
+      return {
+        dateRangeStart: startOfDay.toISOString(),
+        dateRangeEnd: endOfDay.toISOString()
+      };
+    }
+    return { dateRangeStart: '', dateRangeEnd: '' };
+  }, [selectedDate]);
+
+  // Update URL search parameters when date changes
+  const handleDateChange = useCallback((newDate) => {
+    setSearchParams((prev) => {
+      const nextParams = new URLSearchParams(prev);
+      if (newDate === todayStr) {
+        nextParams.delete('date');
+      } else {
+        nextParams.set('date', newDate);
+      }
+      return nextParams;
+    }, { replace: true });
+  }, [setSearchParams, todayStr]);
+
   const [refreshing, setRefreshing] = useState(false);
   const [balanceCheckResults, setBalanceCheckResults] = useState({});
   const [manuallyCrediting, setManuallyCrediting] = useState(null);
@@ -751,6 +790,11 @@ const AdminDashboard = memo(({ user, onLogout }) => {
                 <TabsContent value="dashboard" className="lg:mt-0">
                   <Suspense fallback={<ComponentLoader />}>
                     <AdminStats
+                      selectedDate={selectedDate}
+                      todayDate={todayStr}
+                      onDateChange={handleDateChange}
+                      onRefresh={handleRefresh}
+                      isRefreshing={refreshing}
                       dateRangeStart={dateRangeStart}
                       dateRangeEnd={dateRangeEnd}
                       referralStats={referralStats}

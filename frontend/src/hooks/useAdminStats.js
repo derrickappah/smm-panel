@@ -44,12 +44,16 @@ export const useAdminStats = (options = {}) => {
       const params = {};
       if (dateRangeStart) {
         const start = new Date(dateRangeStart);
-        start.setHours(0, 0, 0, 0);
+        if (typeof dateRangeStart === 'string' && !dateRangeStart.includes('T')) {
+          start.setHours(0, 0, 0, 0);
+        }
         params.p_date_range_start = start.toISOString();
       }
       if (dateRangeEnd) {
         const end = new Date(dateRangeEnd);
-        end.setHours(23, 59, 59, 999);
+        if (typeof dateRangeEnd === 'string' && !dateRangeEnd.includes('T')) {
+          end.setHours(23, 59, 59, 999);
+        }
         params.p_date_range_end = end.toISOString();
       }
 

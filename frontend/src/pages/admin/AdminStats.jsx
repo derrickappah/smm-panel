@@ -9,14 +9,43 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import ProviderBalancesRow from '@/components/admin/ProviderBalancesRow';
+import AdminDateSelector from '@/components/admin/AdminDateSelector';
 
 const AdminStats = memo(({ 
+  selectedDate,
+  todayDate,
+  onDateChange,
+  onRefresh,
+  isRefreshing,
   dateRangeStart, 
   dateRangeEnd, 
   referralStats = { total_referrals: 0, pending_bonuses: 0 },
   onSectionChange,
   paymentMethodSettings = {}
 }) => {
+  const isToday = !selectedDate || selectedDate === todayDate;
+
+  const yesterdayDate = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }, []);
+
+  const isYesterday = selectedDate === yesterdayDate;
+
+  const shortDateLabel = useMemo(() => {
+    if (isToday) return 'Today';
+    if (isYesterday) return 'Yesterday';
+    if (!selectedDate) return '';
+    try {
+      const parts = selectedDate.split('-');
+      const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    } catch {
+      return selectedDate;
+    }
+  }, [isToday, isYesterday, selectedDate]);
+
   const { data: stats = {}, isLoading, recentOrders, recentDeposits, topCustomers } = useAdminStats({ 
     dateRangeStart, 
     dateRangeEnd,
@@ -128,9 +157,20 @@ const AdminStats = memo(({
         }
       `}</style>
 
+      {/* Date Selector Toolbar */}
+      {selectedDate && onDateChange && (
+        <AdminDateSelector
+          selectedDate={selectedDate}
+          todayDate={todayDate}
+          onDateChange={onDateChange}
+          onRefresh={onRefresh}
+          isRefreshing={isRefreshing}
+        />
+      )}
+
       {/* Enhanced Stats Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2 sm:gap-3 md:gap-4">
-        {/* Users Today */}
+        {/* Users Today / Selected Date */}
         <div 
           className="bg-white border border-gray-200 rounded-lg p-2 sm:p-3 md:p-4 shadow-sm hover:shadow-md active:scale-95 transition-all duration-200 cursor-pointer touch-manipulation min-h-[80px] sm:min-h-[100px]" 
           onClick={() => handleSectionClick('users')}
@@ -143,11 +183,11 @@ const AdminStats = memo(({
               <AnimatedNumber value={statsWithPaymentMethods.users_today || 0} previousValue={previousStats?.users_today} />
             </span>
           </div>
-          <p className="text-[10px] sm:text-xs font-medium text-gray-600">Users Today</p>
-          <p className="text-[9px] sm:text-[10px] text-gray-500 mt-0.5">{statsWithPaymentMethods.total_users || 0} Total</p>
+          <p className="text-[10px] sm:text-xs font-medium text-gray-600">Users {isToday ? 'Today' : `(${shortDateLabel})`}</p>
+          <p className="text-[9px] sm:text-[10px] text-gray-500 mt-0.5">{statsWithPaymentMethods.all_time_users || statsWithPaymentMethods.total_users || 0} Total</p>
         </div>
 
-        {/* Deposits Today */}
+        {/* Deposits Today / Selected Date */}
         <div 
           className="bg-white border border-gray-200 rounded-lg p-2 sm:p-3 md:p-4 shadow-sm hover:shadow-md active:scale-95 transition-all duration-200 cursor-pointer touch-manipulation min-h-[80px] sm:min-h-[100px]" 
           onClick={() => handleSectionClick('deposits')}
@@ -164,7 +204,7 @@ const AdminStats = memo(({
               />
             </span>
           </div>
-          <p className="text-[10px] sm:text-xs font-medium text-gray-600">Deposits Today</p>
+          <p className="text-[10px] sm:text-xs font-medium text-gray-600">Deposits {isToday ? 'Today' : `(${shortDateLabel})`}</p>
         </div>
 
         {/* Total Deposits */}
@@ -178,17 +218,17 @@ const AdminStats = memo(({
             </div>
             <span className="text-sm sm:text-base md:text-lg font-bold text-gray-900">
               ₵<AnimatedNumber 
-                value={statsWithPaymentMethods.total_deposits_amount || 0} 
+                value={statsWithPaymentMethods.all_time_deposits_amount || statsWithPaymentMethods.total_deposits_amount || 0} 
                 previousValue={previousStats?.total_deposits_amount} 
                 formatter={(v) => Math.floor(v).toLocaleString()} 
               />
             </span>
           </div>
           <p className="text-[10px] sm:text-xs font-medium text-gray-600">Total Deposits</p>
-          <p className="text-[9px] sm:text-[10px] text-gray-500 mt-0.5">{statsWithPaymentMethods.confirmed_deposits || 0} Confirmed</p>
+          <p className="text-[9px] sm:text-[10px] text-gray-500 mt-0.5">{statsWithPaymentMethods.all_time_confirmed_deposits || statsWithPaymentMethods.confirmed_deposits || 0} Confirmed</p>
         </div>
 
-        {/* Orders Today */}
+        {/* Orders Today / Selected Date */}
         <div 
           className="bg-white border border-gray-200 rounded-lg p-2 sm:p-3 md:p-4 shadow-sm hover:shadow-md active:scale-95 transition-all duration-200 cursor-pointer touch-manipulation min-h-[80px] sm:min-h-[100px]" 
           onClick={() => handleSectionClick('orders')}
@@ -201,8 +241,8 @@ const AdminStats = memo(({
               <AnimatedNumber value={statsWithPaymentMethods.orders_today || 0} previousValue={previousStats?.orders_today} />
             </span>
           </div>
-          <p className="text-xs sm:text-[10px] font-medium text-gray-600">Orders Today</p>
-          <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{statsWithPaymentMethods.total_orders || 0} Total</p>
+          <p className="text-xs sm:text-[10px] font-medium text-gray-600">Orders {isToday ? 'Today' : `(${shortDateLabel})`}</p>
+          <p className="text-[10px] sm:text-[9px] text-gray-500 mt-0.5">{statsWithPaymentMethods.all_time_orders || statsWithPaymentMethods.total_orders || 0} Total</p>
         </div>
 
         {/* Completed Orders */}
@@ -681,7 +721,7 @@ const AdminStats = memo(({
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2">
               <ShoppingCart className="w-5 h-5 text-blue-600" />
-              Recent Orders
+              {isToday ? 'Recent Orders' : `Orders on ${shortDateLabel}`}
             </h3>
             <Button
               onClick={() => handleSectionClick('orders')}
@@ -734,7 +774,9 @@ const AdminStats = memo(({
               </div>
             ))}
             {recentOrders.length === 0 && (
-              <p className="text-center text-gray-500 text-sm py-4">No orders yet</p>
+              <p className="text-center text-gray-500 text-sm py-4">
+                {isToday ? 'No orders yet today' : `No orders placed on ${shortDateLabel}`}
+              </p>
             )}
           </div>
         </div>
@@ -744,7 +786,7 @@ const AdminStats = memo(({
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2">
               <DollarSign className="w-5 h-5 text-emerald-600" />
-              Recent Deposits
+              {isToday ? 'Recent Deposits' : `Deposits on ${shortDateLabel}`}
             </h3>
             <Button
               onClick={() => handleSectionClick('deposits')}
@@ -777,7 +819,9 @@ const AdminStats = memo(({
               </div>
             ))}
             {recentDeposits.length === 0 && (
-              <p className="text-center text-gray-500 text-sm py-4">No deposits yet</p>
+              <p className="text-center text-gray-500 text-sm py-4">
+                {isToday ? 'No deposits yet today' : `No deposits made on ${shortDateLabel}`}
+              </p>
             )}
           </div>
         </div>
@@ -787,7 +831,7 @@ const AdminStats = memo(({
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2">
               <Users className="w-5 h-5 text-indigo-600" />
-              Top Customers
+              {isToday ? 'Top Customers' : `Top Customers on ${shortDateLabel}`}
             </h3>
             <Button
               onClick={() => handleSectionClick('users')}
@@ -820,7 +864,9 @@ const AdminStats = memo(({
               </div>
             ))}
             {topCustomers.length === 0 && (
-              <p className="text-center text-gray-500 text-sm py-4">No customers with deposits yet</p>
+              <p className="text-center text-gray-500 text-sm py-4">
+                {isToday ? 'No customers with deposits yet' : `No deposits recorded on ${shortDateLabel}`}
+              </p>
             )}
           </div>
         </div>
