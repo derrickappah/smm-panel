@@ -1,15 +1,37 @@
-import React, { memo, useState, useMemo, useCallback } from 'react';
-import { useAdminPromotionPackages, useCreatePromotionPackage, useUpdatePromotionPackage, useDeletePromotionPackage } from '@/hooks/useAdminPromotionPackages';
+import React, { memo, useState, useEffect, useMemo, useCallback } from 'react';
+import {
+  useAdminPromotionPackages,
+  useCreatePromotionPackage,
+  useUpdatePromotionPackage,
+  useDeletePromotionPackage,
+  useReorderPromotionPackages,
+} from '@/hooks/useAdminPromotionPackages';
 import { useDebounce } from '@/hooks/useDebounce';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, RefreshCw, Edit, Trash2, Power, PowerOff, Tag } from 'lucide-react';
+import { Search, RefreshCw, Edit, Trash2, Power, PowerOff, Tag, GripVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { getDynamicProviders } from '@/lib/dynamicProviders';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 const normalizeComboPackages = (comboPackageIds) => {
   if (!Array.isArray(comboPackageIds)) return [];
@@ -24,12 +46,177 @@ const normalizeComboPackages = (comboPackageIds) => {
   }).filter(Boolean);
 };
 
+// Sortable Promotion Package Item Component
+const SortablePromotionPackageItem = memo(({
+  pkg,
+  editingPackage,
+  setEditingPackage,
+  handleTogglePackage,
+  handleDeletePackage,
+  handleUpdatePackage,
+  packages,
+  dynamicProviders,
+  isUpdating,
+  isDeleting,
+  formatQuantity,
+  isDragDisabled = false
+}) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: pkg.id, disabled: isDragDisabled });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 20 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`p-4 rounded-xl transition-all ${
+        pkg.enabled === false
+          ? 'bg-gray-100/50 border-2 border-gray-300 opacity-75'
+          : 'bg-white/50 border-2 border-purple-200'
+      } ${isDragging ? 'cursor-grabbing shadow-xl ring-2 ring-purple-400' : ''}`}
+    >
+      {editingPackage?.id === pkg.id ? (
+        <PackageEditForm
+          pkg={pkg}
+          packages={packages}
+          dynamicProviders={dynamicProviders}
+          onSave={(updates) => handleUpdatePackage(pkg.id, updates)}
+          onCancel={() => setEditingPackage(null)}
+        />
+      ) : (
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="flex items-start gap-3 flex-1">
+            <button
+              type="button"
+              {...(!isDragDisabled ? attributes : {})}
+              {...(!isDragDisabled ? listeners : {})}
+              disabled={isDragDisabled}
+              className={`mt-1 transition-colors touch-none p-0.5 rounded ${
+                isDragDisabled
+                  ? 'text-gray-300 cursor-not-allowed'
+                  : 'cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-700'
+              }`}
+              title={isDragDisabled ? 'Clear search to reorder' : 'Drag to reorder package'}
+              aria-label={isDragDisabled ? 'Reordering disabled during search' : 'Drag to reorder package'}
+            >
+              <GripVertical className="w-5 h-5" />
+            </button>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <h3 className="text-lg font-semibold text-gray-900">{pkg.name}</h3>
+                {pkg.is_combo && (
+                  <span className="px-2 py-1 text-xs font-medium bg-indigo-100 text-indigo-700 rounded">
+                    Combo
+                  </span>
+                )}
+                {pkg.enabled === false && (
+                  <span className="px-2 py-1 text-xs font-medium bg-gray-200 text-gray-700 rounded">
+                    Disabled
+                  </span>
+                )}
+              </div>
+              <div className="space-y-1 text-sm text-gray-600">
+                <p><span className="font-medium">Platform:</span> {pkg.platform}</p>
+                <p><span className="font-medium">Service Type:</span> {pkg.service_type}</p>
+                {pkg.is_combo && pkg.combo_package_ids && (
+                  <p className="text-indigo-600 font-medium">
+                    Includes {pkg.combo_package_ids.length} package{pkg.combo_package_ids.length !== 1 ? 's' : ''}
+                  </p>
+                )}
+                <p><span className="font-medium">Quantity:</span> {formatQuantity(pkg.quantity)} ({pkg.quantity.toLocaleString()})</p>
+                <p><span className="font-medium">Price:</span> {pkg.price} GHS</p>
+                {pkg.description && (
+                  <div className="flex gap-1">
+                    <span className="font-medium whitespace-nowrap">Description:</span>
+                    <span className="line-clamp-2 break-words text-gray-600">{pkg.description}</span>
+                  </div>
+                )}
+                {pkg.smmgen_service_id && <p><span className="font-medium">SMMGen ID:</span> {pkg.smmgen_service_id}</p>}
+                {pkg.smmcost_service_id && <p><span className="font-medium">SMMCost ID:</span> {pkg.smmcost_service_id}</p>}
+                {pkg.jbsmmpanel_service_id && <p><span className="font-medium">JB SMM ID:</span> {pkg.jbsmmpanel_service_id}</p>}
+                {pkg.worldofsmm_service_id && <p><span className="font-medium">WorldOfSMM ID:</span> {pkg.worldofsmm_service_id}</p>}
+                {pkg.g1618_service_id && <p><span className="font-medium">G1618 ID:</span> {pkg.g1618_service_id}</p>}
+                {pkg.oldsmm_service_id && <p><span className="font-medium">OldSMM ID:</span> {pkg.oldsmm_service_id}</p>}
+                {pkg.apiowner_service_id && <p><span className="font-medium">ApiOwner ID:</span> {pkg.apiowner_service_id}</p>}
+                {pkg.tiksta_service_id && <p><span className="font-medium">Tiksta ID:</span> {pkg.tiksta_service_id}</p>}
+                {pkg.smmraja_service_id && <p><span className="font-medium">SMM Raja ID:</span> {pkg.smmraja_service_id}</p>}
+                {pkg.smmtake_service_id && <p><span className="font-medium">SMM Take ID:</span> {pkg.smmtake_service_id}</p>}
+                {pkg.quickmedia_service_id && <p><span className="font-medium">QuickMedia ID:</span> {pkg.quickmedia_service_id}</p>}
+                {pkg.custom_provider_service_ids && Object.entries(pkg.custom_provider_service_ids).map(([slug, id]) => {
+                  if (!id) return null;
+                  const prov = dynamicProviders.find(p => p.slug === slug);
+                  const name = prov ? prov.name : slug;
+                  return <p key={slug}><span className="font-medium">{name} ID:</span> {id}</p>;
+                })}
+                {pkg.url_type && (
+                  <p>
+                    <span className="font-medium">URL Type:</span>{' '}
+                    <span className="px-2 py-0.5 text-xs font-semibold rounded bg-blue-100 text-blue-800 uppercase">
+                      {pkg.url_type}
+                    </span>
+                  </p>
+                )}
+                <p><span className="font-medium">Display Order:</span> {pkg.display_order}</p>
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <Button
+              onClick={() => handleTogglePackage(pkg.id, pkg.enabled === true)}
+              variant={pkg.enabled === true ? "outline" : "default"}
+              size="sm"
+              className={pkg.enabled === true ? "" : "bg-green-600 hover:bg-green-700 text-white"}
+              title={pkg.enabled === true ? "Disable package" : "Enable package"}
+              disabled={isUpdating}
+            >
+              {pkg.enabled === true ? (
+                <PowerOff className="w-4 h-4" />
+              ) : (
+                <Power className="w-4 h-4" />
+              )}
+            </Button>
+            <Button
+              onClick={() => setEditingPackage(pkg)}
+              variant="outline"
+              size="sm"
+            >
+              <Edit className="w-4 h-4" />
+            </Button>
+            <Button
+              onClick={() => handleDeletePackage(pkg.id)}
+              variant="destructive"
+              size="sm"
+              disabled={isDeleting}
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
+SortablePromotionPackageItem.displayName = 'SortablePromotionPackageItem';
+
 const AdminPromotionPackages = memo(() => {
   const queryClient = useQueryClient();
   const { data: packages = [], isLoading, error, refetch } = useAdminPromotionPackages();
   const createPackage = useCreatePromotionPackage();
   const updatePackage = useUpdatePromotionPackage();
   const deletePackage = useDeletePromotionPackage();
+  const reorderPackages = useReorderPromotionPackages();
 
   const { data: dynamicProviders = [] } = useQuery({
     queryKey: ['admin', 'dynamic-providers-active'],
@@ -41,7 +228,28 @@ const AdminPromotionPackages = memo(() => {
   });
 
   const [packageSearch, setPackageSearch] = useState('');
+  const [packagesOrder, setPackagesOrder] = useState([]);
   const [editingPackage, setEditingPackage] = useState(null);
+
+  // Sync packagesOrder when packages change
+  useEffect(() => {
+    if (packages.length > 0) {
+      setPackagesOrder(packages.map(p => p.id));
+    }
+  }, [packages]);
+
+  // DnD sensors for drag and drop
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
   const [packageForm, setPackageForm] = useState({
     name: '',
     platform: '',
@@ -72,14 +280,40 @@ const AdminPromotionPackages = memo(() => {
   const debouncedSearch = useDebounce(packageSearch, 300);
 
   const filteredPackages = useMemo(() => {
-    if (!debouncedSearch) return packages;
+    if (!debouncedSearch) {
+      if (!packagesOrder.length) return packages;
+      const orderMap = new Map();
+      packagesOrder.forEach((id, index) => orderMap.set(id, index));
+      return [...packages].sort((a, b) => {
+        const indexA = orderMap.has(a.id) ? orderMap.get(a.id) : 9999;
+        const indexB = orderMap.has(b.id) ? orderMap.get(b.id) : 9999;
+        return indexA - indexB;
+      });
+    }
+
     const searchLower = debouncedSearch.toLowerCase();
     return packages.filter(p =>
       p.name?.toLowerCase().includes(searchLower) ||
       p.platform?.toLowerCase().includes(searchLower) ||
       p.service_type?.toLowerCase().includes(searchLower)
     );
-  }, [packages, debouncedSearch]);
+  }, [packages, debouncedSearch, packagesOrder]);
+
+  const handleDragEnd = useCallback((event) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const currentOrder = packagesOrder.length > 0 ? packagesOrder : packages.map(p => p.id);
+      const oldIndex = currentOrder.indexOf(active.id);
+      const newIndex = currentOrder.indexOf(over.id);
+
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const newOrder = arrayMove(currentOrder, oldIndex, newIndex);
+        setPackagesOrder(newOrder);
+        reorderPackages.mutate(newOrder);
+      }
+    }
+  }, [packagesOrder, packages, reorderPackages]);
 
   const handleCreatePackage = useCallback(async (e) => {
     e.preventDefault();
@@ -702,121 +936,74 @@ const AdminPromotionPackages = memo(() => {
             />
           </div>
         </div>
+        {debouncedSearch && (
+          <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 flex items-center justify-between">
+            <span>Reordering is disabled while searching. Clear the search input to drag and reorder packages.</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setPackageSearch('')}
+              className="h-6 px-2 text-xs text-amber-900 hover:bg-amber-100"
+            >
+              Clear Search
+            </Button>
+          </div>
+        )}
+
         <div className="space-y-4">
           {filteredPackages.length === 0 ? (
             <p className="text-gray-600 text-center py-8">No promotion packages found</p>
-          ) : (
+          ) : debouncedSearch ? (
+            // When searching, render static items without active drag listeners
             filteredPackages.map((pkg) => (
-              <div
+              <SortablePromotionPackageItem
                 key={pkg.id}
-                className={`p-4 rounded-xl transition-all ${pkg.enabled === false
-                    ? 'bg-gray-100/50 border-2 border-gray-300 opacity-75'
-                    : 'bg-white/50 border-2 border-purple-200'
-                  }`}
-              >
-                {editingPackage?.id === pkg.id ? (
-                  <PackageEditForm
-                    pkg={pkg}
-                    packages={packages}
-                    dynamicProviders={dynamicProviders}
-                    onSave={(updates) => handleUpdatePackage(pkg.id, updates)}
-                    onCancel={() => setEditingPackage(null)}
-                  />
-                ) : (
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <h3 className="text-lg font-semibold text-gray-900">{pkg.name}</h3>
-                        {pkg.is_combo && (
-                          <span className="px-2 py-1 text-xs font-medium bg-indigo-100 text-indigo-700 rounded">
-                            Combo
-                          </span>
-                        )}
-                        {pkg.enabled === false && (
-                          <span className="px-2 py-1 text-xs font-medium bg-gray-200 text-gray-700 rounded">
-                            Disabled
-                          </span>
-                        )}
-                      </div>
-                      <div className="space-y-1 text-sm text-gray-600">
-                        <p><span className="font-medium">Platform:</span> {pkg.platform}</p>
-                        <p><span className="font-medium">Service Type:</span> {pkg.service_type}</p>
-                        {pkg.is_combo && pkg.combo_package_ids && (
-                          <p className="text-indigo-600 font-medium">
-                            Includes {pkg.combo_package_ids.length} package{pkg.combo_package_ids.length !== 1 ? 's' : ''}
-                          </p>
-                        )}
-                        <p><span className="font-medium">Quantity:</span> {formatQuantity(pkg.quantity)} ({pkg.quantity.toLocaleString()})</p>
-                        <p><span className="font-medium">Price:</span> {pkg.price} GHS</p>
-                        {pkg.description && (
-                          <div className="flex gap-1">
-                            <span className="font-medium whitespace-nowrap">Description:</span>
-                            <span className="line-clamp-2 break-words text-gray-600">{pkg.description}</span>
-                          </div>
-                        )}
-                        {pkg.smmgen_service_id && <p><span className="font-medium">SMMGen ID:</span> {pkg.smmgen_service_id}</p>}
-                        {pkg.smmcost_service_id && <p><span className="font-medium">SMMCost ID:</span> {pkg.smmcost_service_id}</p>}
-                        {pkg.jbsmmpanel_service_id && <p><span className="font-medium">JB SMM ID:</span> {pkg.jbsmmpanel_service_id}</p>}
-                        {pkg.worldofsmm_service_id && <p><span className="font-medium">WorldOfSMM ID:</span> {pkg.worldofsmm_service_id}</p>}
-                        {pkg.g1618_service_id && <p><span className="font-medium">G1618 ID:</span> {pkg.g1618_service_id}</p>}
-                        {pkg.oldsmm_service_id && <p><span className="font-medium">OldSMM ID:</span> {pkg.oldsmm_service_id}</p>}
-                        {pkg.apiowner_service_id && <p><span className="font-medium">ApiOwner ID:</span> {pkg.apiowner_service_id}</p>}
-                        {pkg.tiksta_service_id && <p><span className="font-medium">Tiksta ID:</span> {pkg.tiksta_service_id}</p>}
-                        {pkg.smmraja_service_id && <p><span className="font-medium">SMM Raja ID:</span> {pkg.smmraja_service_id}</p>}
-                        {pkg.smmtake_service_id && <p><span className="font-medium">SMM Take ID:</span> {pkg.smmtake_service_id}</p>}
-                        {pkg.quickmedia_service_id && <p><span className="font-medium">QuickMedia ID:</span> {pkg.quickmedia_service_id}</p>}
-                        {pkg.custom_provider_service_ids && Object.entries(pkg.custom_provider_service_ids).map(([slug, id]) => {
-                          if (!id) return null;
-                          const prov = dynamicProviders.find(p => p.slug === slug);
-                          const name = prov ? prov.name : slug;
-                          return <p key={slug}><span className="font-medium">{name} ID:</span> {id}</p>;
-                        })}
-                        {pkg.url_type && (
-                          <p>
-                            <span className="font-medium">URL Type:</span>{' '}
-                            <span className="px-2 py-0.5 text-xs font-semibold rounded bg-blue-100 text-blue-800 uppercase">
-                              {pkg.url_type}
-                            </span>
-                          </p>
-                        )}
-                        <p><span className="font-medium">Display Order:</span> {pkg.display_order}</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={() => handleTogglePackage(pkg.id, pkg.enabled === true)}
-                        variant={pkg.enabled === true ? "outline" : "default"}
-                        size="sm"
-                        className={pkg.enabled === true ? "" : "bg-green-600 hover:bg-green-700 text-white"}
-                        title={pkg.enabled === true ? "Disable package" : "Enable package"}
-                        disabled={updatePackage.isPending}
-                      >
-                        {pkg.enabled === true ? (
-                          <PowerOff className="w-4 h-4" />
-                        ) : (
-                          <Power className="w-4 h-4" />
-                        )}
-                      </Button>
-                      <Button
-                        onClick={() => setEditingPackage(pkg)}
-                        variant="outline"
-                        size="sm"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        onClick={() => handleDeletePackage(pkg.id)}
-                        variant="destructive"
-                        size="sm"
-                        disabled={deletePackage.isPending}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
+                pkg={pkg}
+                editingPackage={editingPackage}
+                setEditingPackage={setEditingPackage}
+                handleTogglePackage={handleTogglePackage}
+                handleDeletePackage={handleDeletePackage}
+                handleUpdatePackage={handleUpdatePackage}
+                packages={packages}
+                dynamicProviders={dynamicProviders}
+                isUpdating={updatePackage.isPending}
+                isDeleting={deletePackage.isPending}
+                formatQuantity={formatQuantity}
+                isDragDisabled={true}
+              />
             ))
+          ) : (
+            // When not searching, enable drag-and-drop reordering
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={filteredPackages.map((p) => p.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="space-y-4">
+                  {filteredPackages.map((pkg) => (
+                    <SortablePromotionPackageItem
+                      key={pkg.id}
+                      pkg={pkg}
+                      editingPackage={editingPackage}
+                      setEditingPackage={setEditingPackage}
+                      handleTogglePackage={handleTogglePackage}
+                      handleDeletePackage={handleDeletePackage}
+                      handleUpdatePackage={handleUpdatePackage}
+                      packages={packages}
+                      dynamicProviders={dynamicProviders}
+                      isUpdating={updatePackage.isPending}
+                      isDeleting={deletePackage.isPending}
+                      formatQuantity={formatQuantity}
+                      isDragDisabled={false}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
           )}
         </div>
       </div>

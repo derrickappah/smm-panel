@@ -136,3 +136,55 @@ export const useDeletePromotionPackage = () => {
   });
 };
 
+export const useReorderPromotionPackages = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (packageIds) => {
+      // packageIds is an array of promotion package IDs in the new order
+      const updates = packageIds.map((packageId, index) => ({
+        id: packageId,
+        display_order: index
+      }));
+
+      // Batch update all packages
+      const updatePromises = updates.map(({ id, display_order }) =>
+        supabase
+          .from('promotion_packages')
+          .update({ display_order })
+          .eq('id', id)
+      );
+
+      const results = await Promise.all(updatePromises);
+
+      // Check for errors
+      const errors = results.filter(result => result.error);
+      if (errors.length > 0) {
+        throw new Error(errors[0].error.message || 'Failed to reorder promotion packages');
+      }
+
+      return results;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'promotion-packages'] });
+      queryClient.invalidateQueries({ queryKey: ['promotion-packages'] });
+
+      // Broadcast update across tabs
+      try {
+        if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+          const bc = new BroadcastChannel('promotion_packages_sync');
+          bc.postMessage({ type: 'packages_reordered', timestamp: Date.now() });
+          bc.close();
+        }
+      } catch (e) {
+        // Broadcast best effort
+      }
+
+      toast.success('Promotion packages reordered successfully');
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to reorder promotion packages');
+    },
+  });
+};
+
