@@ -150,12 +150,10 @@ export default async function handler(req, res) {
             const expectedAmount = parseFloat(transaction.amount);
             const amountMatches = verifiedAmount >= expectedAmount * 0.99; // 1% tolerance for processing fee rounding
 
-            isSuccessful = (
-                apiData.isSuccessful === true ||
-                transactionStatus === 'Paid' ||
-                transactionStatus === 'Success' ||
-                (responseCode === '0000' && transactionStatus && transactionStatus !== 'Unpaid' && transactionStatus !== 'Failed')
-            ) && amountMatches;
+            // Only an explicit success status counts. ResponseCode '0000' only means the
+            // lookup succeeded - Pending/Failed transactions also return '0000'.
+            const normalizedStatus = String(transactionStatus || '').trim().toLowerCase();
+            isSuccessful = ['paid', 'success', 'successful'].includes(normalizedStatus) && amountMatches;
         }
 
         // 4. Update transaction & atomic balance crediting if successful

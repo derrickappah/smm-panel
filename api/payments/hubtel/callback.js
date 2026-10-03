@@ -140,12 +140,10 @@ export default async function handler(req, res) {
             const responseCode = hubtelVerifiedData.responseCode || hubtelVerifiedData.ResponseCode;
 
             // Strict confirmation criteria from Hubtel official response
-            const statusMatches = (
-                verifiedStatus === 'Paid' || 
-                verifiedStatus === 'Success' || 
-                apiData.isSuccessful === true ||
-                (responseCode === '0000' && verifiedStatus && verifiedStatus !== 'Unpaid' && verifiedStatus !== 'Failed')
-            );
+            // Only an explicit success status counts. ResponseCode '0000' only means the
+            // lookup succeeded — Pending/Failed transactions also return '0000'.
+            const normalizedStatus = String(verifiedStatus || '').trim().toLowerCase();
+            const statusMatches = ['paid', 'success', 'successful'].includes(normalizedStatus);
 
             const expectedAmount = parseFloat(transaction.amount);
             const amountMatches = verifiedAmount >= expectedAmount * 0.99; // Allow small rounding
